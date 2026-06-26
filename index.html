@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MP · AF Machine Deployment — Ops Console</title>
+<meta name="description" content="Live ops-control console for the UPL 1+1=11 Kharif farm-mechanisation programme in Madhya Pradesh.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%}
+  body{font-family:'Noto Sans',system-ui,sans-serif;color:#1B1A17;background:#F6F5F2}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:#d8d4cb;border-radius:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+  @keyframes drwIn{from{transform:translateX(24px);opacity:0}to{transform:translateX(0);opacity:1}}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  select{appearance:none;-webkit-appearance:none}
+  button{font-family:inherit}
+  a{text-decoration:none}
+  #app{height:100vh}
+  .mono{font-family:'IBM Plex Mono',monospace}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script type="module">
+import { MACHINES as MACHINES_MOCK } from './machines.js';
+import { BASE, COORDS } from './mapdata.js';
+
+/* ============================= state ============================= */
+const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#159234', act:'#15A24A', idle:'#E0A008', brk:'#DC3A2B', ink:'#1B1A17', ink2:'#6E6A62', ink3:'#9C988F', line:'#E9E6DF', line2:'#F2F0EB', softO:'#FBEDDF', softG:'#E6F5EA', softR:'#FBEAE7', softA:'#FBF1DA' };
+const state = { view:'map', org:'Both', terr:'', cluster:'', health:[], search:'', metric:'deploy', pinMode:'health', selected:null, expanded:{}, loaded:true, refreshing:false, device:'desktop' };
+let scale=1, tx=0, ty=0, _g=null, _pinMap={}, _pinLabel=null, _prevSig=null;
+
+/* ============================= helpers ============================= */
+const E = s => (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const kebab = k => k.replace(/[A-Z]/g, m=>'-'+m.toLowerCase());
+const css = o => Object.entries(o).map(([k,v])=>`${kebab(k)}:${v}`).join(';');
+const fmt = n => Math.round(n).toLocaleString('en-IN');
+
+/* ============================= data layer ============================= */
+// ⬇️ Point this at the NEW per-machine sheet. Two options:
+//   1) CONFIG.csvUrl   — full "Publish to web → CSV" link (recommended), OR
+//   2) CONFIG.sheetId  — the sheet's ID (it must be shared "anyone with the link can view")
+// Leave both blank to run on bundled demo data (machines.js).
+const CONFIG = { csvUrl:'', sheetId:'1YFZD6RoccFJulCMyZB0jF0Z7ZoRU-8YaAMr6as8MTBs', sheetName:'Sheet1', refreshMinutes:10 };
+let ROWS = MACHINES_MOCK;
+let dataMode = 'demo';      // 'demo' | 'live' | 'error'
+let lastUpdated = '';
+function nowIST(){ try{ return new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'}); }catch(_){ return new Date().toLocaleTimeString(); } }
+function liveUrl(){
+  if(CONFIG.csvUrl) return CONFIG.csvUrl + (CONFIG.csvUrl.includes('?')?'&':'?') + 't=' + Date.now();
+  if(CONFIG.sheetId) return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(CONFIG.sheetName)}&t=${Date.now()}`;
+  return '';
+}
+function parseCSV(text){ const rows=[]; let i=0,f='',row=[],q=false;
+  while(i<text.length){ const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
+    else { if(c==='"')q=true; else if(c===','){row.push(f);f='';}
+      else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n')i++; row.push(f);rows.push(row);row=[];f=''; } else f+=c; } i++; }
+  if(f.length||row.length){row.push(f);rows.push(row);} return rows;
+}
+const num = v => { const n=parseFloat(String(v==null?'':v).replace(/[, ]/g,'')); return isFinite(n)?n:0; };
+const txt = v => String(v==null?'':v).trim().replace(/\.0$/,'');   // keep phones as text; drop a stray trailing .0
+function parseScanned(s){ s=String(s||'').trim(); if(!s) return [];
+  return s.split(',').map(tok=>{ tok=tok.trim(); if(!tok) return null;
+    const m=tok.match(/^(.*?)[\s:]*(\d+(?:\.\d+)?)\s*$/);
+    if(m){ const name=m[1].trim(); return { product:name||'Unspecified', acres:num(m[2]) }; }
+    return { product:tok, acres:0 };       // unparseable token → bucket, never crash
+  }).filter(Boolean);
+}
+function parseLoc(s){ s=String(s||'').trim(); if(!s) return [null,null];
+  const m=s.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/); if(!m) return [null,null];
+  const lat=parseFloat(m[1]), lon=parseFloat(m[2]); return [isFinite(lat)?lat:null, isFinite(lon)?lon:null];
+}
+function resolveCols(header){
+  const h=header.map(x=>String(x||'').trim().toLowerCase());
+  const find=(...preds)=>{ for(const p of preds){ const i=h.findIndex(p); if(i>=0) return i; } return -1; };
+  return {
+    mc: find(x=>x.includes('machine')&&(x.includes('number')||x.includes('no.')||x===' machine no'), x=>x==='mc', x=>x==='machine no'),
+    org: find(x=>x.includes('organis')||x.includes('organiz'), x=>x==='org'),
+    territory: find(x=>x.includes('territory')),
+    cluster: find(x=>x.includes('cluster')&&!x.includes('officer')),
+    co: find(x=>x.includes('cluster officer')&&!(x.includes('mob')||x.includes('number')||x.includes('phone'))),
+    coMob: find(x=>x.includes('officer')&&(x.includes('mob')||x.includes('number')||x.includes('phone'))),
+    am: find(x=>x.includes('area manager')&&!(x.includes('number')||x.includes('mob')||x.includes('phone'))),
+    amNum: find(x=>x.includes('area manager')&&(x.includes('number')||x.includes('mob')||x.includes('phone'))),
+    target: find(x=>x.includes('target')),
+    achieved: find(x=>x.includes('achieved')),
+    mtd: find(x=>x.includes('mtd')),
+    acresY: find(x=>x.includes('yesterday')),
+    scanned: find(x=>x.includes('scanned')),
+    breakdown: find(x=>x.includes('breakdown')),
+    opMapped: find(x=>x.includes('mapped')),
+    opNum: find(x=>x.includes('operator')&&(x.includes('number')||x.includes('mob')||x.includes('phone'))),
+    opName: find(x=>x.includes('operator')&&x.includes('name'), x=>x.includes('operator')&&!(x.includes('number')||x.includes('mob')||x.includes('phone')||x.includes('mapped'))),
+    loc: find(x=>x.includes('location')||(x.includes('lat')&&x.includes('lon'))),
+  };
+}
+function rowsToMachines(grid){
+  if(grid.length<2) return [];
+  const col=resolveCols(grid[0]); const out=[];
+  for(let r=1;r<grid.length;r++){ const row=grid[r]; if(!row||!row.join('').trim()) continue;
+    const g=i=>i>=0&&i<row.length?row[i]:'';
+    const mc=txt(g(col.mc)); if(!mc) continue;
+    const [lat,lon]=parseLoc(g(col.loc));
+    out.push({
+      mc, org:(txt(g(col.org)).toUpperCase()==='SWAL'?'SWAL':'UPL'),
+      territory:txt(g(col.territory))||'Unassigned', cluster:txt(g(col.cluster))||'Unassigned',
+      co:txt(g(col.co)), coMob:txt(g(col.coMob)), am:txt(g(col.am)), amNum:txt(g(col.amNum)),
+      target:num(g(col.target)), achieved:num(g(col.achieved)), mtd:num(g(col.mtd)), acresY:num(g(col.acresY)),
+      scanned:parseScanned(g(col.scanned)),
+      breakdown:(txt(g(col.breakdown))==='1'?1:0), opMapped:(txt(g(col.opMapped))==='1'?1:0),
+      opName:txt(g(col.opName)), opNum:txt(g(col.opNum)), lat, lon
+    });
+  }
+  return out;
+}
+async function loadData(){
+  const url=liveUrl();
+  if(!url){ dataMode='demo'; ROWS=MACHINES_MOCK; lastUpdated=nowIST(); render(); return; }
+  try{
+    const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
+    const machines=rowsToMachines(parseCSV(await res.text()));
+    if(!machines.length) throw new Error('no rows parsed');
+    ROWS=machines; dataMode='live'; lastUpdated=nowIST(); render();
+  }catch(e){ ROWS=MACHINES_MOCK; dataMode='error'; lastUpdated=nowIST(); render(); console.error('CSV load failed:', e); }
+}
+
+/* ============================= derived ============================= */
+const hstate = m => m.breakdown ? 'Breakdown' : (m.acresY===0 ? 'Idle' : 'Active');
+const hcolor = s => s==='Active'?C.act : s==='Idle'?C.idle : C.brk;
+const pctOf = m => m.target ? m.achieved/m.target : 0;
+const band = p => p>=0.7?'On-track' : p>=0.4?'At-risk' : 'Behind';
+const bcolor = b => b==='On-track'?C.act : b==='At-risk'?C.idle : C.brk;
+
+function getF(){
+  const s = state.search.trim().toLowerCase();
+  return ROWS.filter(m=>{
+    if(state.org!=='Both' && m.org!==state.org) return false;
+    if(state.terr && m.territory!==state.terr) return false;
+    if(state.cluster && m.cluster!==state.cluster) return false;
+    if(state.health.length && !state.health.includes(hstate(m))) return false;
+    if(s && !(m.mc.toLowerCase().includes(s) || (m.opName&&m.opName.toLowerCase().includes(s)) || m.territory.toLowerCase().includes(s))) return false;
+    return true;
+  });
+}
+function roll(list){
+  const o={deployed:list.length,upl:0,swal:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0};
+  list.forEach(m=>{ o[m.org==='UPL'?'upl':'swal']++; o[hstate(m)]++; o.target+=m.target; o.achieved+=m.achieved; o.mtd+=m.mtd; o.acresY+=m.acresY; });
+  o.pct = o.target ? o.achieved/o.target : 0; o.band=band(o.pct); o.ranY=list.filter(m=>m.acresY>0).length; return o;
+}
+function rowBars(r){ const tt=r.deployed||1; return {
+  orgUStyle:{width:(100*r.upl/tt)+'%',background:C.orange,display:'block'}, orgSStyle:{width:(100*r.swal/tt)+'%',background:C.green,display:'block'},
+  mixAStyle:{width:(100*r.Active/tt)+'%',background:C.act,display:'block'}, mixIStyle:{width:(100*r.Idle/tt)+'%',background:C.idle,display:'block'}, mixBStyle:{width:(100*r.Breakdown/tt)+'%',background:C.brk,display:'block'},
+  mixLabel:`${r.Active} active · ${r.Idle} idle · ${r.Breakdown} down`,
+  paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*r.pct)+'%',background:C.act},
+  acresLabel:`${fmt(r.achieved)} / ${fmt(r.target)}`, ranY:fmt(r.acresY) }; }
+function hash(str){ let h=0; for(let i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))>>>0; return h; }
+function lerpHex(a,b,t){ t=Math.max(0,Math.min(1,t)); const pa=[1,3,5].map(i=>parseInt(a.substr(i,2),16)), pb=[1,3,5].map(i=>parseInt(b.substr(i,2),16)); return '#'+pa.map((v,i)=>Math.round(v+(pb[i]-v)*t).toString(16).padStart(2,'0')).join(''); }
+function rainOf(terr){ const h=hash('rain2'+terr); const base=((h>>>4)%1000)/1000; return Math.round(Math.pow(base,1.7)*44*10)/10; }
+function rainColor(mm){ return lerpHex('#E8F1FB','#14528B', Math.min(1, mm/36)); }
+function weather(terr){
+  const h=hash(terr), k=h%3;
+  const temp=28+(h>>3)%7, wind=4+(h>>5)%16, rain=k===2?((h>>2)%9)/10+0.6:0;
+  const w=[{label:'Good spray day',icon:'☀️',bg:C.softG,border:'#C6EBD1',ink:C.greenD},{label:'Marginal window',icon:'⛅',bg:C.softA,border:'#F0DFB0',ink:'#9A6B05'},{label:'Hold — high wind / rain',icon:'🌧️',bg:C.softR,border:'#F2C9C2',ink:'#B0301F'}][k];
+  return { ...w, line:`${temp}° · wind ${wind} km/h · rain ${rain.toFixed(1)} mm` };
+}
+const acresBand = a => a>10?0 : a>=5?1 : a>=1?2 : 3;
+const acresColor = a => ['#0E7C39','#56B36C','#A9D8B4','#CBC6BC'][acresBand(a)];
+
+/* ============================= geometry / map ============================= */
+let W,H,proj;
+function setupProj(){
+  let mnLon=999,mxLon=-999,mnLat=999,mxLat=-999;
+  const walk=c=>{ if(typeof c[0]==='number'){ mnLon=Math.min(mnLon,c[0]);mxLon=Math.max(mxLon,c[0]);mnLat=Math.min(mnLat,c[1]);mxLat=Math.max(mxLat,c[1]); } else c.forEach(walk); };
+  BASE.features.forEach(f=>walk(f.geometry.coordinates));
+  const PAD=24, WW=1000, midLat=(mnLat+mxLat)/2, kx=Math.cos(midLat*Math.PI/180);
+  const sc=(WW-2*PAD)/((mxLon-mnLon)*kx), HH=Math.round((mxLat-mnLat)*sc+2*PAD);
+  W=WW; H=HH;
+  proj=(lon,lat)=>[PAD+(lon-mnLon)*kx*sc, PAD+(mxLat-lat)*sc];
+}
+function pathOf(g){ const ring=r=>r.map((p,i)=>{const[x,y]=proj(p[0],p[1]);return (i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1);}).join('')+'Z'; let d=''; const polys=g.type==='Polygon'?g.coordinates:[].concat(...g.coordinates); polys.forEach(r=>d+=ring(r)); return d; }
+const NS='http://www.w3.org/2000/svg';
+const COORDS_LC={}; for(const k in COORDS) COORDS_LC[k.toLowerCase()]=COORDS[k];
+const coordsOf = name => COORDS[name] || COORDS_LC[String(name||'').trim().toLowerCase()];
+function applyTransform(){ if(_g) _g.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`); }
+function attachPanZoom(svg){
+  let down=false,moved=false,sx=0,sy=0;
+  svg.addEventListener('pointerdown',e=>{ down=true; moved=false; sx=e.clientX; sy=e.clientY; });
+  svg.addEventListener('pointermove',e=>{ if(!down)return; if(!moved && Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)<4) return; if(!moved){ moved=true; try{svg.setPointerCapture(e.pointerId);}catch(_){ } if(svg.parentElement)svg.parentElement.style.cursor='grabbing'; } const k=W/svg.clientWidth; tx+=(e.clientX-sx)*k; ty+=(e.clientY-sy)*k; sx=e.clientX;sy=e.clientY; applyTransform(); });
+  const up=(e)=>{ if(moved){ try{svg.releasePointerCapture(e.pointerId);}catch(_){ } } down=false; if(svg.parentElement)svg.parentElement.style.cursor='grab'; };
+  svg.addEventListener('pointerup',up); svg.addEventListener('pointercancel',up);
+  svg.addEventListener('click',e=>{ if(moved){ e.stopPropagation(); moved=false; } },true);
+  svg.addEventListener('wheel',e=>{ e.preventDefault(); const f=e.deltaY<0?1.12:0.89; scale=Math.max(0.6,Math.min(6,scale*f)); applyTransform(); },{passive:false});
+}
+function drawMap(hostId, metric){
+  const host=document.getElementById(hostId); if(!host||!BASE) return;
+  host.innerHTML='';
+  const svg=document.createElementNS(NS,'svg'); svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width','100%'); svg.setAttribute('height','100%'); svg.style.display='block';
+  const g=document.createElementNS(NS,'g'); svg.appendChild(g); host.appendChild(svg); _g=g;
+  applyTransform();
+  const F=getF();
+  const byT={}; F.forEach(m=>{ (byT[m.territory] ||= []).push(m); });
+  const byTLC={}; for(const k in byT) byTLC[k.toLowerCase()]=byT[k];
+  const tlist = nm => byT[nm] || byTLC[String(nm||'').toLowerCase()];
+  const activeTerr=state.terr;
+  const isW = metric==='weather';
+  BASE.features.forEach(f=>{
+    const nm=f.properties.name, list=tlist(nm), has=list&&list.length;
+    const canonTerr=(has&&list[0].territory)||nm;
+    const p=document.createElementNS(NS,'path'); p.setAttribute('d',pathOf(f.geometry));
+    let fill; if(isW){ fill = has? rainColor(rainOf(canonTerr)) : '#F1EEE8'; } else { fill = has? '#EFEBE3' : '#F4F1EA'; }
+    p.setAttribute('fill', fill); p.setAttribute('stroke','#FFFFFF'); p.setAttribute('stroke-width','1');
+    if(activeTerr&&activeTerr.toLowerCase()!==nm.toLowerCase()) p.setAttribute('opacity','0.4');
+    if(isW&&has){ p.style.cursor='pointer'; p.addEventListener('click',(e)=>{ e.stopPropagation(); setState(s=>({terr:s.terr.toLowerCase()===canonTerr.toLowerCase()?'':canonTerr,cluster:''})); }); const ti=document.createElementNS(NS,'title'); ti.textContent=`${canonTerr} — ${rainOf(canonTerr)} mm rain · ${list.filter(m=>m.acresY>0).length} machines ran`; p.appendChild(ti); }
+    g.appendChild(p);
+  });
+  if(isW){
+    Object.keys(byT).forEach(nm=>{ const c=coordsOf(nm); if(!c) return;
+      const ran=byT[nm].filter(m=>m.acresY>0).length, rain=rainOf(nm), [cx,cy]=proj(c[0],c[1]);
+      const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',cy);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',"'IBM Plex Mono',monospace");t.setAttribute('font-size','13');t.setAttribute('font-weight','600');t.setAttribute('fill', rain>15?'#FFFFFF':'#1B1A17'); t.style.pointerEvents='none'; t.textContent=ran; g.appendChild(t);
+    });
+    attachPanZoom(svg); drawLegend('weather'); return;
+  }
+  const val=(list)=>{ if(metric==='active')return list.filter(m=>hstate(m)==='Active').length; if(metric==='acresY')return list.reduce((s,m)=>s+m.acresY,0); return list.length; };
+  let maxV=1; Object.values(byT).forEach(l=>maxV=Math.max(maxV,val(l)));
+  const rOf=v=>6+30*Math.sqrt(v/maxV);
+  const wedge=(cx,cy,r,a0,a1,fill)=>{ const x0=cx+r*Math.cos(a0),y0=cy+r*Math.sin(a0),x1=cx+r*Math.cos(a1),y1=cy+r*Math.sin(a1),lg=(a1-a0)>Math.PI?1:0; const pa=document.createElementNS(NS,'path'); pa.setAttribute('d',`M${cx} ${cy}L${x0.toFixed(1)} ${y0.toFixed(1)}A${r} ${r} 0 ${lg} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}Z`); pa.setAttribute('fill',fill); return pa; };
+  Object.keys(byT).sort((a,b)=>val(byT[b])-val(byT[a])).forEach(name=>{
+    const list=byT[name], c=coordsOf(name); if(!c) return;
+    const v=val(list); if(v<=0&&metric==='active') return;
+    const r=rOf(v), [cx,cy]=proj(c[0],c[1]);
+    const dim = activeTerr && activeTerr!==name;
+    const grp=document.createElementNS(NS,'g'); grp.style.cursor='pointer'; grp.style.opacity=dim?0.25:1;
+    grp.addEventListener('click',(e)=>{ e.stopPropagation(); setState(s=>({terr: s.terr===name?'':name, cluster:''})); });
+    const ro=roll(list);
+    if(metric==='health'){
+      let a=-Math.PI/2; const segs=[['Active',ro.Active],['Idle',ro.Idle],['Breakdown',ro.Breakdown]];
+      const tot=ro.deployed||1; segs.forEach(([k,n])=>{ if(n<=0)return; const a1=a+2*Math.PI*(n/tot); grp.appendChild(wedge(cx,cy,r,a,a1,hcolor(k))); a=a1; });
+    } else if(metric==='active'){
+      const cir=document.createElementNS(NS,'circle'); cir.setAttribute('cx',cx);cir.setAttribute('cy',cy);cir.setAttribute('r',r); cir.setAttribute('fill',C.act); cir.setAttribute('fill-opacity','.85'); grp.appendChild(cir);
+    } else if(metric==='acresY'){
+      const cir=document.createElementNS(NS,'circle'); cir.setAttribute('cx',cx);cir.setAttribute('cy',cy);cir.setAttribute('r',r); cir.setAttribute('fill','#7C6FE0'); cir.setAttribute('fill-opacity','.82'); grp.appendChild(cir);
+    } else {
+      const tot=ro.deployed||1, aU=2*Math.PI*(ro.upl/tot);
+      if(ro.upl>0&&ro.swal>0){ grp.appendChild(wedge(cx,cy,r,-Math.PI/2,-Math.PI/2+aU,C.orange)); grp.appendChild(wedge(cx,cy,r,-Math.PI/2+aU,-Math.PI/2+2*Math.PI,C.green)); }
+      else { const cir=document.createElementNS(NS,'circle'); cir.setAttribute('cx',cx);cir.setAttribute('cy',cy);cir.setAttribute('r',r); cir.setAttribute('fill',ro.upl>0?C.orange:C.green); grp.appendChild(cir); }
+    }
+    const stroke=document.createElementNS(NS,'circle'); stroke.setAttribute('cx',cx);stroke.setAttribute('cy',cy);stroke.setAttribute('r',r); stroke.setAttribute('fill','none'); stroke.setAttribute('stroke','#fff'); stroke.setAttribute('stroke-width','1.4'); grp.appendChild(stroke);
+    if(r>=15){ const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',cy);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',"'IBM Plex Mono',monospace");t.setAttribute('font-size','12');t.setAttribute('font-weight','600');t.setAttribute('fill','#fff'); t.style.pointerEvents='none'; t.textContent=metric==='acresY'?fmt(v):v; grp.appendChild(t); }
+    const title=document.createElementNS(NS,'title'); title.textContent=`${name} — ${ro.deployed} machines · ${ro.Active} active · ${ro.Breakdown} down`; grp.appendChild(title);
+    g.appendChild(grp);
+  });
+  attachPanZoom(svg);
+  drawLegend(metric);
+}
+function drawLegend(metric){
+  const host=document.getElementById('legendHost'); if(!host) return;
+  let html='';
+  const row=(c,l,shape)=>`<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><span style="width:13px;height:13px;border-radius:${shape==='sq'?'3px':'50%'};background:${c};flex-shrink:0"></span><span style="font-size:11.5px;color:#6E6A62">${l}</span></div>`;
+  if(metric==='weather') html=`<div style="height:12px;border-radius:6px;background:linear-gradient(90deg,#E8F1FB,#14528B);margin-bottom:6px"></div><div style="display:flex;justify-content:space-between;font-size:10.5px;color:#9C988F"><span>0 mm</span><span>40+ mm</span></div><div style="font-size:11px;color:#6E6A62;margin-top:9px">Fill = yesterday's rainfall. The <b>number</b> in each district is machines that ran yesterday.</div>`;
+  else if(metric==='deploy') html=row(C.orange,'UPL')+row(C.green,'SWAL')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Bubble size = machines deployed. Split shows UPL / SWAL share.</div>`;
+  else if(metric==='active') html=row(C.act,'Active machines')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Size = machines that ran yesterday.</div>`;
+  else if(metric==='acresY') html=row('#7C6FE0','Acres sprayed yesterday')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Size = acres covered yesterday.</div>`;
+  else html=row(C.act,'Active')+row(C.idle,'Idle')+row(C.brk,'Breakdown')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Pie = health mix per territory.</div>`;
+  html+=`<div style="font-size:11px;color:#9C988F;margin-top:10px;padding-top:10px;border-top:1px solid #F2F0EB">Click a ${metric==='weather'?'district':'bubble'} to drill into that territory.</div>`;
+  host.innerHTML=html;
+}
+function drawPins(hostId){
+  const host=document.getElementById(hostId); if(!host||!BASE) return;
+  host.innerHTML='';
+  const svg=document.createElementNS(NS,'svg'); svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width','100%'); svg.setAttribute('height','100%'); svg.style.display='block';
+  const g=document.createElementNS(NS,'g'); svg.appendChild(g); host.appendChild(svg); _g=g;
+  applyTransform();
+  BASE.features.forEach(f=>{ const p=document.createElementNS(NS,'path'); p.setAttribute('d',pathOf(f.geometry)); p.setAttribute('fill','#F1EEE8'); p.setAttribute('stroke','#FFFFFF'); p.setAttribute('stroke-width','1'); g.appendChild(p); });
+  const outline=document.createElementNS(NS,'path'); let od=''; BASE.features.forEach(f=>od+=pathOf(f.geometry)); outline.setAttribute('d',od); outline.setAttribute('fill','none'); outline.setAttribute('stroke','#DDD4C6'); outline.setAttribute('stroke-width','0.8'); g.appendChild(outline);
+  const F=getF().filter(m=>m.lat!=null&&m.lon!=null);
+  const mode=state.pinMode;
+  _pinMap={};
+  const labelG=document.createElementNS(NS,'g'); labelG.style.pointerEvents='none'; labelG.style.opacity='0';
+  const lbBg=document.createElementNS(NS,'rect'); lbBg.setAttribute('rx','4'); lbBg.setAttribute('fill','#1B1A17');
+  const lbTx=document.createElementNS(NS,'text'); lbTx.setAttribute('font-family',"'IBM Plex Mono',monospace"); lbTx.setAttribute('font-size','13'); lbTx.setAttribute('font-weight','600'); lbTx.setAttribute('fill','#fff'); lbTx.setAttribute('text-anchor','middle');
+  labelG.appendChild(lbBg); labelG.appendChild(lbTx);
+  const showLabel=(cx,cy,txt)=>{ lbTx.textContent=txt; lbTx.setAttribute('x',cx); lbTx.setAttribute('y',cy-13); const w=txt.length*8+14; lbBg.setAttribute('x',cx-w/2); lbBg.setAttribute('y',cy-26); lbBg.setAttribute('width',w); lbBg.setAttribute('height',18); labelG.style.opacity='1'; };
+  F.forEach(m=>{ const [cx,cy]=proj(m.lon,m.lat); const col= mode==='acres'? acresColor(m.acresY) : hcolor(hstate(m));
+    const c=document.createElementNS(NS,'circle'); c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r','4.2'); c.setAttribute('fill',col); c.setAttribute('fill-opacity','0.92'); c.setAttribute('stroke','#fff'); c.setAttribute('stroke-width','1'); c.style.cursor='pointer'; c.style.transition='r .1s';
+    _pinMap[m.mc]={c,cx,cy};
+    const enter=()=>{ c.setAttribute('r','7.5'); c.setAttribute('stroke','#1B1A17'); c.setAttribute('stroke-width','1.6'); showLabel(cx,cy,m.mc); const row=document.querySelector('#machineTable [data-mc="'+CSS.escape(m.mc)+'"]'); if(row){ row.style.background='#FCF3E9'; } };
+    const leave=()=>{ c.setAttribute('r','4.2'); c.setAttribute('stroke','#fff'); c.setAttribute('stroke-width','1'); labelG.style.opacity='0'; const row=document.querySelector('#machineTable [data-mc="'+CSS.escape(m.mc)+'"]'); if(row){ row.style.background=''; } };
+    c.addEventListener('mouseenter',enter); c.addEventListener('mouseleave',leave);
+    c.addEventListener('click',(e)=>{ e.stopPropagation(); setState({selected:m}); });
+    const ti=document.createElementNS(NS,'title'); ti.textContent=`${m.mc} · ${m.opName} · ${hstate(m)} · ${m.acresY} ac y'day`; c.appendChild(ti);
+    g.appendChild(c);
+  });
+  g.appendChild(labelG);
+  _pinLabel={labelG,showLabel};
+  attachPanZoom(svg);
+}
+function highlightPin(mc,on){ const e=_pinMap&&_pinMap[mc]; if(!e)return; if(on){ e.c.setAttribute('r','7.5'); e.c.setAttribute('stroke','#1B1A17'); e.c.setAttribute('stroke-width','1.6'); if(_pinLabel)_pinLabel.showLabel(e.cx,e.cy,mc); } else { e.c.setAttribute('r','4.2'); e.c.setAttribute('stroke','#fff'); e.c.setAttribute('stroke-width','1'); if(_pinLabel)_pinLabel.labelG.style.opacity='0'; } }
+function drawDrawerMap(){
+  const host=document.getElementById('drawerMap'); if(!host||!BASE) return;
+  const m=state.selected; host.innerHTML='';
+  const svg=document.createElementNS(NS,'svg'); svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width','100%'); svg.setAttribute('height','100%');
+  let d=''; BASE.features.forEach(f=>d+=pathOf(f.geometry));
+  const p=document.createElementNS(NS,'path'); p.setAttribute('d',d); p.setAttribute('fill','#EAE6DD'); p.setAttribute('stroke','#fff'); p.setAttribute('stroke-width','1.5'); svg.appendChild(p);
+  if(m && m.lat!=null&&m.lon!=null){ const [cx,cy]=proj(m.lon,m.lat);
+    const halo=document.createElementNS(NS,'circle'); halo.setAttribute('cx',cx);halo.setAttribute('cy',cy);halo.setAttribute('r',26);halo.setAttribute('fill',C.orange);halo.setAttribute('fill-opacity','.2'); svg.appendChild(halo);
+    const dot=document.createElementNS(NS,'circle'); dot.setAttribute('cx',cx);dot.setAttribute('cy',cy);dot.setAttribute('r',11);dot.setAttribute('fill',C.orange);dot.setAttribute('stroke','#fff');dot.setAttribute('stroke-width','3'); svg.appendChild(dot);
+  }
+  host.appendChild(svg);
+}
+
+/* ============================= style helpers ============================= */
+const navStyle = active => ({ width:'46px',height:'42px',border:'none',borderRadius:'11px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center', background:active?'#34322d':'transparent', color:active?'#fff':'#807c73' });
+const seg = active => ({ border:'none',borderRadius:'6px',padding:'5px 11px',fontFamily:"'Noto Sans'",fontSize:'12px',fontWeight:active?600:500,cursor:'pointer', background:active?'#fff':'transparent', color:active?'#1B1A17':'#807c73', boxShadow:active?'0 1px 2px rgba(0,0,0,.08)':'none' });
+const segM = active => ({ flex:1, border:'none',borderRadius:'8px',padding:'8px 0',fontFamily:"'Noto Sans'",fontSize:'12px',fontWeight:active?600:500,cursor:'pointer', background:active?'#fff':'transparent', color:active?'#1B1A17':'#807c73', boxShadow:active?'0 1px 2px rgba(0,0,0,.08)':'none', textAlign:'center' });
+const chip = (active,color) => ({ display:'flex',alignItems:'center',gap:'5px',border:'1px solid '+(active?color:'#E9E6DF'),borderRadius:'8px',padding:'5px 10px',fontFamily:"'Noto Sans'",fontSize:'11.5px',fontWeight:active?600:500,cursor:'pointer', background:active?(color+'14'):'#fff', color:active?color:'#6E6A62' });
+
+/* ============================= icons ============================= */
+const I = {
+  map:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg>',
+  tables:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 9v11"/></svg>',
+  machines:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+  weather:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 17a4 4 0 0 1 .5-8 5.5 5.5 0 0 1 10.6 1.5A3.5 3.5 0 0 1 17.5 17Z"/><path d="M8 20.5 7 22M12 20.5 11 22M16 20.5 15 22"/></svg>',
+  am:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="3"/><path d="M6.5 21a5.5 5.5 0 0 1 11 0"/><path d="M4 13.5 2.5 15M20 13.5 21.5 15"/></svg>',
+  mobile:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>',
+  desktop:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M9 20h6M12 17v3"/></svg>',
+  search:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9C988F" stroke-width="2" style="position:absolute;left:11px;top:50%;transform:translateY(-50%)"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
+  refresh:s=>`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="${s}"><path d="M21 12a9 9 0 1 1-2.6-6.3M21 4v5h-5"/></svg>`,
+  close:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  closeS:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  clear:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  caret:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9C988F" stroke-width="2.4" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);pointer-events:none"><path d="m6 9 6 6 6-6"/></svg>',
+  phone:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h4l2 5-3 2a12 12 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/></svg>',
+  phoneS:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h4l2 5-3 2a12 12 0 0 0 5 5l2-3 5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2Z"/></svg>'
+};
+
+/* ============================= view-model ============================= */
+function vals(){
+  const S=state;
+  const F=getF();
+  const tot=roll(F);
+  const allTerrs=[...new Set(ROWS.map(m=>m.territory))].sort();
+  const terrOptions=[{v:'',t:'All territories'},...allTerrs.map(t=>({v:t,t}))];
+  const clusters=S.terr? [...new Set(ROWS.filter(m=>m.territory===S.terr).map(m=>m.cluster))].sort() : [];
+  const clusterOptions=[{v:'',t:S.terr?'All clusters':'— pick territory —'},...clusters.map(c=>({v:c,t:c}))];
+  const mono22=col=>({fontFamily:"'IBM Plex Mono'",fontSize:'22px',fontWeight:600,color:col});
+  const pctTxt=(tot.target? Math.round(tot.pct*100):0);
+  const kpis=[
+    {label:'Deployed',value:fmt(tot.deployed),unit:'',valStyle:mono22(C.ink)},
+    {label:'UPL',value:fmt(tot.upl),unit:'',valStyle:mono22(C.orange)},
+    {label:'SWAL',value:fmt(tot.swal),unit:'',valStyle:mono22(C.green)},
+    {label:'Active y’day',value:fmt(tot.Active),unit:'',valStyle:mono22(C.act)},
+    {label:'Idle',value:fmt(tot.Idle),unit:'',valStyle:mono22(C.idle)},
+    {label:'Breakdown',value:fmt(tot.Breakdown),unit:'',valStyle:mono22(C.brk)},
+    {label:'Acres y’day',value:fmt(tot.acresY),unit:'ac',valStyle:mono22(C.ink)},
+    {label:'MTD acres',value:fmt(tot.mtd),unit:'ac',valStyle:mono22(C.ink)},
+    {label:'Achieved',value:pctTxt+'%',unit:'',valStyle:mono22(bcolor(band(tot.pct)))},
+  ];
+  const byT={}; F.forEach(m=>{ (byT[m.territory] ||= []).push(m); });
+  const terrEntries=Object.keys(byT).map(name=>({name,list:byT[name],r:roll(byT[name])})).sort((a,b)=>b.r.deployed-a.r.deployed);
+  const topTerr=terrEntries.slice(0,7).map(({name,r},i)=>{ const t2=r.deployed||1;
+    return { name, rank:String(i+1).padStart(2,'0'), deployed:r.deployed,
+      uStyle:{width:(100*r.upl/t2)+'%',background:C.orange}, sStyle:{width:(100*r.swal/t2)+'%',background:C.green} }; });
+
+  // Tables rows
+  const rows=[];
+  const grid5={display:'grid',gridTemplateColumns:'300px 124px 150px 1fr 96px',gap:'14px',alignItems:'center'};
+  terrEntries.forEach(({name,list,r})=>{
+    const exp=!!S.expanded[name];
+    rows.push({ click:{act:'exp',key:name}, indent:'0px',
+      rowStyle:{...grid5,padding:'11px 18px',borderTop:'1px solid #F2F0EB',cursor:'pointer',background:exp?'#FBFAF8':'#fff'},
+      chev:exp?'▾':'▸', chevStyle:{fontSize:'10px',color:'#B6B1A8',width:'12px'},
+      dotStyle:{display:'none'}, name, nameStyle:{fontSize:'13.5px',fontWeight:600,whiteSpace:'nowrap'}, sub:`${r.deployed} machines`, subStyle:{fontSize:'11px',color:'#9C988F'},
+      deployed:r.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(r) });
+    if(exp){
+      const byC={}; list.forEach(m=>{ (byC[m.cluster] ||= []).push(m); });
+      Object.keys(byC).sort((a,b)=>byC[b].length-byC[a].length).forEach(cn=>{
+        const cr=roll(byC[cn]); const ck=name+'|'+cn; const cexp=!!S.expanded[ck];
+        rows.push({ click:{act:'exp',key:ck}, indent:'18px',
+          rowStyle:{...grid5,padding:'9px 18px',borderTop:'1px solid #F4F2EE',cursor:'pointer',background:cexp?'#FCFBF9':'#fff'},
+          chev:cexp?'▾':'▸', chevStyle:{fontSize:'9px',color:'#C4BFB5',width:'12px'},
+          dotStyle:{display:'none'}, name:cn, nameStyle:{fontSize:'12.5px',fontWeight:500,color:'#46433d',whiteSpace:'nowrap'}, sub:'', subStyle:{display:'none'},
+          deployed:cr.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(cr) });
+        if(cexp){
+          byC[cn].forEach(m=>{ const hs=hstate(m), p=pctOf(m);
+            rows.push({ click:{act:'open',mc:m.mc}, indent:'38px',
+              rowStyle:{...grid5,padding:'8px 18px',borderTop:'1px solid #F6F4F0',cursor:'pointer',background:'#fff'},
+              chev:'', chevStyle:{width:'12px'}, dotStyle:{width:'7px',height:'7px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
+              name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName, subStyle:{fontSize:'11px',color:'#9C988F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'},
+              deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},
+              mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
+              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY) });
+          });
+        }
+      });
+    }
+  });
+
+  // Weather
+  const terrTable=terrEntries.slice().sort((a,b)=>rainOf(b.name)-rainOf(a.name)).map(({name,r})=>{ const tt=r.deployed||1; const rain=rainOf(name);
+    return { name, deployed:r.deployed, upl:r.upl, swal:r.swal, active:r.Active, idle:r.Idle, breakdown:r.Breakdown, acresY:fmt(r.acresY), mtd:fmt(r.mtd), rain:rain.toFixed(1),
+      uStyle:{width:(100*r.upl/tt)+'%',background:C.orange,display:'block'}, sStyle:{width:(100*r.swal/tt)+'%',background:C.green,display:'block'},
+      rainSwatch:'background:'+rainColor(rain) }; });
+  const wetTerr=terrEntries.map(({name,r})=>({name,rain:rainOf(name),ran:r.ranY})).sort((a,b)=>b.rain-a.rain).slice(0,7).map(w=>({ name:w.name, rain:w.rain.toFixed(1), ran:w.ran, swatch:'background:'+rainColor(w.rain) }));
+
+  // AM view
+  const amRows=[]; const grid5am={display:'grid',gridTemplateColumns:'330px 120px 150px 1fr 168px',gap:'14px',alignItems:'center'};
+  const byAM={}; F.forEach(m=>{ (byAM[m.am] ||= []).push(m); });
+  const amKeys=Object.keys(byAM).sort((a,b)=>byAM[b].length-byAM[a].length);
+  const roleChip=(bg,col)=>({display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:'9px',fontWeight:700,letterSpacing:'.02em',padding:'2px 6px',borderRadius:'5px',background:bg,color:col});
+  const callBtn={width:'30px',height:'30px',borderRadius:'8px',background:'#F2F0EB',color:'#1B1A17',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0};
+  amKeys.forEach(am=>{
+    const list=byAM[am], r=roll(list); const cos=[...new Set(list.map(m=>m.co))], terrs=[...new Set(list.map(m=>m.territory))];
+    const key='am:'+am, exp=!!S.expanded[key];
+    amRows.push({ click:{act:'exp',key}, indent:'0px',
+      rowStyle:{...grid5am,padding:'12px 18px',borderTop:'1px solid #F2F0EB',cursor:'pointer',background:exp?'#FBFAF8':'#fff'},
+      chev:exp?'▾':'▸', chevStyle:{fontSize:'10px',color:'#B6B1A8',width:'12px'}, role:'AM', roleStyle:roleChip(C.softO,C.orangeD), dotStyle:{display:'none'},
+      name:am, nameStyle:{fontSize:'13.5px',fontWeight:600,whiteSpace:'nowrap'}, sub:`${cos.length} cluster officers · ${terrs.length} territories`, subStyle:{fontSize:'11px',color:'#9C988F',marginTop:'1px'},
+      deployed:r.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(r),
+      contact:list[0].amNum, callTel:'tel:'+list[0].amNum, callStyle:callBtn });
+    if(exp){
+      const byCO={}; list.forEach(m=>{ (byCO[m.co] ||= []).push(m); });
+      Object.keys(byCO).sort((a,b)=>byCO[b].length-byCO[a].length).forEach(co=>{
+        const cl=byCO[co], cr=roll(cl); const ck=key+'|co:'+co, cexp=!!S.expanded[ck]; const coTerrs=[...new Set(cl.map(m=>m.cluster))];
+        amRows.push({ click:{act:'exp',key:ck}, indent:'20px',
+          rowStyle:{...grid5am,padding:'10px 18px',borderTop:'1px solid #F4F2EE',cursor:'pointer',background:cexp?'#FCFBF9':'#fff'},
+          chev:cexp?'▾':'▸', chevStyle:{fontSize:'9px',color:'#C4BFB5',width:'12px'}, role:'CO', roleStyle:roleChip('#EAF1F8','#3A6FA0'), dotStyle:{display:'none'},
+          name:co, nameStyle:{fontSize:'12.5px',fontWeight:600,color:'#46433d',whiteSpace:'nowrap'}, sub:coTerrs.join(', '), subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
+          deployed:cr.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(cr),
+          contact:cl[0].coMob, callTel:'tel:'+cl[0].coMob, callStyle:callBtn });
+        if(cexp){
+          cl.forEach(m=>{ const hs=hstate(m), p=pctOf(m);
+            amRows.push({ click:{act:'open',mc:m.mc}, indent:'40px',
+              rowStyle:{...grid5am,padding:'8px 18px',borderTop:'1px solid #F6F4F0',cursor:'pointer',background:'#fff'},
+              chev:'', chevStyle:{width:'12px'}, role:'', roleStyle:{display:'none'}, dotStyle:{width:'7px',height:'7px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
+              name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName+' · '+m.territory, subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
+              deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},
+              mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
+              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY),
+              contact:m.opNum, callTel:'tel:'+m.opNum, callStyle:callBtn });
+          });
+        }
+      });
+    }
+  });
+
+  // Machine table
+  const ord={Breakdown:0,Idle:1,Active:2};
+  const machineTable=F.slice().sort((a,b)=>{ const d=ord[hstate(a)]-ord[hstate(b)]; return d!==0?d:(b.acresY-a.acresY); }).map(m=>{ const hs=hstate(m), col=hcolor(hs);
+    return { mc:m.mc, org:m.org, opName:m.opName, opNum:m.opNum, geo:`${m.territory} · ${m.cluster}`, acresY:m.acresY>0?fmt(m.acresY):'0', co:m.co, am:m.am,
+      orgStyle:{display:'inline-flex',fontSize:'9.5px',fontWeight:700,letterSpacing:'.02em',padding:'2px 7px',borderRadius:'5px',background:(m.org==='UPL'?C.softO:C.softG),color:(m.org==='UPL'?C.orangeD:C.greenD)},
+      healthStyle:{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10.5px',fontWeight:600,color:col}, healthDot:{width:'8px',height:'8px',borderRadius:'50%',background:col,flexShrink:0,display:'block'}, health:hs,
+      acresStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12.5px',fontWeight:600,color:m.acresY>0?C.ink:'#B6B1A8',textAlign:'right'} }; });
+
+  // Drawer
+  let d=null;
+  if(S.selected){ const m=S.selected; const hs=hstate(m), p=pctOf(m); const w=weather(m.territory);
+    const maxF=Math.max(m.target,m.achieved,m.mtd,m.acresY,1);
+    const funnel=[['Target',m.target,'#C9C4BA'],['Achieved',m.achieved,bcolor(band(p))],['MTD',m.mtd,'#8C8780'],['Yesterday',m.acresY,C.act]].map(([label,v,col])=>({label,value:fmt(v),barStyle:{display:'block',height:'100%',width:(100*v/maxF)+'%',background:col}}));
+    const maxP=Math.max(1,...m.scanned.map(s=>s.acres));
+    const products=(m.scanned.length?m.scanned:[{product:'Unspecified',acres:0}]).map(s=>({product:s.product,acres:fmt(s.acres),barStyle:{display:'block',height:'100%',width:(100*s.acres/maxP)+'%',background:C.orange}}));
+    const opMapped=m.opMapped===1;
+    d={ mc:m.mc, org:m.org, geo:`${m.territory} · ${m.cluster}`,
+      orgStyle:{display:'inline-flex',fontSize:'10.5px',fontWeight:700,letterSpacing:'.03em',padding:'3px 9px',borderRadius:'6px',background:(m.org==='UPL'?C.softO:C.softG),color:(m.org==='UPL'?C.orangeD:C.greenD)},
+      healthStyle:{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10.5px',fontWeight:600,padding:'3px 9px',borderRadius:'6px',background:hcolor(hs)+'18',color:hcolor(hs)}, healthDot:{width:'6px',height:'6px',borderRadius:'50%',background:hcolor(hs),display:'block'}, health:hs,
+      sprayBg:w.bg, sprayBorder:w.border, sprayIcon:w.icon, sprayLabel:w.label, sprayInk:w.ink, weatherLine:w.line,
+      opInitial:(m.opName||'?').charAt(0), opName:m.opName, opNum:m.opNum, opTel:'tel:'+m.opNum,
+      opTag: opMapped? 'Mapped' : 'Unverified',
+      opTagStyle:{display:'inline-flex',fontSize:'9.5px',fontWeight:600,padding:'1px 7px',borderRadius:'5px',background:opMapped?C.softG:C.softA,color:opMapped?C.greenD:'#9A6B05'},
+      callStyle:{width:'36px',height:'36px',borderRadius:'9px',background:C.ink,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0},
+      funnel, products,
+      locTitle:(m.lat!=null)?`${m.territory} cluster`:'No location on file', coords:(m.lat!=null)?`${m.lat}, ${m.lon}`:'Excluded from map · listed here',
+      coName:m.co, coMob:m.coMob, coTel:'tel:'+m.coMob, amName:m.am, amNum:m.amNum, amTel:'tel:'+m.amNum };
+  }
+
+  const anyFilter = S.org!=='Both'||!!S.terr||!!S.cluster||!!S.health.length||!!S.search;
+  const mobileWeather = weather(S.terr || 'Madhya Pradesh');
+  const mobileList = F.slice(0,80).map(m=>{ const hs=hstate(m);
+    return { mc:m.mc, org:m.org, opName:m.opName, geo:`${m.territory} · ${m.cluster}`,
+      orgStyle:{display:'inline-flex',fontSize:'9px',fontWeight:700,padding:'1px 6px',borderRadius:'5px',background:(m.org==='UPL'?C.softO:C.softG),color:(m.org==='UPL'?C.orangeD:C.greenD)},
+      dotStyle:{width:'9px',height:'9px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
+      acresLabel: m.acresY>0? fmt(m.acresY)+' ac' : (m.breakdown?'down':'idle') }; });
+
+  return { tot, kpis, terrOptions, clusterOptions, topTerr, rows, terrTable, wetTerr, amRows, machineTable, mobileList, d,
+    anyFilter, amCount:amKeys.length, pinCount:F.length, mListCount:F.length,
+    pinB10:fmt(F.filter(m=>m.acresY>10).length), pinB5:fmt(F.filter(m=>m.acresY>=5&&m.acresY<=10).length), pinB1:fmt(F.filter(m=>m.acresY>=1&&m.acresY<5).length), pinB0:fmt(F.filter(m=>m.acresY<1).length),
+    freshCount:`${fmt(tot.deployed)} machines${anyFilter?' (filtered)':''}`, mobileWeather,
+    statusDot: dataMode==='live'?'#15A24A':dataMode==='error'?'#DC3A2B':'#9aa3b1',
+    statusRing: dataMode==='live'?'rgba(21,162,74,.16)':dataMode==='error'?'rgba(220,58,43,.16)':'rgba(0,0,0,.06)',
+    statusLabel: dataMode==='live'?('Live · '+(lastUpdated||'')+' IST') : dataMode==='error'?'Sheet unreachable — demo data' : 'Demo data · add your sheet',
+    statusTime: lastUpdated||'09:42' };
+}
+
+/* ============================= HTML builders ============================= */
+const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" title="${act}" style="${css(navStyle(active))}">${icon}</button>`;
+
+function railHTML(){
+  const v=state.view;
+  return `<aside style="width:74px;flex-shrink:0;background:#1B1A17;display:flex;flex-direction:column;align-items:center;padding:16px 0">
+    <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;margin-bottom:26px">AF</div>
+    <nav style="display:flex;flex-direction:column;gap:8px;flex:1">
+      ${navBtn('map',I.map,v==='map')}${navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${navBtn('am',I.am,v==='am')}
+    </nav>
+    <button data-act="device" title="Mobile view" style="${css({...navStyle(false),marginBottom:'8px'})}">${I.mobile}</button>
+    <div style="writing-mode:vertical-rl;font-size:8.5px;letter-spacing:.14em;color:#6b675f;margin-top:14px;text-transform:uppercase">Confidential</div>
+  </aside>`;
+}
+function topbarHTML(v){
+  return `<header style="height:58px;flex-shrink:0;background:#FFFFFF;border-bottom:1px solid #E9E6DF;display:flex;align-items:center;gap:18px;padding:0 22px">
+    <div style="min-width:0">
+      <div style="font-size:14.5px;font-weight:700;letter-spacing:-.01em;line-height:1.1">MP · AF Machine Deployment</div>
+      <div style="font-size:11px;color:#9C988F;margin-top:1px">1+1=11 Kharif Programme · Farm Mechanisation Services</div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="position:relative;width:300px;max-width:34vw">
+      ${I.search}
+      <input id="searchInput" placeholder="Search machine no. or operator…" style="width:100%;height:36px;border:1px solid #E9E6DF;border-radius:9px;background:#FAF9F6;padding:0 12px 0 32px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;outline:none" />
+    </div>
+    <div style="display:flex;align-items:center;gap:9px;border-left:1px solid #E9E6DF;padding-left:16px">
+      <span style="width:8px;height:8px;border-radius:50%;background:${v.statusDot};box-shadow:0 0 0 3px ${v.statusRing}"></span>
+      <div style="line-height:1.15"><div style="font-size:11.5px;font-weight:600">${E(v.statusLabel)}</div><div style="font-size:10px;color:#9C988F">${E(v.freshCount)}</div></div>
+      <button data-act="refresh" title="Refresh" style="width:32px;height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;display:flex;align-items:center;justify-content:center;cursor:pointer">${I.refresh(state.refreshing?'animation:spin 0.7s linear':'')}</button>
+    </div>
+  </header>`;
+}
+function optionsHTML(opts,cur){ return opts.map(o=>`<option value="${E(o.v)}"${o.v===cur?' selected':''}>${E(o.t)}</option>`).join(''); }
+function filterBarHTML(v){
+  const S=state;
+  const selStyle="height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12px;color:#1B1A17;cursor:pointer;outline:none;max-width:168px";
+  return `<div style="flex-shrink:0;background:#FFFFFF;border-bottom:1px solid #E9E6DF;display:flex;align-items:center;gap:14px;padding:9px 22px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Org</span>
+      <div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
+        <button data-act="org" data-org="Both" style="${css(seg(S.org==='Both'))}">Both</button>
+        <button data-act="org" data-org="UPL" style="${css(seg(S.org==='UPL'))}">UPL</button>
+        <button data-act="org" data-org="SWAL" style="${css(seg(S.org==='SWAL'))}">SWAL</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Geo</span>
+      <div style="position:relative"><select id="terrSelect" style="${selStyle}">${optionsHTML(v.terrOptions,S.terr)}</select>${I.caret}</div>
+      <div style="position:relative"><select id="clusterSelect" style="${selStyle}">${optionsHTML(v.clusterOptions,S.cluster)}</select>${I.caret}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Health</span>
+      <button data-act="health" data-h="Active" style="${css(chip(S.health.includes('Active'),C.act))}"><span style="width:7px;height:7px;border-radius:50%;background:#15A24A"></span>Active</button>
+      <button data-act="health" data-h="Idle" style="${css(chip(S.health.includes('Idle'),C.idle))}"><span style="width:7px;height:7px;border-radius:50%;background:#E0A008"></span>Idle</button>
+      <button data-act="health" data-h="Breakdown" style="${css(chip(S.health.includes('Breakdown'),C.brk))}"><span style="width:7px;height:7px;border-radius:50%;background:#DC3A2B"></span>Breakdown</button>
+    </div>
+    ${v.anyFilter?`<button data-act="clear" style="margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:#6E6A62;background:none;border:none;cursor:pointer">${I.clear}Clear filters</button>`:''}
+  </div>`;
+}
+function kpiStripHTML(v){
+  return `<div style="flex-shrink:0;background:#FBFAF8;border-bottom:1px solid #E9E6DF;display:flex;gap:0;overflow-x:auto;padding:0 8px">
+    ${v.kpis.map(k=>`<div style="flex:1;min-width:118px;padding:13px 16px;border-right:1px solid #EFEDE7">
+      <div style="display:flex;align-items:baseline;gap:5px"><span style="${css(k.valStyle)}">${E(k.value)}</span><span style="font-size:10.5px;color:#B6B1A8">${E(k.unit)}</span></div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">${E(k.label)}</div>
+    </div>`).join('')}
+  </div>`;
+}
+const zoomCtrls = `<div style="display:flex;gap:4px">
+  <button data-act="zoomout" style="width:28px;height:28px;border:1px solid #E9E6DF;border-radius:7px;background:#fff;cursor:pointer;font-size:15px;color:#6E6A62;line-height:1">−</button>
+  <button data-act="zoomin" style="width:28px;height:28px;border:1px solid #E9E6DF;border-radius:7px;background:#fff;cursor:pointer;font-size:15px;color:#6E6A62;line-height:1">+</button>
+  <button data-act="zoomreset" style="height:28px;padding:0 10px;border:1px solid #E9E6DF;border-radius:7px;background:#fff;cursor:pointer;font-size:11px;color:#6E6A62">Reset</button>
+</div>`;
+const mt = m => css(seg(state.metric===m));
+function mapViewHTML(v){
+  return `<section style="padding:18px 22px;display:grid;grid-template-columns:1fr 252px;gap:18px;min-height:100%">
+    <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid #EFEDE7;flex-wrap:wrap">
+        <span style="font-size:12px;font-weight:600">Size bubbles by</span>
+        <div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
+          <button data-act="metric" data-metric="deploy" style="${mt('deploy')}">Deployment</button>
+          <button data-act="metric" data-metric="active" style="${mt('active')}">Active</button>
+          <button data-act="metric" data-metric="acresY" style="${mt('acresY')}">Acres y'day</button>
+          <button data-act="metric" data-metric="health" style="${mt('health')}">Health</button>
+          <button data-act="metric" data-metric="weather" style="${mt('weather')}">Weather</button>
+        </div>
+        <div style="flex:1"></div>${zoomCtrls}
+      </div>
+      <div id="mapHost" style="flex:1;min-height:430px;background:#FBFAF8;position:relative;cursor:grab"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;padding:15px 16px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:11px">Legend</div>
+        <div id="legendHost"></div>
+      </div>
+      <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;padding:15px 16px;flex:1">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:4px">Top territories</div>
+        ${v.topTerr.map(t=>`<div data-act="terr" data-terr="${E(t.name)}" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #F2F0EB;cursor:pointer">
+          <span style="font-family:'IBM Plex Mono';font-size:11px;color:#C9C4BA;width:14px">${E(t.rank)}</span>
+          <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(t.name)}</div><div style="display:flex;height:4px;margin-top:5px;border-radius:2px;overflow:hidden;background:#F2F0EB"><span style="${css(t.uStyle)}"></span><span style="${css(t.sStyle)}"></span></div></div>
+          <span style="font-family:'IBM Plex Mono';font-size:14px;font-weight:600">${t.deployed}</span>
+        </div>`).join('')}
+      </div>
+    </div>
+  </section>`;
+}
+function rowDataAttrs(click){ return `data-act="${click.act}" ${click.key!=null?`data-key="${E(click.key)}"`:''} ${click.mc!=null?`data-mc="${E(click.mc)}"`:''}`; }
+function tablesViewHTML(v){
+  return `<section style="padding:18px 22px">
+    <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:300px 124px 150px 1fr 96px;gap:14px;padding:11px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;font-size:10px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase">
+        <div>Territory · Cluster · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel (achieved / target)</div><div style="text-align:right">Acres y'day</div>
+      </div>
+      <div style="max-height:calc(100vh - 320px);overflow:auto">
+        ${v.rows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;padding-left:${r.indent}">
+            <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.dotStyle)}"></span>
+            <span style="${css(r.nameStyle)}">${E(r.name)}</span><span style="${css(r.subStyle)}">${E(r.sub)}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span></span></div>
+          <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
+          <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;max-width:220px"><div style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="${css(r.paceBarStyle)}"></span></div></div><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span></div>
+          <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${E(r.ranY)}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+  </section>`;
+}
+function weatherViewHTML(v){
+  return `<section style="padding:18px 22px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:grid;grid-template-columns:1fr 270px;gap:16px">
+      <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;display:flex;flex-direction:column">
+        <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7"><div style="font-size:13px;font-weight:700">Yesterday's rainfall by territory</div><div style="font-size:11px;color:#9C988F;margin-top:2px">Darker = more rain · number inside = machines that ran yesterday</div></div>
+        <div id="wMapHost" style="flex:1;min-height:380px;background:#FBFAF8;cursor:grab"></div>
+      </div>
+      <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px">
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:10px">Rainfall scale</div>
+          <div style="height:12px;border-radius:6px;background:linear-gradient(90deg,#E8F1FB,#14528B)"></div>
+          <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#9C988F;margin-top:5px"><span>0 mm</span><span>40+ mm</span></div>
+        </div>
+        <div style="border-top:1px solid #F2F0EB;padding-top:13px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:8px">Wettest territories</div>
+          ${v.wetTerr.map(w=>`<div data-act="terr" data-terr="${E(w.name)}" style="display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid #F6F4F0;cursor:pointer">
+            <span style="width:12px;height:12px;border-radius:3px;flex-shrink:0;${w.swatch}"></span>
+            <span style="flex:1;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(w.name)}</span>
+            <span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#3A6FA0;font-weight:600">${E(w.rain)} mm</span>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
+      <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:13px;font-weight:700">Territory summary <span style="font-weight:400;color:#9C988F">· all key metrics</span></div>
+        <div style="display:flex;align-items:center;gap:13px;font-size:11px;color:#6E6A62"><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:#F5821F"></span>UPL</span><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:#1FAE43"></span>SWAL</span></div>
+      </div>
+      <div style="overflow-x:auto"><div style="min-width:920px">
+        <div style="display:grid;grid-template-columns:160px 158px 76px 70px 100px 100px 92px 120px;gap:12px;padding:10px 18px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
+          <div>Territory</div><div>Deployed (UPL / SWAL)</div><div style="text-align:right">Active</div><div style="text-align:right">Idle</div><div style="text-align:right">Breakdown</div><div style="text-align:right">Acres y'day</div><div style="text-align:right">MTD ac</div><div style="text-align:right">Rain y'day</div>
+        </div>
+        ${v.terrTable.map(t=>`<div data-act="terr" data-terr="${E(t.name)}" style="display:grid;grid-template-columns:160px 158px 76px 70px 100px 100px 92px 120px;gap:12px;padding:11px 18px;border-bottom:1px solid #F4F2EE;align-items:center;cursor:pointer">
+          <div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(t.name)}</div>
+          <div>
+            <div style="display:flex;align-items:baseline;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${t.deployed}</span><span style="font-size:10.5px"><span style="color:#D96A12;font-weight:600">${t.upl}</span><span style="color:#C9C4BA"> / </span><span style="color:#159234;font-weight:600">${t.swal}</span></span></div>
+            <div style="display:flex;height:5px;margin-top:4px;border-radius:3px;overflow:hidden;background:#F2F0EB;width:118px"><span style="${css(t.uStyle)}"></span><span style="${css(t.sStyle)}"></span></div>
+          </div>
+          <div style="font-family:'IBM Plex Mono';font-size:12.5px;color:#15A24A;font-weight:600;text-align:right">${t.active}</div>
+          <div style="font-family:'IBM Plex Mono';font-size:12.5px;color:#E0A008;font-weight:600;text-align:right">${t.idle}</div>
+          <div style="font-family:'IBM Plex Mono';font-size:12.5px;color:#DC3A2B;font-weight:600;text-align:right">${t.breakdown}</div>
+          <div style="font-family:'IBM Plex Mono';font-size:12.5px;text-align:right">${E(t.acresY)}</div>
+          <div style="font-family:'IBM Plex Mono';font-size:12.5px;color:#6E6A62;text-align:right">${E(t.mtd)}</div>
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:7px"><span style="width:11px;height:11px;border-radius:3px;flex-shrink:0;${t.rainSwatch}"></span><span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;color:#3A6FA0">${E(t.rain)}</span></div>
+        </div>`).join('')}
+      </div></div>
+    </div>
+  </section>`;
+}
+function machinesViewHTML(v){
+  const S=state;
+  const legend = S.pinMode==='health'
+    ? `<div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;padding:15px 16px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:11px">Health</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0"><span style="display:flex;align-items:center;gap:9px"><span style="width:12px;height:12px;border-radius:50%;background:#15A24A"></span><span style="font-size:11.5px;color:#6E6A62">Active</span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;color:#15A24A">${fmt(v.tot.Active)}</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid #F6F4F0"><span style="display:flex;align-items:center;gap:9px"><span style="width:12px;height:12px;border-radius:50%;background:#E0A008"></span><span style="font-size:11.5px;color:#6E6A62">Idle</span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;color:#E0A008">${fmt(v.tot.Idle)}</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid #F6F4F0"><span style="display:flex;align-items:center;gap:9px"><span style="width:12px;height:12px;border-radius:50%;background:#DC3A2B"></span><span style="font-size:11.5px;color:#6E6A62">Breakdown</span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;color:#DC3A2B">${fmt(v.tot.Breakdown)}</span></div>
+      </div>`
+    : `<div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;padding:15px 16px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:11px">Acres sprayed yesterday</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0"><span style="display:flex;align-items:center;gap:9px"><span style="width:12px;height:12px;border-radius:50%;background:#0E7C39"></span><span style="font-size:11.5px;color:#6E6A62">More than 10 ac</span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${v.pinB10}</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid #F6F4F0"><span style="display:flex;align-items:center;gap:9px"><span style="width:12px;height:12px;border-radius:50%;background:#56B36C"></span><span style="font-size:11.5px;color:#6E6A62">5 – 10 ac</span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${v.pinB5}</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid #F6F4F0"><span style="display:flex;align-items:center;gap:9px"><span style="width:12px;height:12px;border-radius:50%;background:#A9D8B4"></span><span style="font-size:11.5px;color:#6E6A62">1 – 5 ac</span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${v.pinB1}</span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid #F6F4F0"><span style="display:flex;align-items:center;gap:9px"><span style="width:12px;height:12px;border-radius:50%;background:#CBC6BC"></span><span style="font-size:11.5px;color:#6E6A62">0 ac — not run</span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${v.pinB0}</span></div>
+      </div>`;
+  return `<section style="padding:18px 22px;display:flex;flex-direction:column;gap:18px;min-height:100%">
+    <div style="display:grid;grid-template-columns:1fr 252px;gap:18px">
+    <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid #EFEDE7;flex-wrap:wrap">
+        <div><div style="font-size:13px;font-weight:700">Machine locations</div><div style="font-size:11px;color:#9C988F;margin-top:1px">${v.pinCount} machines · hover for ID, click to open</div></div>
+        <div style="flex:1"></div>
+        <div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;font-weight:600;color:#9C988F">Colour by</span>
+          <div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
+            <button data-act="pinmode" data-mode="health" style="${css(seg(S.pinMode==='health'))}">Health</button>
+            <button data-act="pinmode" data-mode="acres" style="${css(seg(S.pinMode==='acres'))}">Acres y'day</button>
+          </div>
+        </div>${zoomCtrls}
+      </div>
+      <div id="pinHost" style="flex:1;min-height:430px;background:#FBFAF8;cursor:grab"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      ${legend}
+      <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;padding:15px 16px;flex:1">
+        <div style="font-size:11px;color:#9C988F;line-height:1.5">Hover a table row below to locate its machine on the map; hover a dot to find its row. Click either to open the full machine detail.</div>
+      </div>
+    </div>
+    </div>
+    <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
+      <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:13px;font-weight:700">Machine-wise metrics <span style="font-weight:400;color:#9C988F">· ${v.pinCount} machines · breakdowns first</span></div>
+      </div>
+      <div style="overflow-x:auto"><div style="min-width:980px">
+        <div style="display:grid;grid-template-columns:120px 64px 116px 1fr 220px 84px 1fr;gap:14px;padding:10px 18px;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
+          <div>Machine no.</div><div>Org</div><div>Health</div><div>Operator</div><div>Territory · Cluster</div><div style="text-align:right">Acres y'day</div><div>Cluster Officer · AM</div>
+        </div>
+        <div style="max-height:calc(100vh - 640px);min-height:230px;overflow:auto" id="machineTable">
+          ${v.machineTable.map(r=>`<div data-mc="${E(r.mc)}" data-act="open" style="display:grid;grid-template-columns:120px 64px 116px 1fr 220px 84px 1fr;gap:14px;padding:9px 18px;border-bottom:1px solid #F4F2EE;align-items:center;cursor:pointer">
+            <div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600">${E(r.mc)}</div>
+            <div><span style="${css(r.orgStyle)}">${E(r.org)}</span></div>
+            <div><span style="${css(r.healthStyle)}"><span style="${css(r.healthDot)}"></span>${E(r.health)}</span></div>
+            <div style="min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(r.opName)}</div><div style="font-family:'IBM Plex Mono';font-size:10.5px;color:#9C988F">${E(r.opNum)}</div></div>
+            <div style="font-size:11.5px;color:#6E6A62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(r.geo)}</div>
+            <div style="${css(r.acresStyle)}">${E(r.acresY)}</div>
+            <div style="min-width:0;font-size:11.5px;color:#6E6A62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(r.co)} <span style="color:#C9C4BA">·</span> ${E(r.am)}</div>
+          </div>`).join('')}
+        </div>
+      </div></div>
+    </div>
+  </section>`;
+}
+function amViewHTML(v){
+  return `<section style="padding:18px 22px">
+    <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
+      <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:13px;font-weight:700">Area Managers <span style="font-weight:400;color:#9C988F">· ${v.amCount} AMs · expand to Cluster Officer → Machine</span></div>
+      </div>
+      <div style="overflow-x:auto"><div style="min-width:912px">
+        <div style="display:grid;grid-template-columns:330px 120px 150px 1fr 168px;gap:14px;padding:10px 18px;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">
+          <div>AM · Cluster Officer · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div>Contact</div>
+        </div>
+        <div style="max-height:calc(100vh - 300px);overflow:auto">
+          ${v.amRows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
+            <div style="display:flex;align-items:center;gap:9px;min-width:0;padding-left:${r.indent}">
+              <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.roleStyle)}">${E(r.role)}</span><span style="${css(r.dotStyle)}"></span>
+              <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="${css(r.subStyle)}">${E(r.sub)}</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span></span></div>
+            <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
+            <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;max-width:200px"><div style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="${css(r.paceBarStyle)}"></span></div></div><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span></div>
+            <div style="display:flex;align-items:center;gap:9px"><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(r.contact)}</span><a href="${E(r.callTel)}" data-stop="1" style="${css(r.callStyle)}">${I.phoneS}</a></div>
+          </div>`).join('')}
+        </div>
+      </div></div>
+    </div>
+  </section>`;
+}
+function drawerHTML(v){
+  const d=v.d; if(!d||!d.mc) return '';
+  return `<div data-act="close" style="position:fixed;inset:0;background:rgba(27,26,23,.32);z-index:40;animation:fadeIn .2s"></div>
+  <aside style="position:fixed;top:0;right:0;bottom:0;width:432px;max-width:92vw;background:#FFFFFF;z-index:41;box-shadow:-8px 0 40px rgba(0,0,0,.16);display:flex;flex-direction:column;animation:drwIn .26s cubic-bezier(.2,.7,.3,1)">
+    <div style="padding:18px 22px;border-bottom:1px solid #E9E6DF;display:flex;align-items:flex-start;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:7px"><span style="${css(d.orgStyle)}">${E(d.org)}</span><span style="${css(d.healthStyle)}"><span style="${css(d.healthDot)}"></span>${E(d.health)}</span></div>
+        <div style="font-family:'IBM Plex Mono';font-size:21px;font-weight:600;letter-spacing:-.01em">${E(d.mc)}</div>
+        <div style="font-size:12px;color:#9C988F;margin-top:3px">${E(d.geo)}</div>
+      </div>
+      <button data-act="close" style="width:32px;height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.close}</button>
+    </div>
+    <div style="flex:1;overflow:auto;padding:18px 22px">
+      <div style="display:flex;align-items:center;gap:12px;background:${d.sprayBg};border:1px solid ${d.sprayBorder};border-radius:12px;padding:12px 14px;margin-bottom:18px">
+        <span style="font-size:22px">${d.sprayIcon}</span>
+        <div style="flex:1"><div style="font-size:13px;font-weight:600;color:${d.sprayInk}">${E(d.sprayLabel)}</div><div style="font-size:11px;color:#6E6A62;margin-top:1px">${E(d.weatherLine)}</div></div>
+      </div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Operator</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
+        <div style="width:40px;height:40px;border-radius:50%;background:#F2F0EB;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;color:#6E6A62;flex-shrink:0">${E(d.opInitial)}</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:7px">${E(d.opName)}<span style="${css(d.opTagStyle)}">${E(d.opTag)}</span></div><div style="font-family:'IBM Plex Mono';font-size:12px;color:#6E6A62;margin-top:2px">${E(d.opNum)}</div></div>
+        <a href="${E(d.opTel)}" data-stop="1" style="${css(d.callStyle)}">${I.phone}</a>
+      </div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Acreage funnel</div>
+      <div style="margin-bottom:18px">
+        ${d.funnel.map(f=>`<div style="display:grid;grid-template-columns:74px 1fr 52px;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:11.5px;color:#6E6A62">${E(f.label)}</span>
+          <span style="height:9px;border-radius:5px;background:#F2F0EB;overflow:hidden;display:block"><span style="${css(f.barStyle)}"></span></span>
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right">${E(f.value)}</span>
+        </div>`).join('')}
+      </div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Products sprayed <span style="color:#C9C4BA;font-weight:500">· scanned acres</span></div>
+      <div style="margin-bottom:18px">
+        ${d.products.map(p=>`<div style="display:grid;grid-template-columns:1fr 52px;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="min-width:0"><div style="font-size:12px;font-weight:500;margin-bottom:5px">${E(p.product)}</div><span style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden;display:block"><span style="${css(p.barStyle)}"></span></span></div>
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right">${E(p.acres)}</span>
+        </div>`).join('')}
+      </div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Location</div>
+      <div style="display:flex;gap:12px;margin-bottom:18px;align-items:center">
+        <div id="drawerMap" style="width:96px;height:96px;border:1px solid #E9E6DF;border-radius:10px;background:#FBFAF8;flex-shrink:0;overflow:hidden"></div>
+        <div style="flex:1"><div style="font-size:12px;font-weight:600">${E(d.locTitle)}</div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;margin-top:3px">${E(d.coords)}</div></div>
+      </div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Escalation</div>
+      <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:11px;padding:12px 14px;border-bottom:1px solid #F2F0EB">
+          <div style="flex:1"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.05em">Cluster Officer</div><div style="font-size:13px;font-weight:600;margin-top:2px">${E(d.coName)}</div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(d.coMob)}</div></div>
+          <a href="${E(d.coTel)}" data-stop="1" style="width:34px;height:34px;border-radius:8px;background:#F2F0EB;color:#1B1A17;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.phone}</a>
+        </div>
+        <div style="display:flex;align-items:center;gap:11px;padding:12px 14px">
+          <div style="flex:1"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.05em">Area Manager</div><div style="font-size:13px;font-weight:600;margin-top:2px">${E(d.amName)}</div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(d.amNum)}</div></div>
+          <a href="${E(d.amTel)}" data-stop="1" style="width:34px;height:34px;border-radius:8px;background:#F2F0EB;color:#1B1A17;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.phone}</a>
+        </div>
+      </div>
+    </div>
+  </aside>`;
+}
+function contentHTML(v){
+  switch(state.view){
+    case 'tables': return tablesViewHTML(v);
+    case 'weather': return weatherViewHTML(v);
+    case 'machines': return machinesViewHTML(v);
+    case 'am': return amViewHTML(v);
+    default: return mapViewHTML(v);
+  }
+}
+function desktopHTML(v){
+  return `<div style="height:100vh;display:flex;background:#F6F5F2;color:#1B1A17;overflow:hidden">
+    ${railHTML()}
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+      ${topbarHTML(v)}${filterBarHTML(v)}${kpiStripHTML(v)}
+      <main style="flex:1;overflow:auto;position:relative">${contentHTML(v)}</main>
+    </div>
+    ${drawerHTML(v)}
+  </div>`;
+}
+function mobileHTML(v){
+  const S=state;
+  const d=v.d;
+  let body='';
+  if(S.view==='map'){
+    body=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:10px;margin-bottom:6px">
+      <div id="mMapHost" style="width:100%;height:300px;background:#FBFAF8;border-radius:8px;overflow:hidden"></div>
+      <div style="display:flex;align-items:center;gap:13px;padding:10px 4px 2px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#F5821F"></span><span style="font-size:11px;color:#6E6A62">UPL</span></div>
+        <div style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#1FAE43"></span><span style="font-size:11px;color:#6E6A62">SWAL</span></div>
+        <span style="font-size:10.5px;color:#9C988F">Tap a bubble to drill in</span>
+      </div>
+    </div>`;
+  } else if(S.view==='tables'){
+    body=`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:8px">${v.mListCount} machines</div>
+      ${v.mobileList.map(m=>`<div data-act="open" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:11px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:12px 13px;margin-bottom:8px;cursor:pointer">
+        <span style="${css(m.dotStyle)}"></span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600">${E(m.mc)}</span><span style="${css(m.orgStyle)}">${E(m.org)}</span></div>
+          <div style="font-size:11px;color:#9C988F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.opName)} · ${E(m.geo)}</div>
+        </div>
+        <span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(m.acresLabel)}</span>
+      </div>`).join('')}`;
+  } else {
+    body=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:10px;margin-bottom:12px">
+        <div id="mwMapHost" style="width:100%;height:260px;background:#FBFAF8;border-radius:8px;overflow:hidden"></div>
+        <div style="padding:9px 4px 2px"><div style="height:10px;border-radius:5px;background:linear-gradient(90deg,#E8F1FB,#14528B)"></div><div style="display:flex;justify-content:space-between;font-size:10px;color:#9C988F;margin-top:4px"><span>0 mm</span><span>number = ran y'day · 40+ mm</span></div></div>
+      </div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:8px">Territories by rainfall</div>
+      ${v.wetTerr.map(w=>`<div data-act="terr" data-terr="${E(w.name)}" style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px;margin-bottom:8px;cursor:pointer">
+        <span style="width:13px;height:13px;border-radius:4px;flex-shrink:0;${w.swatch}"></span>
+        <span style="flex:1;font-size:12.5px;font-weight:500">${E(w.name)}</span>
+        <span style="font-size:11px;color:#9C988F">${E(w.ran)} ran</span>
+        <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;color:#3A6FA0">${E(w.rain)} mm</span>
+      </div>`).join('')}`;
+  }
+  const sheet = (d&&d.mc) ? `<div data-act="close" style="position:absolute;inset:0;background:rgba(20,19,15,.4);z-index:10"></div>
+    <div style="position:absolute;left:0;right:0;bottom:0;height:92%;background:#fff;border-radius:24px 24px 0 0;z-index:11;display:flex;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,.2)">
+      <div style="padding:16px 18px 14px;border-bottom:1px solid #E9E6DF">
+        <div style="width:38px;height:4px;border-radius:3px;background:#E0DCD3;margin:0 auto 14px"></div>
+        <div style="display:flex;align-items:flex-start;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="${css(d.orgStyle)}">${E(d.org)}</span><span style="${css(d.healthStyle)}"><span style="${css(d.healthDot)}"></span>${E(d.health)}</span></div>
+            <div style="font-family:'IBM Plex Mono';font-size:19px;font-weight:600">${E(d.mc)}</div>
+            <div style="font-size:11.5px;color:#9C988F;margin-top:2px">${E(d.geo)}</div>
+          </div>
+          <button data-act="close" style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.closeS}</button>
+        </div>
+      </div>
+      <div style="flex:1;overflow:auto;padding:16px 18px 22px">
+        <div style="display:flex;align-items:center;gap:11px;background:${d.sprayBg};border:1px solid ${d.sprayBorder};border-radius:12px;padding:11px 13px;margin-bottom:16px">
+          <span style="font-size:20px">${d.sprayIcon}</span>
+          <div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:${d.sprayInk}">${E(d.sprayLabel)}</div><div style="font-size:11px;color:#6E6A62">${E(d.weatherLine)}</div></div>
+        </div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Operator</div>
+        <div style="display:flex;align-items:center;gap:11px;margin-bottom:16px">
+          <div style="width:38px;height:38px;border-radius:50%;background:#F2F0EB;display:flex;align-items:center;justify-content:center;font-weight:600;color:#6E6A62;flex-shrink:0">${E(d.opInitial)}</div>
+          <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">${E(d.opName)}<span style="${css(d.opTagStyle)}">${E(d.opTag)}</span></div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(d.opNum)}</div></div>
+          <a href="${E(d.opTel)}" data-stop="1" style="${css(d.callStyle)}">${I.phone}</a>
+        </div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Acreage funnel</div>
+        <div style="margin-bottom:16px">
+          ${d.funnel.map(f=>`<div style="display:grid;grid-template-columns:68px 1fr 46px;align-items:center;gap:9px;margin-bottom:8px">
+            <span style="font-size:11px;color:#6E6A62">${E(f.label)}</span>
+            <span style="height:8px;border-radius:5px;background:#F2F0EB;overflow:hidden;display:block"><span style="${css(f.barStyle)}"></span></span>
+            <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;text-align:right">${E(f.value)}</span>
+          </div>`).join('')}
+        </div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Products sprayed</div>
+        <div style="margin-bottom:16px">
+          ${d.products.map(p=>`<div style="display:grid;grid-template-columns:1fr 46px;align-items:center;gap:9px;margin-bottom:8px">
+            <div style="min-width:0"><div style="font-size:12px;font-weight:500;margin-bottom:5px">${E(p.product)}</div><span style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden;display:block"><span style="${css(p.barStyle)}"></span></span></div>
+            <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;text-align:right">${E(p.acres)}</span>
+          </div>`).join('')}
+        </div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Location · Escalation</div>
+        <div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;margin-bottom:12px">${E(d.coords)}</div>
+        <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid #F2F0EB">
+            <div style="flex:1"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Cluster Officer</div><div style="font-size:12.5px;font-weight:600;margin-top:1px">${E(d.coName)}</div><div style="font-family:'IBM Plex Mono';font-size:11px;color:#6E6A62">${E(d.coMob)}</div></div>
+            <a href="${E(d.coTel)}" data-stop="1" style="width:32px;height:32px;border-radius:8px;background:#F2F0EB;color:#1B1A17;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.phoneS}</a>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:11px 13px">
+            <div style="flex:1"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Area Manager</div><div style="font-size:12.5px;font-weight:600;margin-top:1px">${E(d.amName)}</div><div style="font-family:'IBM Plex Mono';font-size:11px;color:#6E6A62">${E(d.amNum)}</div></div>
+            <a href="${E(d.amTel)}" data-stop="1" style="width:32px;height:32px;border-radius:8px;background:#F2F0EB;color:#1B1A17;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.phoneS}</a>
+          </div>
+        </div>
+      </div>
+    </div>` : '';
+  return `<div style="height:100vh;width:100%;background:#E7E4DE;display:flex;align-items:center;justify-content:center;padding:18px">
+    <div style="width:392px;height:840px;max-height:96vh;background:#F6F5F2;border-radius:44px;border:11px solid #15140F;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 30px 90px rgba(0,0,0,.32)">
+      <div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:118px;height:25px;background:#15140F;border-radius:0 0 16px 16px;z-index:8"></div>
+      <div style="padding:30px 18px 12px;background:#fff;border-bottom:1px solid #E9E6DF;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:9px">
+          <div style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff">AF</div>
+          <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;line-height:1.1">MP Deployment</div><div style="font-size:10px;color:#9C988F">1+1=11 Kharif · AFS</div></div>
+          <div style="display:flex;align-items:center;gap:6px;margin-right:4px"><span style="width:7px;height:7px;border-radius:50%;background:${v.statusDot}"></span><span style="font-size:10.5px;font-weight:600;color:#6E6A62">${E(v.statusTime)}</span></div>
+          <button data-act="device" title="Desktop" style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;display:flex;align-items:center;justify-content:center;cursor:pointer">${I.desktop}</button>
+        </div>
+      </div>
+      <div style="flex:1;overflow:auto;padding:14px 16px 24px">
+        <div style="display:flex;align-items:center;gap:11px;background:${v.mobileWeather.bg};border:1px solid ${v.mobileWeather.border};border-radius:14px;padding:12px 14px;margin-bottom:14px">
+          <span style="font-size:22px">${v.mobileWeather.icon}</span>
+          <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:${v.mobileWeather.ink}">${E(v.mobileWeather.label)}</div><div style="font-size:11px;color:#6E6A62;margin-top:1px">${E(v.mobileWeather.line)}</div></div>
+        </div>
+        <div style="display:flex;gap:9px;overflow-x:auto;padding-bottom:3px;margin-bottom:14px">
+          ${v.kpis.map(k=>`<div style="flex-shrink:0;min-width:84px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px"><div style="${css(k.valStyle)}">${E(k.value)}</div><div style="font-size:9px;font-weight:600;letter-spacing:.04em;color:#9C988F;text-transform:uppercase;margin-top:4px;white-space:nowrap">${E(k.label)}</div></div>`).join('')}
+        </div>
+        <div style="display:flex;background:#EDEAE3;border-radius:11px;padding:3px;gap:2px;margin-bottom:14px">
+          <button data-act="view" data-view="map" style="${css(segM(S.view==='map'))}">Map</button>
+          <button data-act="view" data-view="tables" style="${css(segM(S.view==='tables'))}">Machines</button>
+          <button data-act="view" data-view="weather" style="${css(segM(S.view==='weather'))}">Weather</button>
+        </div>
+        ${body}
+      </div>
+      ${sheet}
+    </div>
+  </div>`;
+}
+
+/* ============================= render / events ============================= */
+const app=document.getElementById('app');
+function render(){
+  const ae=document.activeElement; const focusId=ae&&ae.id; const selStart=ae&&ae.selectionStart;
+  const v=vals();
+  app.innerHTML = state.device==='mobile' ? mobileHTML(v) : desktopHTML(v);
+  // restore inputs/selects + focus
+  const si=document.getElementById('searchInput'); if(si){ si.value=state.search; }
+  if(focusId){ const el=document.getElementById(focusId); if(el){ el.focus(); if(selStart!=null&&el.setSelectionRange){ try{el.setSelectionRange(selStart,selStart);}catch(_){ } } } }
+  paint();
+}
+function paint(){
+  const S=state, mob=S.device==='mobile';
+  try{
+    if(S.view==='map') drawMap(mob?'mMapHost':'mapHost', S.metric);
+    else if(S.view==='weather') drawMap(mob?'mwMapHost':'wMapHost', 'weather');
+    else if(S.view==='machines' && !mob) drawPins('pinHost');
+    if(!mob && S.selected) drawDrawerMap();
+  }catch(err){ console.error('paint failed:', err); }
+}
+function setState(patch){ if(typeof patch==='function') patch=patch(state); Object.assign(state, patch); render(); }
+
+app.addEventListener('input', e=>{ if(e.target.id==='searchInput') setState({search:e.target.value}); });
+app.addEventListener('change', e=>{
+  if(e.target.id==='terrSelect') setState({terr:e.target.value, cluster:''});
+  else if(e.target.id==='clusterSelect') setState({cluster:e.target.value});
+});
+app.addEventListener('click', e=>{
+  if(e.target.closest('a[data-stop]')) { e.stopPropagation(); return; } // let tel: link work, don't open row
+  const el=e.target.closest('[data-act]'); if(!el) return;
+  const act=el.dataset.act;
+  switch(act){
+    case 'view': setState({view:el.dataset.view}); break;
+    case 'device': setState(s=>{ const dev=s.device==='mobile'?'desktop':'mobile'; const view=(dev==='mobile'&&(s.view==='machines'||s.view==='am'))?'map':s.view; return {device:dev,selected:null,view}; }); break;
+    case 'org': setState({org:el.dataset.org}); break;
+    case 'metric': setState({metric:el.dataset.metric}); break;
+    case 'pinmode': setState({pinMode:el.dataset.mode}); break;
+    case 'health': { const h=el.dataset.h; setState(s=>({health: s.health.includes(h)? s.health.filter(x=>x!==h) : [...s.health,h]})); break; }
+    case 'clear': setState({org:'Both',terr:'',cluster:'',health:[],search:''}); break;
+    case 'refresh': state.refreshing=true; render(); loadData().finally(()=>{ state.refreshing=false; render(); }); break;
+    case 'terr': { const t=el.dataset.terr; setState(s=>({terr: s.terr===t?'':t, cluster:''})); break; }
+    case 'exp': { const k=el.dataset.key; setState(s=>({expanded:{...s.expanded,[k]:!s.expanded[k]}})); break; }
+    case 'open': { const m=ROWS.find(x=>x.mc===el.dataset.mc); if(m) setState({selected:m}); break; }
+    case 'close': setState({selected:null}); break;
+    case 'zoomin': scale=Math.min(6,scale*1.25); applyTransform(); break;
+    case 'zoomout': scale=Math.max(0.6,scale*0.8); applyTransform(); break;
+    case 'zoomreset': scale=1;tx=0;ty=0; applyTransform(); break;
+  }
+});
+// machine table row <-> pin cross-highlight
+app.addEventListener('mouseover', e=>{ const row=e.target.closest('#machineTable [data-mc]'); if(row){ highlightPin(row.dataset.mc,true); } });
+app.addEventListener('mouseout', e=>{ const row=e.target.closest('#machineTable [data-mc]'); if(row){ highlightPin(row.dataset.mc,false); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'&&state.selected) setState({selected:null}); });
+
+/* ============================= mount ============================= */
+setupProj();
+render();
+loadData();
+if(CONFIG.refreshMinutes>0) setInterval(loadData, CONFIG.refreshMinutes*60000);
+</script>
+</body>
+</html>
