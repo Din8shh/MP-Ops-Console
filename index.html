@@ -159,6 +159,16 @@ function roll(list){
   list.forEach(m=>{ o[m.org==='UPL'?'upl':'swal']++; o[hstate(m)]++; o.target+=m.target; o.achieved+=m.achieved; o.mtd+=m.mtd; o.acresY+=m.acresY; });
   o.pct = o.target ? o.achieved/o.target : 0; o.band=band(o.pct); o.ranY=list.filter(m=>m.acresY>0).length; return o;
 }
+// dominant name by count (case-insensitive), returning the most-common original spelling + "+N" for extra distinct names
+function dominantName(list, field){
+  const cnt={}, disp={};
+  list.forEach(m=>{ const v=(m[field]||'').trim(); if(!v)return; const k=v.toLowerCase(); cnt[k]=(cnt[k]||0)+1; (disp[k]||(disp[k]={}))[v]=(disp[k][v]||0)+1; });
+  const keys=Object.keys(cnt); if(!keys.length) return '';
+  keys.sort((a,b)=>cnt[b]-cnt[a]);
+  const variants=disp[keys[0]], rep=Object.keys(variants).sort((a,b)=>variants[b]-variants[a])[0];
+  return rep + (keys.length>1?` +${keys.length-1}`:'');
+}
+function coAmLabel(list){ const co=dominantName(list,'co'), am=dominantName(list,'am'); return co&&am?`${co} · ${am}`:(co||am); }
 function rowBars(r){ const tt=r.deployed||1; return {
   orgUStyle:{width:(100*r.upl/tt)+'%',background:C.orange,display:'block'}, orgSStyle:{width:(100*r.swal/tt)+'%',background:C.green,display:'block'},
   mixAStyle:{width:(100*r.Active/tt)+'%',background:C.act,display:'block'}, mixIStyle:{width:(100*r.Idle/tt)+'%',background:C.idle,display:'block'}, mixBStyle:{width:(100*r.Breakdown/tt)+'%',background:C.brk,display:'block'},
@@ -412,7 +422,7 @@ function vals(){
         rows.push({ click:{act:'exp',key:ck}, indent:'18px',
           rowStyle:{...grid5,padding:'9px 18px',borderTop:'1px solid #F4F2EE',cursor:'pointer',background:cexp?'#FCFBF9':'#fff'},
           chev:cexp?'▾':'▸', chevStyle:{fontSize:'9px',color:'#C4BFB5',width:'12px'},
-          dotStyle:{display:'none'}, name:cn, nameStyle:{fontSize:'12.5px',fontWeight:500,color:'#46433d',whiteSpace:'nowrap'}, sub:'', subStyle:{display:'none'},
+          dotStyle:{display:'none'}, name:cn, nameStyle:{fontSize:'12.5px',fontWeight:500,color:'#46433d',whiteSpace:'nowrap',flexShrink:0}, sub:coAmLabel(byC[cn]), subStyle:{fontSize:'10.5px',color:'#9C988F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:'0',flex:'1'},
           deployed:cr.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(cr) });
         if(cexp){
           byC[cn].forEach(m=>{ const hs=hstate(m), p=pctOf(m);
