@@ -123,13 +123,13 @@ function rowsToMachines(grid){
 }
 async function loadData(){
   const url=liveUrl();
-  if(!url){ dataMode='demo'; ROWS=MACHINES_MOCK; lastUpdated=nowIST(); render(); return; }
+  if(!url){ dataMode='demo'; ROWS=MACHINES_MOCK; lastUpdated=nowIST(); render(); loadWeather(); return; }
   try{
     const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
     const machines=rowsToMachines(parseCSV(await res.text()));
     if(!machines.length) throw new Error('no rows parsed');
-    ROWS=machines; dataMode='live'; lastUpdated=nowIST(); render();
-  }catch(e){ ROWS=MACHINES_MOCK; dataMode='error'; lastUpdated=nowIST(); render(); console.error('CSV load failed:', e); }
+    ROWS=machines; dataMode='live'; lastUpdated=nowIST(); render(); loadWeather();
+  }catch(e){ ROWS=MACHINES_MOCK; dataMode='error'; lastUpdated=nowIST(); render(); loadWeather(); console.error('CSV load failed:', e); }
 }
 
 /* ============================= derived ============================= */
@@ -163,13 +163,32 @@ function rowBars(r){ const tt=r.deployed||1; return {
   acresLabel:`${fmt(r.achieved)} / ${fmt(r.target)}`, ranY:fmt(r.acresY) }; }
 function hash(str){ let h=0; for(let i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))>>>0; return h; }
 function lerpHex(a,b,t){ t=Math.max(0,Math.min(1,t)); const pa=[1,3,5].map(i=>parseInt(a.substr(i,2),16)), pb=[1,3,5].map(i=>parseInt(b.substr(i,2),16)); return '#'+pa.map((v,i)=>Math.round(v+(pb[i]-v)*t).toString(16).padStart(2,'0')).join(''); }
-function rainOf(terr){ const h=hash('rain2'+terr); const base=((h>>>4)%1000)/1000; return Math.round(Math.pow(base,1.7)*44*10)/10; }
+let WX={};   // territory(lowercase) -> { rain, tmax, tmin, wind, code } — live Open-Meteo, "yesterday" IST
+function mockRainOf(terr){ const h=hash('rain2'+terr); const base=((h>>>4)%1000)/1000; return Math.round(Math.pow(base,1.7)*44*10)/10; }
+function rainOf(terr){ const w=WX[String(terr||'').trim().toLowerCase()]; return (w&&w.rain!=null)? Math.round(w.rain*10)/10 : mockRainOf(terr); }
 function rainColor(mm){ return lerpHex('#E8F1FB','#14528B', Math.min(1, mm/36)); }
-function weather(terr){
-  const h=hash(terr), k=h%3;
-  const temp=28+(h>>3)%7, wind=4+(h>>5)%16, rain=k===2?((h>>2)%9)/10+0.6:0;
-  const w=[{label:'Good spray day',icon:'☀️',bg:C.softG,border:'#C6EBD1',ink:C.greenD},{label:'Marginal window',icon:'⛅',bg:C.softA,border:'#F0DFB0',ink:'#9A6B05'},{label:'Hold — high wind / rain',icon:'🌧️',bg:C.softR,border:'#F2C9C2',ink:'#B0301F'}][k];
-  return { ...w, line:`${temp}° · wind ${wind} km/h · rain ${rain.toFixed(1)} mm` };
+const SPRAY={ good:{label:'Good spray day',icon:'☀️',bg:C.softG,border:'#C6EBD1',ink:C.greenD}, marg:{label:'Marginal window',icon:'⛅',bg:C.softA,border:'#F0DFB0',ink:'#9A6B05'}, hold:{label:'Hold — high wind / rain',icon:'🌧️',bg:C.softR,border:'#F2C9C2',ink:'#B0301F'} };
+function mockWeather(terr){ const h=hash(terr), k=h%3; const temp=28+(h>>3)%7, wind=4+(h>>5)%16, rain=k===2?((h>>2)%9)/10+0.6:0; const w=[SPRAY.good,SPRAY.marg,SPRAY.hold][k]; return { ...w, line:`${temp}° · wind ${wind} km/h · rain ${rain.toFixed(1)} mm` }; }
+function weather(terr){ const w=WX[String(terr||'').trim().toLowerCase()]; if(!w) return mockWeather(terr);
+  const rain=w.rain||0, wind=Math.round(w.wind||0), temp=Math.round(w.tmax!=null?w.tmax:0);
+  const v = (rain>=5||wind>=20)?SPRAY.hold : (rain>=1||wind>=15)?SPRAY.marg : SPRAY.good;   // spray window: hold if wet/windy
+  return { ...v, line:`${temp}° · wind ${wind} km/h · rain ${rain.toFixed(1)} mm` };
+}
+async function loadWeather(){
+  try{
+    const terrs=[...new Set(ROWS.map(m=>m.territory))].map(t=>({t,c:coordsOf(t)})).filter(x=>x.c);
+    if(!terrs.length) return;
+    const ax=terrs.reduce((s,x)=>s+x.c[0],0)/terrs.length, ay=terrs.reduce((s,x)=>s+x.c[1],0)/terrs.length;
+    terrs.push({t:'Madhya Pradesh',c:[ax,ay]});   // statewide point for the unfiltered mobile banner
+    const lats=terrs.map(x=>x.c[1]).join(','), lons=terrs.map(x=>x.c[0]).join(',');
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&past_days=1&forecast_days=1&timezone=Asia%2FKolkata&wind_speed_unit=kmh`;
+    const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
+    const j=await res.json(), arr=Array.isArray(j)?j:[j], wx={};
+    arr.forEach((loc,i)=>{ const x=terrs[i], d=loc&&loc.daily; if(!x||!d) return;
+      wx[x.t.toLowerCase()]={ rain:(d.precipitation_sum||[])[0]||0, tmax:(d.temperature_2m_max||[])[0], tmin:(d.temperature_2m_min||[])[0], wind:(d.wind_speed_10m_max||[])[0]||0, code:(d.weather_code||[])[0] };
+    });
+    WX=wx; render();
+  }catch(e){ console.error('weather load failed (using simulated):', e); }
 }
 const acresBand = a => a>10?0 : a>=5?1 : a>=1?2 : 3;
 const acresColor = a => ['#0E7C39','#56B36C','#A9D8B4','#CBC6BC'][acresBand(a)];
