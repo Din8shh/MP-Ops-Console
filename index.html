@@ -49,6 +49,9 @@ const fmt = n => Math.round(n).toLocaleString('en-IN');
 //   2) CONFIG.sheetId  — the sheet's ID (it must be shared "anyone with the link can view")
 // Leave both blank to run on bundled demo data (machines.js).
 const CONFIG = { csvUrl:'', sheetId:'1YFZD6RoccFJulCMyZB0jF0Z7ZoRU-8YaAMr6as8MTBs', sheetName:'Sheet1', refreshMinutes:10 };
+// canonicalise territory names to the map's casing so e.g. "khargone"/"Khargone" merge into one territory
+const TERR_CANON={}; for(const k in COORDS) TERR_CANON[k.toLowerCase()]=k;
+const canonTerr = s => { s=String(s||'').trim(); return TERR_CANON[s.toLowerCase()]||s; };
 let ROWS = MACHINES_MOCK;
 let dataMode = 'demo';      // 'demo' | 'live' | 'error'
 let lastUpdated = '';
@@ -111,7 +114,7 @@ function rowsToMachines(grid){
     const [lat,lon]=parseLoc(g(col.loc));
     out.push({
       mc, org:(txt(g(col.org)).toUpperCase()==='SWAL'?'SWAL':'UPL'),
-      territory:txt(g(col.territory))||'Unassigned', cluster:txt(g(col.cluster))||'Unassigned',
+      territory:canonTerr(txt(g(col.territory)))||'Unassigned', cluster:txt(g(col.cluster))||'Unassigned',
       co:txt(g(col.co)), coMob:txt(g(col.coMob)), am:txt(g(col.am)), amNum:txt(g(col.amNum)),
       target:num(g(col.target)), achieved:num(g(col.achieved)), mtd:num(g(col.mtd)), acresY:num(g(col.acresY)),
       scanned:parseScanned(g(col.scanned)),
@@ -133,7 +136,8 @@ async function loadData(){
 }
 
 /* ============================= derived ============================= */
-const hstate = m => m.breakdown ? 'Breakdown' : (m.acresY===0 ? 'Idle' : 'Active');
+// Active = ran yesterday (>0 acres) — wins over the breakdown flag; else flagged-broken = Breakdown; else Idle.
+const hstate = m => (m.acresY>0) ? 'Active' : (m.breakdown ? 'Breakdown' : 'Idle');
 const hcolor = s => s==='Active'?C.act : s==='Idle'?C.idle : C.brk;
 const pctOf = m => m.target ? m.achieved/m.target : 0;
 const band = p => p>=0.7?'On-track' : p>=0.4?'At-risk' : 'Behind';
