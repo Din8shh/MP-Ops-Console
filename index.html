@@ -34,7 +34,7 @@ import { BASE, COORDS } from './mapdata.js';
 
 /* ============================= state ============================= */
 const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#159234', act:'#15A24A', idle:'#E0A008', brk:'#DC3A2B', ink:'#1B1A17', ink2:'#6E6A62', ink3:'#9C988F', line:'#E9E6DF', line2:'#F2F0EB', softO:'#FBEDDF', softG:'#E6F5EA', softR:'#FBEAE7', softA:'#FBF1DA' };
-const state = { view:'map', org:'Both', terr:'', cluster:'', health:[], search:'', metric:'deploy', pinMode:'health', selected:null, expanded:{}, loaded:true, refreshing:false, device:'desktop' };
+const state = { view:'map', org:'Both', terr:'', cluster:'', am:'', co:'', health:[], search:'', metric:'deploy', pinMode:'health', selected:null, expanded:{}, loaded:true, refreshing:false, device:'desktop' };
 let scale=1, tx=0, ty=0, _g=null, _pinMap={}, _pinLabel=null, _prevSig=null, mapLocked=true;
 
 /* ============================= helpers ============================= */
@@ -149,6 +149,8 @@ function getF(){
     if(state.org!=='Both' && m.org!==state.org) return false;
     if(state.terr && m.territory!==state.terr) return false;
     if(state.cluster && m.cluster!==state.cluster) return false;
+    if(state.am && (m.am||'').trim().toLowerCase()!==state.am.trim().toLowerCase()) return false;
+    if(state.co && (m.co||'').trim().toLowerCase()!==state.co.trim().toLowerCase()) return false;
     if(state.health.length && !state.health.includes(hstate(m))) return false;
     if(s && !(m.mc.toLowerCase().includes(s) || (m.opName&&m.opName.toLowerCase().includes(s)) || m.territory.toLowerCase().includes(s))) return false;
     return true;
@@ -169,6 +171,12 @@ function dominantName(list, field){
   return rep + (keys.length>1?` +${keys.length-1}`:'');
 }
 function coAmLabel(list){ const co=dominantName(list,'co'), am=dominantName(list,'am'); return co&&am?`${co} · ${am}`:(co||am); }
+// distinct names with representative casing (case-insensitive dedupe), alphabetical — for the AM/CO dropdowns
+function distinctNames(list, field){
+  const disp={};
+  list.forEach(m=>{ const v=(m[field]||'').trim(); if(!v)return; const k=v.toLowerCase(); (disp[k]||(disp[k]={}))[v]=(disp[k][v]||0)+1; });
+  return Object.keys(disp).map(k=>{ const v=disp[k]; return Object.keys(v).sort((a,b)=>v[b]-v[a])[0]; }).sort((a,b)=>a.localeCompare(b));
+}
 function rowBars(r){ const tt=r.deployed||1; return {
   orgUStyle:{width:(100*r.upl/tt)+'%',background:C.orange,display:'block'}, orgSStyle:{width:(100*r.swal/tt)+'%',background:C.green,display:'block'},
   mixAStyle:{width:(100*r.Active/tt)+'%',background:C.act,display:'block'}, mixIStyle:{width:(100*r.Idle/tt)+'%',background:C.idle,display:'block'}, mixBStyle:{width:(100*r.Breakdown/tt)+'%',background:C.brk,display:'block'},
@@ -386,6 +394,9 @@ function vals(){
   const terrOptions=[{v:'',t:'All territories'},...allTerrs.map(t=>({v:t,t}))];
   const clusters=S.terr? [...new Set(ROWS.filter(m=>m.territory===S.terr).map(m=>m.cluster))].sort() : [];
   const clusterOptions=[{v:'',t:S.terr?'All clusters':'— pick territory —'},...clusters.map(c=>({v:c,t:c}))];
+  const amOptions=[{v:'',t:'All AMs'},...distinctNames(ROWS,'am').map(t=>({v:t,t}))];
+  const coList=S.am? distinctNames(ROWS.filter(m=>(m.am||'').trim().toLowerCase()===S.am.trim().toLowerCase()),'co') : [];
+  const coOptions=[{v:'',t:S.am?'All officers':'— pick AM —'},...coList.map(t=>({v:t,t}))];
   const mono22=col=>({fontFamily:"'IBM Plex Mono'",fontSize:'22px',fontWeight:600,color:col});
   const pctTxt=(tot.target? Math.round(tot.pct*100):0);
   const kpis=[
@@ -516,7 +527,7 @@ function vals(){
       coName:m.co, coMob:m.coMob, coTel:'tel:'+m.coMob, amName:m.am, amNum:m.amNum, amTel:'tel:'+m.amNum };
   }
 
-  const anyFilter = S.org!=='Both'||!!S.terr||!!S.cluster||!!S.health.length||!!S.search;
+  const anyFilter = S.org!=='Both'||!!S.terr||!!S.cluster||!!S.am||!!S.co||!!S.health.length||!!S.search;
   const mobileWeather = weather(S.terr || 'Madhya Pradesh');
   const mobileList = F.slice(0,80).map(m=>{ const hs=hstate(m);
     return { mc:m.mc, org:m.org, opName:m.opName, geo:`${m.territory} · ${m.cluster}`,
@@ -524,7 +535,7 @@ function vals(){
       dotStyle:{width:'9px',height:'9px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
       acresLabel: m.acresY>0? fmt(m.acresY)+' ac' : (m.breakdown?'down':'idle') }; });
 
-  return { tot, kpis, terrOptions, clusterOptions, topTerr, rows, terrTable, wetTerr, amRows, machineTable, mobileList, d,
+  return { tot, kpis, terrOptions, clusterOptions, amOptions, coOptions, topTerr, rows, terrTable, wetTerr, amRows, machineTable, mobileList, d,
     anyFilter, amCount:amKeys.length, pinCount:F.length, mListCount:F.length,
     pinB10:fmt(F.filter(m=>m.acresY>10).length), pinB5:fmt(F.filter(m=>m.acresY>=5&&m.acresY<=10).length), pinB1:fmt(F.filter(m=>m.acresY>=1&&m.acresY<5).length), pinB0:fmt(F.filter(m=>m.acresY<1).length),
     freshCount:`${fmt(tot.deployed)} machines${anyFilter?' (filtered)':''}`, mobileWeather,
@@ -583,6 +594,11 @@ function filterBarHTML(v){
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Geo</span>
       <div style="position:relative"><select id="terrSelect" style="${selStyle}">${optionsHTML(v.terrOptions,S.terr)}</select>${I.caret}</div>
       <div style="position:relative"><select id="clusterSelect" style="${selStyle}">${optionsHTML(v.clusterOptions,S.cluster)}</select>${I.caret}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Team</span>
+      <div style="position:relative"><select id="amSelect" style="${selStyle}">${optionsHTML(v.amOptions,S.am)}</select>${I.caret}</div>
+      <div style="position:relative"><select id="coSelect" style="${selStyle}">${optionsHTML(v.coOptions,S.co)}</select>${I.caret}</div>
     </div>
     <div style="display:flex;align-items:center;gap:7px">
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Health</span>
@@ -1022,6 +1038,8 @@ app.addEventListener('input', e=>{ if(e.target.id==='searchInput') setState({sea
 app.addEventListener('change', e=>{
   if(e.target.id==='terrSelect') setState({terr:e.target.value, cluster:''});
   else if(e.target.id==='clusterSelect') setState({cluster:e.target.value});
+  else if(e.target.id==='amSelect') setState({am:e.target.value, co:''});
+  else if(e.target.id==='coSelect') setState({co:e.target.value});
 });
 app.addEventListener('click', e=>{
   if(e.target.closest('a[data-stop]')) { e.stopPropagation(); return; } // let tel: link work, don't open row
@@ -1034,7 +1052,7 @@ app.addEventListener('click', e=>{
     case 'metric': setState({metric:el.dataset.metric}); break;
     case 'pinmode': setState({pinMode:el.dataset.mode}); break;
     case 'health': { const h=el.dataset.h; setState(s=>({health: s.health.includes(h)? s.health.filter(x=>x!==h) : [...s.health,h]})); break; }
-    case 'clear': setState({org:'Both',terr:'',cluster:'',health:[],search:''}); break;
+    case 'clear': setState({org:'Both',terr:'',cluster:'',am:'',co:'',health:[],search:''}); break;
     case 'refresh': state.refreshing=true; render(); loadData().finally(()=>{ state.refreshing=false; render(); }); break;
     case 'terr': { const t=el.dataset.terr; setState(s=>({terr: s.terr===t?'':t, cluster:''})); break; }
     case 'exp': { const k=el.dataset.key; setState(s=>({expanded:{...s.expanded,[k]:!s.expanded[k]}})); break; }
