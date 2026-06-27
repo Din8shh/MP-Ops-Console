@@ -469,7 +469,7 @@ function vals(){
   });
 
   // Weather
-  const terrTable=terrEntries.slice().sort((a,b)=>rainOf(b.name)-rainOf(a.name)).map(({name,r})=>{ const tt=r.deployed||1; const rain=rainOf(name);
+  const terrTable=terrEntries.slice().sort((a,b)=>b.r.deployed-a.r.deployed).map(({name,r})=>{ const tt=r.deployed||1; const rain=rainOf(name);
     return { name, deployed:r.deployed, upl:r.upl, swal:r.swal, active:r.Active, idle:r.Idle, breakdown:r.Breakdown, acresY:fmt(r.acresY), mtd:fmt(r.mtd), rain:rain.toFixed(1),
       uStyle:{width:(100*r.upl/tt)+'%',background:C.orange,display:'block'}, sStyle:{width:(100*r.swal/tt)+'%',background:C.green,display:'block'},
       rainSwatch:'background:'+rainColor(rain) }; });
