@@ -157,10 +157,11 @@ function getF(){
   });
 }
 function roll(list){
-  const o={deployed:list.length,upl:0,swal:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0};
-  list.forEach(m=>{ o[m.org==='UPL'?'upl':'swal']++; o[hstate(m)]++; o.target+=m.target; o.achieved+=m.achieved; o.mtd+=m.mtd; o.acresY+=m.acresY; });
+  const o={deployed:list.length,upl:0,swal:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,opMappedCount:0};
+  list.forEach(m=>{ o[m.org==='UPL'?'upl':'swal']++; o[hstate(m)]++; o.target+=m.target; o.achieved+=m.achieved; o.mtd+=m.mtd; o.acresY+=m.acresY; if(m.opName&&m.opNum&&m.opNum!=='0')o.opMappedCount++; });
   o.pct = o.target ? o.achieved/o.target : 0; o.band=band(o.pct); o.ranY=list.filter(m=>m.acresY>0).length; return o;
 }
+function opMapLabel(r){ return r.opMappedCount+'/'+r.deployed; }
 // dominant name by count (case-insensitive), returning the most-common original spelling + "+N" for extra distinct names
 function dominantName(list, field){
   const cnt={}, disp={};
@@ -418,14 +419,14 @@ function vals(){
 
   // Tables rows
   const rows=[];
-  const grid5={display:'grid',gridTemplateColumns:'300px 124px 150px 1fr 96px',gap:'14px',alignItems:'center'};
+  const grid5={display:'grid',gridTemplateColumns:'300px 124px 150px 1fr 96px 96px',gap:'14px',alignItems:'center'};
   terrEntries.forEach(({name,list,r})=>{
     const exp=!!S.expanded[name];
     rows.push({ click:{act:'exp',key:name}, indent:'0px',
       rowStyle:{...grid5,padding:'11px 18px',borderTop:'1px solid #F2F0EB',cursor:'pointer',background:exp?'#FBFAF8':'#fff'},
       chev:exp?'▾':'▸', chevStyle:{fontSize:'10px',color:'#B6B1A8',width:'12px'},
       dotStyle:{display:'none'}, name, nameStyle:{fontSize:'13.5px',fontWeight:600,whiteSpace:'nowrap'}, sub:`${r.deployed} machines`, subStyle:{fontSize:'11px',color:'#9C988F'},
-      deployed:r.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(r) });
+      deployed:r.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(r), opMap:opMapLabel(r) });
     if(exp){
       const byC={}; list.forEach(m=>{ (byC[m.cluster] ||= []).push(m); });
       Object.keys(byC).sort((a,b)=>byC[b].length-byC[a].length).forEach(cn=>{
@@ -434,7 +435,7 @@ function vals(){
           rowStyle:{...grid5,padding:'9px 18px',borderTop:'1px solid #F4F2EE',cursor:'pointer',background:cexp?'#FCFBF9':'#fff'},
           chev:cexp?'▾':'▸', chevStyle:{fontSize:'9px',color:'#C4BFB5',width:'12px'},
           dotStyle:{display:'none'}, name:cn, nameStyle:{fontSize:'12.5px',fontWeight:500,color:'#46433d',whiteSpace:'nowrap',flexShrink:0}, sub:coAmLabel(byC[cn]), subStyle:{fontSize:'10.5px',color:'#9C988F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',minWidth:'0',flex:'1'},
-          deployed:cr.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(cr) });
+          deployed:cr.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(cr), opMap:opMapLabel(cr) });
         if(cexp){
           byC[cn].forEach(m=>{ const hs=hstate(m), p=pctOf(m);
             rows.push({ click:{act:'open',mc:m.mc}, indent:'38px',
@@ -443,7 +444,7 @@ function vals(){
               name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName, subStyle:{fontSize:'11px',color:'#9C988F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'},
               deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},
               mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
-              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY) });
+              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'' });
           });
         }
       });
@@ -458,7 +459,7 @@ function vals(){
   const wetTerr=terrEntries.map(({name,r})=>({name,rain:rainOf(name),ran:r.ranY})).sort((a,b)=>b.rain-a.rain).slice(0,7).map(w=>({ name:w.name, rain:w.rain.toFixed(1), ran:w.ran, swatch:'background:'+rainColor(w.rain) }));
 
   // AM view
-  const amRows=[]; const grid5am={display:'grid',gridTemplateColumns:'330px 120px 150px 1fr 84px 168px',gap:'14px',alignItems:'center'};
+  const amRows=[]; const grid5am={display:'grid',gridTemplateColumns:'330px 120px 150px 1fr 84px 96px 168px',gap:'14px',alignItems:'center'};
   const byAM={}; F.forEach(m=>{ (byAM[m.am] ||= []).push(m); });
   const amKeys=Object.keys(byAM).sort((a,b)=>byAM[b].length-byAM[a].length);
   const roleChip=(bg,col)=>({display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:'9px',fontWeight:700,letterSpacing:'.02em',padding:'2px 6px',borderRadius:'5px',background:bg,color:col});
@@ -470,7 +471,7 @@ function vals(){
       rowStyle:{...grid5am,padding:'12px 18px',borderTop:'1px solid #F2F0EB',cursor:'pointer',background:exp?'#FBFAF8':'#fff'},
       chev:exp?'▾':'▸', chevStyle:{fontSize:'10px',color:'#B6B1A8',width:'12px'}, role:'AM', roleStyle:roleChip(C.softO,C.orangeD), dotStyle:{display:'none'},
       name:am, nameStyle:{fontSize:'13.5px',fontWeight:600,whiteSpace:'nowrap'}, sub:`${cos.length} cluster officers · ${terrs.length} territories`, subStyle:{fontSize:'11px',color:'#9C988F',marginTop:'1px'},
-      deployed:r.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(r),
+      deployed:r.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(r), opMap:opMapLabel(r),
       contact:list[0].amNum, callTel:'tel:'+list[0].amNum, callStyle:callBtn });
     if(exp){
       const byCO={}; list.forEach(m=>{ (byCO[m.co] ||= []).push(m); });
@@ -480,7 +481,7 @@ function vals(){
           rowStyle:{...grid5am,padding:'10px 18px',borderTop:'1px solid #F4F2EE',cursor:'pointer',background:cexp?'#FCFBF9':'#fff'},
           chev:cexp?'▾':'▸', chevStyle:{fontSize:'9px',color:'#C4BFB5',width:'12px'}, role:'CO', roleStyle:roleChip('#EAF1F8','#3A6FA0'), dotStyle:{display:'none'},
           name:co, nameStyle:{fontSize:'12.5px',fontWeight:600,color:'#46433d',whiteSpace:'nowrap'}, sub:coTerrs.join(', '), subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
-          deployed:cr.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(cr),
+          deployed:cr.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(cr), opMap:opMapLabel(cr),
           contact:cl[0].coMob, callTel:'tel:'+cl[0].coMob, callStyle:callBtn });
         if(cexp){
           cl.forEach(m=>{ const hs=hstate(m), p=pctOf(m);
@@ -490,7 +491,7 @@ function vals(){
               name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName+' · '+m.territory, subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
               deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},
               mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
-              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY),
+              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'',
               contact:m.opNum, callTel:'tel:'+m.opNum, callStyle:callBtn });
           });
         }
@@ -659,8 +660,8 @@ function rowDataAttrs(click){ return `data-act="${click.act}" ${click.key!=null?
 function tablesViewHTML(v){
   return `<section style="padding:18px 22px">
     <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
-      <div style="display:grid;grid-template-columns:300px 124px 150px 1fr 96px;gap:14px;padding:11px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;font-size:10px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase">
-        <div>Territory · Cluster · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel (achieved / target)</div><div style="text-align:right">Acres y'day</div>
+      <div style="display:grid;grid-template-columns:300px 124px 150px 1fr 96px 96px;gap:14px;padding:11px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;font-size:10px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase">
+        <div>Territory · Cluster · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel (achieved / target)</div><div style="text-align:right">Acres y'day</div><div style="text-align:right">Operators</div>
       </div>
       <div style="max-height:calc(100vh - 320px);overflow:auto">
         ${v.rows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
@@ -672,6 +673,7 @@ function tablesViewHTML(v){
           <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
           <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;max-width:220px"><div style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="${css(r.paceBarStyle)}"></span></div></div><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span></div>
           <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${E(r.ranY)}</div>
+          <div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:500;text-align:right;color:#6E6A62">${E(r.opMap)}</div>
         </div>`).join('')}
       </div>
     </div>
@@ -793,9 +795,9 @@ function amViewHTML(v){
       <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;display:flex;align-items:center;justify-content:space-between">
         <div style="font-size:13px;font-weight:700">Area Managers <span style="font-weight:400;color:#9C988F">· ${v.amCount} AMs · expand to Cluster Officer → Machine</span></div>
       </div>
-      <div style="overflow-x:auto"><div style="min-width:1010px">
-        <div style="display:grid;grid-template-columns:330px 120px 150px 1fr 84px 168px;gap:14px;padding:10px 18px;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">
-          <div>AM · Cluster Officer · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div style="text-align:right">Acres y'day</div><div>Contact</div>
+      <div style="overflow-x:auto"><div style="min-width:1120px">
+        <div style="display:grid;grid-template-columns:330px 120px 150px 1fr 84px 96px 168px;gap:14px;padding:10px 18px;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">
+          <div>AM · Cluster Officer · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div style="text-align:right">Acres y'day</div><div style="text-align:right">Operators</div><div>Contact</div>
         </div>
         <div style="max-height:calc(100vh - 300px);overflow:auto">
           ${v.amRows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
@@ -807,6 +809,7 @@ function amViewHTML(v){
             <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
             <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;max-width:200px"><div style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="${css(r.paceBarStyle)}"></span></div></div><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span></div>
             <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${E(r.ranY)}</div>
+            <div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:500;text-align:right;color:#6E6A62">${E(r.opMap)}</div>
             <div style="display:flex;align-items:center;gap:9px"><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(r.contact)}</span><a href="${E(r.callTel)}" data-stop="1" style="${css(r.callStyle)}">${I.phoneS}</a></div>
           </div>`).join('')}
         </div>
