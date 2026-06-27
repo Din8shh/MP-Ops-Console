@@ -34,7 +34,7 @@ import { BASE, COORDS } from './mapdata.js';
 
 /* ============================= state ============================= */
 const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#159234', act:'#15A24A', idle:'#E0A008', brk:'#DC3A2B', ink:'#1B1A17', ink2:'#6E6A62', ink3:'#9C988F', line:'#E9E6DF', line2:'#F2F0EB', softO:'#FBEDDF', softG:'#E6F5EA', softR:'#FBEAE7', softA:'#FBF1DA' };
-const state = { view:'map', org:'Both', terr:'', cluster:'', am:'', co:'', health:[], search:'', metric:'deploy', pinMode:'health', selected:null, expanded:{}, loaded:true, refreshing:false, device:'desktop' };
+const state = { view:'map', org:'Both', terr:'', cluster:'', am:'', co:'', health:[], search:'', metric:'deploy', pinMode:'health', lbScope:'total', selected:null, expanded:{}, loaded:true, refreshing:false, device:'desktop' };
 let scale=1, tx=0, ty=0, _g=null, _pinMap={}, _pinLabel=null, _prevSig=null, mapLocked=true;
 
 /* ============================= helpers ============================= */
@@ -172,6 +172,8 @@ function dominantName(list, field){
   return rep + (keys.length>1?` +${keys.length-1}`:'');
 }
 function coAmLabel(list){ const co=dominantName(list,'co'), am=dominantName(list,'am'); return co&&am?`${co} · ${am}`:(co||am); }
+// most-common representative spelling from an array of strings (case-insensitive)
+function domStr(arr){ const cnt={},disp={}; arr.forEach(v=>{ v=(v||'').trim(); if(!v)return; const k=v.toLowerCase(); cnt[k]=(cnt[k]||0)+1; (disp[k]||(disp[k]={}))[v]=(disp[k][v]||0)+1; }); const ks=Object.keys(cnt); if(!ks.length)return ''; ks.sort((a,b)=>cnt[b]-cnt[a]); const vv=disp[ks[0]]; return Object.keys(vv).sort((a,b)=>vv[b]-vv[a])[0]; }
 // distinct names with representative casing (case-insensitive dedupe), alphabetical — for the AM/CO dropdowns
 function distinctNames(list, field){
   const disp={};
@@ -189,7 +191,18 @@ function lerpHex(a,b,t){ t=Math.max(0,Math.min(1,t)); const pa=[1,3,5].map(i=>pa
 let WX={};   // territory(lowercase) -> { rain, tmax, tmin, wind, code } — live Open-Meteo, "yesterday" IST
 function mockRainOf(terr){ const h=hash('rain2'+terr); const base=((h>>>4)%1000)/1000; return Math.round(Math.pow(base,1.7)*44*10)/10; }
 function rainOf(terr){ const w=WX[String(terr||'').trim().toLowerCase()]; return (w&&w.rain!=null)? Math.round(w.rain*10)/10 : mockRainOf(terr); }
-function rainColor(mm){ return lerpHex('#E8F1FB','#14528B', Math.min(1, mm/36)); }
+// distinct rainfall buckets (high/med/low visually separable) instead of a continuous ramp
+const RAIN_BUCKETS=[
+  {max:0.1, c:'#EDEAE2', l:'Dry'},
+  {max:2,   c:'#CFE6F7', l:'<2'},
+  {max:5,   c:'#86C0E8', l:'2–5'},
+  {max:10,  c:'#4793CE', l:'5–10'},
+  {max:20,  c:'#2563A8', l:'10–20'},
+  {max:1e9, c:'#0C3B72', l:'20+'},
+];
+function rainColor(mm){ mm=mm||0; for(const b of RAIN_BUCKETS) if(mm<b.max) return b.c; return RAIN_BUCKETS[RAIN_BUCKETS.length-1].c; }
+function rainInk(mm){ return (mm||0)>=5?'#FFFFFF':'#1B1A17'; }
+function rainLegendHTML(){ return `<div style="display:flex;flex-direction:column;gap:4px">${RAIN_BUCKETS.map(b=>`<div style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border-radius:3px;flex-shrink:0;background:${b.c};border:1px solid rgba(0,0,0,.06)"></span><span style="font-size:11px;color:#6E6A62">${b.l}${b.max>=1e9?' mm':b.max===0.1?'':' mm'}</span></div>`).join('')}</div>`; }
 const SPRAY={ good:{label:'Good spray day',icon:'☀️',bg:C.softG,border:'#C6EBD1',ink:C.greenD}, marg:{label:'Marginal window',icon:'⛅',bg:C.softA,border:'#F0DFB0',ink:'#9A6B05'}, hold:{label:'Hold — high wind / rain',icon:'🌧️',bg:C.softR,border:'#F2C9C2',ink:'#B0301F'} };
 function mockWeather(terr){ const h=hash(terr), k=h%3; const temp=28+(h>>3)%7, wind=4+(h>>5)%16, rain=k===2?((h>>2)%9)/10+0.6:0; const w=[SPRAY.good,SPRAY.marg,SPRAY.hold][k]; return { ...w, line:`${temp}° · wind ${wind} km/h · rain ${rain.toFixed(1)} mm` }; }
 function weather(terr){ const w=WX[String(terr||'').trim().toLowerCase()]; if(!w) return mockWeather(terr);
@@ -263,13 +276,16 @@ function drawMap(hostId, metric){
     let fill; if(isW){ fill = has? rainColor(rainOf(canonTerr)) : '#F1EEE8'; } else { fill = has? '#EFEBE3' : '#F4F1EA'; }
     p.setAttribute('fill', fill); p.setAttribute('stroke','#FFFFFF'); p.setAttribute('stroke-width','1');
     if(activeTerr&&activeTerr.toLowerCase()!==nm.toLowerCase()) p.setAttribute('opacity','0.4');
-    if(isW&&has){ p.style.cursor='pointer'; p.addEventListener('click',(e)=>{ e.stopPropagation(); setState(s=>({terr:s.terr.toLowerCase()===canonTerr.toLowerCase()?'':canonTerr,cluster:''})); }); const ti=document.createElementNS(NS,'title'); ti.textContent=`${canonTerr} — ${rainOf(canonTerr)} mm rain · ${list.filter(m=>m.acresY>0).length} machines ran`; p.appendChild(ti); }
+    if(isW&&has){ p.style.cursor='pointer'; p.addEventListener('click',(e)=>{ e.stopPropagation(); setState(s=>({terr:s.terr.toLowerCase()===canonTerr.toLowerCase()?'':canonTerr,cluster:''})); }); const ti=document.createElementNS(NS,'title'); ti.textContent=`${canonTerr} — ${rainOf(canonTerr)} mm rain · ${list.filter(m=>m.acresY>0).length}/${list.length} machines ran`; p.appendChild(ti); }
     g.appendChild(p);
   });
   if(isW){
     Object.keys(byT).forEach(nm=>{ const c=coordsOf(nm); if(!c) return;
-      const ran=byT[nm].filter(m=>m.acresY>0).length, rain=rainOf(nm), [cx,cy]=proj(c[0],c[1]);
-      const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',cy);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',"'IBM Plex Mono',monospace");t.setAttribute('font-size','13');t.setAttribute('font-weight','600');t.setAttribute('fill', rain>15?'#FFFFFF':'#1B1A17'); t.style.pointerEvents='none'; t.textContent=ran; g.appendChild(t);
+      const list=byT[nm], total=list.length, ran=list.filter(m=>m.acresY>0).length, rain=rainOf(nm), ink=rainInk(rain), [cx,cy]=proj(c[0],c[1]);
+      const label=(list[0].territory)||nm;
+      const mk=(y,size,weight,fam,txt)=>{ const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',y);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',fam);t.setAttribute('font-size',size);t.setAttribute('font-weight',weight);t.setAttribute('fill',ink); t.style.pointerEvents='none'; t.textContent=txt; g.appendChild(t); };
+      mk(cy-6.5,'9.5',600,"'Noto Sans',sans-serif",label);
+      mk(cy+6.5,'12.5',700,"'IBM Plex Mono',monospace",ran+'/'+total);
     });
     attachPanZoom(svg); drawLegend('weather'); return;
   }
@@ -309,7 +325,7 @@ function drawLegend(metric){
   const host=document.getElementById('legendHost'); if(!host) return;
   let html='';
   const row=(c,l,shape)=>`<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><span style="width:13px;height:13px;border-radius:${shape==='sq'?'3px':'50%'};background:${c};flex-shrink:0"></span><span style="font-size:11.5px;color:#6E6A62">${l}</span></div>`;
-  if(metric==='weather') html=`<div style="height:12px;border-radius:6px;background:linear-gradient(90deg,#E8F1FB,#14528B);margin-bottom:6px"></div><div style="display:flex;justify-content:space-between;font-size:10.5px;color:#9C988F"><span>0 mm</span><span>40+ mm</span></div><div style="font-size:11px;color:#6E6A62;margin-top:9px">Fill = yesterday's rainfall. The <b>number</b> in each district is machines that ran yesterday.</div>`;
+  if(metric==='weather') html=`${rainLegendHTML()}<div style="font-size:11px;color:#6E6A62;margin-top:9px">Fill = yesterday's rainfall. The <b>number</b> in each district is machines that ran / total deployed.</div>`;
   else if(metric==='deploy') html=row(C.orange,'UPL')+row(C.green,'SWAL')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Bubble size = machines deployed. Split shows UPL / SWAL share.</div>`;
   else if(metric==='active') html=row(C.act,'Active machines')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Size = machines that ran yesterday.</div>`;
   else if(metric==='acresY') html=row('#7C6FE0','Acres sprayed yesterday')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Size = acres covered yesterday.</div>`;
@@ -374,6 +390,7 @@ const I = {
   machines:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
   weather:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 17a4 4 0 0 1 .5-8 5.5 5.5 0 0 1 10.6 1.5A3.5 3.5 0 0 1 17.5 17Z"/><path d="M8 20.5 7 22M12 20.5 11 22M16 20.5 15 22"/></svg>',
   am:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="3"/><path d="M6.5 21a5.5 5.5 0 0 1 11 0"/><path d="M4 13.5 2.5 15M20 13.5 21.5 15"/></svg>',
+  leader:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0Z"/><path d="M17 5h2.5a1.5 1.5 0 0 1 0 5H17M7 5H4.5a1.5 1.5 0 0 0 0 5H7"/></svg>',
   mobile:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>',
   desktop:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M9 20h6M12 17v3"/></svg>',
   search:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9C988F" stroke-width="2" style="position:absolute;left:11px;top:50%;transform:translateY(-50%)"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
@@ -536,7 +553,28 @@ function vals(){
       dotStyle:{width:'9px',height:'9px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
       acresLabel: m.acresY>0? fmt(m.acresY)+' ac' : (m.breakdown?'down':'idle') }; });
 
-  return { tot, kpis, terrOptions, clusterOptions, amOptions, coOptions, topTerr, rows, terrTable, wetTerr, amRows, machineTable, mobileList, d,
+  // Leaderboard — aggregate filtered machines by Cluster Officer and by Operator
+  const lbScope = S.lbScope==='yday' ? 'yday' : 'total';
+  const sortKey = lbScope==='yday' ? 'acresY' : 'achieved';
+  const coAgg={};
+  F.forEach(m=>{ const nm=(m.co||'').trim(); if(!nm) return; const k=nm.toLowerCase();
+    const o=coAgg[k] || (coAgg[k]={names:[],ams:[],machines:0,achieved:0,target:0,acresY:0,opMapped:0});
+    o.names.push(m.co); o.ams.push(m.am); o.machines++; o.achieved+=m.achieved; o.target+=m.target; o.acresY+=m.acresY;
+    if(m.opName&&m.opNum&&m.opNum!=='0') o.opMapped++; });
+  const coLeaders = Object.values(coAgg).map(o=>{ const val=o[sortKey];
+    return { name:domStr(o.names), am:domStr(o.ams), machines:o.machines, achieved:o.achieved, target:o.target, acresY:o.acresY,
+      opMapped:o.opMapped, perMc:o.machines? val/o.machines : 0, pct:o.target? o.achieved/o.target : 0, val }; })
+    .sort((a,b)=>b.val-a.val).slice(0,10);
+  const opAgg={};
+  F.forEach(m=>{ const nm=(m.opName||'').trim(); if(!nm) return; const k=nm.toLowerCase()+'|'+(m.opNum||'').trim();
+    const o=opAgg[k] || (opAgg[k]={names:[],num:m.opNum,cos:[],terrs:[],machines:0,achieved:0,target:0,acresY:0});
+    o.names.push(m.opName); o.machines++; o.achieved+=m.achieved; o.target+=m.target; o.acresY+=m.acresY; o.cos.push(m.co); o.terrs.push(m.territory); });
+  const opLeaders = Object.values(opAgg).map(o=>{ const val=o[sortKey];
+    return { name:domStr(o.names), num:o.num, co:domStr(o.cos), terr:domStr(o.terrs), machines:o.machines,
+      achieved:o.achieved, target:o.target, acresY:o.acresY, pct:o.target? o.achieved/o.target : 0, val }; })
+    .sort((a,b)=>b.val-a.val).slice(0,20);
+
+  return { tot, kpis, terrOptions, clusterOptions, amOptions, coOptions, topTerr, rows, terrTable, wetTerr, amRows, machineTable, mobileList, d, lbScope, coLeaders, opLeaders,
     anyFilter, amCount:amKeys.length, pinCount:F.length, mListCount:F.length,
     pinB10:fmt(F.filter(m=>m.acresY>10).length), pinB5:fmt(F.filter(m=>m.acresY>=5&&m.acresY<=10).length), pinB1:fmt(F.filter(m=>m.acresY>=1&&m.acresY<5).length), pinB0:fmt(F.filter(m=>m.acresY<1).length),
     freshCount:`${fmt(tot.deployed)} machines${anyFilter?' (filtered)':''}`, mobileWeather,
@@ -554,7 +592,7 @@ function railHTML(){
   return `<aside style="width:74px;flex-shrink:0;background:#1B1A17;display:flex;flex-direction:column;align-items:center;padding:16px 0">
     <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;letter-spacing:.02em;color:#fff;margin-bottom:26px">UPL</div>
     <nav style="display:flex;flex-direction:column;gap:8px;flex:1">
-      ${navBtn('map',I.map,v==='map')}${navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${navBtn('am',I.am,v==='am')}
+      ${navBtn('map',I.map,v==='map')}${navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${navBtn('am',I.am,v==='am')}${navBtn('leader',I.leader,v==='leader')}
     </nav>
     <button data-act="device" title="Mobile view" style="${css({...navStyle(false),marginBottom:'8px'})}">${I.mobile}</button>
     <div style="writing-mode:vertical-rl;font-size:8.5px;letter-spacing:.14em;color:#6b675f;margin-top:14px;text-transform:uppercase">Confidential</div>
@@ -634,7 +672,6 @@ function mapViewHTML(v){
           <button data-act="metric" data-metric="active" style="${mt('active')}">Active</button>
           <button data-act="metric" data-metric="acresY" style="${mt('acresY')}">Acres y'day</button>
           <button data-act="metric" data-metric="health" style="${mt('health')}">Health</button>
-          <button data-act="metric" data-metric="weather" style="${mt('weather')}">Weather</button>
         </div>
         <div style="flex:1"></div>${zoomCtrls}
       </div>
@@ -683,14 +720,13 @@ function weatherViewHTML(v){
   return `<section style="padding:18px 22px;display:flex;flex-direction:column;gap:16px">
     <div style="display:grid;grid-template-columns:1fr 270px;gap:16px">
       <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;display:flex;flex-direction:column">
-        <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">Yesterday's rainfall by territory</div><div style="font-size:11px;color:#9C988F;margin-top:2px">Darker = more rain · number inside = machines that ran yesterday</div></div>${zoomCtrls}</div>
+        <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">Yesterday's rainfall by territory</div><div style="font-size:11px;color:#9C988F;margin-top:2px">Darker = more rain · number inside = machines that ran / total deployed</div></div>${zoomCtrls}</div>
         <div id="wMapHost" style="flex:1;min-height:380px;background:#FBFAF8;cursor:default"></div>
       </div>
       <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px">
         <div>
           <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:10px">Rainfall scale</div>
-          <div style="height:12px;border-radius:6px;background:linear-gradient(90deg,#E8F1FB,#14528B)"></div>
-          <div style="display:flex;justify-content:space-between;font-size:10.5px;color:#9C988F;margin-top:5px"><span>0 mm</span><span>40+ mm</span></div>
+          ${rainLegendHTML()}
         </div>
         <div style="border-top:1px solid #F2F0EB;padding-top:13px">
           <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:8px">Wettest territories</div>
@@ -817,6 +853,66 @@ function amViewHTML(v){
     </div>
   </section>`;
 }
+function leaderViewHTML(v){
+  const yday = v.lbScope==='yday';
+  const sub = (yday?'by acres sprayed yesterday':'by total acres achieved') + (v.anyFilter?' · filtered':'');
+  const seg2 = on => css({...seg(on),padding:'6px 14px'});
+  const toggle = `<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
+      <button data-act="lbscope" data-scope="total" style="${seg2(!yday)}">Total · so far</button>
+      <button data-act="lbscope" data-scope="yday" style="${seg2(yday)}">Yesterday</button>
+    </div>`;
+  const medal=['#E0A93B','#AEB4BC','#C68A52'];
+  const rankChip = i => `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:${i<3?medal[i]:'#F2F0EB'};color:${i<3?'#fff':'#807c73'};font-size:11px;font-weight:700;font-family:'IBM Plex Mono'">${i+1}</span>`;
+  const metricHead = yday ? "Acres y'day" : 'Achieved / target';
+  const metricCell = o => yday
+    ? `<div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700;text-align:right">${fmt(o.acresY)}<span style="font-size:10px;color:#9C988F;font-weight:500"> ac</span></div>`
+    : `<div style="text-align:right">
+        <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:6px"><span style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${fmt(o.achieved)}</span><span style="font-size:10.5px;color:#9C988F">/ ${fmt(o.target)}</span></div>
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:3px"><div style="width:66px;height:5px;border-radius:3px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${Math.min(100,Math.round(o.pct*100))}%;background:${C.act}"></span></div><span style="font-size:10px;color:#6E6A62;font-family:'IBM Plex Mono'">${Math.round(o.pct*100)}%</span></div>
+      </div>`;
+  const coGrid='grid-template-columns:40px 1fr 86px 124px 116px 178px;gap:14px';
+  const opGrid='grid-template-columns:40px 1fr 86px 178px;gap:14px';
+  const card=(title,subtitle,inner)=>`<div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
+      <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;display:flex;align-items:baseline;gap:9px"><div style="font-size:13px;font-weight:700">${title}</div><div style="font-size:11px;color:#9C988F">${subtitle}</div></div>
+      ${inner}</div>`;
+  const empty = `<div style="padding:26px 18px;font-size:12px;color:#9C988F;text-align:center">No data for the current filters.</div>`;
+
+  const coInner = !v.coLeaders.length ? empty : `<div style="overflow-x:auto"><div style="min-width:760px">
+      <div style="display:grid;${coGrid};padding:10px 18px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
+        <div style="text-align:center">#</div><div>Cluster Officer</div><div style="text-align:right">Machines</div><div style="text-align:right">Operators mapped</div><div style="text-align:right">Avg / machine</div><div style="text-align:right">${metricHead}</div>
+      </div>
+      ${v.coLeaders.map((o,i)=>`<div style="display:grid;${coGrid};padding:11px 18px;border-bottom:1px solid #F4F2EE;align-items:center">
+        <div style="text-align:center">${rankChip(i)}</div>
+        <div style="min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</div><div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">AM · ${E(o.am||'—')}</div></div>
+        <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${o.machines}</div>
+        <div style="text-align:right"><span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;color:${o.opMapped===o.machines?C.greenD:'#6E6A62'}">${o.opMapped}/${o.machines}</span></div>
+        <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right;color:#3A6FA0">${o.perMc.toFixed(1)}<span style="font-size:9.5px;color:#9C988F;font-weight:500"> ac</span></div>
+        <div>${metricCell(o)}</div>
+      </div>`).join('')}
+    </div></div>`;
+
+  const opInner = !v.opLeaders.length ? empty : `<div style="overflow-x:auto"><div style="min-width:560px">
+      <div style="display:grid;${opGrid};padding:10px 18px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
+        <div style="text-align:center">#</div><div>Operator</div><div style="text-align:right">Machines</div><div style="text-align:right">${metricHead}</div>
+      </div>
+      ${v.opLeaders.map((o,i)=>`<div style="display:grid;${opGrid};padding:11px 18px;border-bottom:1px solid #F4F2EE;align-items:center">
+        <div style="text-align:center">${rankChip(i)}</div>
+        <div style="min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</div><div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-family:'IBM Plex Mono'">${E(o.num||'—')}</span> · ${E(o.co||'—')} · ${E(o.terr||'—')}</div></div>
+        <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${o.machines}</div>
+        <div>${metricCell(o)}</div>
+      </div>`).join('')}
+    </div></div>`;
+
+  return `<section style="padding:18px 22px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="font-size:15px;font-weight:700">Leaderboard</div>
+      <div style="font-size:11.5px;color:#9C988F">${sub}</div>
+      <div style="flex:1"></div>${toggle}
+    </div>
+    ${card('Top cluster officers','Top 10 · '+sub, coInner)}
+    ${card('Top operators','Top 20 · '+sub, opInner)}
+  </section>`;
+}
 function drawerHTML(v){
   const d=v.d; if(!d||!d.mc) return '';
   return `<div data-act="close" style="position:fixed;inset:0;background:rgba(27,26,23,.32);z-index:40;animation:fadeIn .2s"></div>
@@ -880,6 +976,7 @@ function contentHTML(v){
     case 'weather': return weatherViewHTML(v);
     case 'machines': return machinesViewHTML(v);
     case 'am': return amViewHTML(v);
+    case 'leader': return leaderViewHTML(v);
     default: return mapViewHTML(v);
   }
 }
@@ -921,7 +1018,7 @@ function mobileHTML(v){
     body=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:10px;margin-bottom:12px">
         <div style="display:flex;justify-content:flex-end;margin-bottom:8px">${zoomCtrls}</div>
         <div id="mwMapHost" style="width:100%;height:260px;background:#FBFAF8;border-radius:8px;overflow:hidden;cursor:default"></div>
-        <div style="padding:9px 4px 2px"><div style="height:10px;border-radius:5px;background:linear-gradient(90deg,#E8F1FB,#14528B)"></div><div style="display:flex;justify-content:space-between;font-size:10px;color:#9C988F;margin-top:4px"><span>0 mm</span><span>number = ran y'day · 40+ mm</span></div></div>
+        <div style="padding:9px 4px 2px"><div style="display:flex;gap:4px">${RAIN_BUCKETS.map(b=>`<div style="flex:1;height:10px;background:${b.c};border-radius:3px"></div>`).join('')}</div><div style="display:flex;justify-content:space-between;font-size:10px;color:#9C988F;margin-top:4px"><span>Dry</span><span>number = ran / total</span><span>20+ mm</span></div></div>
       </div>
       <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:8px">Territories by rainfall</div>
       ${v.wetTerr.map(w=>`<div data-act="terr" data-terr="${E(w.name)}" style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px;margin-bottom:8px;cursor:pointer">
@@ -1050,9 +1147,10 @@ app.addEventListener('click', e=>{
   const act=el.dataset.act;
   switch(act){
     case 'view': mapLocked=true; scale=1; tx=0; ty=0; setState({view:el.dataset.view}); break;
-    case 'device': mapLocked=true; scale=1; tx=0; ty=0; setState(s=>{ const dev=s.device==='mobile'?'desktop':'mobile'; const view=(dev==='mobile'&&(s.view==='machines'||s.view==='am'))?'map':s.view; return {device:dev,selected:null,view}; }); break;
+    case 'device': mapLocked=true; scale=1; tx=0; ty=0; setState(s=>{ const dev=s.device==='mobile'?'desktop':'mobile'; const view=(dev==='mobile'&&(s.view==='machines'||s.view==='am'||s.view==='leader'))?'map':s.view; return {device:dev,selected:null,view}; }); break;
     case 'org': setState({org:el.dataset.org}); break;
     case 'metric': setState({metric:el.dataset.metric}); break;
+    case 'lbscope': setState({lbScope:el.dataset.scope}); break;
     case 'pinmode': setState({pinMode:el.dataset.mode}); break;
     case 'health': { const h=el.dataset.h; setState(s=>({health: s.health.includes(h)? s.health.filter(x=>x!==h) : [...s.health,h]})); break; }
     case 'clear': setState({org:'Both',terr:'',cluster:'',am:'',co:'',health:[],search:''}); break;
