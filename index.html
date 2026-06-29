@@ -134,15 +134,28 @@ function rowsToMachines(grid){
   }
   return out;
 }
+// Merge name groups that differ only by case or whitespace. For each field, normalise
+// (trim + collapse internal spaces + lowercase) as the grouping key, then rewrite every
+// row's value to the most-common original spelling for that key (ties → first seen).
+// Keeps grouping in Tables / AM / Leaderboard / filters from splitting on casing noise.
+function canonicalizeNames(rows){
+  ['cluster','am','co','opName'].forEach(f=>{
+    const cnt={}, disp={};
+    rows.forEach(m=>{ const v=String(m[f]||'').trim().replace(/\s+/g,' '); if(!v) return; const k=v.toLowerCase(); cnt[k]=(cnt[k]||0)+1; (disp[k]||(disp[k]={}))[v]=(disp[k][v]||0)+1; });
+    const canon={}; for(const k in disp){ canon[k]=Object.keys(disp[k]).sort((a,b)=>disp[k][b]-disp[k][a])[0]; }
+    rows.forEach(m=>{ const v=String(m[f]||'').trim().replace(/\s+/g,' '); if(v) m[f]=canon[v.toLowerCase()]; });
+  });
+  return rows;
+}
 async function loadData(){
   const url=liveUrl();
-  if(!url){ dataMode='demo'; ROWS=MACHINES_MOCK; lastUpdated=nowIST(); render(); loadWeather(); return; }
+  if(!url){ dataMode='demo'; ROWS=canonicalizeNames(MACHINES_MOCK); lastUpdated=nowIST(); render(); loadWeather(); return; }
   try{
     const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
     const machines=rowsToMachines(parseCSV(await res.text()));
     if(!machines.length) throw new Error('no rows parsed');
-    ROWS=machines; dataMode='live'; lastUpdated=nowIST(); render(); loadWeather();
-  }catch(e){ ROWS=MACHINES_MOCK; dataMode='error'; lastUpdated=nowIST(); render(); loadWeather(); console.error('CSV load failed:', e); }
+    ROWS=canonicalizeNames(machines); dataMode='live'; lastUpdated=nowIST(); render(); loadWeather();
+  }catch(e){ ROWS=canonicalizeNames(MACHINES_MOCK); dataMode='error'; lastUpdated=nowIST(); render(); loadWeather(); console.error('CSV load failed:', e); }
 }
 
 /* ============================= derived ============================= */
