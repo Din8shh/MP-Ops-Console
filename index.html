@@ -97,7 +97,10 @@ function resolveCols(header){
     achieved: find(x=>x.includes('achieved')),
     mtd: find(x=>x.includes('mtd')),
     acresY: find(x=>x.includes('yesterday')&&x.includes('acres')&&!x.includes('iot')&&!x.includes('ping'), x=>x.includes('yesterday')&&!x.includes('iot')&&!x.includes('ping')),
+    iotAcresY: find(x=>x.includes('iot')),
     pinged: find(x=>x.includes('ping')&&x.includes('yesterday'), x=>x.includes('pinged')&&!x.includes('date')&&!x.includes('days')&&!x.includes('since')),
+    lastPing: find(x=>x.includes('ping')&&x.includes('date')),
+    daysSincePing: find(x=>x.includes('ping')&&(x.includes('days')||x.includes('since'))),
     scanned: find(x=>x.includes('scanned')),
     breakdown: find(x=>x.includes('breakdown')),
     opMapped: find(x=>x.includes('mapped')),
@@ -107,7 +110,10 @@ function resolveCols(header){
   };
   // Positional fallback for the IoT/connectivity block — sheet cols S/T/U/V (idx 18/19/20/21).
   // Keyword match wins; positional only kicks in when a header didn't match and the row is wide enough.
+  if(c.iotAcresY<0 && h.length>18) c.iotAcresY=18;
   if(c.pinged<0 && h.length>19) c.pinged=19;
+  if(c.lastPing<0 && h.length>20) c.lastPing=20;
+  if(c.daysSincePing<0 && h.length>21) c.daysSincePing=21;
   return c;
 }
 function rowsToMachines(grid){
@@ -121,10 +127,10 @@ function rowsToMachines(grid){
       mc, org:(txt(g(col.org)).toUpperCase()==='SWAL'?'SWAL':'UPL'),
       territory:canonTerr(txt(g(col.territory)))||'Unassigned', cluster:txt(g(col.cluster))||'Unassigned',
       co:txt(g(col.co)), coMob:txt(g(col.coMob)), am:txt(g(col.am)), amNum:txt(g(col.amNum)),
-      target:num(g(col.target)), achieved:num(g(col.achieved)), mtd:num(g(col.mtd)), acresY:num(g(col.acresY)),
+      target:num(g(col.target)), achieved:num(g(col.achieved)), mtd:num(g(col.mtd)), acresY:num(g(col.acresY)), iotAcresY:num(g(col.iotAcresY)),
       scanned:parseScanned(g(col.scanned)),
       breakdown:(txt(g(col.breakdown))==='1'?1:0), opMapped:(txt(g(col.opMapped))==='1'?1:0),
-      pinged:(txt(g(col.pinged))==='1'?1:0),
+      pinged:(txt(g(col.pinged))==='1'?1:0), lastPing:txt(g(col.lastPing)), daysSincePing:txt(g(col.daysSincePing)),
       opName:txt(g(col.opName)), opNum:txt(g(col.opNum)), lat, lon
     });
   }
@@ -175,9 +181,10 @@ function getF(){
     return true;
   });
 }
+function isAdmin(){ return !!(GATE.cur && GATE.cur.role==='admin'); }
 function roll(list){
-  const o={deployed:list.length,upl:0,swal:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,opMappedCount:0};
-  list.forEach(m=>{ o[m.org==='UPL'?'upl':'swal']++; o[hstate(m)]++; o.target+=m.target; o.achieved+=m.achieved; o.mtd+=m.mtd; o.acresY+=m.acresY; if(m.opName&&m.opNum&&m.opNum!=='0')o.opMappedCount++; });
+  const o={deployed:list.length,upl:0,swal:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
+  list.forEach(m=>{ o[m.org==='UPL'?'upl':'swal']++; o[hstate(m)]++; o.target+=m.target; o.achieved+=m.achieved; o.mtd+=m.mtd; o.acresY+=m.acresY; o.iotAcresY+=(m.iotAcresY||0); o.pinged+=(m.pinged?1:0); if(m.opName&&m.opNum&&m.opNum!=='0')o.opMappedCount++; });
   o.pct = o.target ? o.achieved/o.target : 0; o.band=band(o.pct); o.ranY=list.filter(m=>m.acresY>0).length; return o;
 }
 function opMapLabel(r){ return r.opMappedCount+'/'+r.deployed; }
@@ -204,7 +211,7 @@ function rowBars(r){ const tt=r.deployed||1; return {
   mixAStyle:{width:(100*r.Active/tt)+'%',background:C.act,display:'block'}, mixIStyle:{width:(100*r.Idle/tt)+'%',background:C.idle,display:'block'}, mixBStyle:{width:(100*r.Breakdown/tt)+'%',background:C.brk,display:'block'},
   mixLabel:`${r.Active} active · ${r.Idle} idle · ${r.Breakdown} down`,
   paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*r.pct)+'%',background:C.act},
-  acresLabel:`${fmt(r.achieved)} / ${fmt(r.target)}`, ranY:fmt(r.acresY) }; }
+  acresLabel:`${fmt(r.achieved)} / ${fmt(r.target)}`, ranY:fmt(r.acresY), iotRanY:fmt(r.iotAcresY||0), pingLabel:`${r.pinged}/${r.deployed}`, pingInk:'#46433d' }; }
 function hash(str){ let h=0; for(let i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))>>>0; return h; }
 function lerpHex(a,b,t){ t=Math.max(0,Math.min(1,t)); const pa=[1,3,5].map(i=>parseInt(a.substr(i,2),16)), pb=[1,3,5].map(i=>parseInt(b.substr(i,2),16)); return '#'+pa.map((v,i)=>Math.round(v+(pb[i]-v)*t).toString(16).padStart(2,'0')).join(''); }
 let WX={};   // territory(lowercase) -> { rain, tmax, tmin, wind, code } — live Open-Meteo, "yesterday" IST
@@ -447,6 +454,10 @@ function vals(){
     {label:'MTD acres',value:fmt(tot.mtd),unit:'ac',valStyle:mono22(C.ink)},
     {label:'Achieved',value:pctTxt+'%',unit:'',valStyle:mono22(bcolor(band(tot.pct)))},
   ];
+  if(isAdmin()){   // IoT/connectivity KPIs — admin role only
+    kpis.push({label:'IoT acres y’day',value:fmt(tot.iotAcresY),unit:'ac',valStyle:mono22(C.orangeD)});
+    kpis.push({label:'Pinged y’day',value:fmt(tot.pinged),unit:'',valStyle:mono22('#3A6FA0')});
+  }
   const byT={}; F.forEach(m=>{ (byT[m.territory] ||= []).push(m); });
   const terrEntries=Object.keys(byT).map(name=>({name,list:byT[name],r:roll(byT[name])})).sort((a,b)=>b.r.deployed-a.r.deployed);
   const topTerr=terrEntries.slice(0,7).map(({name,r},i)=>{ const t2=r.deployed||1;
@@ -454,8 +465,9 @@ function vals(){
       uStyle:{width:(100*r.upl/t2)+'%',background:C.orange}, sStyle:{width:(100*r.swal/t2)+'%',background:C.green} }; });
 
   // Tables rows
+  const adm=isAdmin();
   const rows=[];
-  const grid5={display:'grid',gridTemplateColumns:'300px 124px 150px 1fr 96px 96px',gap:'14px',alignItems:'center'};
+  const grid5={display:'grid',gridTemplateColumns:adm?'288px 110px 132px 1fr 84px 90px 78px 86px':'300px 124px 150px 1fr 96px 96px',gap:'14px',alignItems:'center'};
   terrEntries.forEach(({name,list,r})=>{
     const exp=!!S.expanded[name];
     rows.push({ click:{act:'exp',key:name}, indent:'0px',
@@ -480,7 +492,7 @@ function vals(){
               name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName, subStyle:{fontSize:'11px',color:'#9C988F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'},
               deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},
               mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
-              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'' });
+              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk) });
           });
         }
       });
@@ -495,7 +507,7 @@ function vals(){
   const wetTerr=terrEntries.map(({name,r})=>({name,rain:rainOf(name),ran:r.ranY})).sort((a,b)=>b.rain-a.rain).slice(0,7).map(w=>({ name:w.name, rain:w.rain.toFixed(1), ran:w.ran, swatch:'background:'+rainColor(w.rain) }));
 
   // AM view
-  const amRows=[]; const grid5am={display:'grid',gridTemplateColumns:'330px 120px 150px 1fr 84px 96px 168px',gap:'14px',alignItems:'center'};
+  const amRows=[]; const grid5am={display:'grid',gridTemplateColumns:adm?'320px 110px 132px 1fr 78px 84px 74px 84px 150px':'330px 120px 150px 1fr 84px 96px 168px',gap:'14px',alignItems:'center'};
   const byAM={}; F.forEach(m=>{ (byAM[m.am] ||= []).push(m); });
   const amKeys=Object.keys(byAM).sort((a,b)=>byAM[b].length-byAM[a].length);
   const roleChip=(bg,col)=>({display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:'9px',fontWeight:700,letterSpacing:'.02em',padding:'2px 6px',borderRadius:'5px',background:bg,color:col});
@@ -527,7 +539,7 @@ function vals(){
               name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName+' · '+m.territory, subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
               deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},
               mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
-              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'',
+              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk),
               contact:m.opNum, callTel:'tel:'+m.opNum, callStyle:callBtn });
           });
         }
@@ -562,7 +574,8 @@ function vals(){
       funnel, products,
       locTitle:(m.lat!=null)?`${m.territory} cluster`:'No location on file', coords:(m.lat!=null)?`${m.lat}, ${m.lon}`:'Excluded from map · listed here',
       coName:m.co, coMob:m.coMob, coTel:'tel:'+m.coMob, amName:m.am, amNum:m.amNum, amTel:'tel:'+m.amNum,
-      pingLabel:(m.pinged?'Yes':'No'), pingInk:(m.pinged?C.act:C.brk) };
+      pingLabel:(m.pinged?'Yes':'No'), pingInk:(m.pinged?C.act:C.brk), iotAcresY:fmt(m.iotAcresY||0),
+      lastPing:(m.lastPing&&String(m.lastPing).trim())||'—', daysSincePing:(m.daysSincePing!=null&&String(m.daysSincePing).trim()!=='')?m.daysSincePing:'—' };
   }
 
   const anyFilter = S.org!=='Both'||!!S.terr||!!S.cluster||!!S.am||!!S.co||!!S.health.length||!!S.search;
@@ -594,7 +607,7 @@ function vals(){
       achieved:o.achieved, target:o.target, acresY:o.acresY, pct:o.target? o.achieved/o.target : 0, val }; })
     .sort((a,b)=>b.val-a.val).slice(0,20);
 
-  return { tot, kpis, terrOptions, clusterOptions, amOptions, coOptions, topTerr, rows, terrTable, wetTerr, amRows, machineTable, mobileList, d, lbScope, coLeaders, opLeaders,
+  return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, topTerr, rows, terrTable, wetTerr, amRows, machineTable, mobileList, d, lbScope, coLeaders, opLeaders,
     anyFilter, amCount:amKeys.length, pinCount:F.length, mListCount:F.length,
     pinB10:fmt(F.filter(m=>m.acresY>10).length), pinB5:fmt(F.filter(m=>m.acresY>=5&&m.acresY<=10).length), pinB1:fmt(F.filter(m=>m.acresY>=1&&m.acresY<5).length), pinB0:fmt(F.filter(m=>m.acresY<1).length),
     freshCount:`${fmt(tot.deployed)} machines${anyFilter?' (filtered)':''}`, mobileWeather,
@@ -723,9 +736,12 @@ function downloadFilteredCSV(){
     ['Area Manager', m=>m.am], ['AM Number', m=>m.amNum], ['Cluster Officer', m=>m.co], ['CO Mobile', m=>m.coMob],
     ['Operator', m=>m.opName], ['Operator Number', m=>m.opNum], ['Health', m=>hstate(m)],
     ['Target', m=>m.target], ['Achieved', m=>m.achieved], ['MTD Acres', m=>m.mtd], ['Acres Yesterday', m=>m.acresY],
-    ['Breakdown', m=>m.breakdown?'Yes':'No'], ['Operator Mapped', m=>m.opMapped?'Yes':'No'], ['Pinged Yesterday', m=>m.pinged?'Yes':'No'],
+    ['Breakdown', m=>m.breakdown?'Yes':'No'], ['Operator Mapped', m=>m.opMapped?'Yes':'No'],
     ['Lat', m=>m.lat==null?'':m.lat], ['Lon', m=>m.lon==null?'':m.lon],
   ];
+  if(isAdmin()){   // IoT/connectivity columns — admin role only
+    cols.push(['IoT Acres Yesterday', m=>m.iotAcresY||0], ['Pinged Yesterday', m=>m.pinged?'Yes':'No']);
+  }
   const lines=[cols.map(c=>csvCell(c[0])).join(',')];
   F.forEach(m=>lines.push(cols.map(c=>csvCell(c[1](m))).join(',')));
   const csv='﻿'+lines.join('\r\n');   // BOM so Excel reads UTF-8 names correctly
@@ -745,8 +761,8 @@ function tablesViewHTML(v){
         <div style="font-size:13px;font-weight:700">Territory breakdown <span style="font-weight:400;color:#9C988F">· expand to Cluster → Machine</span></div>
         ${downloadBtnHTML(v)}
       </div>
-      <div style="display:grid;grid-template-columns:300px 124px 150px 1fr 96px 96px;gap:14px;padding:11px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;font-size:10px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase">
-        <div>Territory · Cluster · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel (achieved / target)</div><div style="text-align:right">Acres y'day</div><div style="text-align:right">Operators</div>
+      <div style="display:grid;grid-template-columns:${v.adm?'288px 110px 132px 1fr 84px 90px 78px 86px':'300px 124px 150px 1fr 96px 96px'};gap:14px;padding:11px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;font-size:10px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase">
+        <div>Territory · Cluster · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel (achieved / target)</div><div style="text-align:right">Acres y'day</div>${v.adm?`<div style="text-align:right">IoT ac y'day</div><div style="text-align:right">Pinged</div>`:''}<div style="text-align:right">Operators</div>
       </div>
       <div style="max-height:calc(100vh - 320px);overflow:auto">
         ${v.rows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
@@ -758,6 +774,7 @@ function tablesViewHTML(v){
           <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
           <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;max-width:220px"><div style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="${css(r.paceBarStyle)}"></span></div></div><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span></div>
           <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${E(r.ranY)}</div>
+          ${v.adm?`<div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right;color:#D96A12">${E(r.iotRanY)}</div><div style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right;color:${r.pingInk||'#46433d'}">${E(r.pingLabel)}</div>`:''}
           <div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:500;text-align:right;color:#6E6A62">${E(r.opMap)}</div>
         </div>`).join('')}
       </div>
@@ -880,9 +897,9 @@ function amViewHTML(v){
         <div style="font-size:13px;font-weight:700">Area Managers <span style="font-weight:400;color:#9C988F">· ${v.amCount} AMs · expand to Cluster Officer → Machine</span></div>
         ${downloadBtnHTML(v)}
       </div>
-      <div style="overflow-x:auto"><div style="min-width:1120px">
-        <div style="display:grid;grid-template-columns:330px 120px 150px 1fr 84px 96px 168px;gap:14px;padding:10px 18px;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">
-          <div>AM · Cluster Officer · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div style="text-align:right">Acres y'day</div><div style="text-align:right">Operators</div><div>Contact</div>
+      <div style="overflow-x:auto"><div style="min-width:${v.adm?'1240px':'1120px'}">
+        <div style="display:grid;grid-template-columns:${v.adm?'320px 110px 132px 1fr 78px 84px 74px 84px 150px':'330px 120px 150px 1fr 84px 96px 168px'};gap:14px;padding:10px 18px;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">
+          <div>AM · Cluster Officer · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div style="text-align:right">Acres y'day</div>${v.adm?`<div style="text-align:right">IoT ac y'day</div><div style="text-align:right">Pinged</div>`:''}<div style="text-align:right">Operators</div><div>Contact</div>
         </div>
         <div style="max-height:calc(100vh - 300px);overflow:auto">
           ${v.amRows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
@@ -894,6 +911,7 @@ function amViewHTML(v){
             <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
             <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;max-width:200px"><div style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="${css(r.paceBarStyle)}"></span></div></div><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span></div>
             <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${E(r.ranY)}</div>
+            ${v.adm?`<div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right;color:#D96A12">${E(r.iotRanY)}</div><div style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right;color:${r.pingInk||'#46433d'}">${E(r.pingLabel)}</div>`:''}
             <div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:500;text-align:right;color:#6E6A62">${E(r.opMap)}</div>
             <div style="display:flex;align-items:center;gap:9px"><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(r.contact)}</span><a href="${E(r.callTel)}" data-stop="1" style="${css(r.callStyle)}">${I.phoneS}</a></div>
           </div>`).join('')}
@@ -1000,10 +1018,16 @@ function drawerHTML(v){
           <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right">${E(p.acres)}</span>
         </div>`).join('')}
       </div>
-      <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Connectivity</div>
+      ${v.adm?`<div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Connectivity · IoT</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
+        <div style="border:1px solid #E9E6DF;border-radius:10px;padding:10px 12px"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Pinged y'day</div><div style="font-size:13.5px;font-weight:700;margin-top:3px;color:${d.pingInk}">${E(d.pingLabel)}</div></div>
+        <div style="border:1px solid #E9E6DF;border-radius:10px;padding:10px 12px"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">IoT acres y'day</div><div style="font-family:'IBM Plex Mono';font-size:13.5px;font-weight:700;margin-top:3px;color:#D96A12">${E(d.iotAcresY)}<span style="font-size:10px;color:#9C988F;font-weight:500"> ac</span></div></div>
+        <div style="border:1px solid #E9E6DF;border-radius:10px;padding:10px 12px"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Last ping date</div><div style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;margin-top:3px">${E(d.lastPing)}</div></div>
+        <div style="border:1px solid #E9E6DF;border-radius:10px;padding:10px 12px"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Days since ping</div><div style="font-family:'IBM Plex Mono';font-size:13.5px;font-weight:700;margin-top:3px">${E(d.daysSincePing)}</div></div>
+      </div>`:`<div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Connectivity</div>
       <div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;justify-content:space-between;border:1px solid #E9E6DF;border-radius:10px;padding:11px 14px"><div style="font-size:11.5px;color:#6E6A62">Machine pinged yesterday</div><div style="font-size:14px;font-weight:700;color:${d.pingInk}">${E(d.pingLabel)}</div></div>
-      </div>
+      </div>`}
       <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Location</div>
       <div style="display:flex;gap:12px;margin-bottom:18px;align-items:center">
         <div id="drawerMap" style="width:96px;height:96px;border:1px solid #E9E6DF;border-radius:10px;background:#FBFAF8;flex-shrink:0;overflow:hidden"></div>
@@ -1120,8 +1144,14 @@ function mobileHTML(v){
             <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;text-align:right">${E(p.acres)}</span>
           </div>`).join('')}
         </div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Connectivity</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;border:1px solid #E9E6DF;border-radius:10px;padding:10px 13px;margin-bottom:16px"><div style="font-size:11.5px;color:#6E6A62">Machine pinged yesterday</div><div style="font-size:13.5px;font-weight:700;color:${d.pingInk}">${E(d.pingLabel)}</div></div>
+        ${v.adm?`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Connectivity · IoT</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:16px">
+          <div style="border:1px solid #E9E6DF;border-radius:10px;padding:9px 11px"><div style="font-size:9.5px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Pinged y'day</div><div style="font-size:13px;font-weight:700;margin-top:2px;color:${d.pingInk}">${E(d.pingLabel)}</div></div>
+          <div style="border:1px solid #E9E6DF;border-radius:10px;padding:9px 11px"><div style="font-size:9.5px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">IoT acres y'day</div><div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700;margin-top:2px;color:#D96A12">${E(d.iotAcresY)}</div></div>
+          <div style="border:1px solid #E9E6DF;border-radius:10px;padding:9px 11px"><div style="font-size:9.5px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Last ping date</div><div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;margin-top:2px">${E(d.lastPing)}</div></div>
+          <div style="border:1px solid #E9E6DF;border-radius:10px;padding:9px 11px"><div style="font-size:9.5px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Days since ping</div><div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700;margin-top:2px">${E(d.daysSincePing)}</div></div>
+        </div>`:`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Connectivity</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;border:1px solid #E9E6DF;border-radius:10px;padding:10px 13px;margin-bottom:16px"><div style="font-size:11.5px;color:#6E6A62">Machine pinged yesterday</div><div style="font-size:13.5px;font-weight:700;color:${d.pingInk}">${E(d.pingLabel)}</div></div>`}
         <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Location · Escalation</div>
         <div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;margin-bottom:12px">${E(d.coords)}</div>
         <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">
