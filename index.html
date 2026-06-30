@@ -1174,7 +1174,7 @@ app.addEventListener('click', e=>{
   switch(act){
     case 'view': if(gateExpired()){ gateLock(); break; } mapLocked=true; scale=1; tx=0; ty=0; setState({view:el.dataset.view}); break;
     case 'device': mapLocked=true; scale=1; tx=0; ty=0; setState(s=>{ const dev=s.device==='mobile'?'desktop':'mobile'; const view=(dev==='mobile'&&(s.view==='machines'||s.view==='am'||s.view==='leader'))?'map':s.view; return {device:dev,selected:null,view}; }); break;
-    case 'org': { const want=el.dataset.org; if(gateAllows(want)){ setState({org:want}); } else { gateShow(()=>setState({org: gateAllows(want)?want:gateDefaultOrg()}), `Enter PIN for ${want} access`); } break; }
+    case 'org': { const want=el.dataset.org; if(gateAllows(want)){ setState({org:want}); } else { gateShow(()=>setState({org: gateAllows(want)?want:gateDefaultOrg()}), `Enter PIN for ${want} access`, true); } break; }
     case 'metric': setState({metric:el.dataset.metric}); break;
     case 'lbscope': setState({lbScope:el.dataset.scope}); break;
     case 'pinmode': setState({pinMode:el.dataset.mode}); break;
@@ -1220,7 +1220,7 @@ function gateExpired(){ const o=gateRead(); return !o||!o.role||(Date.now()-(o.a
 function gateRestore(){ const o=gateRead(); if(!o||!o.role) return false; const age=Date.now()-(o.at||0); if(age>=GATE.TTL_MS) return false; const f=Object.values(GATE.ROLES).find(r=>r.role===o.role); if(!f) return false; GATE.cur=f; gateArmTimer(GATE.TTL_MS-age); return true; }
 function gateLock(){ clearTimeout(GATE.timer); GATE.cur=null; try{ sessionStorage.removeItem(GATE.SKEY); }catch(_){ } gateShow(()=>bootApp()); }
 function gateHide(){ const ov=document.getElementById('gateOv'); if(ov) ov.style.display='none'; }
-function gateShow(onOk, msg){
+function gateShow(onOk, msg, cancelable){
   let ov=document.getElementById('gateOv');
   if(!ov){
     ov=document.createElement('div'); ov.id='gateOv';
@@ -1232,6 +1232,7 @@ function gateShow(onOk, msg){
       <input id="gateInput" type="password" inputmode="numeric" autocomplete="off" maxlength="4" aria-label="Access PIN"
         style="margin-top:16px;width:100%;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:30px;letter-spacing:.5em;padding:12px 0 12px .5em;border:1.5px solid #E9E6DF;border-radius:10px;outline:none;color:#1B1A17">
       <div id="gateErr" style="font-size:12px;color:#DC3A2B;margin-top:10px;min-height:15px;font-weight:600"></div>
+      <button id="gateCancel" type="button" style="display:none;margin-top:14px;background:none;border:none;color:#6E6A62;font-size:13px;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px">Cancel</button>
       <div style="font-size:10.5px;color:#9C988F;margin-top:14px;line-height:1.4">Access auto-expires after 30 min of inactivity.</div>
     </div>`;
     document.body.appendChild(ov);
@@ -1245,8 +1246,12 @@ function gateShow(onOk, msg){
       if(role){ inp.value=''; gateSave(role); gateHide(); (ov._onOk||function(){})(role); }
       else { ov.querySelector('#gateErr').textContent='Incorrect PIN'; inp.value=''; }
     });
+    ov.querySelector('#gateCancel').addEventListener('click', ()=>{ if(ov._cancelable){ ov._onOk=null; gateHide(); } });
+    ov.addEventListener('keydown', e=>{ if(e.key==='Escape' && ov._cancelable){ ov._onOk=null; gateHide(); } });
   }
   ov._onOk=onOk||function(){};
+  ov._cancelable=!!cancelable;
+  ov.querySelector('#gateCancel').style.display = cancelable ? 'inline-block' : 'none';
   ov.querySelector('#gateMsg').textContent=msg||'';
   ov.querySelector('#gateErr').textContent='';
   ov.style.display='flex';
