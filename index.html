@@ -1172,14 +1172,14 @@ app.addEventListener('click', e=>{
   const el=e.target.closest('[data-act]'); if(!el) return;
   const act=el.dataset.act;
   switch(act){
-    case 'view': mapLocked=true; scale=1; tx=0; ty=0; setState({view:el.dataset.view}); break;
+    case 'view': if(gateExpired()){ gateLock(); break; } mapLocked=true; scale=1; tx=0; ty=0; setState({view:el.dataset.view}); break;
     case 'device': mapLocked=true; scale=1; tx=0; ty=0; setState(s=>{ const dev=s.device==='mobile'?'desktop':'mobile'; const view=(dev==='mobile'&&(s.view==='machines'||s.view==='am'||s.view==='leader'))?'map':s.view; return {device:dev,selected:null,view}; }); break;
-    case 'org': setState({org:el.dataset.org}); break;
+    case 'org': { const want=el.dataset.org; if(gateAllows(want)){ setState({org:want}); } else { gateShow(()=>setState({org: gateAllows(want)?want:gateDefaultOrg()}), `Enter PIN for ${want} access`); } break; }
     case 'metric': setState({metric:el.dataset.metric}); break;
     case 'lbscope': setState({lbScope:el.dataset.scope}); break;
     case 'pinmode': setState({pinMode:el.dataset.mode}); break;
     case 'health': { const h=el.dataset.h; setState(s=>({health: s.health.includes(h)? s.health.filter(x=>x!==h) : [...s.health,h]})); break; }
-    case 'clear': setState({org:'Both',terr:'',cluster:'',am:'',co:'',health:[],search:''}); break;
+    case 'clear': setState({org:gateDefaultOrg(),terr:'',cluster:'',am:'',co:'',health:[],search:''}); break;
     case 'refresh': state.refreshing=true; render(); loadData().finally(()=>{ state.refreshing=false; render(); }); break;
     case 'terr': { const t=el.dataset.terr; setState(s=>({terr: s.terr===t?'':t, cluster:''})); break; }
     case 'exp': { const k=el.dataset.key; setState(s=>({expanded:{...s.expanded,[k]:!s.expanded[k]}})); break; }
@@ -1195,11 +1195,79 @@ app.addEventListener('mouseover', e=>{ const row=e.target.closest('#machineTable
 app.addEventListener('mouseout', e=>{ const row=e.target.closest('#machineTable [data-mc]'); if(row){ highlightPin(row.dataset.mc,false); } });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'&&state.selected) setState({selected:null}); });
 
+/* ============================= access gate (PIN) =============================
+   SOFT client-side gate only. The dashboard is a static site, so this PIN check
+   runs in the browser and can be bypassed by anyone who opens DevTools. It stops
+   casual viewing and enforces the 30-min re-auth UX — it is NOT real security.
+   PINs are stored as SHA-256 hashes (needs https/localhost; file:// won't hash). */
+const GATE = {
+  TTL_MS: 30*60*1000,           // 30-minute idle expiry
+  SKEY: 'mpoc_gate',
+  ROLES: {                       // sha256(pin) -> role scope
+    'c64306c91d63dfeed553ccc9e3ba29bc7e84449a67c5714a2f5f497d140f845f': { role:'admin', org:'Both', allow:['Both','UPL','SWAL'], label:'Admin' }, // 0088
+    '0ffe1abd1a08215353c233d6e009613e95eec4253832a761af28ff37ac5a150c': { role:'upl',   org:'UPL',  allow:['UPL'],               label:'UPL'   }, // 1111
+    'edee29f882543b956620b26d0ee0e7e950399b1c4222f5de05e06425b4c995e9': { role:'swal',  org:'SWAL', allow:['SWAL'],              label:'SWAL'  }, // 2222
+  },
+  cur:null, timer:null,
+};
+async function sha256(s){ const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+function gateAllows(org){ return GATE.cur ? GATE.cur.allow.includes(org) : false; }
+function gateDefaultOrg(){ return GATE.cur ? GATE.cur.org : 'Both'; }
+function gateArmTimer(ms){ clearTimeout(GATE.timer); GATE.timer=setTimeout(gateLock, Math.max(0,ms)); }
+function gateSave(r){ GATE.cur=r; try{ sessionStorage.setItem(GATE.SKEY, JSON.stringify({role:r.role, at:Date.now()})); }catch(_){ } gateArmTimer(GATE.TTL_MS); }
+function gateRead(){ try{ return JSON.parse(sessionStorage.getItem(GATE.SKEY)||'null'); }catch(_){ return null; } }
+function gateExpired(){ const o=gateRead(); return !o||!o.role||(Date.now()-(o.at||0))>=GATE.TTL_MS; }
+function gateRestore(){ const o=gateRead(); if(!o||!o.role) return false; const age=Date.now()-(o.at||0); if(age>=GATE.TTL_MS) return false; const f=Object.values(GATE.ROLES).find(r=>r.role===o.role); if(!f) return false; GATE.cur=f; gateArmTimer(GATE.TTL_MS-age); return true; }
+function gateLock(){ clearTimeout(GATE.timer); GATE.cur=null; try{ sessionStorage.removeItem(GATE.SKEY); }catch(_){ } gateShow(()=>bootApp()); }
+function gateHide(){ const ov=document.getElementById('gateOv'); if(ov) ov.style.display='none'; }
+function gateShow(onOk, msg){
+  let ov=document.getElementById('gateOv');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='gateOv';
+    ov.style.cssText="position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:#F6F5F2;font-family:'Noto Sans',system-ui,sans-serif";
+    ov.innerHTML=`<div style="width:340px;max-width:90vw;background:#fff;border:1px solid #E9E6DF;border-radius:16px;padding:30px 28px;box-shadow:0 12px 40px rgba(0,0,0,.08);text-align:center">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.14em;color:#D96A12;text-transform:uppercase">MP Operations</div>
+      <div style="font-size:20px;font-weight:700;margin-top:6px;color:#1B1A17">Enter access PIN</div>
+      <div id="gateMsg" style="font-size:12.5px;color:#6E6A62;margin-top:6px;min-height:16px"></div>
+      <input id="gateInput" type="password" inputmode="numeric" autocomplete="off" maxlength="4" aria-label="Access PIN"
+        style="margin-top:16px;width:100%;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:30px;letter-spacing:.5em;padding:12px 0 12px .5em;border:1.5px solid #E9E6DF;border-radius:10px;outline:none;color:#1B1A17">
+      <div id="gateErr" style="font-size:12px;color:#DC3A2B;margin-top:10px;min-height:15px;font-weight:600"></div>
+      <div style="font-size:10.5px;color:#9C988F;margin-top:14px;line-height:1.4">Access auto-expires after 30 min of inactivity.</div>
+    </div>`;
+    document.body.appendChild(ov);
+    const inp=ov.querySelector('#gateInput');
+    inp.addEventListener('input', async ()=>{
+      inp.value=inp.value.replace(/\D/g,'').slice(0,4);
+      ov.querySelector('#gateErr').textContent='';
+      if(inp.value.length!==4) return;
+      let h; try{ h=await sha256(inp.value); }catch(_){ ov.querySelector('#gateErr').textContent='PIN check needs https — open the live site.'; inp.value=''; return; }
+      const role=GATE.ROLES[h];
+      if(role){ inp.value=''; gateSave(role); gateHide(); (ov._onOk||function(){})(role); }
+      else { ov.querySelector('#gateErr').textContent='Incorrect PIN'; inp.value=''; }
+    });
+  }
+  ov._onOk=onOk||function(){};
+  ov.querySelector('#gateMsg').textContent=msg||'';
+  ov.querySelector('#gateErr').textContent='';
+  ov.style.display='flex';
+  const inp=ov.querySelector('#gateInput'); inp.value=''; setTimeout(()=>inp.focus(),30);
+}
+// re-check expiry when the user returns to the tab (timers can stall during sleep)
+window.addEventListener('focus', ()=>{ if(_booted && gateExpired()) gateLock(); });
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && _booted && gateExpired()) gateLock(); });
+
 /* ============================= mount ============================= */
-setupProj();
-render();
-loadData();
-if(CONFIG.refreshMinutes>0) setInterval(loadData, CONFIG.refreshMinutes*60000);
+let _booted=false;
+function bootApp(){
+  if(_booted){ if(!gateAllows(state.org)) state.org=gateDefaultOrg(); render(); return; }
+  _booted=true;
+  state.org=gateDefaultOrg();
+  setupProj();
+  render();
+  loadData();
+  if(CONFIG.refreshMinutes>0) setInterval(loadData, CONFIG.refreshMinutes*60000);
+}
+if(gateRestore()) bootApp(); else gateShow(()=>bootApp());
 </script>
 </body>
 </html>
