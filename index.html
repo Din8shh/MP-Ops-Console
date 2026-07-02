@@ -206,7 +206,11 @@ async function loadData(){
 
 /* ============================= derived ============================= */
 // Active = ran yesterday (>0 acres) — wins over the breakdown flag; else flagged-broken = Breakdown; else Idle.
-const hstate = m => (m.acresY>0) ? 'Active' : (m.breakdown ? 'Breakdown' : 'Idle');
+// Display/colour state — Breakdown takes priority (current BD status). NOTE counts (roll) and the
+// health filter treat the three as INDEPENDENT: Active=acresY>0, Idle=!bd&&acres0, Breakdown=bd flag
+// (a machine that ran AND is flagged down counts in both Active and Breakdown, so totals won't sum to
+// the machine count — intended). This single-value fn only picks one colour/label per machine.
+const hstate = m => m.breakdown ? 'Breakdown' : (m.acresY>0 ? 'Active' : 'Idle');
 const hcolor = s => s==='Active'?C.act : s==='Idle'?C.idle : C.brk;
 const pctOf = m => m.target ? m.achieved/m.target : 0;
 const band = p => p>=0.7?'On-track' : p>=0.4?'At-risk' : 'Behind';
@@ -222,7 +226,9 @@ function getF(){
     if(state.co && (m.co||'').trim().toLowerCase()!==state.co.trim().toLowerCase()) return false;
     if(state.bm && (m.bmName||'').trim().toLowerCase()!==state.bm.trim().toLowerCase()) return false;
     if(state.tm && (m.tmName||'').trim().toLowerCase()!==state.tm.trim().toLowerCase()) return false;
-    if(state.health.length && !state.health.includes(hstate(m))) return false;
+    if(state.health.length){ const H=state.health;
+      const ok=(H.includes('Active')&&m.acresY>0)||(H.includes('Idle')&&!m.breakdown&&!(m.acresY>0))||(H.includes('Breakdown')&&m.breakdown);
+      if(!ok) return false; }
     if(s && !(m.mc.toLowerCase().includes(s) || (m.opName&&m.opName.toLowerCase().includes(s)) || m.territory.toLowerCase().includes(s))) return false;
     return true;
   });
@@ -230,7 +236,9 @@ function getF(){
 function isAdmin(){ return !!(GATE.cur && GATE.cur.role==='admin'); }
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
-  list.forEach(m=>{ o[m.org==='UPL'?'upl':'swal']++; o[hstate(m)]++; o.target+=m.target; o.achieved+=m.achieved; o.mtd+=m.mtd; o.acresY+=m.acresY; o.iotAcresY+=(m.iotAcresY||0); o.pinged+=(m.pinged?1:0); if(m.opName&&m.opNum&&m.opNum!=='0')o.opMappedCount++; });
+  list.forEach(m=>{ o[m.org==='UPL'?'upl':'swal']++;
+    if(m.acresY>0) o.Active++; if(m.breakdown) o.Breakdown++; else if(!(m.acresY>0)) o.Idle++;
+    o.target+=m.target; o.achieved+=m.achieved; o.mtd+=m.mtd; o.acresY+=m.acresY; o.iotAcresY+=(m.iotAcresY||0); o.pinged+=(m.pinged?1:0); if(m.opName&&m.opNum&&m.opNum!=='0')o.opMappedCount++; });
   o.pct = o.target ? o.achieved/o.target : 0; o.band=band(o.pct); o.ranY=list.filter(m=>m.acresY>0).length; return o;
 }
 function opMapLabel(r){ return r.opMappedCount+'/'+r.deployed; }
@@ -252,9 +260,9 @@ function distinctNames(list, field){
   list.forEach(m=>{ const v=(m[field]||'').trim(); if(!v)return; const k=v.toLowerCase(); (disp[k]||(disp[k]={}))[v]=(disp[k][v]||0)+1; });
   return Object.keys(disp).map(k=>{ const v=disp[k]; return Object.keys(v).sort((a,b)=>v[b]-v[a])[0]; }).sort((a,b)=>a.localeCompare(b));
 }
-function rowBars(r){ const tt=r.deployed||1; return {
+function rowBars(r){ const tt=r.deployed||1, ht=(r.Active+r.Idle+r.Breakdown)||1; return {
   orgUStyle:{width:(100*r.upl/tt)+'%',background:C.orange,display:'block'}, orgSStyle:{width:(100*r.swal/tt)+'%',background:C.green,display:'block'},
-  mixAStyle:{width:(100*r.Active/tt)+'%',background:C.act,display:'block'}, mixIStyle:{width:(100*r.Idle/tt)+'%',background:C.idle,display:'block'}, mixBStyle:{width:(100*r.Breakdown/tt)+'%',background:C.brk,display:'block'},
+  mixAStyle:{width:(100*r.Active/ht)+'%',background:C.act,display:'block'}, mixIStyle:{width:(100*r.Idle/ht)+'%',background:C.idle,display:'block'}, mixBStyle:{width:(100*r.Breakdown/ht)+'%',background:C.brk,display:'block'},
   mixLabel:`${r.Active} active · ${r.Idle} idle · ${r.Breakdown} down`,
   paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*r.pct)+'%',background:C.act},
   acresLabel:`${fmt(r.achieved)} / ${fmt(r.target)}`, ranY:fmt(r.acresY), iotRanY:fmt(r.iotAcresY||0), pingLabel:`${r.pinged}/${r.deployed}`, pingInk:'#46433d' }; }
@@ -361,7 +369,7 @@ function drawMap(hostId, metric){
     });
     attachPanZoom(svg); drawLegend('weather'); return;
   }
-  const val=(list)=>{ if(metric==='active')return list.filter(m=>hstate(m)==='Active').length; if(metric==='acresY')return list.reduce((s,m)=>s+m.acresY,0); return list.length; };
+  const val=(list)=>{ if(metric==='active')return list.filter(m=>m.acresY>0).length; if(metric==='acresY')return list.reduce((s,m)=>s+m.acresY,0); return list.length; };
   let maxV=1; Object.values(byT).forEach(l=>maxV=Math.max(maxV,val(l)));
   const rOf=v=>6+30*Math.sqrt(v/maxV);
   const wedge=(cx,cy,r,a0,a1,fill)=>{ const x0=cx+r*Math.cos(a0),y0=cy+r*Math.sin(a0),x1=cx+r*Math.cos(a1),y1=cy+r*Math.sin(a1),lg=(a1-a0)>Math.PI?1:0; const pa=document.createElementNS(NS,'path'); pa.setAttribute('d',`M${cx} ${cy}L${x0.toFixed(1)} ${y0.toFixed(1)}A${r} ${r} 0 ${lg} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}Z`); pa.setAttribute('fill',fill); return pa; };
@@ -375,7 +383,7 @@ function drawMap(hostId, metric){
     const ro=roll(list);
     if(metric==='health'){
       let a=-Math.PI/2; const segs=[['Active',ro.Active],['Idle',ro.Idle],['Breakdown',ro.Breakdown]];
-      const tot=ro.deployed||1; segs.forEach(([k,n])=>{ if(n<=0)return; const a1=a+2*Math.PI*(n/tot); grp.appendChild(wedge(cx,cy,r,a,a1,hcolor(k))); a=a1; });
+      const tot=(ro.Active+ro.Idle+ro.Breakdown)||1; segs.forEach(([k,n])=>{ if(n<=0)return; const a1=a+2*Math.PI*(n/tot); grp.appendChild(wedge(cx,cy,r,a,a1,hcolor(k))); a=a1; });
     } else if(metric==='active'){
       const cir=document.createElementNS(NS,'circle'); cir.setAttribute('cx',cx);cir.setAttribute('cy',cy);cir.setAttribute('r',r); cir.setAttribute('fill',C.act); cir.setAttribute('fill-opacity','.85'); grp.appendChild(cir);
     } else if(metric==='acresY'){
@@ -488,8 +496,9 @@ function vals(){
   const amOptions=[{v:'',t:'All AMs'},...distinctNames(ROWS,'am').map(t=>({v:t,t}))];
   const coList=S.am? distinctNames(ROWS.filter(m=>(m.am||'').trim().toLowerCase()===S.am.trim().toLowerCase()),'co') : [];
   const coOptions=[{v:'',t:S.am?'All officers':'— pick AM —'},...coList.map(t=>({v:t,t}))];
-  const bmOptions=[{v:'',t:'All BMs'},...distinctNames(ROWS,'bmName').map(t=>({v:t,t}))];
-  const tmList=S.bm? distinctNames(ROWS.filter(m=>(m.bmName||'').trim().toLowerCase()===S.bm.trim().toLowerCase()),'tmName') : [];
+  const orgRows = S.org==='Both' ? ROWS : ROWS.filter(m=>m.org===S.org);   // scope BM/TM dropdowns to the active org
+  const bmOptions=[{v:'',t:'All BMs'},...distinctNames(orgRows,'bmName').map(t=>({v:t,t}))];
+  const tmList=S.bm? distinctNames(orgRows.filter(m=>(m.bmName||'').trim().toLowerCase()===S.bm.trim().toLowerCase()),'tmName') : [];
   const tmOptions=[{v:'',t:S.bm?'All TMs':'— pick BM —'},...tmList.map(t=>({v:t,t}))];
   const mono22=col=>({fontFamily:"'IBM Plex Mono'",fontSize:'22px',fontWeight:600,color:col});
   const pctTxt=(tot.target? Math.round(tot.pct*100):0);
@@ -1375,7 +1384,7 @@ app.addEventListener('click', e=>{
   switch(act){
     case 'view': if(gateExpired()){ gateLock(); break; } mapLocked=true; scale=1; tx=0; ty=0; setState({view:el.dataset.view}); break;
     case 'device': mapLocked=true; scale=1; tx=0; ty=0; setState(s=>{ const dev=s.device==='mobile'?'desktop':'mobile'; const view=(dev==='mobile'&&(s.view==='machines'||s.view==='am'||s.view==='bm'||s.view==='leader'))?'map':s.view; return {device:dev,selected:null,view}; }); break;
-    case 'org': { const want=el.dataset.org; if(gateAllows(want)){ setState({org:want}); } else { gateShow(()=>setState({org: gateAllows(want)?want:gateDefaultOrg()}), `Enter PIN for ${want} access`, true); } break; }
+    case 'org': { const want=el.dataset.org; if(gateAllows(want)){ setState({org:want, bm:'', tm:''}); } else { gateShow(()=>setState({org: gateAllows(want)?want:gateDefaultOrg(), bm:'', tm:''}), `Enter PIN for ${want} access`, true); } break; }
     case 'metric': setState({metric:el.dataset.metric}); break;
     case 'lbscope': setState({lbScope:el.dataset.scope}); break;
     case 'pinmode': setState({pinMode:el.dataset.mode}); break;
@@ -1435,7 +1444,7 @@ function gateShow(onOk, msg, cancelable){
         style="margin-top:16px;width:100%;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:30px;letter-spacing:.5em;padding:12px 0 12px .5em;border:1.5px solid #E9E6DF;border-radius:10px;outline:none;color:#1B1A17">
       <div id="gateErr" style="font-size:12px;color:#DC3A2B;margin-top:10px;min-height:15px;font-weight:600"></div>
       <button id="gateCancel" type="button" style="display:none;margin-top:14px;width:100%;padding:10px 0;background:#fff;border:1.5px solid #E9E6DF;border-radius:9px;color:#6E6A62;font-size:13.5px;font-weight:600;cursor:pointer">← Cancel · keep current view</button>
-      <div style="font-size:10.5px;color:#9C988F;margin-top:14px;line-height:1.4">Access auto-expires after 30 min of inactivity. <span style="opacity:.6">· build c5</span></div>
+      <div style="font-size:10.5px;color:#9C988F;margin-top:14px;line-height:1.4">Access auto-expires after 30 min of inactivity. <span style="opacity:.6">· build c6</span></div>
     </div>`;
     document.body.appendChild(ov);
     const inp=ov.querySelector('#gateInput');
