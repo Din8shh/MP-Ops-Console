@@ -34,7 +34,7 @@ import { BASE, COORDS } from './mapdata.js';
 
 /* ============================= state ============================= */
 const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#159234', act:'#15A24A', idle:'#E0A008', brk:'#DC3A2B', ink:'#1B1A17', ink2:'#6E6A62', ink3:'#9C988F', line:'#E9E6DF', line2:'#F2F0EB', softO:'#FBEDDF', softG:'#E6F5EA', softR:'#FBEAE7', softA:'#FBF1DA' };
-const state = { view:'map', org:'Both', terr:'', cluster:'', am:'', co:'', health:[], search:'', metric:'deploy', pinMode:'health', lbScope:'total', selected:null, expanded:{}, loaded:true, refreshing:false, device:'desktop' };
+const state = { view:'map', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', lbScope:'total', selected:null, expanded:{}, loaded:true, refreshing:false, device:'desktop' };
 let scale=1, tx=0, ty=0, _g=null, _pinMap={}, _pinLabel=null, _prevSig=null, mapLocked=true;
 
 /* ============================= helpers ============================= */
@@ -107,6 +107,16 @@ function resolveCols(header){
     opNum: find(x=>x.includes('operator')&&(x.includes('number')||x.includes('mob')||x.includes('phone'))),
     opName: find(x=>x.includes('operator')&&x.includes('name'), x=>x.includes('operator')&&!(x.includes('number')||x.includes('mob')||x.includes('phone')||x.includes('mapped'))),
     loc: find(x=>x.includes('location')||(x.includes('lat')&&x.includes('lon'))),
+    // Business-Manager hierarchy (sheet cols W–AE) — BM · TM · FO · Retailer
+    bmName: find(x=>x.includes('bm')&&x.includes('name'), x=>x==='bm'),
+    bmMob: find(x=>x.includes('bm')&&(x.includes('mob')||x.includes('number')||x.includes('phone'))),
+    tmName: find(x=>x.includes('tm')&&x.includes('name'), x=>x==='tm'),
+    tmMob: find(x=>x.includes('tm')&&(x.includes('mob')||x.includes('number')||x.includes('phone'))),
+    foName: find(x=>x.includes('fo')&&x.includes('name'), x=>x==='fo'),
+    foMob: find(x=>x.includes('fo')&&(x.includes('mob')||x.includes('number')||x.includes('phone'))),
+    retailerName: find(x=>x.includes('retailer')&&x.includes('name'), x=>x==='retailer'),
+    retailerMob: find(x=>x.includes('retailer')&&(x.includes('mob')||x.includes('number')||x.includes('phone'))),
+    retailerLoc: find(x=>x.includes('retailer')&&x.includes('location')),
   };
   // Positional fallback for the IoT/connectivity block — sheet cols S/T/U/V (idx 18/19/20/21).
   // Keyword match wins; positional only kicks in when a header didn't match and the row is wide enough.
@@ -114,6 +124,16 @@ function resolveCols(header){
   if(c.pinged<0 && h.length>19) c.pinged=19;
   if(c.lastPing<0 && h.length>20) c.lastPing=20;
   if(c.daysSincePing<0 && h.length>21) c.daysSincePing=21;
+  // Positional fallback for the BM block — sheet cols W/X/Y/Z/AA/AB/AC/AD/AE (idx 22–30).
+  if(c.bmName<0 && h.length>22) c.bmName=22;
+  if(c.bmMob<0 && h.length>23) c.bmMob=23;
+  if(c.tmName<0 && h.length>24) c.tmName=24;
+  if(c.tmMob<0 && h.length>25) c.tmMob=25;
+  if(c.foName<0 && h.length>26) c.foName=26;
+  if(c.foMob<0 && h.length>27) c.foMob=27;
+  if(c.retailerName<0 && h.length>28) c.retailerName=28;
+  if(c.retailerMob<0 && h.length>29) c.retailerMob=29;
+  if(c.retailerLoc<0 && h.length>30) c.retailerLoc=30;
   return c;
 }
 function rowsToMachines(grid){
@@ -131,7 +151,11 @@ function rowsToMachines(grid){
       scanned:parseScanned(g(col.scanned)),
       breakdown:(txt(g(col.breakdown))==='1'?1:0), opMapped:(txt(g(col.opMapped))==='1'?1:0),
       pinged:(txt(g(col.pinged))==='1'?1:0), lastPing:txt(g(col.lastPing)), daysSincePing:txt(g(col.daysSincePing)),
-      opName:txt(g(col.opName)), opNum:txt(g(col.opNum)), lat, lon
+      opName:txt(g(col.opName)), opNum:txt(g(col.opNum)),
+      bmName:txt(g(col.bmName)), bmMob:txt(g(col.bmMob)), tmName:txt(g(col.tmName)), tmMob:txt(g(col.tmMob)),
+      foName:txt(g(col.foName)), foMob:txt(g(col.foMob)),
+      retailerName:txt(g(col.retailerName)), retailerMob:txt(g(col.retailerMob)), retailerLoc:txt(g(col.retailerLoc)),
+      lat, lon
     });
   }
   return out;
@@ -141,7 +165,7 @@ function rowsToMachines(grid){
 // row's value to the most-common original spelling for that key (ties → first seen).
 // Keeps grouping in Tables / AM / Leaderboard / filters from splitting on casing noise.
 function canonicalizeNames(rows){
-  ['cluster','am','co','opName'].forEach(f=>{
+  ['cluster','am','co','opName','bmName','tmName','foName','retailerName'].forEach(f=>{
     const cnt={}, disp={};
     rows.forEach(m=>{ const v=String(m[f]||'').trim().replace(/\s+/g,' '); if(!v) return; const k=v.toLowerCase(); cnt[k]=(cnt[k]||0)+1; (disp[k]||(disp[k]={}))[v]=(disp[k][v]||0)+1; });
     const canon={}; for(const k in disp){ canon[k]=Object.keys(disp[k]).sort((a,b)=>disp[k][b]-disp[k][a])[0]; }
@@ -176,6 +200,8 @@ function getF(){
     if(state.cluster && m.cluster!==state.cluster) return false;
     if(state.am && (m.am||'').trim().toLowerCase()!==state.am.trim().toLowerCase()) return false;
     if(state.co && (m.co||'').trim().toLowerCase()!==state.co.trim().toLowerCase()) return false;
+    if(state.bm && (m.bmName||'').trim().toLowerCase()!==state.bm.trim().toLowerCase()) return false;
+    if(state.tm && (m.tmName||'').trim().toLowerCase()!==state.tm.trim().toLowerCase()) return false;
     if(state.health.length && !state.health.includes(hstate(m))) return false;
     if(s && !(m.mc.toLowerCase().includes(s) || (m.opName&&m.opName.toLowerCase().includes(s)) || m.territory.toLowerCase().includes(s))) return false;
     return true;
@@ -416,6 +442,7 @@ const I = {
   machines:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
   weather:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 17a4 4 0 0 1 .5-8 5.5 5.5 0 0 1 10.6 1.5A3.5 3.5 0 0 1 17.5 17Z"/><path d="M8 20.5 7 22M12 20.5 11 22M16 20.5 15 22"/></svg>',
   am:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="3"/><path d="M6.5 21a5.5 5.5 0 0 1 11 0"/><path d="M4 13.5 2.5 15M20 13.5 21.5 15"/></svg>',
+  bm:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></svg>',
   leader:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0Z"/><path d="M17 5h2.5a1.5 1.5 0 0 1 0 5H17M7 5H4.5a1.5 1.5 0 0 0 0 5H7"/></svg>',
   mobile:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>',
   desktop:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M9 20h6M12 17v3"/></svg>',
@@ -441,6 +468,9 @@ function vals(){
   const amOptions=[{v:'',t:'All AMs'},...distinctNames(ROWS,'am').map(t=>({v:t,t}))];
   const coList=S.am? distinctNames(ROWS.filter(m=>(m.am||'').trim().toLowerCase()===S.am.trim().toLowerCase()),'co') : [];
   const coOptions=[{v:'',t:S.am?'All officers':'— pick AM —'},...coList.map(t=>({v:t,t}))];
+  const bmOptions=[{v:'',t:'All BMs'},...distinctNames(ROWS,'bmName').map(t=>({v:t,t}))];
+  const tmList=S.bm? distinctNames(ROWS.filter(m=>(m.bmName||'').trim().toLowerCase()===S.bm.trim().toLowerCase()),'tmName') : [];
+  const tmOptions=[{v:'',t:S.bm?'All TMs':'— pick BM —'},...tmList.map(t=>({v:t,t}))];
   const mono22=col=>({fontFamily:"'IBM Plex Mono'",fontSize:'22px',fontWeight:600,color:col});
   const pctTxt=(tot.target? Math.round(tot.pct*100):0);
   const kpis=[
@@ -454,7 +484,8 @@ function vals(){
     {label:'MTD acres',value:fmt(tot.mtd),unit:'ac',valStyle:mono22(C.ink)},
     {label:'Achieved',value:pctTxt+'%',unit:'',valStyle:mono22(bcolor(band(tot.pct)))},
   ];
-  if(isAdmin()){   // IoT/connectivity KPIs — admin role only
+  if(isAdmin()){   // IoT/connectivity + operator-mapping KPIs — admin role only
+    kpis.push({label:'Operators mapped',value:fmt(tot.opMappedCount)+'/'+fmt(tot.deployed),unit:'',valStyle:mono22(tot.opMappedCount===tot.deployed?C.greenD:C.ink)});
     kpis.push({label:'IoT acres y’day',value:fmt(tot.iotAcresY),unit:'ac',valStyle:mono22(C.orangeD)});
     kpis.push({label:'Pinged y’day',value:fmt(tot.pinged),unit:'',valStyle:mono22('#3A6FA0')});
   }
@@ -547,6 +578,57 @@ function vals(){
     }
   });
 
+  // BM view — Business Manager → Territory Manager → Retailer → Machine (FO shown on retailer + machine rows)
+  const bmRows=[]; const grid5bm=grid5am;
+  const byBM={}; F.forEach(m=>{ (byBM[m.bmName||'Unassigned'] ||= []).push(m); });
+  const bmKeys=Object.keys(byBM).sort((a,b)=>byBM[b].length-byBM[a].length);
+  bmKeys.forEach(bm=>{
+    const list=byBM[bm], r=roll(list); const tms=[...new Set(list.map(m=>m.tmName||'Unassigned'))], rets=[...new Set(list.map(m=>m.retailerName||'Unassigned'))];
+    const key='bm:'+bm, exp=!!S.expanded[key];
+    bmRows.push({ click:{act:'exp',key}, indent:'0px',
+      rowStyle:{...grid5bm,padding:'12px 18px',borderTop:'1px solid #F2F0EB',cursor:'pointer',background:exp?'#FBFAF8':'#fff'},
+      chev:exp?'▾':'▸', chevStyle:{fontSize:'10px',color:'#B6B1A8',width:'12px'}, role:'BM', roleStyle:roleChip(C.softO,C.orangeD), dotStyle:{display:'none'},
+      name:bm, nameStyle:{fontSize:'13.5px',fontWeight:600,whiteSpace:'nowrap'}, sub:`${tms.length} TMs · ${rets.length} retailers`, subStyle:{fontSize:'11px',color:'#9C988F',marginTop:'1px'},
+      deployed:r.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(r), opMap:opMapLabel(r),
+      contact:list[0].bmMob, callTel:'tel:'+list[0].bmMob, callStyle:callBtn });
+    if(exp){
+      const byTM={}; list.forEach(m=>{ (byTM[m.tmName||'Unassigned'] ||= []).push(m); });
+      Object.keys(byTM).sort((a,b)=>byTM[b].length-byTM[a].length).forEach(tm=>{
+        const tl=byTM[tm], tr=roll(tl); const tk=key+'|tm:'+tm, texp=!!S.expanded[tk]; const tmRets=[...new Set(tl.map(m=>m.retailerName||'Unassigned'))];
+        bmRows.push({ click:{act:'exp',key:tk}, indent:'20px',
+          rowStyle:{...grid5bm,padding:'10px 18px',borderTop:'1px solid #F4F2EE',cursor:'pointer',background:texp?'#FCFBF9':'#fff'},
+          chev:texp?'▾':'▸', chevStyle:{fontSize:'9px',color:'#C4BFB5',width:'12px'}, role:'TM', roleStyle:roleChip('#EAF1F8','#3A6FA0'), dotStyle:{display:'none'},
+          name:tm, nameStyle:{fontSize:'12.5px',fontWeight:600,color:'#46433d',whiteSpace:'nowrap'}, sub:`${tmRets.length} retailers`, subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px'},
+          deployed:tr.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(tr), opMap:opMapLabel(tr),
+          contact:tl[0].tmMob, callTel:'tel:'+tl[0].tmMob, callStyle:callBtn });
+        if(texp){
+          const byR={}; tl.forEach(m=>{ (byR[m.retailerName||'Unassigned'] ||= []).push(m); });
+          Object.keys(byR).sort((a,b)=>byR[b].length-byR[a].length).forEach(ret=>{
+            const rl=byR[ret], rr=roll(rl); const rk=tk+'|ret:'+ret, rexp=!!S.expanded[rk]; const fo=dominantName(rl,'foName');
+            bmRows.push({ click:{act:'exp',key:rk}, indent:'40px',
+              rowStyle:{...grid5bm,padding:'10px 18px',borderTop:'1px solid #F6F4F0',cursor:'pointer',background:rexp?'#FCFBF9':'#fff'},
+              chev:rexp?'▾':'▸', chevStyle:{fontSize:'9px',color:'#C4BFB5',width:'12px'}, role:'RET', roleStyle:roleChip('#EFEAF9','#6A5AC4'), dotStyle:{display:'none'},
+              name:ret, nameStyle:{fontSize:'12.5px',fontWeight:600,color:'#46433d',whiteSpace:'nowrap'}, sub:fo?('FO · '+fo):'', subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
+              deployed:rr.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(rr), opMap:opMapLabel(rr),
+              contact:rl[0].retailerMob, callTel:'tel:'+rl[0].retailerMob, callStyle:callBtn });
+            if(rexp){
+              rl.forEach(m=>{ const hs=hstate(m), p=pctOf(m);
+                bmRows.push({ click:{act:'open',mc:m.mc}, indent:'60px',
+                  rowStyle:{...grid5bm,padding:'8px 18px',borderTop:'1px solid #F6F4F0',cursor:'pointer',background:'#fff'},
+                  chev:'', chevStyle:{width:'12px'}, role:'', roleStyle:{display:'none'}, dotStyle:{width:'7px',height:'7px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
+                  name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:(m.foName?('FO · '+m.foName+' · '):'')+m.opName, subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
+                  deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},
+                  mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
+                  paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk),
+                  contact:m.opNum, callTel:'tel:'+m.opNum, callStyle:callBtn });
+              });
+            }
+          });
+        }
+      });
+    }
+  });
+
   // Machine table
   const ord={Breakdown:0,Idle:1,Active:2};
   const machineTable=F.slice().sort((a,b)=>{ const d=ord[hstate(a)]-ord[hstate(b)]; return d!==0?d:(b.acresY-a.acresY); }).map(m=>{ const hs=hstate(m), col=hcolor(hs);
@@ -574,11 +656,13 @@ function vals(){
       funnel, products,
       locTitle:(m.lat!=null)?`${m.territory} cluster`:'No location on file', coords:(m.lat!=null)?`${m.lat}, ${m.lon}`:'Excluded from map · listed here',
       coName:m.co, coMob:m.coMob, coTel:'tel:'+m.coMob, amName:m.am, amNum:m.amNum, amTel:'tel:'+m.amNum,
+      bmName:m.bmName, bmMob:m.bmMob, bmTel:'tel:'+m.bmMob, tmName:m.tmName, tmMob:m.tmMob, tmTel:'tel:'+m.tmMob,
+      foName:m.foName, foMob:m.foMob, foTel:'tel:'+m.foMob, retailerName:m.retailerName, retailerMob:m.retailerMob, retailerTel:'tel:'+m.retailerMob, retailerLoc:m.retailerLoc,
       pingLabel:(m.pinged?'Yes':'No'), pingInk:(m.pinged?C.act:C.brk), iotAcresY:fmt(m.iotAcresY||0),
       lastPing:(m.lastPing&&String(m.lastPing).trim())||'—', daysSincePing:(m.daysSincePing!=null&&String(m.daysSincePing).trim()!=='')?m.daysSincePing:'—' };
   }
 
-  const anyFilter = S.org!=='Both'||!!S.terr||!!S.cluster||!!S.am||!!S.co||!!S.health.length||!!S.search;
+  const anyFilter = S.org!=='Both'||!!S.terr||!!S.cluster||!!S.am||!!S.co||!!S.bm||!!S.tm||!!S.health.length||!!S.search;
   const mobileWeather = weather(S.terr || 'Madhya Pradesh');
   const mobileList = F.slice(0,80).map(m=>{ const hs=hstate(m);
     return { mc:m.mc, org:m.org, opName:m.opName, geo:`${m.territory} · ${m.cluster}`,
@@ -607,8 +691,8 @@ function vals(){
       achieved:o.achieved, target:o.target, acresY:o.acresY, pct:o.target? o.achieved/o.target : 0, val }; })
     .sort((a,b)=>b.val-a.val).slice(0,20);
 
-  return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, topTerr, rows, terrTable, wetTerr, amRows, machineTable, mobileList, d, lbScope, coLeaders, opLeaders,
-    anyFilter, amCount:amKeys.length, pinCount:F.length, mListCount:F.length,
+  return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, rows, terrTable, wetTerr, amRows, bmRows, machineTable, mobileList, d, lbScope, coLeaders, opLeaders,
+    anyFilter, amCount:amKeys.length, bmCount:bmKeys.length, pinCount:F.length, mListCount:F.length,
     pinB10:fmt(F.filter(m=>m.acresY>10).length), pinB5:fmt(F.filter(m=>m.acresY>=5&&m.acresY<=10).length), pinB1:fmt(F.filter(m=>m.acresY>=1&&m.acresY<5).length), pinB0:fmt(F.filter(m=>m.acresY<1).length),
     freshCount:`${fmt(tot.deployed)} machines${anyFilter?' (filtered)':''}`, mobileWeather,
     statusDot: dataMode==='live'?'#15A24A':dataMode==='error'?'#DC3A2B':'#9aa3b1',
@@ -625,7 +709,7 @@ function railHTML(){
   return `<aside style="width:74px;flex-shrink:0;background:#1B1A17;display:flex;flex-direction:column;align-items:center;padding:16px 0">
     <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;letter-spacing:.02em;color:#fff;margin-bottom:26px">UPL</div>
     <nav style="display:flex;flex-direction:column;gap:8px;flex:1">
-      ${navBtn('map',I.map,v==='map')}${navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${navBtn('am',I.am,v==='am')}${navBtn('leader',I.leader,v==='leader')}
+      ${navBtn('map',I.map,v==='map')}${navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${navBtn('am',I.am,v==='am')}${navBtn('bm',I.bm,v==='bm')}${navBtn('leader',I.leader,v==='leader')}
     </nav>
     <button data-act="device" title="Mobile view" style="${css({...navStyle(false),marginBottom:'8px'})}">${I.mobile}</button>
     <div style="writing-mode:vertical-rl;font-size:8.5px;letter-spacing:.14em;color:#6b675f;margin-top:14px;text-transform:uppercase">Confidential</div>
@@ -671,6 +755,11 @@ function filterBarHTML(v){
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Team</span>
       <div style="position:relative"><select id="amSelect" style="${selStyle}">${optionsHTML(v.amOptions,S.am)}</select>${I.caret}</div>
       <div style="position:relative"><select id="coSelect" style="${selStyle}">${optionsHTML(v.coOptions,S.co)}</select>${I.caret}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">BM</span>
+      <div style="position:relative"><select id="bmSelect" style="${selStyle}">${optionsHTML(v.bmOptions,S.bm)}</select>${I.caret}</div>
+      <div style="position:relative"><select id="tmSelect" style="${selStyle}"${S.bm?'':' disabled'}>${optionsHTML(v.tmOptions,S.tm)}</select>${I.caret}</div>
     </div>
     <div style="display:flex;align-items:center;gap:7px">
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Health</span>
@@ -920,6 +1009,36 @@ function amViewHTML(v){
     </div>
   </section>`;
 }
+function bmViewHTML(v){
+  return `<section style="padding:18px 22px">
+    <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
+      <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="font-size:13px;font-weight:700">Business Managers <span style="font-weight:400;color:#9C988F">· ${v.bmCount} BMs · expand to Territory Manager → Retailer → Machine</span></div>
+        ${downloadBtnHTML(v)}
+      </div>
+      <div style="overflow-x:auto"><div style="min-width:${v.adm?'1240px':'1120px'}">
+        <div style="display:grid;grid-template-columns:${v.adm?'320px 110px 132px 1fr 78px 84px 74px 84px 150px':'330px 120px 150px 1fr 84px 96px 168px'};gap:14px;padding:10px 18px;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">
+          <div>BM · TM · Retailer · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div style="text-align:right">Acres y'day</div>${v.adm?`<div style="text-align:right">IoT ac y'day</div><div style="text-align:right">Pinged</div>`:''}<div style="text-align:right">Operators</div><div>Contact</div>
+        </div>
+        <div style="max-height:calc(100vh - 300px);overflow:auto">
+          ${v.bmRows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
+            <div style="display:flex;align-items:center;gap:9px;min-width:0;padding-left:${r.indent}">
+              <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.roleStyle)}">${E(r.role)}</span><span style="${css(r.dotStyle)}"></span>
+              <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="${css(r.subStyle)}">${E(r.sub)}</div></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span></span></div>
+            <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
+            <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;max-width:200px"><div style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="${css(r.paceBarStyle)}"></span></div></div><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span></div>
+            <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${E(r.ranY)}</div>
+            ${v.adm?`<div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right;color:#D96A12">${E(r.iotRanY)}</div><div style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right;color:${r.pingInk||'#46433d'}">${E(r.pingLabel)}</div>`:''}
+            <div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:500;text-align:right;color:#6E6A62">${E(r.opMap)}</div>
+            <div style="display:flex;align-items:center;gap:9px"><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(r.contact)}</span><a href="${E(r.callTel)}" data-stop="1" style="${css(r.callStyle)}">${I.phoneS}</a></div>
+          </div>`).join('')}
+        </div>
+      </div></div>
+    </div>
+  </section>`;
+}
 function leaderViewHTML(v){
   const yday = v.lbScope==='yday';
   const sub = (yday?'by acres sprayed yesterday':'by total acres achieved') + (v.anyFilter?' · filtered':'');
@@ -980,6 +1099,24 @@ function leaderViewHTML(v){
     ${card('Top operators','Top 20 · '+sub, opInner)}
   </section>`;
 }
+// Escalation contact row — shared by desktop drawer + mobile sheet. Optional roles hide when blank.
+function escRowHTML(label,name,mob,tel,phoneIcon,extra,optional){
+  const hasName=name&&String(name).trim(), hasMob=mob&&String(mob).trim();
+  if(optional && !hasName && !hasMob && !extra) return '';
+  return `<div style="display:flex;align-items:center;gap:11px;padding:12px 14px;border-bottom:1px solid #F2F0EB">
+    <div style="flex:1;min-width:0"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.05em">${label}</div><div style="font-size:13px;font-weight:600;margin-top:2px">${E(hasName?name:'—')}</div>${hasMob?`<div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(mob)}</div>`:''}${extra||''}</div>
+    ${hasMob?`<a href="${E(tel)}" data-stop="1" style="width:34px;height:34px;border-radius:8px;background:#F2F0EB;color:#1B1A17;display:flex;align-items:center;justify-content:center;flex-shrink:0">${phoneIcon}</a>`:''}
+  </div>`;
+}
+function escalationHTML(d, phoneIcon){
+  const locExtra = d.retailerLoc&&String(d.retailerLoc).trim() ? `<div style="font-size:11px;color:#9C988F;margin-top:3px">📍 ${E(d.retailerLoc)}</div>` : '';
+  return escRowHTML('Cluster Officer',d.coName,d.coMob,d.coTel,phoneIcon)
+    + escRowHTML('Area Manager',d.amName,d.amNum,d.amTel,phoneIcon)
+    + escRowHTML('Business Manager',d.bmName,d.bmMob,d.bmTel,phoneIcon,'',true)
+    + escRowHTML('Territory Manager',d.tmName,d.tmMob,d.tmTel,phoneIcon,'',true)
+    + escRowHTML('Field Officer',d.foName,d.foMob,d.foTel,phoneIcon,'',true)
+    + escRowHTML('Retailer',d.retailerName,d.retailerMob,d.retailerTel,phoneIcon,locExtra,true);
+}
 function drawerHTML(v){
   const d=v.d; if(!d||!d.mc) return '';
   return `<div data-act="close" style="position:fixed;inset:0;background:rgba(27,26,23,.32);z-index:40;animation:fadeIn .2s"></div>
@@ -1034,16 +1171,7 @@ function drawerHTML(v){
         <div style="flex:1"><div style="font-size:12px;font-weight:600">${E(d.locTitle)}</div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;margin-top:3px">${E(d.coords)}</div></div>
       </div>
       <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Escalation</div>
-      <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">
-        <div style="display:flex;align-items:center;gap:11px;padding:12px 14px;border-bottom:1px solid #F2F0EB">
-          <div style="flex:1"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.05em">Cluster Officer</div><div style="font-size:13px;font-weight:600;margin-top:2px">${E(d.coName)}</div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(d.coMob)}</div></div>
-          <a href="${E(d.coTel)}" data-stop="1" style="width:34px;height:34px;border-radius:8px;background:#F2F0EB;color:#1B1A17;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.phone}</a>
-        </div>
-        <div style="display:flex;align-items:center;gap:11px;padding:12px 14px">
-          <div style="flex:1"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.05em">Area Manager</div><div style="font-size:13px;font-weight:600;margin-top:2px">${E(d.amName)}</div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(d.amNum)}</div></div>
-          <a href="${E(d.amTel)}" data-stop="1" style="width:34px;height:34px;border-radius:8px;background:#F2F0EB;color:#1B1A17;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.phone}</a>
-        </div>
-      </div>
+      <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">${escalationHTML(d, I.phone)}</div>
     </div>
   </aside>`;
 }
@@ -1053,6 +1181,7 @@ function contentHTML(v){
     case 'weather': return weatherViewHTML(v);
     case 'machines': return machinesViewHTML(v);
     case 'am': return amViewHTML(v);
+    case 'bm': return bmViewHTML(v);
     case 'leader': return leaderViewHTML(v);
     default: return mapViewHTML(v);
   }
@@ -1154,16 +1283,7 @@ function mobileHTML(v){
         <div style="display:flex;align-items:center;justify-content:space-between;border:1px solid #E9E6DF;border-radius:10px;padding:10px 13px;margin-bottom:16px"><div style="font-size:11.5px;color:#6E6A62">Machine pinged yesterday</div><div style="font-size:13.5px;font-weight:700;color:${d.pingInk}">${E(d.pingLabel)}</div></div>`}
         <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Location · Escalation</div>
         <div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;margin-bottom:12px">${E(d.coords)}</div>
-        <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">
-          <div style="display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid #F2F0EB">
-            <div style="flex:1"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Cluster Officer</div><div style="font-size:12.5px;font-weight:600;margin-top:1px">${E(d.coName)}</div><div style="font-family:'IBM Plex Mono';font-size:11px;color:#6E6A62">${E(d.coMob)}</div></div>
-            <a href="${E(d.coTel)}" data-stop="1" style="width:32px;height:32px;border-radius:8px;background:#F2F0EB;color:#1B1A17;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.phoneS}</a>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;padding:11px 13px">
-            <div style="flex:1"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Area Manager</div><div style="font-size:12.5px;font-weight:600;margin-top:1px">${E(d.amName)}</div><div style="font-family:'IBM Plex Mono';font-size:11px;color:#6E6A62">${E(d.amNum)}</div></div>
-            <a href="${E(d.amTel)}" data-stop="1" style="width:32px;height:32px;border-radius:8px;background:#F2F0EB;color:#1B1A17;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.phoneS}</a>
-          </div>
-        </div>
+        <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">${escalationHTML(d, I.phoneS)}</div>
       </div>
     </div>` : '';
   return `<div style="height:100vh;width:100%;background:#E7E4DE;display:flex;align-items:center;justify-content:center;padding:18px">
@@ -1225,6 +1345,8 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='clusterSelect') setState({cluster:e.target.value});
   else if(e.target.id==='amSelect') setState({am:e.target.value, co:''});
   else if(e.target.id==='coSelect') setState({co:e.target.value});
+  else if(e.target.id==='bmSelect') setState({bm:e.target.value, tm:''});
+  else if(e.target.id==='tmSelect') setState({tm:e.target.value});
 });
 app.addEventListener('click', e=>{
   if(e.target.closest('a[data-stop]')) { e.stopPropagation(); return; } // let tel: link work, don't open row
@@ -1232,13 +1354,13 @@ app.addEventListener('click', e=>{
   const act=el.dataset.act;
   switch(act){
     case 'view': if(gateExpired()){ gateLock(); break; } mapLocked=true; scale=1; tx=0; ty=0; setState({view:el.dataset.view}); break;
-    case 'device': mapLocked=true; scale=1; tx=0; ty=0; setState(s=>{ const dev=s.device==='mobile'?'desktop':'mobile'; const view=(dev==='mobile'&&(s.view==='machines'||s.view==='am'||s.view==='leader'))?'map':s.view; return {device:dev,selected:null,view}; }); break;
+    case 'device': mapLocked=true; scale=1; tx=0; ty=0; setState(s=>{ const dev=s.device==='mobile'?'desktop':'mobile'; const view=(dev==='mobile'&&(s.view==='machines'||s.view==='am'||s.view==='bm'||s.view==='leader'))?'map':s.view; return {device:dev,selected:null,view}; }); break;
     case 'org': { const want=el.dataset.org; if(gateAllows(want)){ setState({org:want}); } else { gateShow(()=>setState({org: gateAllows(want)?want:gateDefaultOrg()}), `Enter PIN for ${want} access`, true); } break; }
     case 'metric': setState({metric:el.dataset.metric}); break;
     case 'lbscope': setState({lbScope:el.dataset.scope}); break;
     case 'pinmode': setState({pinMode:el.dataset.mode}); break;
     case 'health': { const h=el.dataset.h; setState(s=>({health: s.health.includes(h)? s.health.filter(x=>x!==h) : [...s.health,h]})); break; }
-    case 'clear': setState({org:gateDefaultOrg(),terr:'',cluster:'',am:'',co:'',health:[],search:''}); break;
+    case 'clear': setState({org:gateDefaultOrg(),terr:'',cluster:'',am:'',co:'',bm:'',tm:'',health:[],search:''}); break;
     case 'refresh': state.refreshing=true; render(); loadData().finally(()=>{ state.refreshing=false; render(); }); break;
     case 'download': downloadFilteredCSV(); break;
     case 'terr': { const t=el.dataset.terr; setState(s=>({terr: s.terr===t?'':t, cluster:''})); break; }
@@ -1293,7 +1415,7 @@ function gateShow(onOk, msg, cancelable){
         style="margin-top:16px;width:100%;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:30px;letter-spacing:.5em;padding:12px 0 12px .5em;border:1.5px solid #E9E6DF;border-radius:10px;outline:none;color:#1B1A17">
       <div id="gateErr" style="font-size:12px;color:#DC3A2B;margin-top:10px;min-height:15px;font-weight:600"></div>
       <button id="gateCancel" type="button" style="display:none;margin-top:14px;width:100%;padding:10px 0;background:#fff;border:1.5px solid #E9E6DF;border-radius:9px;color:#6E6A62;font-size:13.5px;font-weight:600;cursor:pointer">← Cancel · keep current view</button>
-      <div style="font-size:10.5px;color:#9C988F;margin-top:14px;line-height:1.4">Access auto-expires after 30 min of inactivity. <span style="opacity:.6">· build c3</span></div>
+      <div style="font-size:10.5px;color:#9C988F;margin-top:14px;line-height:1.4">Access auto-expires after 30 min of inactivity. <span style="opacity:.6">· build c4</span></div>
     </div>`;
     document.body.appendChild(ov);
     const inp=ov.querySelector('#gateInput');
