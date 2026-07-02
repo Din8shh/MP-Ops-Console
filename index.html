@@ -234,6 +234,8 @@ function getF(){
   });
 }
 function isAdmin(){ return !!(GATE.cur && GATE.cur.role==='admin'); }
+// Non-admin (UPL/SWAL) desktop views drop the Territory-breakdown, Area-Manager and Leaderboard tabs.
+function roleHidesView(view){ return !isAdmin() && (view==='tables'||view==='am'||view==='leader'); }
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':'swal']++;
@@ -738,7 +740,7 @@ function railHTML(){
   return `<aside style="width:74px;flex-shrink:0;background:#1B1A17;display:flex;flex-direction:column;align-items:center;padding:16px 0">
     <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;letter-spacing:.02em;color:#fff;margin-bottom:26px">UPL</div>
     <nav style="display:flex;flex-direction:column;gap:8px;flex:1">
-      ${navBtn('map',I.map,v==='map')}${navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${navBtn('am',I.am,v==='am')}${navBtn('bm',I.bm,v==='bm')}${navBtn('leader',I.leader,v==='leader')}
+      ${navBtn('map',I.map,v==='map')}${roleHidesView('tables')?'':navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${roleHidesView('am')?'':navBtn('am',I.am,v==='am')}${navBtn('bm',I.bm,v==='bm')}${roleHidesView('leader')?'':navBtn('leader',I.leader,v==='leader')}
     </nav>
     <button data-act="device" title="Mobile view" style="${css({...navStyle(false),marginBottom:'8px'})}">${I.mobile}</button>
     <div style="writing-mode:vertical-rl;font-size:8.5px;letter-spacing:.14em;color:#6b675f;margin-top:14px;text-transform:uppercase">Confidential</div>
@@ -775,7 +777,7 @@ function filterBarHTML(v){
         <button data-act="org" data-org="SWAL" style="${css(seg(S.org==='SWAL'))}">SWAL</button>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:7px">
+    ${isAdmin()?`<div style="display:flex;align-items:center;gap:7px">
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Geo</span>
       <div style="position:relative"><select id="terrSelect" style="${selStyle}">${optionsHTML(v.terrOptions,S.terr)}</select>${I.caret}</div>
       <div style="position:relative"><select id="clusterSelect" style="${selStyle}">${optionsHTML(v.clusterOptions,S.cluster)}</select>${I.caret}</div>
@@ -784,7 +786,7 @@ function filterBarHTML(v){
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Team</span>
       <div style="position:relative"><select id="amSelect" style="${selStyle}">${optionsHTML(v.amOptions,S.am)}</select>${I.caret}</div>
       <div style="position:relative"><select id="coSelect" style="${selStyle}">${optionsHTML(v.coOptions,S.co)}</select>${I.caret}</div>
-    </div>
+    </div>`:''}
     <div style="display:flex;align-items:center;gap:7px">
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">BM</span>
       <div style="position:relative"><select id="bmSelect" style="${selStyle}">${optionsHTML(v.bmOptions,S.bm)}</select>${I.caret}</div>
@@ -1349,6 +1351,8 @@ function mobileHTML(v){
 /* ============================= render / events ============================= */
 const app=document.getElementById('app');
 function render(){
+  // keep non-admins off desktop tabs their role no longer exposes (mobile 'tables' = machine list, left intact)
+  if(state.device!=='mobile' && roleHidesView(state.view)) state.view='map';
   const ae=document.activeElement; const focusId=ae&&ae.id; const selStart=ae&&ae.selectionStart;
   const v=vals();
   app.innerHTML = state.device==='mobile' ? mobileHTML(v) : desktopHTML(v);
