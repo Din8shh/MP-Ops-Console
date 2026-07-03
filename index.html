@@ -205,12 +205,17 @@ async function loadData(){
 }
 
 /* ============================= derived ============================= */
-// Active = ran yesterday (>0 acres) — wins over the breakdown flag; else flagged-broken = Breakdown; else Idle.
-// Display/colour state — Breakdown takes priority (current BD status). NOTE counts (roll) and the
-// health filter treat the three as INDEPENDENT: Active=acresY>0, Idle=!bd&&acres0, Breakdown=bd flag
-// (a machine that ran AND is flagged down counts in both Active and Breakdown, so totals won't sum to
-// the machine count — intended). This single-value fn only picks one colour/label per machine.
-const hstate = m => m.breakdown ? 'Breakdown' : (m.acresY>0 ? 'Active' : 'Idle');
+// Effective breakdown state is ROLE-DEPENDENT (bdEff centralises it; roll(), getF() health filter and
+// hstate() all route through it):
+//  - admin: purely the BD-status flag, regardless of acres. A machine that ran AND is flagged counts as
+//    Breakdown independently of Active, so Active+Idle+Breakdown can exceed the machine count (intended).
+//  - UPL/SWAL (non-admin): a breakdown is only counted if the machine did NOT run yesterday
+//    (bd flag && acresY<=0). A flagged machine that still logged acres is Active, not Breakdown — the
+//    three categories are mutually exclusive again and sum to the machine count (pre-65aba88 model).
+const bdEff = m => !!m.breakdown && (isAdmin() || !(m.acresY>0));
+// Single colour/label per machine: effective-Breakdown wins for admin; for non-admin a machine that ran
+// is Active (ran-yesterday priority).
+const hstate = m => bdEff(m) ? 'Breakdown' : (m.acresY>0 ? 'Active' : 'Idle');
 const hcolor = s => s==='Active'?C.act : s==='Idle'?C.idle : C.brk;
 const pctOf = m => m.target ? m.achieved/m.target : 0;
 const band = p => p>=0.7?'On-track' : p>=0.4?'At-risk' : 'Behind';
@@ -227,7 +232,7 @@ function getF(){
     if(state.bm && (m.bmName||'').trim().toLowerCase()!==state.bm.trim().toLowerCase()) return false;
     if(state.tm && (m.tmName||'').trim().toLowerCase()!==state.tm.trim().toLowerCase()) return false;
     if(state.health.length){ const H=state.health;
-      const ok=(H.includes('Active')&&m.acresY>0)||(H.includes('Idle')&&!m.breakdown&&!(m.acresY>0))||(H.includes('Breakdown')&&m.breakdown);
+      const ok=(H.includes('Active')&&m.acresY>0)||(H.includes('Idle')&&!bdEff(m)&&!(m.acresY>0))||(H.includes('Breakdown')&&bdEff(m));
       if(!ok) return false; }
     if(s && !(m.mc.toLowerCase().includes(s) || (m.opName&&m.opName.toLowerCase().includes(s)) || m.territory.toLowerCase().includes(s))) return false;
     return true;
@@ -239,7 +244,7 @@ function roleHidesView(view){ return !isAdmin() && (view==='tables'||view==='am'
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':'swal']++;
-    if(m.acresY>0) o.Active++; if(m.breakdown) o.Breakdown++; else if(!(m.acresY>0)) o.Idle++;
+    if(m.acresY>0) o.Active++; if(bdEff(m)) o.Breakdown++; else if(!(m.acresY>0)) o.Idle++;
     o.target+=m.target; o.achieved+=m.achieved; o.mtd+=m.mtd; o.acresY+=m.acresY; o.iotAcresY+=(m.iotAcresY||0); o.pinged+=(m.pinged?1:0); if(m.opName&&m.opNum&&m.opNum!=='0')o.opMappedCount++; });
   o.pct = o.target ? o.achieved/o.target : 0; o.band=band(o.pct); o.ranY=list.filter(m=>m.acresY>0).length; return o;
 }
