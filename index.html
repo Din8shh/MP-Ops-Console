@@ -30,7 +30,8 @@
 
 <script type="module">
 import { MACHINES as MACHINES_MOCK } from './machines.js';
-import { BASE, COORDS } from './mapdata.js';
+import { BASE as MP_BASE, COORDS as MP_COORDS } from './mapdata.js';
+let BASE = MP_BASE, COORDS = MP_COORDS;   // ACTIVE geometry — defaults to MP; swapped per active state (Phase 4)
 
 /* ============================= state ============================= */
 const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#159234', act:'#15A24A', idle:'#E0A008', brk:'#DC3A2B', ink:'#1B1A17', ink2:'#6E6A62', ink3:'#9C988F', line:'#E9E6DF', line2:'#F2F0EB', softO:'#FBEDDF', softG:'#E6F5EA', softR:'#FBEAE7', softA:'#FBF1DA' };
@@ -341,6 +342,23 @@ function pathOf(g){ const ring=r=>r.map((p,i)=>{const[x,y]=proj(p[0],p[1]);retur
 const NS='http://www.w3.org/2000/svg';
 const COORDS_LC={}; for(const k in COORDS) COORDS_LC[k.toLowerCase()]=COORDS[k];
 const coordsOf = name => COORDS[name] || COORDS_LC[String(name||'').trim().toLowerCase()];
+// --- multi-state geometry swap ------------------------------------------------
+// Rebuild the name-lookup tables (mutated in place so existing closures keep working) after a geometry swap.
+function rebuildGeoDerived(){ for(const k in TERR_CANON)delete TERR_CANON[k]; for(const k in COORDS_LC)delete COORDS_LC[k];
+  for(const k in COORDS){ TERR_CANON[k.toLowerCase()]=k; COORDS_LC[k.toLowerCase()]=COORDS[k]; } }
+const GEO_LOADERS = { MH:()=>import('./states/MH/mapdata.js'), TG:()=>import('./states/TG/mapdata.js'),
+  GJ:()=>import('./states/GJ/mapdata.js'), RJ:()=>import('./states/RJ/mapdata.js'),
+  PB:()=>import('./states/PB/mapdata.js'), HR:()=>import('./states/HR/mapdata.js'),
+  __india:()=>import('./states/india/mapdata.js') };   // MP is bundled (MP_BASE/MP_COORDS), not lazy-loaded
+const GEO_CACHE = { MP:{BASE:MP_BASE, COORDS:MP_COORDS} };
+let activeGeoKey='MP';
+const knownGeo = code => code==='MP' || !!GEO_LOADERS[code];
+async function ensureGeo(key){ if(!GEO_CACHE[key]){ if(!GEO_LOADERS[key]) return null; const m=await GEO_LOADERS[key](); GEO_CACHE[key]={BASE:m.BASE, COORDS:m.COORDS}; } return GEO_CACHE[key]; }
+function applyGeo(key){ const g=GEO_CACHE[key]; if(!g) return false; BASE=g.BASE; COORDS=g.COORDS; activeGeoKey=key; rebuildGeoDerived(); setupProj(); scale=1; tx=0; ty=0; mapLocked=true; return true; }
+// Which geometry the current state needs: a selected state → its districts; all-India w/ >1 state → national; else the sole state (MP).
+function geoKeyForState(){ if(state.st) return knownGeo(state.st)?state.st:'MP';
+  const sts=[...new Set(ROWS.map(m=>m.st))]; if(sts.length>1) return '__india';
+  const only=sts[0]||'MP'; return knownGeo(only)?only:'MP'; }
 function applyTransform(){ if(_g) _g.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`); }
 function mapHostEl(){ const svg=_g&&_g.ownerSVGElement; return svg&&svg.parentElement; }
 function setMapLock(locked){ mapLocked=locked; const h=mapHostEl(); if(h) h.style.cursor=locked?'default':'grab'; }
@@ -361,9 +379,15 @@ function drawMap(hostId, metric){
   const g=document.createElementNS(NS,'g'); svg.appendChild(g); host.appendChild(svg); _g=g;
   applyTransform();
   const F=getF();
-  const byT={}; F.forEach(m=>{ (byT[m.territory] ||= []).push(m); });
+  const national = activeGeoKey==='__india';   // national map: features are STATES, group + drill by state
+  const keyOf = national ? (m=>STATE_NAMES[m.st]||m.st) : (m=>m.territory);
+  const byT={}; F.forEach(m=>{ (byT[keyOf(m)] ||= []).push(m); });
   const byTLC={}; for(const k in byT) byTLC[k.toLowerCase()]=byT[k];
   const tlist = nm => byT[nm] || byTLC[String(nm||'').toLowerCase()];
+  const codeByName={}; if(national) BASE.features.forEach(f=>{ codeByName[f.properties.name]=f.properties.code; });
+  const drill = national
+    ? (name=>{ const c=codeByName[name]; if(c&&gateAllowsState(c)) setState({st:c, terr:'', cluster:'', am:'', co:'', expanded:{}}); })
+    : (name=>setState(s=>({terr: s.terr===name?'':name, cluster:''})));
   const activeTerr=state.terr;
   const isW = metric==='weather';
   BASE.features.forEach(f=>{
@@ -373,7 +397,7 @@ function drawMap(hostId, metric){
     let fill; if(isW){ fill = has? rainColor(rainOf(canonTerr)) : '#F1EEE8'; } else { fill = has? '#EFEBE3' : '#F4F1EA'; }
     p.setAttribute('fill', fill); p.setAttribute('stroke','#FFFFFF'); p.setAttribute('stroke-width','1');
     if(activeTerr&&activeTerr.toLowerCase()!==nm.toLowerCase()) p.setAttribute('opacity','0.4');
-    if(isW&&has){ p.style.cursor='pointer'; p.addEventListener('click',(e)=>{ e.stopPropagation(); setState(s=>({terr:s.terr.toLowerCase()===canonTerr.toLowerCase()?'':canonTerr,cluster:''})); }); const ti=document.createElementNS(NS,'title'); ti.textContent=`${canonTerr} — ${rainOf(canonTerr)} mm rain · ${list.filter(m=>m.acresY>0).length}/${list.length} machines ran`; p.appendChild(ti); }
+    if(isW&&has){ p.style.cursor='pointer'; p.addEventListener('click',(e)=>{ e.stopPropagation(); if(national){ drill(nm); } else { setState(s=>({terr:s.terr.toLowerCase()===canonTerr.toLowerCase()?'':canonTerr,cluster:''})); } }); const ti=document.createElementNS(NS,'title'); ti.textContent=`${canonTerr} — ${rainOf(canonTerr)} mm rain · ${list.filter(m=>m.acresY>0).length}/${list.length} machines ran`; p.appendChild(ti); }
     g.appendChild(p);
   });
   if(isW){
@@ -396,7 +420,7 @@ function drawMap(hostId, metric){
     const r=rOf(v), [cx,cy]=proj(c[0],c[1]);
     const dim = activeTerr && activeTerr!==name;
     const grp=document.createElementNS(NS,'g'); grp.style.cursor='pointer'; grp.style.opacity=dim?0.25:1;
-    grp.addEventListener('click',(e)=>{ e.stopPropagation(); setState(s=>({terr: s.terr===name?'':name, cluster:''})); });
+    grp.addEventListener('click',(e)=>{ e.stopPropagation(); drill(name); });
     const ro=roll(list);
     if(metric==='health'){
       let a=-Math.PI/2; const segs=[['Active',ro.Active],['Idle',ro.Idle],['Breakdown',ro.Breakdown]];
@@ -1402,6 +1426,12 @@ function render(){
 }
 function paint(){
   const S=state, mob=S.device==='mobile';
+  // ensure the active geometry matches the current state before drawing (no-op for single-state MP → key stays 'MP')
+  const needKey=geoKeyForState();
+  if(needKey!==activeGeoKey){
+    if(GEO_CACHE[needKey]) applyGeo(needKey);
+    else { ensureGeo(needKey).then(g=>{ if(g){ applyGeo(needKey); render(); } }); return; }   // lazy-load then repaint
+  }
   try{
     if(S.view==='map') drawMap(mob?'mMapHost':'mapHost', S.metric);
     else if(S.view==='weather') drawMap(mob?'mwMapHost':'wMapHost', 'weather');
