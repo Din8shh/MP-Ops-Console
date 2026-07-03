@@ -1575,7 +1575,7 @@ function gateDefaultState(){ return GATE.cur ? (GATE.cur.states[0]==='*' ? '' : 
 function gateCanSwitchStates(){ return GATE.cur ? !!GATE.cur.switchStates : false; }
 function gateArmTimer(ms){ clearTimeout(GATE.timer); GATE.timer=setTimeout(gateLock, Math.max(0,ms)); }
 function gateSave(r){ GATE.cur=r; try{ sessionStorage.setItem(GATE.SKEY, JSON.stringify({id:r.id, at:Date.now()})); }catch(_){ } gateArmTimer(GATE.TTL_MS);
-  if(GA_ON()){ try{ window.gtag('set','user_properties',{ role:r.role, org:r.org, mp_state:(r.states||[]).join(',') }); }catch(_){ } track('login',{ role:r.role, role_id:r.id }); } }
+  if(GA_ON()){ try{ window.gtag('set','user_properties',{ role:r.role, org:r.org, mp_state:(r.states||[]).join(','), team:r.label, team_id:r.id }); }catch(_){ } track('login',{ role:r.role, role_id:r.id, team:r.label }); } }
 function gateRead(){ try{ return JSON.parse(sessionStorage.getItem(GATE.SKEY)||'null'); }catch(_){ return null; } }
 function gateExpired(){ const o=gateRead(); return !o||!o.id||(Date.now()-(o.at||0))>=GATE.TTL_MS; }
 function gateRestore(){ const o=gateRead(); if(!o||!o.id) return false; const age=Date.now()-(o.at||0); if(age>=GATE.TTL_MS) return false; const f=Object.values(GATE.ROLES).find(r=>r.id===o.id); if(!f) return false; GATE.cur=f; gateArmTimer(GATE.TTL_MS-age); return true; }
