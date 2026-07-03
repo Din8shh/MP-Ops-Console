@@ -51,6 +51,21 @@ const fmt = n => Math.round(n).toLocaleString('en-IN');
 //   2) CONFIG.sheetId  — the sheet's ID (it must be shared "anyone with the link can view")
 // Leave both blank to run on bundled demo data (machines.js).
 const CONFIG = { csvUrl:'', sheetId:'1YFZD6RoccFJulCMyZB0jF0Z7ZoRU-8YaAMr6as8MTBs', sheetName:'Sheet1', refreshMinutes:10 };
+// Phase-5 staging override (localhost ONLY): repoint the data source at a COPY sheet for multi-state testing
+// without ever committing a non-live id. Committed CONFIG always keeps the LIVE sheet, so nothing needs reverting
+// at cutover and production is unaffected (this block is inert off localhost). Usage:
+//   http://localhost:8777/?sheet=<COPY_SHEET_ID>          (optionally &sheetName=Sheet1)
+//   http://localhost:8777/?csv=<published-csv-url>
+try{
+  const H=location.hostname, isLocal = H==='localhost'||H==='127.0.0.1'||H==='';
+  if(isLocal){
+    const qs=new URLSearchParams(location.search);
+    if(qs.get('csv'))   CONFIG.csvUrl   = qs.get('csv');
+    if(qs.get('sheet')) CONFIG.sheetId  = qs.get('sheet');
+    if(qs.get('sheetName')) CONFIG.sheetName = qs.get('sheetName');
+    if(qs.get('csv')||qs.get('sheet')) console.info('[MP-Ops] Phase-5 staging override active →', CONFIG.csvUrl||CONFIG.sheetId);
+  }
+}catch(_){}
 // canonicalise territory names to the map's casing so e.g. "khargone"/"Khargone" merge into one territory
 const TERR_CANON={}; for(const k in COORDS) TERR_CANON[k.toLowerCase()]=k;
 const canonTerr = s => { s=String(s||'').trim(); return TERR_CANON[s.toLowerCase()]||s; };
