@@ -75,6 +75,18 @@ const STATE_NAMES = { MP:'Madhya Pradesh', MH:'Maharashtra', TG:'Telangana', GJ:
 const STATE_ALIAS = { mp:'MP', madhyapradesh:'MP', mh:'MH', maharashtra:'MH', tg:'TG', ts:'TG', telangana:'TG', gj:'GJ', guj:'GJ', gujarat:'GJ', rj:'RJ', raj:'RJ', rajasthan:'RJ', pb:'PB', pun:'PB', punjab:'PB', hr:'HR', har:'HR', haryana:'HR' };
 function canonState(v){ const raw=String(v||'').trim(); if(!raw) return 'MP'; const k=raw.toLowerCase().replace(/[^a-z]/g,''); return STATE_ALIAS[k] || (STATE_NAMES[raw.toUpperCase()]?raw.toUpperCase():raw); }
 const ensureSt = rows => (rows.forEach(m=>{ if(!m.st) m.st=canonState(m.state); }), rows); // demo/mock rows lack st → default MP
+// Territory aliases: sheet Territory values that are spelling variants or sub-district towns → the map's district
+// name, per state, so those machines plot on the choropleth/bubbles. Keys are lowercased. (Same idea as MP's COORDS
+// aliasing.) Non-district junk ("0","Not in Plan","GT Belt/UP") is intentionally NOT here — those need a sheet fix.
+const TERR_ALIAS = {
+  MP:{ 'mandsor':'Mandsaur' },
+  TG:{ 'nagarkarnool':'Nagarkurnool', 'mahaboobnagar':'Mahabubnagar', 'warangal 1':'Warangal Urban', 'warangal-1':'Warangal Urban', 'warangal 2':'Warangal Rural' },
+  GJ:{ 'halvad':'Morbi', 'rajkot cotton':'Rajkot' },
+  RJ:{ 'sri ganganagar':'Ganganagar', 'suratgarh':'Ganganagar', 'anoopgarh':'Ganganagar', 'sangria':'Hanumangarh', 'merta':'Nagaur' },
+  PB:{ 'abohar':'Fazilka', 'malout':'Sri Muktsar Sahib' },
+  HR:{ 'dabwali':'Sirsa' },
+};
+const aliasTerr = (st,terr) => { const a=TERR_ALIAS[st]; return (a && a[String(terr||'').trim().toLowerCase()]) || terr; };
 let ROWS = MACHINES_MOCK;
 let dataMode = 'demo';      // 'demo' | 'live' | 'error'
 let lastUpdated = '';
@@ -167,10 +179,11 @@ function rowsToMachines(grid){
     const g=i=>i>=0&&i<row.length?row[i]:'';
     const mc=txt(g(col.mc)); if(!mc) continue;
     const [lat,lon]=parseLoc(g(col.loc));
+    const st=canonState(txt(g(col.st)));
     out.push({
       mc, org:(txt(g(col.org)).toUpperCase()==='SWAL'?'SWAL':'UPL'),
-      st:canonState(txt(g(col.st))),
-      territory:canonTerr(txt(g(col.territory)))||'Unassigned', cluster:txt(g(col.cluster))||'Unassigned',
+      st,
+      territory:aliasTerr(st, canonTerr(txt(g(col.territory))))||'Unassigned', cluster:txt(g(col.cluster))||'Unassigned',
       co:txt(g(col.co)), coMob:txt(g(col.coMob)), am:txt(g(col.am)), amNum:txt(g(col.amNum)),
       target:num(g(col.target)), achieved:num(g(col.achieved)), mtd:num(g(col.mtd)), acresY:num(g(col.acresY)), iotAcresY:num(g(col.iotAcresY)),
       scanned:parseScanned(g(col.scanned)),
