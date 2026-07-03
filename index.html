@@ -506,6 +506,11 @@ function vals(){
   const S=state;
   const F=getF();
   const tot=roll(F);
+  // multi-state: the national (state) tier + State dropdown appear only when >1 state exists in the data.
+  // With single-state MP data this is false, so every branch below falls through to the original behaviour.
+  const allStates=[...new Set(ROWS.map(m=>m.st))];
+  const multiState=allStates.length>1;
+  const stOptions=[{v:'',t:'All India'},...allStates.slice().sort().map(c=>({v:c,t:STATE_NAMES[c]||c}))];
   const allTerrs=[...new Set(ROWS.map(m=>m.territory))].sort();
   const terrOptions=[{v:'',t:'All territories'},...allTerrs.map(t=>({v:t,t}))];
   const clusters=S.terr? [...new Set(ROWS.filter(m=>m.territory===S.terr).map(m=>m.cluster))].sort() : [];
@@ -545,7 +550,18 @@ function vals(){
   const adm=isAdmin();
   const rows=[];
   const grid5={display:'grid',gridTemplateColumns:adm?'288px 110px 132px 1fr 84px 90px 78px 86px':'300px 124px 150px 1fr 96px 96px',gap:'14px',alignItems:'center'};
-  terrEntries.forEach(({name,list,r})=>{
+  if(multiState && !S.st){   // national tier: one row per state, click to drill (never shows for single-state MP)
+    const byS={}; F.forEach(m=>{ (byS[m.st] ||= []).push(m); });
+    Object.keys(byS).sort((a,b)=>byS[b].length-byS[a].length).forEach(code=>{ const r=roll(byS[code]);
+      rows.push({ click:{act:'state',key:code}, indent:'0px',
+        rowStyle:{...grid5,padding:'11px 18px',borderTop:'1px solid #F2F0EB',cursor:'pointer',background:'#fff'},
+        chev:'▸', chevStyle:{fontSize:'10px',color:'#B6B1A8',width:'12px'}, dotStyle:{display:'none'},
+        name:STATE_NAMES[code]||code, nameStyle:{fontSize:'13.5px',fontWeight:700,whiteSpace:'nowrap'},
+        sub:`${r.deployed} machines · tap to drill in`, subStyle:{fontSize:'11px',color:'#9C988F'},
+        deployed:r.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'},
+        mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(r), opMap:opMapLabel(r) });
+    });
+  } else terrEntries.forEach(({name,list,r})=>{
     const exp=!!S.expanded[name];
     rows.push({ click:{act:'exp',key:name}, indent:'0px',
       rowStyle:{...grid5,padding:'11px 18px',borderTop:'1px solid #F2F0EB',cursor:'pointer',background:exp?'#FBFAF8':'#fff'},
@@ -738,6 +754,7 @@ function vals(){
     .sort((a,b)=>b.val-a.val).slice(0,20);
 
   return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, rows, terrTable, wetTerr, amRows, bmRows, machineTable, mobileList, d, lbScope, coLeaders, opLeaders,
+    multiState, stOptions, stName:(S.st?(STATE_NAMES[S.st]||S.st):''),
     anyFilter, amCount:amKeys.length, bmCount:bmKeys.length, pinCount:F.length, mListCount:F.length,
     pinB10:fmt(F.filter(m=>m.acresY>10).length), pinB5:fmt(F.filter(m=>m.acresY>=5&&m.acresY<=10).length), pinB1:fmt(F.filter(m=>m.acresY>=1&&m.acresY<5).length), pinB0:fmt(F.filter(m=>m.acresY<1).length),
     freshCount:`${fmt(tot.deployed)} machines${anyFilter?' (filtered)':''}`, mobileWeather,
@@ -792,6 +809,10 @@ function filterBarHTML(v){
         <button data-act="org" data-org="SWAL" style="${css(seg(S.org==='SWAL'))}">SWAL</button>
       </div>
     </div>
+    ${v.multiState?`<div style="display:flex;align-items:center;gap:7px">
+      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">State</span>
+      <div style="position:relative"><select id="stSelect" style="${selStyle}">${optionsHTML(v.stOptions,S.st)}</select>${I.caret}</div>
+    </div>`:''}
     ${isAdmin()?`<div style="display:flex;align-items:center;gap:7px">
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Geo</span>
       <div style="position:relative"><select id="terrSelect" style="${selStyle}">${optionsHTML(v.terrOptions,S.terr)}</select>${I.caret}</div>
@@ -866,8 +887,11 @@ function rowDataAttrs(click){ return `data-act="${click.act}" ${click.key!=null?
 function csvCell(v){ v=(v==null?'':String(v)); return /[",\n\r]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
 function downloadFilteredCSV(){
   const F=getF();
+  const multi=[...new Set(ROWS.map(m=>m.st))].length>1;   // only surface the State column once multiple states exist
   const cols=[
-    ['Machine', m=>m.mc], ['Org', m=>m.org], ['Territory', m=>m.territory], ['Cluster', m=>m.cluster],
+    ['Machine', m=>m.mc], ['Org', m=>m.org],
+    ...(multi?[['State', m=>STATE_NAMES[m.st]||m.st]]:[]),
+    ['Territory', m=>m.territory], ['Cluster', m=>m.cluster],
     ['Area Manager', m=>m.am], ['AM Number', m=>m.amNum], ['Cluster Officer', m=>m.co], ['CO Mobile', m=>m.coMob],
     ['Operator', m=>m.opName], ['Operator Number', m=>m.opNum], ['Health', m=>hstate(m)],
     ['Target', m=>m.target], ['Achieved', m=>m.achieved], ['MTD Acres', m=>m.mtd], ['Acres Yesterday', m=>m.acresY],
@@ -893,7 +917,7 @@ function tablesViewHTML(v){
   return `<section style="padding:18px 22px">
     <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
       <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div style="font-size:13px;font-weight:700">Territory breakdown <span style="font-weight:400;color:#9C988F">· expand to Cluster → Machine</span></div>
+        <div style="font-size:13px;font-weight:700">${(v.multiState && !state.st)?'State breakdown <span style="font-weight:400;color:#9C988F">· tap a state to drill in</span>':(v.stName?E(v.stName)+' · ':'')+'Territory breakdown <span style="font-weight:400;color:#9C988F">· expand to Cluster → Machine</span>'}</div>
         ${downloadBtnHTML(v)}
       </div>
       <div style="display:grid;grid-template-columns:${v.adm?'288px 110px 132px 1fr 84px 90px 78px 86px':'300px 124px 150px 1fr 96px 96px'};gap:14px;padding:11px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;font-size:10px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase">
@@ -1389,7 +1413,8 @@ function setState(patch){ if(typeof patch==='function') patch=patch(state); Obje
 
 app.addEventListener('input', e=>{ if(e.target.id==='searchInput') setState({search:e.target.value}); });
 app.addEventListener('change', e=>{
-  if(e.target.id==='terrSelect') setState({terr:e.target.value, cluster:''});
+  if(e.target.id==='stSelect') setState({st:e.target.value, terr:'', cluster:'', am:'', co:'', expanded:{}});
+  else if(e.target.id==='terrSelect') setState({terr:e.target.value, cluster:''});
   else if(e.target.id==='clusterSelect') setState({cluster:e.target.value});
   else if(e.target.id==='amSelect') setState({am:e.target.value, co:''});
   else if(e.target.id==='coSelect') setState({co:e.target.value});
@@ -1411,6 +1436,7 @@ app.addEventListener('click', e=>{
     case 'clear': setState({org:gateDefaultOrg(),terr:'',cluster:'',am:'',co:'',bm:'',tm:'',health:[],search:''}); break;
     case 'refresh': state.refreshing=true; render(); loadData().finally(()=>{ state.refreshing=false; render(); }); break;
     case 'download': downloadFilteredCSV(); break;
+    case 'state': setState({st:el.dataset.key, terr:'', cluster:'', am:'', co:'', expanded:{}}); break;   // drill from national tier into a state
     case 'terr': { const t=el.dataset.terr; setState(s=>({terr: s.terr===t?'':t, cluster:''})); break; }
     case 'exp': { const k=el.dataset.key; setState(s=>({expanded:{...s.expanded,[k]:!s.expanded[k]}})); break; }
     case 'open': { const m=ROWS.find(x=>x.mc===el.dataset.mc); if(m) setState({selected:m}); break; }
