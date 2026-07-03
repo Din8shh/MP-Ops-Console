@@ -34,7 +34,8 @@ import { BASE, COORDS } from './mapdata.js';
 
 /* ============================= state ============================= */
 const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#159234', act:'#15A24A', idle:'#E0A008', brk:'#DC3A2B', ink:'#1B1A17', ink2:'#6E6A62', ink3:'#9C988F', line:'#E9E6DF', line2:'#F2F0EB', softO:'#FBEDDF', softG:'#E6F5EA', softR:'#FBEAE7', softA:'#FBF1DA' };
-const state = { view:'map', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', lbScope:'total', selected:null, expanded:{}, loaded:true, refreshing:false, device:'desktop' };
+const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', lbScope:'total', selected:null, expanded:{}, loaded:true, refreshing:false, device:'desktop' };
+// state.st = active Indian-state scope: '' = all-India (default); else a 2-letter code (MP/MH/TG/GJ/RJ/PB/HR).
 let scale=1, tx=0, ty=0, _g=null, _pinMap={}, _pinLabel=null, _prevSig=null, mapLocked=true;
 
 /* ============================= helpers ============================= */
@@ -52,6 +53,12 @@ const CONFIG = { csvUrl:'', sheetId:'1YFZD6RoccFJulCMyZB0jF0Z7ZoRU-8YaAMr6as8MTB
 // canonicalise territory names to the map's casing so e.g. "khargone"/"Khargone" merge into one territory
 const TERR_CANON={}; for(const k in COORDS) TERR_CANON[k.toLowerCase()]=k;
 const canonTerr = s => { s=String(s||'').trim(); return TERR_CANON[s.toLowerCase()]||s; };
+// Multi-state: canonicalise a free-text state value (code or name, any casing/punctuation) to a 2-letter code.
+// Blank → 'MP' so the single-state MP sheet (no State column yet) behaves exactly as before.
+const STATE_NAMES = { MP:'Madhya Pradesh', MH:'Maharashtra', TG:'Telangana', GJ:'Gujarat', RJ:'Rajasthan', PB:'Punjab', HR:'Haryana' };
+const STATE_ALIAS = { mp:'MP', madhyapradesh:'MP', mh:'MH', maharashtra:'MH', tg:'TG', ts:'TG', telangana:'TG', gj:'GJ', guj:'GJ', gujarat:'GJ', rj:'RJ', raj:'RJ', rajasthan:'RJ', pb:'PB', pun:'PB', punjab:'PB', hr:'HR', har:'HR', haryana:'HR' };
+function canonState(v){ const raw=String(v||'').trim(); if(!raw) return 'MP'; const k=raw.toLowerCase().replace(/[^a-z]/g,''); return STATE_ALIAS[k] || (STATE_NAMES[raw.toUpperCase()]?raw.toUpperCase():raw); }
+const ensureSt = rows => (rows.forEach(m=>{ if(!m.st) m.st=canonState(m.state); }), rows); // demo/mock rows lack st → default MP
 let ROWS = MACHINES_MOCK;
 let dataMode = 'demo';      // 'demo' | 'live' | 'error'
 let lastUpdated = '';
@@ -87,6 +94,7 @@ function resolveCols(header){
   const c = {
     mc: find(x=>x.includes('machine')&&(x.includes('number')||x.includes('no.')||x===' machine no'), x=>x==='mc', x=>x==='machine no'),
     org: find(x=>x.includes('organis')||x.includes('organiz'), x=>x==='org'),
+    st: find(x=>x==='state', x=>x.includes('state')&&!x.includes('estate')),   // multi-state: appended State column (keyword-matched)
     territory: find(x=>x.includes('territory')),
     cluster: find(x=>x.includes('cluster')&&!x.includes('officer')),
     co: find(x=>x.includes('cluster officer')&&!(x.includes('mob')||x.includes('number')||x.includes('phone'))),
@@ -145,6 +153,7 @@ function rowsToMachines(grid){
     const [lat,lon]=parseLoc(g(col.loc));
     out.push({
       mc, org:(txt(g(col.org)).toUpperCase()==='SWAL'?'SWAL':'UPL'),
+      st:canonState(txt(g(col.st))),
       territory:canonTerr(txt(g(col.territory)))||'Unassigned', cluster:txt(g(col.cluster))||'Unassigned',
       co:txt(g(col.co)), coMob:txt(g(col.coMob)), am:txt(g(col.am)), amNum:txt(g(col.amNum)),
       target:num(g(col.target)), achieved:num(g(col.achieved)), mtd:num(g(col.mtd)), acresY:num(g(col.acresY)), iotAcresY:num(g(col.iotAcresY)),
@@ -195,13 +204,13 @@ function canonicalizeByMobile(rows){
 }
 async function loadData(){
   const url=liveUrl();
-  if(!url){ dataMode='demo'; ROWS=canonicalizeNames(canonicalizeByMobile(MACHINES_MOCK)); lastUpdated=nowIST(); render(); loadWeather(); return; }
+  if(!url){ dataMode='demo'; ROWS=canonicalizeNames(canonicalizeByMobile(ensureSt(MACHINES_MOCK))); lastUpdated=nowIST(); render(); loadWeather(); return; }
   try{
     const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
     const machines=rowsToMachines(parseCSV(await res.text()));
     if(!machines.length) throw new Error('no rows parsed');
-    ROWS=canonicalizeNames(canonicalizeByMobile(machines)); dataMode='live'; lastUpdated=nowIST(); render(); loadWeather();
-  }catch(e){ ROWS=canonicalizeNames(canonicalizeByMobile(MACHINES_MOCK)); dataMode='error'; lastUpdated=nowIST(); render(); loadWeather(); console.error('CSV load failed:', e); }
+    ROWS=canonicalizeNames(canonicalizeByMobile(ensureSt(machines))); dataMode='live'; lastUpdated=nowIST(); render(); loadWeather();
+  }catch(e){ ROWS=canonicalizeNames(canonicalizeByMobile(ensureSt(MACHINES_MOCK))); dataMode='error'; lastUpdated=nowIST(); render(); loadWeather(); console.error('CSV load failed:', e); }
 }
 
 /* ============================= derived ============================= */
@@ -224,6 +233,7 @@ const bcolor = b => b==='On-track'?C.act : b==='At-risk'?C.idle : C.brk;
 function getF(){
   const s = state.search.trim().toLowerCase();
   return ROWS.filter(m=>{
+    if(state.st && m.st!==state.st) return false;   // multi-state scope: '' = all-India (no-op today)
     if(state.org!=='Both' && m.org!==state.org) return false;
     if(state.terr && m.territory!==state.terr) return false;
     if(state.cluster && m.cluster!==state.cluster) return false;
