@@ -53,7 +53,7 @@ import { BASE as MP_BASE, COORDS as MP_COORDS } from './mapdata.js';
 let BASE = MP_BASE, COORDS = MP_COORDS;   // ACTIVE geometry — defaults to MP; swapped per active state (Phase 4)
 
 /* ============================= state ============================= */
-const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#159234', act:'#15A24A', idle:'#E0A008', brk:'#DC3A2B', ink:'#1B1A17', ink2:'#6E6A62', ink3:'#9C988F', line:'#E9E6DF', line2:'#F2F0EB', softO:'#FBEDDF', softG:'#E6F5EA', softR:'#FBEAE7', softA:'#FBF1DA' };
+const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#159234', open:'#4C7399', openD:'#3A5B7D', act:'#15A24A', idle:'#E0A008', brk:'#DC3A2B', ink:'#1B1A17', ink2:'#6E6A62', ink3:'#9C988F', line:'#E9E6DF', line2:'#F2F0EB', softO:'#FBEDDF', softG:'#E6F5EA', softB:'#EAF0F6', softR:'#FBEAE7', softA:'#FBF1DA' };
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', lbScope:'total', selected:null, expanded:{}, loaded:true, refreshing:false, device:'desktop' };
 // state.st = active Indian-state scope: '' = all-India (default); else a 2-letter code (MP/MH/TG/GJ/RJ/PB/HR).
 let scale=1, tx=0, ty=0, _g=null, _pinMap={}, _pinLabel=null, _prevSig=null, mapLocked=true;
@@ -114,7 +114,11 @@ const TERR_ALIAS = {
   HR:{ 'dabwali':'Sirsa' },
 };
 const aliasTerr = (st,terr) => { const a=TERR_ALIAS[st]; return (a && a[String(terr||'').trim().toLowerCase()]) || terr; };
-let ROWS = MACHINES_MOCK;
+let ROWS = MACHINES_MOCK;        // DEPLOYED machines only — drives every map/table/KPI view
+let ALL_ROWS = MACHINES_MOCK;    // deployed + not-yet-deployed (plan) — drives the Plan KPI + Pending Deployment view
+// Every dataset flows through here: ALL_ROWS keeps the full set, ROWS is the deployed subset (mock rows lack a
+// `deployed` flag → treated as deployed so demo/fallback behaves exactly as before).
+function applyRows(rows){ ALL_ROWS=rows; ROWS=rows.filter(m=>m.deployed!==0); }
 let dataMode = 'demo';      // 'demo' | 'live' | 'error'
 let lastUpdated = '';
 function nowIST(){ try{ return new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'}); }catch(_){ return new Date().toLocaleTimeString(); } }
@@ -149,6 +153,7 @@ function resolveCols(header){
   const c = {
     mc: find(x=>x.includes('machine')&&(x.includes('number')||x.includes('no.')||x===' machine no'), x=>x==='mc', x=>x==='machine no'),
     org: find(x=>x.includes('organis')||x.includes('organiz'), x=>x==='org'),
+    dep: find(x=>x.includes('deployed')&&x.includes('status'), x=>x.includes('deployed')),   // "Deployed status" (Yes/No) — drives deployed-vs-plan split
     st: find(x=>x==='state', x=>x.includes('state')&&!x.includes('estate')),   // multi-state: appended State column (keyword-matched)
     territory: find(x=>x.includes('territory')),
     cluster: find(x=>x.includes('cluster')&&!x.includes('officer')),
@@ -207,8 +212,17 @@ function rowsToMachines(grid){
     const mc=txt(g(col.mc)); if(!mc) continue;
     const [lat,lon]=parseLoc(g(col.loc));
     const st=canonState(txt(g(col.st)));
+    // Org: SWAL / UPL / Open. Anything not UPL/SWAL is Open, EXCEPT MP "Unimart" which stays UPL (business rule).
+    const orgRaw=txt(g(col.org)).trim().toLowerCase();
+    const org = orgRaw==='swal' ? 'SWAL'
+              : orgRaw==='upl'  ? 'UPL'
+              : (orgRaw==='unimart' && st==='MP') ? 'UPL'
+              : 'Open';
+    // Deployed: MP shows every sheet row as deployed regardless of status; other states use the "Deployed status"=Yes flag.
+    const deployed = st==='MP' ? 1 : (txt(g(col.dep)).trim().toLowerCase()==='yes' ? 1 : 0);
     out.push({
-      mc, org:(txt(g(col.org)).toUpperCase()==='SWAL'?'SWAL':'UPL'),
+      mc, org,
+      deployed,
       st,
       territory:aliasTerr(st, canonTerr(txt(g(col.territory))))||'Unassigned', cluster:txt(g(col.cluster))||'Unassigned',
       co:txt(g(col.co)), coMob:txt(g(col.coMob)), am:txt(g(col.am)), amNum:txt(g(col.amNum)),
@@ -260,13 +274,13 @@ function canonicalizeByMobile(rows){
 }
 async function loadData(){
   const url=liveUrl();
-  if(!url){ dataMode='demo'; ROWS=canonicalizeNames(canonicalizeByMobile(ensureSt(MACHINES_MOCK))); lastUpdated=nowIST(); render(); loadWeather(); return; }
+  if(!url){ dataMode='demo'; applyRows(canonicalizeNames(canonicalizeByMobile(ensureSt(MACHINES_MOCK)))); lastUpdated=nowIST(); render(); loadWeather(); return; }
   try{
     const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
     const machines=rowsToMachines(parseCSV(await res.text()));
     if(!machines.length) throw new Error('no rows parsed');
-    ROWS=canonicalizeNames(canonicalizeByMobile(ensureSt(machines))); dataMode='live'; lastUpdated=nowIST(); render(); loadWeather();
-  }catch(e){ ROWS=canonicalizeNames(canonicalizeByMobile(ensureSt(MACHINES_MOCK))); dataMode='error'; lastUpdated=nowIST(); render(); loadWeather(); console.error('CSV load failed:', e); }
+    applyRows(canonicalizeNames(canonicalizeByMobile(ensureSt(machines)))); dataMode='live'; lastUpdated=nowIST(); render(); loadWeather();
+  }catch(e){ applyRows(canonicalizeNames(canonicalizeByMobile(ensureSt(MACHINES_MOCK)))); dataMode='error'; lastUpdated=nowIST(); render(); loadWeather(); console.error('CSV load failed:', e); }
 }
 
 /* ============================= derived ============================= */
@@ -282,6 +296,9 @@ const bdEff = m => !!m.breakdown && (isAdmin() || !(m.acresY>0));
 // is Active (ran-yesterday priority).
 const hstate = m => bdEff(m) ? 'Breakdown' : (m.acresY>0 ? 'Active' : 'Idle');
 const hcolor = s => s==='Active'?C.act : s==='Idle'?C.idle : C.brk;
+// org chip colours (Open added alongside UPL/SWAL)
+const orgSoft = o => o==='UPL'?C.softO : o==='SWAL'?C.softG : C.softB;
+const orgInk  = o => o==='UPL'?C.orangeD : o==='SWAL'?C.greenD : C.openD;
 const pctOf = m => m.target ? m.achieved/m.target : 0;
 const band = p => p>=0.7?'On-track' : p>=0.4?'At-risk' : 'Behind';
 const bcolor = b => b==='On-track'?C.act : b==='At-risk'?C.idle : C.brk;
@@ -304,12 +321,44 @@ function getF(){
     return true;
   });
 }
+// ---- Plan (deployed + not-yet-deployed) ----------------------------------------
+// MP is a special case: its plan is a fixed programme target (not derivable from the sheet, which shows every MP
+// row as already deployed). Other states derive plan from ALL_ROWS (deployed + pending), incl. Open machines.
+const MP_PLAN = { UPL:270, SWAL:230 };   // MP total = 500
+// Rows in the current scope (state/geo/team filters, incl. search) but NOT org/health — org is split out for the
+// per-org Plan number, health is a deployed-only concept. Used by both the Plan KPI and the Pending view.
+function planScope(rows){
+  const S=state, s=S.search.trim().toLowerCase();
+  return rows.filter(m=>{
+    if(S.st && m.st!==S.st) return false;
+    if(S.terr && m.territory!==S.terr) return false;
+    if(S.cluster && m.cluster!==S.cluster) return false;
+    if(S.am && (m.am||'').trim().toLowerCase()!==S.am.trim().toLowerCase()) return false;
+    if(S.co && (m.co||'').trim().toLowerCase()!==S.co.trim().toLowerCase()) return false;
+    if(S.bm && (m.bmName||'').trim().toLowerCase()!==S.bm.trim().toLowerCase()) return false;
+    if(S.tm && (m.tmName||'').trim().toLowerCase()!==S.tm.trim().toLowerCase()) return false;
+    if(s && !(m.mc.toLowerCase().includes(s) || (m.opName&&m.opName.toLowerCase().includes(s)) || (m.territory||'').toLowerCase().includes(s))) return false;
+    return true;
+  });
+}
+// Plan totals per org for the current scope. Non-MP is row-derived; MP adds its fixed constant, but only at the
+// state/all-India aggregate — a fixed 500 can't be attributed to a territory/AM, so it drops out under sub-filters.
+function planTotals(){
+  const S=state;
+  const subActive = !!(S.terr||S.cluster||S.am||S.co||S.bm||S.tm||S.search);
+  let upl=0, swal=0, open=0;
+  planScope(ALL_ROWS).forEach(m=>{ if(m.st==='MP') return;
+    if(m.org==='UPL') upl++; else if(m.org==='SWAL') swal++; else open++; });
+  if((!S.st || S.st==='MP') && !subActive){ upl+=MP_PLAN.UPL; swal+=MP_PLAN.SWAL; }
+  return { upl, swal, open, total:upl+swal+open };
+}
 function isAdmin(){ return !!(GATE.cur && GATE.cur.role==='admin'); }
 // Non-admin (UPL/SWAL) desktop views drop the Territory-breakdown, Area-Manager and Leaderboard tabs.
-function roleHidesView(view){ return !isAdmin() && (view==='tables'||view==='am'||view==='leader'); }
+// 'pending' (undeployed) view is admin-only, alongside the existing admin-only desktop tabs.
+function roleHidesView(view){ return !isAdmin() && (view==='tables'||view==='am'||view==='leader'||view==='pending'); }
 function roll(list){
-  const o={deployed:list.length,upl:0,swal:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
-  list.forEach(m=>{ o[m.org==='UPL'?'upl':'swal']++;
+  const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
+  list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
     if(m.acresY>0) o.Active++; if(bdEff(m)) o.Breakdown++; else if(!(m.acresY>0)) o.Idle++;
     o.target+=m.target; o.achieved+=m.achieved; o.mtd+=m.mtd; o.acresY+=m.acresY; o.iotAcresY+=(m.iotAcresY||0); o.pinged+=(m.pinged?1:0); if(m.opName&&m.opNum&&m.opNum!=='0')o.opMappedCount++; });
   o.pct = o.target ? o.achieved/o.target : 0; o.band=band(o.pct); o.ranY=list.filter(m=>m.acresY>0).length; return o;
@@ -334,7 +383,7 @@ function distinctNames(list, field){
   return Object.keys(disp).map(k=>{ const v=disp[k]; return Object.keys(v).sort((a,b)=>v[b]-v[a])[0]; }).sort((a,b)=>a.localeCompare(b));
 }
 function rowBars(r){ const tt=r.deployed||1, ht=(r.Active+r.Idle+r.Breakdown)||1; return {
-  orgUStyle:{width:(100*r.upl/tt)+'%',background:C.orange,display:'block'}, orgSStyle:{width:(100*r.swal/tt)+'%',background:C.green,display:'block'},
+  orgUStyle:{width:(100*r.upl/tt)+'%',background:C.orange,display:'block'}, orgSStyle:{width:(100*r.swal/tt)+'%',background:C.green,display:'block'}, orgOStyle:{width:(100*(r.open||0)/tt)+'%',background:C.open,display:'block'},
   mixAStyle:{width:(100*r.Active/ht)+'%',background:C.act,display:'block'}, mixIStyle:{width:(100*r.Idle/ht)+'%',background:C.idle,display:'block'}, mixBStyle:{width:(100*r.Breakdown/ht)+'%',background:C.brk,display:'block'},
   mixLabel:`${r.Active} active · ${r.Idle} idle · ${r.Breakdown} down`,
   paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*r.pct)+'%',background:C.act},
@@ -485,9 +534,10 @@ function drawMap(hostId, metric){
     } else if(metric==='acresY'){
       const cir=document.createElementNS(NS,'circle'); cir.setAttribute('cx',cx);cir.setAttribute('cy',cy);cir.setAttribute('r',r); cir.setAttribute('fill','#7C6FE0'); cir.setAttribute('fill-opacity','.82'); grp.appendChild(cir);
     } else {
-      const tot=ro.deployed||1, aU=2*Math.PI*(ro.upl/tot);
-      if(ro.upl>0&&ro.swal>0){ grp.appendChild(wedge(cx,cy,r,-Math.PI/2,-Math.PI/2+aU,C.orange)); grp.appendChild(wedge(cx,cy,r,-Math.PI/2+aU,-Math.PI/2+2*Math.PI,C.green)); }
-      else { const cir=document.createElementNS(NS,'circle'); cir.setAttribute('cx',cx);cir.setAttribute('cy',cy);cir.setAttribute('r',r); cir.setAttribute('fill',ro.upl>0?C.orange:C.green); grp.appendChild(cir); }
+      const tot=ro.deployed||1;
+      const segs=[[ro.upl,C.orange],[ro.swal,C.green],[ro.open||0,C.open]].filter(s=>s[0]>0);   // UPL / SWAL / Open split
+      if(segs.length<=1){ const cir=document.createElementNS(NS,'circle'); cir.setAttribute('cx',cx);cir.setAttribute('cy',cy);cir.setAttribute('r',r); cir.setAttribute('fill',segs.length?segs[0][1]:C.green); grp.appendChild(cir); }
+      else { let a0=-Math.PI/2; segs.forEach(([n,col])=>{ const a1=a0+2*Math.PI*(n/tot); grp.appendChild(wedge(cx,cy,r,a0,a1,col)); a0=a1; }); }
     }
     const stroke=document.createElementNS(NS,'circle'); stroke.setAttribute('cx',cx);stroke.setAttribute('cy',cy);stroke.setAttribute('r',r); stroke.setAttribute('fill','none'); stroke.setAttribute('stroke','#fff'); stroke.setAttribute('stroke-width','1.4'); grp.appendChild(stroke);
     if(r>=15){ const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',cy);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',"'IBM Plex Mono',monospace");t.setAttribute('font-size','12');t.setAttribute('font-weight','600');t.setAttribute('fill','#fff'); t.style.pointerEvents='none'; t.textContent=metric==='acresY'?fmt(v):v; grp.appendChild(t); }
@@ -502,7 +552,7 @@ function drawLegend(metric){
   let html='';
   const row=(c,l,shape)=>`<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><span style="width:13px;height:13px;border-radius:${shape==='sq'?'3px':'50%'};background:${c};flex-shrink:0"></span><span style="font-size:11.5px;color:#6E6A62">${l}</span></div>`;
   if(metric==='weather') html=`${rainLegendHTML()}<div style="font-size:11px;color:#6E6A62;margin-top:9px">Fill = yesterday's rainfall. The <b>number</b> in each district is machines that ran / total deployed.</div>`;
-  else if(metric==='deploy') html=row(C.orange,'UPL')+row(C.green,'SWAL')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Bubble size = machines deployed. Split shows UPL / SWAL share.</div>`;
+  else if(metric==='deploy') html=row(C.orange,'UPL')+row(C.green,'SWAL')+row(C.open,'Open')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Bubble size = machines deployed. Split shows UPL / SWAL / Open share.</div>`;
   else if(metric==='active') html=row(C.act,'Active machines')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Size = machines that ran yesterday.</div>`;
   else if(metric==='acresY') html=row('#7C6FE0','Acres sprayed yesterday')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Size = acres covered yesterday.</div>`;
   else html=row(C.act,'Active')+row(C.idle,'Idle')+row(C.brk,'Breakdown')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Pie = health mix per territory.</div>`;
@@ -568,6 +618,7 @@ const I = {
   am:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="3"/><path d="M6.5 21a5.5 5.5 0 0 1 11 0"/><path d="M4 13.5 2.5 15M20 13.5 21.5 15"/></svg>',
   bm:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></svg>',
   leader:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0Z"/><path d="M17 5h2.5a1.5 1.5 0 0 1 0 5H17M7 5H4.5a1.5 1.5 0 0 0 0 5H7"/></svg>',
+  pending:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   mobile:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>',
   desktop:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M9 20h6M12 17v3"/></svg>',
   search:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9C988F" stroke-width="2" style="position:absolute;left:11px;top:50%;transform:translateY(-50%)"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
@@ -590,23 +641,33 @@ function vals(){
   const allStates=[...new Set(ROWS.map(m=>m.st))];
   const multiState=allStates.length>1;
   const stOptions=[{v:'',t:'All India'},...allStates.slice().sort().map(c=>({v:c,t:STATE_NAMES[c]||c}))];
-  const allTerrs=[...new Set(ROWS.map(m=>m.territory))].sort();
+  // When a state is selected, every filter dropdown lists only that state's territories/AMs/COs/BMs/TMs.
+  // Geo lists use deployed ROWS (clean district names); team lists use ALL_ROWS so managers with only pending
+  // (not-yet-deployed) machines still appear. All-India (no state) keeps the full, cross-state lists.
+  const stRows    = S.st ? ROWS.filter(m=>m.st===S.st)     : ROWS;
+  const stRowsAll = S.st ? ALL_ROWS.filter(m=>m.st===S.st) : ALL_ROWS;
+  const allTerrs=[...new Set(stRows.map(m=>m.territory))].sort();
   const terrOptions=[{v:'',t:'All territories'},...allTerrs.map(t=>({v:t,t}))];
-  const clusters=S.terr? [...new Set(ROWS.filter(m=>m.territory===S.terr).map(m=>m.cluster))].sort() : [];
+  const clusters=S.terr? [...new Set(stRows.filter(m=>m.territory===S.terr).map(m=>m.cluster))].sort() : [];
   const clusterOptions=[{v:'',t:S.terr?'All clusters':'— pick territory —'},...clusters.map(c=>({v:c,t:c}))];
-  const amOptions=[{v:'',t:'All AMs'},...distinctNames(ROWS,'am').map(t=>({v:t,t}))];
-  const coList=S.am? distinctNames(ROWS.filter(m=>(m.am||'').trim().toLowerCase()===S.am.trim().toLowerCase()),'co') : [];
+  const amOptions=[{v:'',t:'All AMs'},...distinctNames(stRowsAll,'am').map(t=>({v:t,t}))];
+  const coList=S.am? distinctNames(stRowsAll.filter(m=>(m.am||'').trim().toLowerCase()===S.am.trim().toLowerCase()),'co') : [];
   const coOptions=[{v:'',t:S.am?'All officers':'— pick AM —'},...coList.map(t=>({v:t,t}))];
-  const orgRows = S.org==='Both' ? ROWS : ROWS.filter(m=>m.org===S.org);   // scope BM/TM dropdowns to the active org
+  const orgRows = S.org==='Both' ? stRowsAll : stRowsAll.filter(m=>m.org===S.org);   // scope BM/TM dropdowns to the active state + org
   const bmOptions=[{v:'',t:'All BMs'},...distinctNames(orgRows,'bmName').map(t=>({v:t,t}))];
   const tmList=S.bm? distinctNames(orgRows.filter(m=>(m.bmName||'').trim().toLowerCase()===S.bm.trim().toLowerCase()),'tmName') : [];
   const tmOptions=[{v:'',t:S.bm?'All TMs':'— pick BM —'},...tmList.map(t=>({v:t,t}))];
   const mono22=col=>({fontFamily:"'IBM Plex Mono'",fontSize:'22px',fontWeight:600,color:col});
   const pctTxt=(tot.target? Math.round(tot.pct*100):0);
+  // Plan (admin only): a single number that tracks the active org — Both→total, UPL/SWAL/Open→that org's plan.
+  const pt=planTotals();
+  const planVal = S.org==='UPL'?pt.upl : S.org==='SWAL'?pt.swal : S.org==='Open'?pt.open : pt.total;
   const kpis=[
     {label:'Deployed',value:fmt(tot.deployed),unit:'',valStyle:mono22(C.ink)},
+    ...(isAdmin()?[{label:'Plan',value:fmt(planVal),unit:'',valStyle:mono22(C.openD)}]:[]),
     {label:'UPL',value:fmt(tot.upl),unit:'',valStyle:mono22(C.orange)},
     {label:'SWAL',value:fmt(tot.swal),unit:'',valStyle:mono22(C.green)},
+    ...(tot.open>0?[{label:'Open',value:fmt(tot.open),unit:'',valStyle:mono22(C.open)}]:[]),
     {label:'Active y’day',value:fmt(tot.Active),unit:'',valStyle:mono22(C.act)},
     {label:'Idle',value:fmt(tot.Idle),unit:'',valStyle:mono22(C.idle)},
     {label:'Breakdown',value:fmt(tot.Breakdown),unit:'',valStyle:mono22(C.brk)},
@@ -662,7 +723,7 @@ function vals(){
               rowStyle:{...grid5,padding:'8px 18px',borderTop:'1px solid #F6F4F0',cursor:'pointer',background:'#fff'},
               chev:'', chevStyle:{width:'12px'}, dotStyle:{width:'7px',height:'7px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
               name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName, subStyle:{fontSize:'11px',color:'#9C988F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'},
-              deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},
+              deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},orgOStyle:{display:'none'},
               mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
               paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk) });
           });
@@ -709,7 +770,7 @@ function vals(){
               rowStyle:{...grid5am,padding:'8px 18px',borderTop:'1px solid #F6F4F0',cursor:'pointer',background:'#fff'},
               chev:'', chevStyle:{width:'12px'}, role:'', roleStyle:{display:'none'}, dotStyle:{width:'7px',height:'7px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
               name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName+' · '+m.territory, subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
-              deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},
+              deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},orgOStyle:{display:'none'},
               mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
               paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk),
               contact:m.opNum, callTel:'tel:'+m.opNum, callStyle:callBtn });
@@ -758,7 +819,7 @@ function vals(){
                   rowStyle:{...grid5bm,padding:'8px 18px',borderTop:'1px solid #F6F4F0',cursor:'pointer',background:'#fff'},
                   chev:'', chevStyle:{width:'12px'}, role:'', roleStyle:{display:'none'}, dotStyle:{width:'7px',height:'7px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
                   name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:(m.foName?('FO · '+m.foName+' · '):'')+m.opName, subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
-                  deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},
+                  deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},orgOStyle:{display:'none'},
                   mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
                   paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk),
                   contact:m.opNum, callTel:'tel:'+m.opNum, callStyle:callBtn });
@@ -770,11 +831,52 @@ function vals(){
     }
   });
 
+  // Pending Deployment view (admin) — not-yet-deployed machines grouped AM → Cluster Officer → Machine.
+  // Sourced from ALL_ROWS (the pending rows never enter ROWS/F, so they stay out of every other view). MP has
+  // no pending rows (all MP sheet rows are treated as deployed), so this view is naturally empty for MP.
+  const pendAll = planScope(ALL_ROWS).filter(m=>m.deployed===0 && (S.org==='Both'||m.org===S.org));
+  const orgMix = list => { let u=0,s=0,o=0; list.forEach(m=>m.org==='UPL'?u++:m.org==='SWAL'?s++:o++);
+    return [u&&`UPL ${u}`, s&&`SWAL ${s}`, o&&`Open ${o}`].filter(Boolean).join(' · '); };
+  const pendRows=[];
+  const byPAM={}; pendAll.forEach(m=>{ (byPAM[m.am||'Unassigned'] ||= []).push(m); });
+  Object.keys(byPAM).sort((a,b)=>byPAM[b].length-byPAM[a].length).forEach(am=>{
+    const list=byPAM[am]; const cos=[...new Set(list.map(m=>m.co||'Unassigned'))];
+    const key='pam:'+am, exp=!!S.expanded[key];
+    pendRows.push({ click:{act:'exp',key}, indent:'0px',
+      rowStyle:{padding:'12px 18px',borderTop:'1px solid #F2F0EB',cursor:'pointer',background:exp?'#FBFAF8':'#fff'},
+      chev:exp?'▾':'▸', chevStyle:{fontSize:'10px',color:'#B6B1A8',width:'12px'}, role:'AM', roleStyle:roleChip(C.softO,C.orangeD), dotStyle:{display:'none'},
+      name:am, nameStyle:{fontSize:'13.5px',fontWeight:600,whiteSpace:'nowrap'}, sub:`${cos.length} cluster officers`, subStyle:{fontSize:'11px',color:'#9C988F',marginTop:'1px'},
+      count:list.length, mix:orgMix(list), org:'',
+      contact:list[0].amNum, callTel:'tel:'+list[0].amNum, callStyle:callBtn });
+    if(exp){
+      const byPCO={}; list.forEach(m=>{ (byPCO[m.co||'Unassigned'] ||= []).push(m); });
+      Object.keys(byPCO).sort((a,b)=>byPCO[b].length-byPCO[a].length).forEach(co=>{
+        const cl=byPCO[co]; const ck=key+'|co:'+co, cexp=!!S.expanded[ck];
+        pendRows.push({ click:{act:'exp',key:ck}, indent:'20px',
+          rowStyle:{padding:'10px 18px',borderTop:'1px solid #F4F2EE',cursor:'pointer',background:cexp?'#FCFBF9':'#fff'},
+          chev:cexp?'▾':'▸', chevStyle:{fontSize:'9px',color:'#C4BFB5',width:'12px'}, role:'CO', roleStyle:roleChip('#EAF1F8','#3A6FA0'), dotStyle:{display:'none'},
+          name:co, nameStyle:{fontSize:'12.5px',fontWeight:600,color:'#46433d',whiteSpace:'nowrap'}, sub:`${cl.length} pending`, subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px'},
+          count:cl.length, mix:orgMix(cl), org:'',
+          contact:cl[0].coMob, callTel:'tel:'+cl[0].coMob, callStyle:callBtn });
+        if(cexp){
+          cl.forEach(m=>{
+            pendRows.push({ click:null, indent:'40px',
+              rowStyle:{padding:'8px 18px',borderTop:'1px solid #F6F4F0',background:'#fff'},
+              chev:'', chevStyle:{width:'12px'}, role:'', roleStyle:{display:'none'}, dotStyle:{display:'none'},
+              name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:(m.territory&&m.territory!=='Unassigned'?m.territory:'—'), subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px'},
+              count:'', mix:'', org:m.org, orgStyle:{display:'inline-flex',fontSize:'9px',fontWeight:700,padding:'2px 7px',borderRadius:'5px',background:orgSoft(m.org),color:orgInk(m.org)},
+              contact:m.coMob, callTel:'tel:'+m.coMob, callStyle:callBtn });
+          });
+        }
+      });
+    }
+  });
+
   // Machine table
   const ord={Breakdown:0,Idle:1,Active:2};
   const machineTable=F.slice().sort((a,b)=>{ const d=ord[hstate(a)]-ord[hstate(b)]; return d!==0?d:(b.acresY-a.acresY); }).map(m=>{ const hs=hstate(m), col=hcolor(hs);
     return { mc:m.mc, org:m.org, opName:m.opName, opNum:m.opNum, geo:`${m.territory} · ${m.cluster}`, acresY:m.acresY>0?fmt(m.acresY):'0', co:m.co, am:m.am,
-      orgStyle:{display:'inline-flex',fontSize:'9.5px',fontWeight:700,letterSpacing:'.02em',padding:'2px 7px',borderRadius:'5px',background:(m.org==='UPL'?C.softO:C.softG),color:(m.org==='UPL'?C.orangeD:C.greenD)},
+      orgStyle:{display:'inline-flex',fontSize:'9.5px',fontWeight:700,letterSpacing:'.02em',padding:'2px 7px',borderRadius:'5px',background:orgSoft(m.org),color:orgInk(m.org)},
       healthStyle:{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10.5px',fontWeight:600,color:col}, healthDot:{width:'8px',height:'8px',borderRadius:'50%',background:col,flexShrink:0,display:'block'}, health:hs,
       acresStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12.5px',fontWeight:600,color:m.acresY>0?C.ink:'#B6B1A8',textAlign:'right'} }; });
 
@@ -787,7 +889,7 @@ function vals(){
     const products=(m.scanned.length?m.scanned:[{product:'Unspecified',acres:0}]).map(s=>({product:s.product,acres:fmt(s.acres),barStyle:{display:'block',height:'100%',width:(100*s.acres/maxP)+'%',background:C.orange}}));
     const opMapped=m.opMapped===1;
     d={ mc:m.mc, org:m.org, geo:`${m.territory} · ${m.cluster}`,
-      orgStyle:{display:'inline-flex',fontSize:'10.5px',fontWeight:700,letterSpacing:'.03em',padding:'3px 9px',borderRadius:'6px',background:(m.org==='UPL'?C.softO:C.softG),color:(m.org==='UPL'?C.orangeD:C.greenD)},
+      orgStyle:{display:'inline-flex',fontSize:'10.5px',fontWeight:700,letterSpacing:'.03em',padding:'3px 9px',borderRadius:'6px',background:orgSoft(m.org),color:orgInk(m.org)},
       healthStyle:{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10.5px',fontWeight:600,padding:'3px 9px',borderRadius:'6px',background:hcolor(hs)+'18',color:hcolor(hs)}, healthDot:{width:'6px',height:'6px',borderRadius:'50%',background:hcolor(hs),display:'block'}, health:hs,
       sprayBg:w.bg, sprayBorder:w.border, sprayIcon:w.icon, sprayLabel:w.label, sprayInk:w.ink, weatherLine:w.line,
       opInitial:(m.opName||'?').charAt(0), opName:m.opName, opNum:m.opNum, opTel:'tel:'+m.opNum,
@@ -807,7 +909,7 @@ function vals(){
   const mobileWeather = weather(S.terr || 'Madhya Pradesh');
   const mobileList = F.slice(0,80).map(m=>{ const hs=hstate(m);
     return { mc:m.mc, org:m.org, opName:m.opName, geo:`${m.territory} · ${m.cluster}`,
-      orgStyle:{display:'inline-flex',fontSize:'9px',fontWeight:700,padding:'1px 6px',borderRadius:'5px',background:(m.org==='UPL'?C.softO:C.softG),color:(m.org==='UPL'?C.orangeD:C.greenD)},
+      orgStyle:{display:'inline-flex',fontSize:'9px',fontWeight:700,padding:'1px 6px',borderRadius:'5px',background:orgSoft(m.org),color:orgInk(m.org)},
       dotStyle:{width:'9px',height:'9px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
       acresLabel: m.acresY>0? fmt(m.acresY)+' ac' : (m.breakdown?'down':'idle') }; });
 
@@ -832,7 +934,7 @@ function vals(){
       achieved:o.achieved, target:o.target, acresY:o.acresY, pct:o.target? o.achieved/o.target : 0, val }; })
     .sort((a,b)=>b.val-a.val).slice(0,20);
 
-  return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, rows, terrTable, wetTerr, amRows, bmRows, machineTable, mobileList, d, lbScope, coLeaders, opLeaders,
+  return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, rows, terrTable, wetTerr, amRows, bmRows, pendRows, pendCount:pendAll.length, machineTable, mobileList, d, lbScope, coLeaders, opLeaders,
     multiState, stOptions, stName:(S.st?(STATE_NAMES[S.st]||S.st):''), canSwitchStates:gateCanSwitchStates(),
     scopeLabel:(S.st ? S.st : (multiState ? 'India' : (allStates[0]||'MP'))),  // header/title scope: state code when scoped, 'India' for multi-state all-India, sole state when single-state
     anyFilter, amCount:amKeys.length, bmCount:bmKeys.length, pinCount:F.length, mListCount:F.length,
@@ -852,7 +954,7 @@ function railHTML(){
   return `<aside style="width:74px;flex-shrink:0;background:#1B1A17;display:flex;flex-direction:column;align-items:center;padding:16px 0">
     <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;letter-spacing:.02em;color:#fff;margin-bottom:26px">UPL</div>
     <nav style="display:flex;flex-direction:column;gap:8px;flex:1">
-      ${navBtn('map',I.map,v==='map')}${roleHidesView('tables')?'':navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${roleHidesView('am')?'':navBtn('am',I.am,v==='am')}${navBtn('bm',I.bm,v==='bm')}${roleHidesView('leader')?'':navBtn('leader',I.leader,v==='leader')}
+      ${navBtn('map',I.map,v==='map')}${roleHidesView('tables')?'':navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${roleHidesView('am')?'':navBtn('am',I.am,v==='am')}${navBtn('bm',I.bm,v==='bm')}${roleHidesView('pending')?'':navBtn('pending',I.pending,v==='pending')}${roleHidesView('leader')?'':navBtn('leader',I.leader,v==='leader')}
     </nav>
     <button data-act="device" title="Mobile view" style="${css({...navStyle(false),marginBottom:'8px'})}">${I.mobile}</button>
     <div style="writing-mode:vertical-rl;font-size:8.5px;letter-spacing:.14em;color:#6b675f;margin-top:14px;text-transform:uppercase">Confidential</div>
@@ -884,9 +986,10 @@ function filterBarHTML(v){
     <div style="display:flex;align-items:center;gap:7px">
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Org</span>
       <div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
-        <button data-act="org" data-org="Both" style="${css(seg(S.org==='Both'))}">Both</button>
+        <button data-act="org" data-org="Both" style="${css(seg(S.org==='Both'))}">All</button>
         <button data-act="org" data-org="UPL" style="${css(seg(S.org==='UPL'))}">UPL</button>
         <button data-act="org" data-org="SWAL" style="${css(seg(S.org==='SWAL'))}">SWAL</button>
+        <button data-act="org" data-org="Open" style="${css(seg(S.org==='Open'))}">Open</button>
       </div>
     </div>
     ${(v.multiState && v.canSwitchStates)?`<div style="display:flex;align-items:center;gap:7px">
@@ -966,10 +1069,12 @@ function rowDataAttrs(click){ return `data-act="${click.act}" ${click.key!=null?
 // ---- CSV export of the currently-filtered machine rows (respects all active filters) ----
 function csvCell(v){ v=(v==null?'':String(v)); return /[",\n\r]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
 function downloadFilteredCSV(){
-  const F=getF();
-  const multi=[...new Set(ROWS.map(m=>m.st))].length>1;   // only surface the State column once multiple states exist
+  // On the Pending Deployment view, export the not-yet-deployed rows; elsewhere export the deployed, filtered set.
+  const pending = state.view==='pending';
+  const F = pending ? planScope(ALL_ROWS).filter(m=>m.deployed===0 && (state.org==='Both'||m.org===state.org)) : getF();
+  const multi=[...new Set(ALL_ROWS.map(m=>m.st))].length>1;   // only surface the State column once multiple states exist
   const cols=[
-    ['Machine', m=>m.mc], ['Org', m=>m.org],
+    ['Machine', m=>m.mc], ['Org', m=>m.org], ['Deployed', m=>m.deployed===0?'No':'Yes'],
     ...(multi?[['State', m=>STATE_NAMES[m.st]||m.st]]:[]),
     ['Territory', m=>m.territory], ['Cluster', m=>m.cluster],
     ['Area Manager', m=>m.am], ['AM Number', m=>m.amNum], ['Cluster Officer', m=>m.co], ['CO Mobile', m=>m.coMob],
@@ -991,7 +1096,7 @@ function downloadFilteredCSV(){
   const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1500);
 }
-function downloadBtnHTML(v){ return `<button data-act="download" title="Download the ${v.pinCount} currently-filtered machine rows as CSV" style="display:inline-flex;align-items:center;gap:6px;padding:7px 13px;background:#1B1A17;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">⤓ Download CSV · ${v.pinCount}</button>`; }
+function downloadBtnHTML(v){ const n=state.view==='pending'?v.pendCount:v.pinCount; return `<button data-act="download" title="Download the ${n} currently-filtered ${state.view==='pending'?'pending':'machine'} rows as CSV" style="display:inline-flex;align-items:center;gap:6px;padding:7px 13px;background:#1B1A17;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">⤓ Download CSV · ${n}</button>`; }
 
 function tablesViewHTML(v){
   return `<section style="padding:18px 22px">
@@ -1009,7 +1114,7 @@ function tablesViewHTML(v){
             <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.dotStyle)}"></span>
             <span style="${css(r.nameStyle)}">${E(r.name)}</span><span style="${css(r.subStyle)}">${E(r.sub)}</span>
           </div>
-          <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span></span></div>
+          <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span><span style="${css(r.orgOStyle)}"></span></span></div>
           <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
           <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;max-width:220px"><div style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="${css(r.paceBarStyle)}"></span></div></div><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span></div>
           <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${E(r.ranY)}</div>
@@ -1045,7 +1150,7 @@ function weatherViewHTML(v){
     <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
       <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;display:flex;align-items:center;justify-content:space-between">
         <div style="font-size:13px;font-weight:700">Territory summary <span style="font-weight:400;color:#9C988F">· all key metrics</span></div>
-        <div style="display:flex;align-items:center;gap:13px;font-size:11px;color:#6E6A62"><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:#F5821F"></span>UPL</span><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:#1FAE43"></span>SWAL</span></div>
+        <div style="display:flex;align-items:center;gap:13px;font-size:11px;color:#6E6A62"><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:#F5821F"></span>UPL</span><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:#1FAE43"></span>SWAL</span><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:#4C7399"></span>Open</span></div>
       </div>
       <div style="overflow-x:auto"><div style="min-width:920px">
         <div style="display:grid;grid-template-columns:160px 158px 76px 70px 100px 100px 92px 120px;gap:12px;padding:10px 18px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
@@ -1146,7 +1251,7 @@ function amViewHTML(v){
               <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.roleStyle)}">${E(r.role)}</span><span style="${css(r.dotStyle)}"></span>
               <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="${css(r.subStyle)}">${E(r.sub)}</div></div>
             </div>
-            <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span></span></div>
+            <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span><span style="${css(r.orgOStyle)}"></span></span></div>
             <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
             <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;max-width:200px"><div style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="${css(r.paceBarStyle)}"></span></div></div><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span></div>
             <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${E(r.ranY)}</div>
@@ -1176,13 +1281,43 @@ function bmViewHTML(v){
               <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.roleStyle)}">${E(r.role)}</span><span style="${css(r.dotStyle)}"></span>
               <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="${css(r.subStyle)}">${E(r.sub)}</div></div>
             </div>
-            <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span></span></div>
+            <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span><span style="${css(r.orgOStyle)}"></span></span></div>
             <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
             <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;max-width:200px"><div style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="${css(r.paceBarStyle)}"></span></div></div><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span></div>
             <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${E(r.ranY)}</div>
             ${v.adm?`<div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right;color:#D96A12">${E(r.iotRanY)}</div><div style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right;color:${r.pingInk||'#46433d'}">${E(r.pingLabel)}</div>`:''}
             <div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:500;text-align:right;color:#6E6A62">${E(r.opMap)}</div>
             <div style="display:flex;align-items:center;gap:9px"><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(r.contact)}</span><a href="${E(r.callTel)}" data-stop="1" style="${css(r.callStyle)}">${I.phoneS}</a></div>
+          </div>`).join('')}
+        </div>
+      </div></div>
+    </div>
+  </section>`;
+}
+function pendViewHTML(v){
+  const grid={display:'grid',gridTemplateColumns:'1fr 120px 220px 130px 150px',gap:'14px',alignItems:'center'};
+  const empty = !v.pendRows.length;
+  return `<section style="padding:18px 22px">
+    <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
+      <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="font-size:13px;font-weight:700">Pending Deployment <span style="font-weight:400;color:#9C988F">· ${v.pendCount} machines awaiting deployment · AM → Cluster Officer → Machine</span></div>
+        ${downloadBtnHTML(v)}
+      </div>
+      <div style="overflow-x:auto"><div style="min-width:840px">
+        <div style="${css({...grid,padding:'10px 18px',borderBottom:'1px solid #EFEDE7'})};font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">
+          <div>AM · Cluster Officer · Machine</div><div>Pending</div><div>Org mix</div><div>Org</div><div>Contact</div>
+        </div>
+        <div style="max-height:calc(100vh - 300px);overflow:auto">
+          ${empty?`<div style="padding:40px 18px;text-align:center;color:#9C988F;font-size:12.5px">No pending machines in this scope. ${v.tot.deployed?'Everything here is deployed. ':''}Madhya Pradesh has no pending list (all rows show as deployed).</div>`:
+          v.pendRows.map(r=>`<div ${r.click?rowDataAttrs(r.click):''} style="${css(r.rowStyle)}">
+            <div style="display:flex;align-items:center;gap:9px;min-width:0;padding-left:${r.indent}">
+              <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.roleStyle)}">${E(r.role)}</span><span style="${css(r.dotStyle)}"></span>
+              <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="${css(r.subStyle)}">${E(r.sub)}</div></div>
+            </div>
+            <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;color:${r.count?'#3A5B7D':'#C4BFB5'}">${E(r.count)}</div>
+            <div style="font-size:11px;color:#6E6A62;white-space:nowrap">${E(r.mix)}</div>
+            <div>${r.org?`<span style="${css(r.orgStyle)}">${E(r.org)}</span>`:''}</div>
+            <div style="display:flex;align-items:center;gap:9px">${r.contact?`<span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(r.contact)}</span><a href="${E(r.callTel)}" data-stop="1" style="${css(r.callStyle)}">${I.phoneS}</a>`:''}</div>
           </div>`).join('')}
         </div>
       </div></div>
@@ -1332,6 +1467,7 @@ function contentHTML(v){
     case 'machines': return machinesViewHTML(v);
     case 'am': return amViewHTML(v);
     case 'bm': return bmViewHTML(v);
+    case 'pending': return pendViewHTML(v);
     case 'leader': return leaderViewHTML(v);
     default: return mapViewHTML(v);
   }
@@ -1357,6 +1493,7 @@ function mobileHTML(v){
       <div style="display:flex;align-items:center;gap:13px;padding:10px 4px 2px;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#F5821F"></span><span style="font-size:11px;color:#6E6A62">UPL</span></div>
         <div style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#1FAE43"></span><span style="font-size:11px;color:#6E6A62">SWAL</span></div>
+        <div style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#4C7399"></span><span style="font-size:11px;color:#6E6A62">Open</span></div>
         <span style="font-size:10.5px;color:#9C988F">Tap a bubble to drill in</span>
       </div>
     </div>`;
@@ -1513,7 +1650,7 @@ app.addEventListener('click', e=>{
   const act=el.dataset.act;
   switch(act){
     case 'view': if(gateExpired()){ gateLock(); break; } mapLocked=true; scale=1; tx=0; ty=0; setState({view:el.dataset.view}); trackView(el.dataset.view); break;
-    case 'device': mapLocked=true; scale=1; tx=0; ty=0; setState(s=>{ const dev=s.device==='mobile'?'desktop':'mobile'; const view=(dev==='mobile'&&(s.view==='machines'||s.view==='am'||s.view==='bm'||s.view==='leader'))?'map':s.view; return {device:dev,selected:null,view}; }); break;
+    case 'device': mapLocked=true; scale=1; tx=0; ty=0; setState(s=>{ const dev=s.device==='mobile'?'desktop':'mobile'; const view=(dev==='mobile'&&(s.view==='machines'||s.view==='am'||s.view==='bm'||s.view==='pending'||s.view==='leader'))?'map':s.view; return {device:dev,selected:null,view}; }); break;
     case 'org': { const want=el.dataset.org; if(gateAllows(want)){ setState({org:want, bm:'', tm:''}); } else { gateShow(()=>setState({org: gateAllows(want)?want:gateDefaultOrg(), bm:'', tm:''}), `Enter PIN for ${want} access`, true); } break; }
     case 'metric': setState({metric:el.dataset.metric}); break;
     case 'lbscope': setState({lbScope:el.dataset.scope}); break;
@@ -1547,7 +1684,7 @@ const GATE = {
   SKEY: 'mpoc_gate',
   ROLES: {                       // sha256(pin) -> role scope. 2-D: org (allow) × state (states/switchStates).
     // Admin: all-India, org Both, state dropdown enabled (switchStates). One global admin.
-    'c64306c91d63dfeed553ccc9e3ba29bc7e84449a67c5714a2f5f497d140f845f': { id:'admin', role:'admin', org:'Both', allow:['Both','UPL','SWAL'], states:['*'], switchStates:true, label:'Admin · All India' }, // 0088
+    'c64306c91d63dfeed553ccc9e3ba29bc7e84449a67c5714a2f5f497d140f845f': { id:'admin', role:'admin', org:'Both', allow:['Both','UPL','SWAL','Open'], states:['*'], switchStates:true, label:'Admin · All India' }, // 0088
     // UPL/SWAL: locked to one state (switchStates:false → dropdown hidden), org forced. MP keeps its original PINs.
     '0ffe1abd1a08215353c233d6e009613e95eec4253832a761af28ff37ac5a150c': { id:'mp-upl',  role:'upl',  org:'UPL',  allow:['UPL'],  states:['MP'], switchStates:false, label:'Madhya Pradesh · UPL'  }, // 1111
     'edee29f882543b956620b26d0ee0e7e950399b1c4222f5de05e06425b4c995e9': { id:'mp-swal', role:'swal', org:'SWAL', allow:['SWAL'], states:['MP'], switchStates:false, label:'Madhya Pradesh · SWAL' }, // 2222

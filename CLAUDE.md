@@ -15,17 +15,26 @@ HTML/CSS/JS + inline-SVG maps. Same deploy shape as `din8shh.github.io/MP-map-vi
   centroids). Reused directly for map geometry.
 
 ## Data
-One row = one machine. Live source is a published-CSV Google Sheet (18 columns — see
-`CONFIG` in index.html). To go live, set `CONFIG.csvUrl` (Publish-to-web CSV link) or
-`CONFIG.sheetId`. Blank → runs on `machines.js` demo data. The parser matches columns
-by header **keyword** (tolerant of wording/order), keeps phones as text, parses the
-free-text `Scanned acres`, and handles missing location / unparseable tokens / empty
-fetch gracefully. Derived client-side: health (Breakdown>Idle>Active), achieved %,
-ran-yesterday, operator coverage.
+One row = one machine. Live source is a published-CSV Google Sheet (see `CONFIG` in
+index.html). To go live, set `CONFIG.csvUrl` (Publish-to-web CSV link) or `CONFIG.sheetId`.
+Blank → runs on `machines.js` demo data. The parser matches columns by header **keyword**
+(tolerant of wording/order), keeps phones as text, parses the free-text `Scanned acres`,
+and handles missing location / unparseable tokens / empty fetch gracefully. Derived
+client-side: health (Breakdown>Idle>Active), achieved %, ran-yesterday, operator coverage.
 
-Object shape: `{ mc, org, territory, cluster, co, coMob, am, amNum, target, achieved,
-mtd, acresY, scanned:[{product,acres}], breakdown(1/0), opMapped(1/0), opName, opNum,
-lat, lon }`.
+**Org** (`org`) is `UPL` / `SWAL` / `Open` — anything not UPL/SWAL is Open, EXCEPT MP
+`Unimart` rows, which stay UPL (business rule). **Deployed vs Plan:** the sheet carries a
+`Deployed status` (Yes/No) column and now includes not-yet-deployed rows. `ALL_ROWS` holds
+every parsed row; `ROWS` is the deployed subset (`deployed===1`) and drives every map/table/
+KPI view. MP is special: **all** MP sheet rows count as deployed regardless of status, and
+MP's plan is a fixed programme constant (`MP_PLAN` = UPL 270 / SWAL 230), not sheet-derived.
+Other states derive plan from `ALL_ROWS` (deployed + pending, incl. Open). `planTotals()` +
+`planScope()` compute the per-org Plan; the **Plan KPI and the Pending Deployment view are
+admin-only**. Global filter dropdowns (territory/AM/CO/BM/TM) scope to the selected state.
+
+Object shape: `{ mc, org, deployed(1/0), territory, cluster, co, coMob, am, amNum, target,
+achieved, mtd, acresY, scanned:[{product,acres}], breakdown(1/0), opMapped(1/0), opName,
+opNum, lat, lon }`.
 
 ## Not yet wired
 - Rainfall + spray-window weather are still **simulated** per territory (`rainOf`,
