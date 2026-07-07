@@ -662,12 +662,15 @@ function vals(){
   // Plan (admin only): a single number that tracks the active org — Both→total, UPL/SWAL/Open→that org's plan.
   const pt=planTotals();
   const planVal = S.org==='UPL'?pt.upl : S.org==='SWAL'?pt.swal : S.org==='Open'?pt.open : pt.total;
+  const orgSel = S.org!=='Both';   // a specific org is selected
+  // KPI order: Plan first (admin), then Deployed. When a specific org is picked, Deployed is redundant with the
+  // org card (all those machines are deployed) so it's hidden, and only the active org's card is shown.
   const kpis=[
-    {label:'Deployed',value:fmt(tot.deployed),unit:'',valStyle:mono22(C.ink)},
     ...(isAdmin()?[{label:'Plan',value:fmt(planVal),unit:'',valStyle:mono22(C.openD)}]:[]),
-    {label:'UPL',value:fmt(tot.upl),unit:'',valStyle:mono22(C.orange)},
-    {label:'SWAL',value:fmt(tot.swal),unit:'',valStyle:mono22(C.green)},
-    ...(tot.open>0?[{label:'Open',value:fmt(tot.open),unit:'',valStyle:mono22(C.open)}]:[]),
+    ...(orgSel?[]:[{label:'Deployed',value:fmt(tot.deployed),unit:'',valStyle:mono22(C.ink)}]),
+    ...((S.org==='Both'||S.org==='UPL')?[{label:'UPL',value:fmt(tot.upl),unit:'',valStyle:mono22(C.orange)}]:[]),
+    ...((S.org==='Both'||S.org==='SWAL')?[{label:'SWAL',value:fmt(tot.swal),unit:'',valStyle:mono22(C.green)}]:[]),
+    ...(((S.org==='Both'&&tot.open>0)||S.org==='Open')?[{label:'Open',value:fmt(tot.open),unit:'',valStyle:mono22(C.open)}]:[]),
     {label:'Active y’day',value:fmt(tot.Active),unit:'',valStyle:mono22(C.act)},
     {label:'Idle',value:fmt(tot.Idle),unit:'',valStyle:mono22(C.idle)},
     {label:'Breakdown',value:fmt(tot.Breakdown),unit:'',valStyle:mono22(C.brk)},
@@ -1309,7 +1312,7 @@ function pendViewHTML(v){
         </div>
         <div style="max-height:calc(100vh - 300px);overflow:auto">
           ${empty?`<div style="padding:40px 18px;text-align:center;color:#9C988F;font-size:12.5px">No pending machines in this scope. ${v.tot.deployed?'Everything here is deployed. ':''}Madhya Pradesh has no pending list (all rows show as deployed).</div>`:
-          v.pendRows.map(r=>`<div ${r.click?rowDataAttrs(r.click):''} style="${css(r.rowStyle)}">
+          v.pendRows.map(r=>`<div ${r.click?rowDataAttrs(r.click):''} style="${css({...grid,...r.rowStyle})}">
             <div style="display:flex;align-items:center;gap:9px;min-width:0;padding-left:${r.indent}">
               <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.roleStyle)}">${E(r.role)}</span><span style="${css(r.dotStyle)}"></span>
               <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="${css(r.subStyle)}">${E(r.sub)}</div></div>
