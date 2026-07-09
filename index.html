@@ -426,8 +426,28 @@ async function loadWeather(){
       wx[x.t.toLowerCase()]={ rain:(d.precipitation_sum||[])[0]||0, tmax:(d.temperature_2m_max||[])[0], tmin:(d.temperature_2m_min||[])[0], wind:(d.wind_speed_10m_max||[])[0]||0, code:(d.weather_code||[])[0] };
     });
     WX=wx; render();
+    trackMeteoUsage(terrs.length);
   }catch(e){ console.error('weather load failed (using simulated):', e); }
 }
+// --- Open-Meteo usage tracking (client-side, per IST day, persisted in localStorage) ---
+// One loadWeather() = 1 HTTP request but Open-Meteo weights multi-location calls,
+// so we also tally "call units" = number of locations sent (its dominant weight factor).
+function trackMeteoUsage(locations){
+  try{
+    const day=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'}); // "YYYY-MM-DD" in IST
+    const KEY='mp_meteo_usage';
+    let u; try{ u=JSON.parse(localStorage.getItem(KEY)||'null'); }catch(_){ u=null; }
+    if(!u || u.day!==day) u={ day, loads:0, units:0 };
+    u.loads+=1; u.units+=locations||0;
+    localStorage.setItem(KEY, JSON.stringify(u));
+    console.log(`Open-Meteo today (${day}): ${u.loads} load${u.loads===1?'':'s'} · ~${u.units.toLocaleString()} call units (${locations} locations this request)`);
+  }catch(_){ /* localStorage unavailable — tracking is best-effort */ }
+}
+// Read the tally any time from the console: meteoUsage()
+window.meteoUsage=function(){
+  try{ const u=JSON.parse(localStorage.getItem('mp_meteo_usage')||'null'); console.log('Open-Meteo usage:', u||'(none yet today)'); return u; }
+  catch(_){ return null; }
+};
 const acresBand = a => a>10?0 : a>=5?1 : a>=1?2 : 3;
 const acresColor = a => ['#0E7C39','#56B36C','#A9D8B4','#CBC6BC'][acresBand(a)];
 
