@@ -410,30 +410,52 @@ function wxAt(terr,st){
   const hits=Object.keys(WX).filter(k=>k.slice(k.indexOf('|')+1)===t);
   return hits.length===1 ? WX[hits[0]] : undefined;
 }
-let WX_DATES=[];             // ISO date per day index, aligned with the days arrays
-const WX_DAYS=5;             // yesterday + today + next 3
+let WX_DATES=[];             // ISO date per ABSOLUTE day index, aligned with the days arrays
+// TWO indexing schemes live here, so keep them straight:
+//  · ABSOLUTE index = position in days[] / WX_DATES, 0..6 = day-3 … day+3. What the API returns.
+//  · TAB index      = what state.wxDay holds, 0..4 = yesterday, today, +1, +2, +3. What the UI shows.
+// wxAbs() converts tab -> absolute. The table's cumulative columns address absolute indices directly.
+const WX_PAST=3, WX_FWD=4;                 // Open-Meteo past_days / forecast_days
+const WX_DAYS=WX_PAST+WX_FWD;              // 7 = day-3 … day+3
+const WX_I_YDAY=WX_PAST-1;                 // 2 — yesterday
+const WX_I_TODAY=WX_PAST;                  // 3 — today
+const WX_TABS=WX_DAYS-WX_I_YDAY;           // 5 tabs: yesterday … +3 (unchanged UI)
 const WX_WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-function wxDayIdx(i){ i=(i|0); return i<0?0:(i>=WX_DAYS?WX_DAYS-1:i); }
+function wxDayIdx(i){ i=(i|0); return i<0?0:(i>=WX_TABS?WX_TABS-1:i); }   // clamp a TAB index
+const wxAbs = tab => WX_I_YDAY + wxDayIdx(tab);                            // tab -> absolute
 // Tab label for a day: the two anchors are named, the rest fall back to weekday (or +N without data).
 function wxDayLabel(i){
   if(i===0) return 'Yesterday';
   if(i===1) return 'Today';
-  const d=WX_DATES[i]; if(!d) return '+'+(i-1);
+  const d=WX_DATES[wxAbs(i)]; if(!d) return '+'+(i-1);
   const dt=new Date(d+'T00:00:00'); return isNaN(dt.getTime()) ? '+'+(i-1) : WX_WD[dt.getDay()];
 }
 // Short date under the tab, e.g. "12 Jul". Blank until the fetch lands.
-function wxDayDate(i){
-  const d=WX_DATES[i]; if(!d) return '';
+function wxDayDate(i){ return wxDateAbs(wxAbs(i)); }
+function wxDateAbs(ai){
+  const d=WX_DATES[ai]; if(!d) return '';
   const dt=new Date(d+'T00:00:00'); if(isNaN(dt.getTime())) return '';
   return dt.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()];
 }
 // Phrase used in headings/legends so they track the selected day.
 function wxDayPhrase(i){ return i===0?"Yesterday's rainfall":(i===1?"Today's rainfall":'Rainfall forecast · '+wxDayLabel(i)); }
-// Day 0 keeps the original hash so demo/fallback data is unchanged; later days vary off it.
-function mockRainOf(terr,di){ di=wxDayIdx(di==null?0:di); const h=hash('rain2'+terr+(di?'#'+di:'')); const base=((h>>>4)%1000)/1000; return Math.round(Math.pow(base,1.7)*44*10)/10; }
-function rainOf(terr,di,st){ di=wxDayIdx(di==null?state.wxDay:di);
-  const w=wxAt(terr,st), d=w&&w.days&&w.days[di];
-  return (d&&d.rain!=null)? Math.round(d.rain*10)/10 : mockRainOf(terr||st||'',di); }
+// `off` is the offset from YESTERDAY (0 = yesterday, negative = further back), so offset 0 keeps the
+// original hash and demo/fallback data is unchanged; every other day varies off it.
+// hash() is h*31+charCode, so keys ending '#1'/'#2'/'#3' land 1 apart and the >>>4 below threw the
+// difference away — every forecast day rendered the SAME simulated value (and a 3-day total came out
+// as exactly 3x it). Re-hash the non-zero offsets so adjacent days actually diverge.
+function mockRainOf(terr,off){ off=(off|0);
+  let h=hash('rain2'+terr+(off?'#'+off:'')); if(off) h=hash(h+':'+off);
+  const base=((h>>>4)%1000)/1000; return Math.round(Math.pow(base,1.7)*44*10)/10; }
+// Rain at an ABSOLUTE day index, live where we have it and simulated where we don't.
+function rainAbs(terr,ai,st){
+  const w=wxAt(terr,st), d=w&&w.days&&w.days[ai];
+  return (d&&d.rain!=null)? Math.round(d.rain*10)/10 : mockRainOf(terr||st||'', ai-WX_I_YDAY);
+}
+// Cumulative rain over an inclusive ABSOLUTE range — used by the Past 3d / Next 3d columns.
+function rainRange(terr,a,b,st){ let s=0; for(let i=a;i<=b;i++) s+=rainAbs(terr,i,st); return Math.round(s*10)/10; }
+// Rain for a TAB index (map, wettest list) — defaults to the selected tab.
+function rainOf(terr,di,st){ return rainAbs(terr, wxAbs(di==null?state.wxDay:di), st); }
 // distinct rainfall buckets (high/med/low visually separable) instead of a continuous ramp
 const RAIN_BUCKETS=[
   {max:0.1, c:'#EDEAE2', l:'Dry'},
@@ -448,8 +470,8 @@ function rainInk(mm){ return (mm||0)>=5?'#FFFFFF':'#1B1A17'; }
 function rainLegendHTML(){ return `<div style="display:flex;flex-direction:column;gap:4px">${RAIN_BUCKETS.map(b=>`<div style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border-radius:3px;flex-shrink:0;background:${b.c};border:1px solid rgba(0,0,0,.06)"></span><span style="font-size:11px;color:#6E6A62">${b.l}${b.max>=1e9?' mm':b.max===0.1?'':' mm'}</span></div>`).join('')}</div>`; }
 const SPRAY={ good:{label:'Good spray day',icon:'☀️',bg:C.softG,border:'#C6EBD1',ink:C.greenD}, marg:{label:'Marginal window',icon:'⛅',bg:C.softA,border:'#F0DFB0',ink:'#9A6B05'}, hold:{label:'Hold — high wind / rain',icon:'🌧️',bg:C.softR,border:'#F2C9C2',ink:'#B0301F'} };
 function mockWeather(terr){ const h=hash(terr), k=h%3; const temp=28+(h>>3)%7, wind=4+(h>>5)%16, rain=k===2?((h>>2)%9)/10+0.6:0; const w=[SPRAY.good,SPRAY.marg,SPRAY.hold][k]; return { ...w, line:`${temp}° · wind ${wind} km/h · rain ${rain.toFixed(1)} mm` }; }
-// Spray window stays anchored to yesterday (day 0) — the Weather page's day tabs drive rainfall only.
-function weather(terr,st){ const w=wxAt(terr,st), d0=w&&w.days&&w.days[0]; if(!d0) return mockWeather(terr||st||'');
+// Spray window stays anchored to yesterday (absolute WX_I_YDAY) — the day tabs drive rainfall only.
+function weather(terr,st){ const w=wxAt(terr,st), d0=w&&w.days&&w.days[WX_I_YDAY]; if(!d0) return mockWeather(terr||st||'');
   const rain=d0.rain||0, wind=Math.round(d0.wind||0), temp=Math.round(d0.tmax!=null?d0.tmax:0);
   const v = (rain>=5||wind>=20)?SPRAY.hold : (rain>=1||wind>=15)?SPRAY.marg : SPRAY.good;   // spray window: hold if wet/windy
   return { ...v, line:`${temp}° · wind ${wind} km/h · rain ${rain.toFixed(1)} mm` };
@@ -478,7 +500,7 @@ async function loadWeather(){
     for(let b=0;b<pts.length;b+=WX_BATCH){
       const batch=pts.slice(b,b+WX_BATCH);
       const lats=batch.map(x=>x.c[1]).join(','), lons=batch.map(x=>x.c[0]).join(',');
-      const url=`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&past_days=1&forecast_days=4&timezone=Asia%2FKolkata&wind_speed_unit=kmh`;
+      const url=`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&past_days=${WX_PAST}&forecast_days=${WX_FWD}&timezone=Asia%2FKolkata&wind_speed_unit=kmh`;
       const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
       const j=await res.json(), arr=Array.isArray(j)?j:[j];
       // Results come back positionally, one per requested location — that alignment is the only thing
@@ -843,10 +865,17 @@ function vals(){
   });
 
   // Weather
-  const terrTable=terrEntries.slice().sort((a,b)=>b.r.deployed-a.r.deployed).map(({name,list,r})=>{ const tt=r.deployed||1; const rain=rainOf(name,null,list[0]&&list[0].st);
-    return { name, deployed:r.deployed, upl:r.upl, swal:r.swal, active:r.Active, idle:r.Idle, breakdown:r.Breakdown, acresY:fmt(r.acresY), mtd:fmt(r.mtd), rain:rain.toFixed(1),
+  // Rain columns are FIXED windows (not the selected tab): the 3 completed days ending yesterday,
+  // yesterday, today, then the next 3 days. Cumulative windows are coloured on their daily average
+  // so a 3-day total isn't always the darkest bucket on the scale.
+  const terrTable=terrEntries.slice().sort((a,b)=>b.r.deployed-a.r.deployed).map(({name,list,r})=>{ const tt=r.deployed||1; const st=list[0]&&list[0].st;
+    const past3=rainRange(name,0,WX_I_YDAY,st), yday=rainAbs(name,WX_I_YDAY,st),
+          today=rainAbs(name,WX_I_TODAY,st), next3=rainRange(name,WX_I_TODAY+1,WX_DAYS-1,st);
+    return { name, deployed:r.deployed, upl:r.upl, swal:r.swal, active:r.Active, idle:r.Idle, breakdown:r.Breakdown, acresY:fmt(r.acresY), mtd:fmt(r.mtd),
+      past3:past3.toFixed(1), rain:yday.toFixed(1), today:today.toFixed(1), next3:next3.toFixed(1),
       uStyle:{width:(100*r.upl/tt)+'%',background:C.orange,display:'block'}, sStyle:{width:(100*r.swal/tt)+'%',background:C.green,display:'block'},
-      rainSwatch:'background:'+rainColor(rain) }; });
+      past3Swatch:'background:'+rainColor(past3/WX_PAST), rainSwatch:'background:'+rainColor(yday),
+      todaySwatch:'background:'+rainColor(today), next3Swatch:'background:'+rainColor(next3/(WX_DAYS-1-WX_I_TODAY)) }; });
   const wetTerr=terrEntries.map(({name,list,r})=>({name,rain:rainOf(name,null,list[0]&&list[0].st),ran:r.ranY})).sort((a,b)=>b.rain-a.rain).slice(0,7).map(w=>({ name:w.name, rain:w.rain.toFixed(1), ran:w.ran, swatch:'background:'+rainColor(w.rain) }));
 
   // AM view
@@ -1246,14 +1275,27 @@ function wxDayStripHTML(cur,mob){
       <span style="display:block;font-size:${mob?'11px':'11.5px'};pointer-events:none">${wxDayLabel(i)}</span>
       ${dt?`<span style="display:block;font-size:9.5px;font-weight:500;font-family:'IBM Plex Mono';color:${on?'#807c73':'#A9A49B'};pointer-events:none">${dt}</span>`:''}
     </button>`; };
-  return `<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px${mob?';width:100%':''}">${Array.from({length:WX_DAYS},(_,i)=>btn(i)).join('')}</div>`;
+  return `<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px${mob?';width:100%':''}">${Array.from({length:WX_TABS},(_,i)=>btn(i)).join('')}</div>`;
+}
+// Territory-summary grid: 7 ops columns + the 4 fixed rainfall columns.
+const WX_TCOLS='grid-template-columns:160px 158px 76px 70px 100px 100px 92px 96px 84px 84px 96px';
+// " · 19–21 Jul" for a column header tooltip; blank until the fetch lands.
+function wxRangeTitle(a,b){
+  const s=wxDateAbs(a), e=wxDateAbs(b); if(!s||!e) return '';
+  return ' · ' + (s===e ? s : s+' – '+e);
+}
+// One rainfall cell. `sep` draws the divider that opens the rainfall block.
+function rainCell(val,swatch,sep){
+  return `<div style="display:flex;align-items:center;justify-content:flex-end;gap:7px${sep?';border-left:1px solid #F2F0EB;padding-left:12px':''}">
+    <span style="width:11px;height:11px;border-radius:3px;flex-shrink:0;${swatch}"></span>
+    <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;color:#3A6FA0">${E(val)}</span></div>`;
 }
 function weatherViewHTML(v){
   return `<section style="padding:18px 22px;display:flex;flex-direction:column;gap:16px">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase">Rainfall day</div>
       <div style="min-width:320px">${wxDayStripHTML(v.wxDay,false)}</div>
-      <div style="font-size:11px;color:#9C988F">${v.wxDay===0?'Observed':'Forecast'} · drives the map, the wettest list and the Rain column below</div>
+      <div style="font-size:11px;color:#9C988F">${v.wxDay===0?'Observed':'Forecast'} · drives the map and the wettest list · the table below always shows all four windows</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 270px;gap:16px">
       <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;display:flex;flex-direction:column">
@@ -1277,14 +1319,18 @@ function weatherViewHTML(v){
     </div>
     <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
       <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;display:flex;align-items:center;justify-content:space-between">
-        <div style="font-size:13px;font-weight:700">Territory summary <span style="font-weight:400;color:#9C988F">· all key metrics</span></div>
+        <div style="font-size:13px;font-weight:700">Territory summary <span style="font-weight:400;color:#9C988F">· all key metrics · rainfall in mm (Past 3d and Next 3d are cumulative)</span></div>
         <div style="display:flex;align-items:center;gap:13px;font-size:11px;color:#6E6A62"><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:#F5821F"></span>UPL</span><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:#1FAE43"></span>SWAL</span><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:#4C7399"></span>Open</span></div>
       </div>
-      <div style="overflow-x:auto"><div style="min-width:920px">
-        <div style="display:grid;grid-template-columns:160px 158px 76px 70px 100px 100px 92px 120px;gap:12px;padding:10px 18px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
-          <div>Territory</div><div>Deployed (UPL / SWAL)</div><div style="text-align:right">Active</div><div style="text-align:right">Idle</div><div style="text-align:right">Breakdown</div><div style="text-align:right">Acres y'day</div><div style="text-align:right">MTD ac</div><div style="text-align:right">Rain ${v.wxDay===0?"y'day":E(wxDayLabel(v.wxDay))}</div>
+      <div style="overflow-x:auto"><div style="min-width:1260px">
+        <div style="display:grid;${WX_TCOLS};gap:12px;padding:10px 18px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
+          <div>Territory</div><div>Deployed (UPL / SWAL)</div><div style="text-align:right">Active</div><div style="text-align:right">Idle</div><div style="text-align:right">Breakdown</div><div style="text-align:right">Acres y'day</div><div style="text-align:right">MTD ac</div>
+          <div style="text-align:right;color:#3A6FA0;border-left:1px solid #E9E6DF;padding-left:12px" title="Cumulative rainfall over the 3 completed days ending yesterday${wxRangeTitle(0,WX_I_YDAY)}">Past 3d ▸</div>
+          <div style="text-align:right;color:#3A6FA0" title="Rainfall yesterday${wxRangeTitle(WX_I_YDAY,WX_I_YDAY)}">Y'day</div>
+          <div style="text-align:right;color:#3A6FA0" title="Rainfall today${wxRangeTitle(WX_I_TODAY,WX_I_TODAY)}">Today</div>
+          <div style="text-align:right;color:#3A6FA0" title="Forecast cumulative rainfall over the next 3 days${wxRangeTitle(WX_I_TODAY+1,WX_DAYS-1)}">▸ Next 3d</div>
         </div>
-        ${v.terrTable.map(t=>`<div data-act="terr" data-terr="${E(t.name)}" style="display:grid;grid-template-columns:160px 158px 76px 70px 100px 100px 92px 120px;gap:12px;padding:11px 18px;border-bottom:1px solid #F4F2EE;align-items:center;cursor:pointer">
+        ${v.terrTable.map(t=>`<div data-act="terr" data-terr="${E(t.name)}" style="display:grid;${WX_TCOLS};gap:12px;padding:11px 18px;border-bottom:1px solid #F4F2EE;align-items:center;cursor:pointer">
           <div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(t.name)}</div>
           <div>
             <div style="display:flex;align-items:baseline;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${t.deployed}</span><span style="font-size:10.5px"><span style="color:#D96A12;font-weight:600">${t.upl}</span><span style="color:#C9C4BA"> / </span><span style="color:#159234;font-weight:600">${t.swal}</span></span></div>
@@ -1295,7 +1341,7 @@ function weatherViewHTML(v){
           <div style="font-family:'IBM Plex Mono';font-size:12.5px;color:#DC3A2B;font-weight:600;text-align:right">${t.breakdown}</div>
           <div style="font-family:'IBM Plex Mono';font-size:12.5px;text-align:right">${E(t.acresY)}</div>
           <div style="font-family:'IBM Plex Mono';font-size:12.5px;color:#6E6A62;text-align:right">${E(t.mtd)}</div>
-          <div style="display:flex;align-items:center;justify-content:flex-end;gap:7px"><span style="width:11px;height:11px;border-radius:3px;flex-shrink:0;${t.rainSwatch}"></span><span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;color:#3A6FA0">${E(t.rain)}</span></div>
+          ${rainCell(t.past3,t.past3Swatch,true)}${rainCell(t.rain,t.rainSwatch)}${rainCell(t.today,t.todaySwatch)}${rainCell(t.next3,t.next3Swatch)}
         </div>`).join('')}
       </div></div>
     </div>
