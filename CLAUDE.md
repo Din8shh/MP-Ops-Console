@@ -14,6 +14,31 @@ HTML/CSS/JS + inline-SVG maps. Same deploy shape as `din8shh.github.io/MP-map-vi
 - `mapdata.js` — `export const BASE` (MP district GeoJSON) + `COORDS` (territory
   centroids). Reused directly for map geometry.
 
+## Layout / responsive
+`state.device` picks `desktopHTML` vs `mobileHTML`; it is seeded from — and re-synced on every
+crossing of — the `(max-width:820px)` media query (`isPhone()`, `onBreakpoint`). `mobileHTML`
+renders two ways off the same markup: on a real phone it is **full-bleed** (no bezel/notch/desktop
+toggle, `100dvh`, `env(safe-area-inset-*)` padding, viewport-relative map heights, touch-sized
+controls); above the breakpoint it keeps the 392×840 handset frame so the layout stays previewable
+from the desktop rail's phone button. The map SVG carries `touch-action:auto` while locked (a finger
+scrolls the page over it) and `none` once unlocked, where two-pointer pinch zooms.
+
+**The phone carries the whole dashboard** — every view the role allows, plus the full filter set.
+Both paths consume the *same* `vals()` output; only presentation differs. Desktop tables are
+fixed-px grids (~940px+) that cannot reflow, so on mobile each hierarchy row (territory / AM / BM /
+pending) renders through one shared card builder, `mHierCardHTML`, with `r.indent` becoming a left
+rule + inset. Drill-down still runs on `state.expanded` and the shared `data-act="exp"` handler, so
+Territory→Cluster→Machine behaves identically on both.
+
+- **Nav** — `M_VIEWS` (role-filtered by `mViews()`) fills a bottom bar: first `M_PRIMARY` (4) inline,
+  the rest behind "More". `state.sheet` (`null|'filters'|'more'`) drives the overlays via `mSheetHTML`.
+- **Filters** — `mFiltersHTML` reuses the desktop element IDs (`stSelect`, `terrSelect`, …,
+  `searchInput`), so the existing `change`/`input` handlers cover it with no extra wiring. Keep those
+  IDs in sync if the desktop bar changes. The header button badges `activeFilterCount()`.
+- **Paging** — the mobile machine list is capped at `state.listLimit` (`MLIST_PAGE`, 60) with a
+  Load-more button. `render()` resets it whenever the filter signature changes, so a stale offset is
+  never applied to a freshly-filtered (shorter) set.
+
 ## Data
 One row = one machine. Live source is a published-CSV Google Sheet (see `CONFIG` in
 index.html). To go live, set `CONFIG.csvUrl` (Publish-to-web CSV link) or `CONFIG.sheetId`.
