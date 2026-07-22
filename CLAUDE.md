@@ -36,9 +36,21 @@ Object shape: `{ mc, org, deployed(1/0), territory, cluster, co, coMob, am, amNu
 achieved, mtd, acresY, scanned:[{product,acres}], breakdown(1/0), opMapped(1/0), opName,
 opNum, lat, lon }`.
 
-## Not yet wired
-- Rainfall + spray-window weather are still **simulated** per territory (`rainOf`,
-  `weather`). Wire to Open-Meteo (per-territory centroid, "yesterday" Asia/Kolkata) later.
+## Weather (live)
+Rainfall + spray window come from **Open-Meteo** (Asia/Kolkata, `past_days=1&forecast_days=4`),
+fetched once after the CSV lands. `WX` is keyed **`"ST|territory"`** — state-qualified, because one
+fetch covers every state in the sheet and district names are not globally unique. Value shape is
+`{ days:[{rain,tmax,tmin,wind,code}] }` with **index 0 = yesterday**, 1 = today, 2–4 = next three.
+A blank territory is that state's **statewide** point (mobile banner / national choropleth);
+state `IN` + blank is the all-India point. `rainOf(terr,di,st)` / `weather(terr,st)` — always pass
+`st` (take it off the row); the no-`st` fallbacks only guess when a name is unique across states.
+
+Centroids come from `WX_GEO` (`buildWxGeo`), which merges **every** state's `COORDS` via
+`GEO_LOADERS`/`GEO_CACHE`. This is deliberately independent of `COORDS`/`coordsOf`, which only ever
+hold the *active* state's districts — reading those at fetch time silently dropped every non-MP
+territory and fell back to `mockRainOf`, presenting simulated rain as live. The fetch is
+state-complete, so changing `state.st` needs no re-fetch. Territories with no centroid (sheet-side
+junk names) still fall back to the mock; the load logs how many.
 
 ## Local preview
 Serve the folder over http (ES-module imports need a server, not file://), e.g.

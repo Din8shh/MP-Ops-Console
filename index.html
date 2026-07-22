@@ -390,9 +390,26 @@ function rowBars(r){ const tt=r.deployed||1, ht=(r.Active+r.Idle+r.Breakdown)||1
   acresLabel:`${fmt(r.achieved)} / ${fmt(r.target)}`, ranY:fmt(r.acresY), iotRanY:fmt(r.iotAcresY||0), pingLabel:`${r.pinged}/${r.deployed}`, pingInk:'#46433d' }; }
 function hash(str){ let h=0; for(let i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))>>>0; return h; }
 function lerpHex(a,b,t){ t=Math.max(0,Math.min(1,t)); const pa=[1,3,5].map(i=>parseInt(a.substr(i,2),16)), pb=[1,3,5].map(i=>parseInt(b.substr(i,2),16)); return '#'+pa.map((v,i)=>Math.round(v+(pb[i]-v)*t).toString(16).padStart(2,'0')).join(''); }
-// territory(lowercase) -> { days:[{rain,tmax,tmin,wind,code}] } — live Open-Meteo.
+// "ST|territory(lowercase)" -> { days:[{rain,tmax,tmin,wind,code}] } — live Open-Meteo.
 // Day index 0 = yesterday (IST), 1 = today, 2..4 = the next three days.
+// Keys are STATE-QUALIFIED: district names repeat across states, and one fetch now covers every
+// state in the sheet, so a bare territory name is ambiguous. Blank territory = the STATEWIDE point
+// (mobile banner / national choropleth); state 'IN' with blank territory = the all-India point.
 let WX={};
+const wxKey=(st,terr)=>String(st||'').toUpperCase().trim()+'|'+String(terr||'').trim().toLowerCase();
+// Which statewide point represents the current scope: the selected state, the sole state in the
+// data, or 'IN' (all-India) when the view spans several states.
+function wxScopeState(){ if(state.st) return state.st; const sts=[...new Set(ROWS.map(m=>m.st))]; return sts.length===1 ? sts[0] : 'IN'; }
+// Resolve a (territory,state) pair to its WX entry. `st` should always be passed by callers — the
+// fallbacks only cover a caller that has no row to hand: the selected state, then a bare-name match
+// but ONLY when that name is unique across states (otherwise we'd silently show another state's rain).
+function wxAt(terr,st){
+  const t=String(terr||'').trim().toLowerCase();
+  if(st) return WX[wxKey(st,t)];
+  if(state.st && WX[wxKey(state.st,t)]) return WX[wxKey(state.st,t)];
+  const hits=Object.keys(WX).filter(k=>k.slice(k.indexOf('|')+1)===t);
+  return hits.length===1 ? WX[hits[0]] : undefined;
+}
 let WX_DATES=[];             // ISO date per day index, aligned with the days arrays
 const WX_DAYS=5;             // yesterday + today + next 3
 const WX_WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -414,9 +431,9 @@ function wxDayDate(i){
 function wxDayPhrase(i){ return i===0?"Yesterday's rainfall":(i===1?"Today's rainfall":'Rainfall forecast · '+wxDayLabel(i)); }
 // Day 0 keeps the original hash so demo/fallback data is unchanged; later days vary off it.
 function mockRainOf(terr,di){ di=wxDayIdx(di==null?0:di); const h=hash('rain2'+terr+(di?'#'+di:'')); const base=((h>>>4)%1000)/1000; return Math.round(Math.pow(base,1.7)*44*10)/10; }
-function rainOf(terr,di){ di=wxDayIdx(di==null?state.wxDay:di);
-  const w=WX[String(terr||'').trim().toLowerCase()], d=w&&w.days&&w.days[di];
-  return (d&&d.rain!=null)? Math.round(d.rain*10)/10 : mockRainOf(terr,di); }
+function rainOf(terr,di,st){ di=wxDayIdx(di==null?state.wxDay:di);
+  const w=wxAt(terr,st), d=w&&w.days&&w.days[di];
+  return (d&&d.rain!=null)? Math.round(d.rain*10)/10 : mockRainOf(terr||st||'',di); }
 // distinct rainfall buckets (high/med/low visually separable) instead of a continuous ramp
 const RAIN_BUCKETS=[
   {max:0.1, c:'#EDEAE2', l:'Dry'},
@@ -432,29 +449,53 @@ function rainLegendHTML(){ return `<div style="display:flex;flex-direction:colum
 const SPRAY={ good:{label:'Good spray day',icon:'☀️',bg:C.softG,border:'#C6EBD1',ink:C.greenD}, marg:{label:'Marginal window',icon:'⛅',bg:C.softA,border:'#F0DFB0',ink:'#9A6B05'}, hold:{label:'Hold — high wind / rain',icon:'🌧️',bg:C.softR,border:'#F2C9C2',ink:'#B0301F'} };
 function mockWeather(terr){ const h=hash(terr), k=h%3; const temp=28+(h>>3)%7, wind=4+(h>>5)%16, rain=k===2?((h>>2)%9)/10+0.6:0; const w=[SPRAY.good,SPRAY.marg,SPRAY.hold][k]; return { ...w, line:`${temp}° · wind ${wind} km/h · rain ${rain.toFixed(1)} mm` }; }
 // Spray window stays anchored to yesterday (day 0) — the Weather page's day tabs drive rainfall only.
-function weather(terr){ const w=WX[String(terr||'').trim().toLowerCase()], d0=w&&w.days&&w.days[0]; if(!d0) return mockWeather(terr);
+function weather(terr,st){ const w=wxAt(terr,st), d0=w&&w.days&&w.days[0]; if(!d0) return mockWeather(terr||st||'');
   const rain=d0.rain||0, wind=Math.round(d0.wind||0), temp=Math.round(d0.tmax!=null?d0.tmax:0);
   const v = (rain>=5||wind>=20)?SPRAY.hold : (rain>=1||wind>=15)?SPRAY.marg : SPRAY.good;   // spray window: hold if wet/windy
   return { ...v, line:`${temp}° · wind ${wind} km/h · rain ${rain.toFixed(1)} mm` };
 }
+const WX_BATCH=100;   // locations per Open-Meteo request — keeps the URL well inside any query-length limit
+// Fetch live weather for EVERY (state, territory) in the sheet in one pass, plus a statewide point per
+// state and one all-India point for the mobile banner. Deliberately state-complete: nothing here reads
+// the active geometry (COORDS/coordsOf), so the result does not depend on which state's map happens to
+// be loaded, and switching state.st needs no re-fetch.
 async function loadWeather(){
   try{
-    const terrs=[...new Set(ROWS.map(m=>m.territory))].map(t=>({t,c:coordsOf(t)})).filter(x=>x.c);
-    if(!terrs.length) return;
-    const ax=terrs.reduce((s,x)=>s+x.c[0],0)/terrs.length, ay=terrs.reduce((s,x)=>s+x.c[1],0)/terrs.length;
-    terrs.push({t:'Madhya Pradesh',c:[ax,ay]});   // statewide point for the unfiltered mobile banner
-    const lats=terrs.map(x=>x.c[1]).join(','), lons=terrs.map(x=>x.c[0]).join(',');
-    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&past_days=1&forecast_days=4&timezone=Asia%2FKolkata&wind_speed_unit=kmh`;
-    const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
-    const j=await res.json(), arr=Array.isArray(j)?j:[j], wx={}; let dates=[];
-    arr.forEach((loc,i)=>{ const x=terrs[i], d=loc&&loc.daily; if(!x||!d) return;
-      const n=Math.min(WX_DAYS,(d.time||[]).length||WX_DAYS), days=[];
-      for(let k=0;k<n;k++) days.push({ rain:(d.precipitation_sum||[])[k]||0, tmax:(d.temperature_2m_max||[])[k], tmin:(d.temperature_2m_min||[])[k], wind:(d.wind_speed_10m_max||[])[k]||0, code:(d.weather_code||[])[k] });
-      if(d.time && d.time.length>dates.length) dates=d.time.slice(0,WX_DAYS);
-      wx[x.t.toLowerCase()]={ days };
+    const states=[...new Set(ROWS.map(m=>m.st))].filter(Boolean);
+    await buildWxGeo(states);
+    const seen=new Set(), pts=[], byState={};
+    ROWS.forEach(m=>{
+      const k=wxKey(m.st,m.territory); if(seen.has(k)) return; seen.add(k);
+      const c=wxCoords(m.st,m.territory); if(!c) return;   // territory with no centroid (junk/unmapped name) — no live point
+      pts.push({k,c}); (byState[m.st]||(byState[m.st]=[])).push(c);
     });
+    if(!pts.length) return;
+    const avg=cs=>[cs.reduce((s,c)=>s+c[0],0)/cs.length, cs.reduce((s,c)=>s+c[1],0)/cs.length];
+    const allC=pts.map(p=>p.c);
+    for(const st in byState) pts.push({ k:wxKey(st,''), c:avg(byState[st]) });   // statewide banner point
+    pts.push({ k:wxKey('IN',''), c:avg(allC) });                                 // all-India banner point
+    const wx={}; let dates=[];
+    for(let b=0;b<pts.length;b+=WX_BATCH){
+      const batch=pts.slice(b,b+WX_BATCH);
+      const lats=batch.map(x=>x.c[1]).join(','), lons=batch.map(x=>x.c[0]).join(',');
+      const url=`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&past_days=1&forecast_days=4&timezone=Asia%2FKolkata&wind_speed_unit=kmh`;
+      const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
+      const j=await res.json(), arr=Array.isArray(j)?j:[j];
+      // Results come back positionally, one per requested location — that alignment is the only thing
+      // tying a reading to a district. If the count ever disagrees, drop the batch to simulated data
+      // rather than risk pinning one district's rainfall onto another.
+      if(arr.length!==batch.length){ console.warn(`weather: expected ${batch.length} locations, got ${arr.length} — skipping batch (simulated)`); continue; }
+      arr.forEach((loc,i)=>{ const x=batch[i], d=loc&&loc.daily; if(!x||!d) return;
+        const n=Math.min(WX_DAYS,(d.time||[]).length||WX_DAYS), days=[];
+        for(let k=0;k<n;k++) days.push({ rain:(d.precipitation_sum||[])[k]||0, tmax:(d.temperature_2m_max||[])[k], tmin:(d.temperature_2m_min||[])[k], wind:(d.wind_speed_10m_max||[])[k]||0, code:(d.weather_code||[])[k] });
+        if(d.time && d.time.length>dates.length) dates=d.time.slice(0,WX_DAYS);
+        wx[x.k]={ days };
+      });
+    }
     WX=wx; WX_DATES=dates; render();
-    trackMeteoUsage(terrs.length);
+    trackMeteoUsage(pts.length);
+    const missing=seen.size-Object.keys(byState).reduce((s,st)=>s+byState[st].length,0);
+    console.log(`Open-Meteo: live weather for ${Object.keys(wx).length} points across ${states.join(', ')}` + (missing>0?` · ${missing} territor${missing===1?'y':'ies'} had no centroid (simulated)`:''));
   }catch(e){ console.error('weather load failed (using simulated):', e); }
 }
 // --- Open-Meteo usage tracking (client-side, per IST day, persisted in localStorage) ---
@@ -506,6 +547,21 @@ const GEO_CACHE = { MP:{BASE:MP_BASE, COORDS:MP_COORDS} };
 let activeGeoKey='MP';
 const knownGeo = code => code==='MP' || !!GEO_LOADERS[code];
 async function ensureGeo(key){ if(!GEO_CACHE[key]){ if(!GEO_LOADERS[key]) return null; const m=await GEO_LOADERS[key](); GEO_CACHE[key]={BASE:m.BASE, COORDS:m.COORDS}; } return GEO_CACHE[key]; }
+// --- cross-state centroid registry (weather) ---------------------------------
+// COORDS/COORDS_LC only ever hold the ACTIVE state's districts — or, on the national map, STATE
+// centroids. Weather needs every state's districts at once, so mirror them into one state-qualified
+// lookup that no geometry swap can disturb. Populating GEO_CACHE here also warms the state switcher.
+const WX_GEO={};                       // "ST|terrlower" -> [lon,lat]
+async function buildWxGeo(states){
+  for(const st of states){
+    if(!knownGeo(st)) continue;
+    const g=await ensureGeo(st); if(!g||!g.COORDS) continue;
+    for(const k in g.COORDS) WX_GEO[wxKey(st,k)]=g.COORDS[k];
+  }
+}
+// Territory names arrive alias-resolved (aliasTerr) but not necessarily in the map's casing, so match
+// case-insensitively — wxKey lowercases both sides.
+const wxCoords=(st,terr)=>WX_GEO[wxKey(st,terr)];
 function applyGeo(key){ const g=GEO_CACHE[key]; if(!g) return false; BASE=g.BASE; COORDS=g.COORDS; activeGeoKey=key; rebuildGeoDerived(); setupProj(); scale=1; tx=0; ty=0; mapLocked=true; return true; }
 // Which geometry the current state needs: a selected state → its districts; all-India w/ >1 state → national; else the sole state (MP).
 function geoKeyForState(){ if(state.st) return knownGeo(state.st)?state.st:'MP';
@@ -542,19 +598,22 @@ function drawMap(hostId, metric){
     : (name=>setState(s=>({terr: s.terr===name?'':name, cluster:''})));
   const activeTerr=state.terr;
   const isW = metric==='weather';
+  // Rain for a map feature. WX is keyed by state+territory, so take the state off the feature's own
+  // rows; on the national map a feature IS a state, so use that state's statewide point (blank terr).
+  const rainOfList = (list,name) => { const st=list&&list[0]&&list[0].st; return national? rainOf('',null,st) : rainOf(name,null,st); };
   BASE.features.forEach(f=>{
     const nm=f.properties.name, list=tlist(nm), has=list&&list.length;
     const canonTerr=(has&&list[0].territory)||nm;
     const p=document.createElementNS(NS,'path'); p.setAttribute('d',pathOf(f.geometry));
-    let fill; if(isW){ fill = has? rainColor(rainOf(canonTerr)) : '#F1EEE8'; } else { fill = has? '#EFEBE3' : '#F4F1EA'; }
+    let fill; if(isW){ fill = has? rainColor(rainOfList(list,canonTerr)) : '#F1EEE8'; } else { fill = has? '#EFEBE3' : '#F4F1EA'; }
     p.setAttribute('fill', fill); p.setAttribute('stroke','#FFFFFF'); p.setAttribute('stroke-width','1');
     if(activeTerr&&activeTerr.toLowerCase()!==nm.toLowerCase()) p.setAttribute('opacity','0.4');
-    if(isW&&has){ p.style.cursor='pointer'; p.addEventListener('click',(e)=>{ e.stopPropagation(); if(national){ drill(nm); } else { setState(s=>({terr:s.terr.toLowerCase()===canonTerr.toLowerCase()?'':canonTerr,cluster:''})); } }); const ti=document.createElementNS(NS,'title'); ti.textContent=`${canonTerr} — ${rainOf(canonTerr)} mm rain · ${list.filter(m=>m.acresY>0).length}/${list.length} machines ran`; p.appendChild(ti); }
+    if(isW&&has){ p.style.cursor='pointer'; p.addEventListener('click',(e)=>{ e.stopPropagation(); if(national){ drill(nm); } else { setState(s=>({terr:s.terr.toLowerCase()===canonTerr.toLowerCase()?'':canonTerr,cluster:''})); } }); const ti=document.createElementNS(NS,'title'); ti.textContent=`${canonTerr} — ${rainOfList(list,canonTerr)} mm rain · ${list.filter(m=>m.acresY>0).length}/${list.length} machines ran`; p.appendChild(ti); }
     g.appendChild(p);
   });
   if(isW){
     Object.keys(byT).forEach(nm=>{ const c=coordsOf(nm); if(!c) return;
-      const list=byT[nm], total=list.length, ran=list.filter(m=>m.acresY>0).length, rain=rainOf(nm), ink=rainInk(rain), [cx,cy]=proj(c[0],c[1]);
+      const list=byT[nm], total=list.length, ran=list.filter(m=>m.acresY>0).length, rain=rainOfList(list,nm), ink=rainInk(rain), [cx,cy]=proj(c[0],c[1]);
       const label=(list[0].territory)||nm;
       const mk=(y,size,weight,fam,txt)=>{ const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',y);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',fam);t.setAttribute('font-size',size);t.setAttribute('font-weight',weight);t.setAttribute('fill',ink); t.style.pointerEvents='none'; t.textContent=txt; g.appendChild(t); };
       mk(cy-6.5,'9.5',600,"'Noto Sans',sans-serif",label);
@@ -784,11 +843,11 @@ function vals(){
   });
 
   // Weather
-  const terrTable=terrEntries.slice().sort((a,b)=>b.r.deployed-a.r.deployed).map(({name,r})=>{ const tt=r.deployed||1; const rain=rainOf(name);
+  const terrTable=terrEntries.slice().sort((a,b)=>b.r.deployed-a.r.deployed).map(({name,list,r})=>{ const tt=r.deployed||1; const rain=rainOf(name,null,list[0]&&list[0].st);
     return { name, deployed:r.deployed, upl:r.upl, swal:r.swal, active:r.Active, idle:r.Idle, breakdown:r.Breakdown, acresY:fmt(r.acresY), mtd:fmt(r.mtd), rain:rain.toFixed(1),
       uStyle:{width:(100*r.upl/tt)+'%',background:C.orange,display:'block'}, sStyle:{width:(100*r.swal/tt)+'%',background:C.green,display:'block'},
       rainSwatch:'background:'+rainColor(rain) }; });
-  const wetTerr=terrEntries.map(({name,r})=>({name,rain:rainOf(name),ran:r.ranY})).sort((a,b)=>b.rain-a.rain).slice(0,7).map(w=>({ name:w.name, rain:w.rain.toFixed(1), ran:w.ran, swatch:'background:'+rainColor(w.rain) }));
+  const wetTerr=terrEntries.map(({name,list,r})=>({name,rain:rainOf(name,null,list[0]&&list[0].st),ran:r.ranY})).sort((a,b)=>b.rain-a.rain).slice(0,7).map(w=>({ name:w.name, rain:w.rain.toFixed(1), ran:w.ran, swatch:'background:'+rainColor(w.rain) }));
 
   // AM view
   const amRows=[]; const grid5am={display:'grid',gridTemplateColumns:adm?'320px 110px 132px 1fr 78px 84px 74px 84px 150px':'330px 120px 150px 1fr 84px 96px 168px',gap:'14px',alignItems:'center'};
@@ -933,7 +992,7 @@ function vals(){
 
   // Drawer
   let d=null;
-  if(S.selected){ const m=S.selected; const hs=hstate(m), p=pctOf(m); const w=weather(m.territory);
+  if(S.selected){ const m=S.selected; const hs=hstate(m), p=pctOf(m); const w=weather(m.territory, m.st);
     const maxF=Math.max(m.target,m.achieved,m.mtd,m.acresY,1);
     const funnel=[['Target',m.target,'#C9C4BA'],['Achieved',m.achieved,bcolor(band(p))],['MTD',m.mtd,'#8C8780'],['Yesterday',m.acresY,C.act]].map(([label,v,col])=>({label,value:fmt(v),barStyle:{display:'block',height:'100%',width:(100*v/maxF)+'%',background:col}}));
     const maxP=Math.max(1,...m.scanned.map(s=>s.acres));
@@ -957,7 +1016,10 @@ function vals(){
   }
 
   const anyFilter = S.org!=='Both'||!!S.terr||!!S.cluster||!!S.am||!!S.co||!!S.bm||!!S.tm||!!S.health.length||!!S.search;
-  const mobileWeather = weather(S.terr || 'Madhya Pradesh');
+  // Mobile banner follows the active scope: the selected territory, else the selected/only state's
+  // statewide point, else the all-India point. (Was hardcoded to MP, which was wrong in every other state.)
+  const bannerSt = S.terr ? (S.st || (F[0]&&F[0].st) || wxScopeState()) : wxScopeState();
+  const mobileWeather = weather(S.terr || '', bannerSt);
   const mobileList = F.slice(0,80).map(m=>{ const hs=hstate(m);
     return { mc:m.mc, org:m.org, opName:m.opName, geo:`${m.territory} · ${m.cluster}`,
       orgStyle:{display:'inline-flex',fontSize:'9px',fontWeight:700,padding:'1px 6px',borderRadius:'5px',background:orgSoft(m.org),color:orgInk(m.org)},
