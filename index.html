@@ -1268,14 +1268,19 @@ function downloadFilteredCSV(){
     ['Machine', m=>m.mc], ['Org', m=>m.org], ['Deployed', m=>m.deployed===0?'No':'Yes'],
     ...(multi?[['State', m=>STATE_NAMES[m.st]||m.st]]:[]),
     ['Territory', m=>m.territory], ['Cluster', m=>m.cluster],
+    ['Branch Manager', m=>m.bmName], ['BM Mobile', m=>m.bmMob],
+    ['Territory Manager', m=>m.tmName], ['TM Mobile', m=>m.tmMob],
     ['Area Manager', m=>m.am], ['AM Number', m=>m.amNum], ['Cluster Officer', m=>m.co], ['CO Mobile', m=>m.coMob],
+    ['Field Officer', m=>m.foName], ['FO Mobile', m=>m.foMob],
+    ['Retailer', m=>m.retailerName], ['Retailer Mobile', m=>m.retailerMob], ['Retailer Location', m=>m.retailerLoc],
     ['Operator', m=>m.opName], ['Operator Number', m=>m.opNum], ['Health', m=>hstate(m)],
     ['Target', m=>m.target], ['Achieved', m=>m.achieved], ['MTD Acres', m=>m.mtd], ['Acres Yesterday', m=>m.acresY],
     ['Breakdown', m=>m.breakdown?'Yes':'No'], ['Operator Mapped', m=>m.opMapped?'Yes':'No'],
     ['Lat', m=>m.lat==null?'':m.lat], ['Lon', m=>m.lon==null?'':m.lon],
   ];
   if(isAdmin()){   // IoT/connectivity columns — admin role only
-    cols.push(['IoT Acres Yesterday', m=>m.iotAcresY||0], ['Pinged Yesterday', m=>m.pinged?'Yes':'No']);
+    cols.push(['IoT Acres Yesterday', m=>m.iotAcresY||0], ['Pinged Yesterday', m=>m.pinged?'Yes':'No'],
+              ['Last Ping', m=>m.lastPing], ['Days Since Ping', m=>m.daysSincePing]);
   }
   const lines=[cols.map(c=>csvCell(c[0])).join(',')];
   F.forEach(m=>lines.push(cols.map(c=>csvCell(c[1](m))).join(',')));
