@@ -54,7 +54,7 @@ let BASE = MP_BASE, COORDS = MP_COORDS;   // ACTIVE geometry — defaults to MP;
 
 /* ============================= state ============================= */
 const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#159234', open:'#4C7399', openD:'#3A5B7D', act:'#15A24A', idle:'#E0A008', brk:'#DC3A2B', ink:'#1B1A17', ink2:'#6E6A62', ink3:'#9C988F', line:'#E9E6DF', line2:'#F2F0EB', softO:'#FBEDDF', softG:'#E6F5EA', softB:'#EAF0F6', softR:'#FBEAE7', softA:'#FBF1DA' };
-const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', lbScope:'total', selected:null, expanded:{}, loaded:true, refreshing:false, device:'desktop' };
+const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', lbScope:'total', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device:'desktop' };
 // state.st = active Indian-state scope: '' = all-India (default); else a 2-letter code (MP/MH/TG/GJ/RJ/PB/HR).
 let scale=1, tx=0, ty=0, _g=null, _pinMap={}, _pinLabel=null, _prevSig=null, mapLocked=true;
 
@@ -390,9 +390,33 @@ function rowBars(r){ const tt=r.deployed||1, ht=(r.Active+r.Idle+r.Breakdown)||1
   acresLabel:`${fmt(r.achieved)} / ${fmt(r.target)}`, ranY:fmt(r.acresY), iotRanY:fmt(r.iotAcresY||0), pingLabel:`${r.pinged}/${r.deployed}`, pingInk:'#46433d' }; }
 function hash(str){ let h=0; for(let i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))>>>0; return h; }
 function lerpHex(a,b,t){ t=Math.max(0,Math.min(1,t)); const pa=[1,3,5].map(i=>parseInt(a.substr(i,2),16)), pb=[1,3,5].map(i=>parseInt(b.substr(i,2),16)); return '#'+pa.map((v,i)=>Math.round(v+(pb[i]-v)*t).toString(16).padStart(2,'0')).join(''); }
-let WX={};   // territory(lowercase) -> { rain, tmax, tmin, wind, code } — live Open-Meteo, "yesterday" IST
-function mockRainOf(terr){ const h=hash('rain2'+terr); const base=((h>>>4)%1000)/1000; return Math.round(Math.pow(base,1.7)*44*10)/10; }
-function rainOf(terr){ const w=WX[String(terr||'').trim().toLowerCase()]; return (w&&w.rain!=null)? Math.round(w.rain*10)/10 : mockRainOf(terr); }
+// territory(lowercase) -> { days:[{rain,tmax,tmin,wind,code}] } — live Open-Meteo.
+// Day index 0 = yesterday (IST), 1 = today, 2..4 = the next three days.
+let WX={};
+let WX_DATES=[];             // ISO date per day index, aligned with the days arrays
+const WX_DAYS=5;             // yesterday + today + next 3
+const WX_WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function wxDayIdx(i){ i=(i|0); return i<0?0:(i>=WX_DAYS?WX_DAYS-1:i); }
+// Tab label for a day: the two anchors are named, the rest fall back to weekday (or +N without data).
+function wxDayLabel(i){
+  if(i===0) return 'Yesterday';
+  if(i===1) return 'Today';
+  const d=WX_DATES[i]; if(!d) return '+'+(i-1);
+  const dt=new Date(d+'T00:00:00'); return isNaN(dt.getTime()) ? '+'+(i-1) : WX_WD[dt.getDay()];
+}
+// Short date under the tab, e.g. "12 Jul". Blank until the fetch lands.
+function wxDayDate(i){
+  const d=WX_DATES[i]; if(!d) return '';
+  const dt=new Date(d+'T00:00:00'); if(isNaN(dt.getTime())) return '';
+  return dt.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()];
+}
+// Phrase used in headings/legends so they track the selected day.
+function wxDayPhrase(i){ return i===0?"Yesterday's rainfall":(i===1?"Today's rainfall":'Rainfall forecast · '+wxDayLabel(i)); }
+// Day 0 keeps the original hash so demo/fallback data is unchanged; later days vary off it.
+function mockRainOf(terr,di){ di=wxDayIdx(di==null?0:di); const h=hash('rain2'+terr+(di?'#'+di:'')); const base=((h>>>4)%1000)/1000; return Math.round(Math.pow(base,1.7)*44*10)/10; }
+function rainOf(terr,di){ di=wxDayIdx(di==null?state.wxDay:di);
+  const w=WX[String(terr||'').trim().toLowerCase()], d=w&&w.days&&w.days[di];
+  return (d&&d.rain!=null)? Math.round(d.rain*10)/10 : mockRainOf(terr,di); }
 // distinct rainfall buckets (high/med/low visually separable) instead of a continuous ramp
 const RAIN_BUCKETS=[
   {max:0.1, c:'#EDEAE2', l:'Dry'},
@@ -407,8 +431,9 @@ function rainInk(mm){ return (mm||0)>=5?'#FFFFFF':'#1B1A17'; }
 function rainLegendHTML(){ return `<div style="display:flex;flex-direction:column;gap:4px">${RAIN_BUCKETS.map(b=>`<div style="display:flex;align-items:center;gap:8px"><span style="width:14px;height:14px;border-radius:3px;flex-shrink:0;background:${b.c};border:1px solid rgba(0,0,0,.06)"></span><span style="font-size:11px;color:#6E6A62">${b.l}${b.max>=1e9?' mm':b.max===0.1?'':' mm'}</span></div>`).join('')}</div>`; }
 const SPRAY={ good:{label:'Good spray day',icon:'☀️',bg:C.softG,border:'#C6EBD1',ink:C.greenD}, marg:{label:'Marginal window',icon:'⛅',bg:C.softA,border:'#F0DFB0',ink:'#9A6B05'}, hold:{label:'Hold — high wind / rain',icon:'🌧️',bg:C.softR,border:'#F2C9C2',ink:'#B0301F'} };
 function mockWeather(terr){ const h=hash(terr), k=h%3; const temp=28+(h>>3)%7, wind=4+(h>>5)%16, rain=k===2?((h>>2)%9)/10+0.6:0; const w=[SPRAY.good,SPRAY.marg,SPRAY.hold][k]; return { ...w, line:`${temp}° · wind ${wind} km/h · rain ${rain.toFixed(1)} mm` }; }
-function weather(terr){ const w=WX[String(terr||'').trim().toLowerCase()]; if(!w) return mockWeather(terr);
-  const rain=w.rain||0, wind=Math.round(w.wind||0), temp=Math.round(w.tmax!=null?w.tmax:0);
+// Spray window stays anchored to yesterday (day 0) — the Weather page's day tabs drive rainfall only.
+function weather(terr){ const w=WX[String(terr||'').trim().toLowerCase()], d0=w&&w.days&&w.days[0]; if(!d0) return mockWeather(terr);
+  const rain=d0.rain||0, wind=Math.round(d0.wind||0), temp=Math.round(d0.tmax!=null?d0.tmax:0);
   const v = (rain>=5||wind>=20)?SPRAY.hold : (rain>=1||wind>=15)?SPRAY.marg : SPRAY.good;   // spray window: hold if wet/windy
   return { ...v, line:`${temp}° · wind ${wind} km/h · rain ${rain.toFixed(1)} mm` };
 }
@@ -419,13 +444,16 @@ async function loadWeather(){
     const ax=terrs.reduce((s,x)=>s+x.c[0],0)/terrs.length, ay=terrs.reduce((s,x)=>s+x.c[1],0)/terrs.length;
     terrs.push({t:'Madhya Pradesh',c:[ax,ay]});   // statewide point for the unfiltered mobile banner
     const lats=terrs.map(x=>x.c[1]).join(','), lons=terrs.map(x=>x.c[0]).join(',');
-    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&past_days=1&forecast_days=1&timezone=Asia%2FKolkata&wind_speed_unit=kmh`;
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lats}&longitude=${lons}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max&past_days=1&forecast_days=4&timezone=Asia%2FKolkata&wind_speed_unit=kmh`;
     const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
-    const j=await res.json(), arr=Array.isArray(j)?j:[j], wx={};
+    const j=await res.json(), arr=Array.isArray(j)?j:[j], wx={}; let dates=[];
     arr.forEach((loc,i)=>{ const x=terrs[i], d=loc&&loc.daily; if(!x||!d) return;
-      wx[x.t.toLowerCase()]={ rain:(d.precipitation_sum||[])[0]||0, tmax:(d.temperature_2m_max||[])[0], tmin:(d.temperature_2m_min||[])[0], wind:(d.wind_speed_10m_max||[])[0]||0, code:(d.weather_code||[])[0] };
+      const n=Math.min(WX_DAYS,(d.time||[]).length||WX_DAYS), days=[];
+      for(let k=0;k<n;k++) days.push({ rain:(d.precipitation_sum||[])[k]||0, tmax:(d.temperature_2m_max||[])[k], tmin:(d.temperature_2m_min||[])[k], wind:(d.wind_speed_10m_max||[])[k]||0, code:(d.weather_code||[])[k] });
+      if(d.time && d.time.length>dates.length) dates=d.time.slice(0,WX_DAYS);
+      wx[x.t.toLowerCase()]={ days };
     });
-    WX=wx; render();
+    WX=wx; WX_DATES=dates; render();
     trackMeteoUsage(terrs.length);
   }catch(e){ console.error('weather load failed (using simulated):', e); }
 }
@@ -571,7 +599,7 @@ function drawLegend(metric){
   const host=document.getElementById('legendHost'); if(!host) return;
   let html='';
   const row=(c,l,shape)=>`<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><span style="width:13px;height:13px;border-radius:${shape==='sq'?'3px':'50%'};background:${c};flex-shrink:0"></span><span style="font-size:11.5px;color:#6E6A62">${l}</span></div>`;
-  if(metric==='weather') html=`${rainLegendHTML()}<div style="font-size:11px;color:#6E6A62;margin-top:9px">Fill = yesterday's rainfall. The <b>number</b> in each district is machines that ran / total deployed.</div>`;
+  if(metric==='weather') html=`${rainLegendHTML()}<div style="font-size:11px;color:#6E6A62;margin-top:9px">Fill = rainfall for <b>${wxDayLabel(state.wxDay).toLowerCase()}</b>. The <b>number</b> in each district is machines that ran / total deployed.</div>`;
   else if(metric==='deploy') html=row(C.orange,'UPL')+row(C.green,'SWAL')+row(C.open,'Open')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Bubble size = machines deployed. Split shows UPL / SWAL / Open share.</div>`;
   else if(metric==='active') html=row(C.act,'Active machines')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Size = machines that ran yesterday.</div>`;
   else if(metric==='acresY') html=row('#7C6FE0','Acres sprayed yesterday')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Size = acres covered yesterday.</div>`;
@@ -957,7 +985,7 @@ function vals(){
       achieved:o.achieved, target:o.target, acresY:o.acresY, pct:o.target? o.achieved/o.target : 0, val }; })
     .sort((a,b)=>b.val-a.val).slice(0,20);
 
-  return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, rows, terrTable, wetTerr, amRows, bmRows, pendRows, pendCount:pendAll.length, machineTable, mobileList, d, lbScope, coLeaders, opLeaders,
+  return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, rows, terrTable, wetTerr, amRows, bmRows, pendRows, pendCount:pendAll.length, machineTable, mobileList, d, lbScope, wxDay:wxDayIdx(S.wxDay), coLeaders, opLeaders,
     multiState, stOptions, stName:(S.st?(STATE_NAMES[S.st]||S.st):''), canSwitchStates:gateCanSwitchStates(),
     scopeLabel:(S.st ? S.st : (multiState ? 'India' : (allStates[0]||'MP'))),  // header/title scope: state code when scoped, 'India' for multi-state all-India, sole state when single-state
     anyFilter, amCount:amKeys.length, bmCount:bmKeys.length, pinCount:F.length, mListCount:F.length,
@@ -1148,11 +1176,26 @@ function tablesViewHTML(v){
     </div>
   </section>`;
 }
+// Day tabs for the Weather page (yesterday → +3). Rainfall only — the spray-window
+// badge and every other view stay anchored to yesterday.
+function wxDayStripHTML(cur,mob){
+  const btn = i => { const on=i===cur, dt=wxDayDate(i);
+    return `<button data-act="wxday" data-day="${i}" style="${css({...seg(on),flex:'1',padding:mob?'6px 4px':'6px 10px',lineHeight:'1.25',textAlign:'center'})}">
+      <span style="display:block;font-size:${mob?'11px':'11.5px'};pointer-events:none">${wxDayLabel(i)}</span>
+      ${dt?`<span style="display:block;font-size:9.5px;font-weight:500;font-family:'IBM Plex Mono';color:${on?'#807c73':'#A9A49B'};pointer-events:none">${dt}</span>`:''}
+    </button>`; };
+  return `<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px${mob?';width:100%':''}">${Array.from({length:WX_DAYS},(_,i)=>btn(i)).join('')}</div>`;
+}
 function weatherViewHTML(v){
   return `<section style="padding:18px 22px;display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase">Rainfall day</div>
+      <div style="min-width:320px">${wxDayStripHTML(v.wxDay,false)}</div>
+      <div style="font-size:11px;color:#9C988F">${v.wxDay===0?'Observed':'Forecast'} · drives the map, the wettest list and the Rain column below</div>
+    </div>
     <div style="display:grid;grid-template-columns:1fr 270px;gap:16px">
       <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;display:flex;flex-direction:column">
-        <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">Yesterday's rainfall by territory</div><div style="font-size:11px;color:#9C988F;margin-top:2px">Darker = more rain · number inside = machines that ran / total deployed</div></div>${zoomCtrls}</div>
+        <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">${wxDayPhrase(v.wxDay)} by territory</div><div style="font-size:11px;color:#9C988F;margin-top:2px">Darker = more rain · number inside = machines that ran / total deployed</div></div>${zoomCtrls}</div>
         <div id="wMapHost" style="flex:1;min-height:380px;background:#FBFAF8;cursor:default"></div>
       </div>
       <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px">
@@ -1177,7 +1220,7 @@ function weatherViewHTML(v){
       </div>
       <div style="overflow-x:auto"><div style="min-width:920px">
         <div style="display:grid;grid-template-columns:160px 158px 76px 70px 100px 100px 92px 120px;gap:12px;padding:10px 18px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
-          <div>Territory</div><div>Deployed (UPL / SWAL)</div><div style="text-align:right">Active</div><div style="text-align:right">Idle</div><div style="text-align:right">Breakdown</div><div style="text-align:right">Acres y'day</div><div style="text-align:right">MTD ac</div><div style="text-align:right">Rain y'day</div>
+          <div>Territory</div><div>Deployed (UPL / SWAL)</div><div style="text-align:right">Active</div><div style="text-align:right">Idle</div><div style="text-align:right">Breakdown</div><div style="text-align:right">Acres y'day</div><div style="text-align:right">MTD ac</div><div style="text-align:right">Rain ${v.wxDay===0?"y'day":E(wxDayLabel(v.wxDay))}</div>
         </div>
         ${v.terrTable.map(t=>`<div data-act="terr" data-terr="${E(t.name)}" style="display:grid;grid-template-columns:160px 158px 76px 70px 100px 100px 92px 120px;gap:12px;padding:11px 18px;border-bottom:1px solid #F4F2EE;align-items:center;cursor:pointer">
           <div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(t.name)}</div>
@@ -1531,8 +1574,9 @@ function mobileHTML(v){
         <span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(m.acresLabel)}</span>
       </div>`).join('')}`;
   } else {
-    body=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:10px;margin-bottom:12px">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">${zoomCtrls}</div>
+    body=`<div style="margin-bottom:10px">${wxDayStripHTML(v.wxDay,true)}</div>
+      <div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:10px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:#6E6A62">${wxDayPhrase(v.wxDay)}</span>${zoomCtrls}</div>
         <div id="mwMapHost" style="width:100%;height:260px;background:#FBFAF8;border-radius:8px;overflow:hidden;cursor:default"></div>
         <div style="padding:9px 4px 2px"><div style="display:flex;gap:4px">${RAIN_BUCKETS.map(b=>`<div style="flex:1;height:10px;background:${b.c};border-radius:3px"></div>`).join('')}</div><div style="display:flex;justify-content:space-between;font-size:10px;color:#9C988F;margin-top:4px"><span>Dry</span><span>number = ran / total</span><span>20+ mm</span></div></div>
       </div>
@@ -1677,6 +1721,7 @@ app.addEventListener('click', e=>{
     case 'org': { const want=el.dataset.org; if(gateAllows(want)){ setState({org:want, bm:'', tm:''}); } else { gateShow(()=>setState({org: gateAllows(want)?want:gateDefaultOrg(), bm:'', tm:''}), `Enter PIN for ${want} access`, true); } break; }
     case 'metric': setState({metric:el.dataset.metric}); break;
     case 'lbscope': setState({lbScope:el.dataset.scope}); break;
+    case 'wxday': setState({wxDay:wxDayIdx(+el.dataset.day||0)}); track('weather_day',{day:wxDayLabel(wxDayIdx(+el.dataset.day||0))}); break;
     case 'pinmode': setState({pinMode:el.dataset.mode}); break;
     case 'health': { const h=el.dataset.h; setState(s=>({health: s.health.includes(h)? s.health.filter(x=>x!==h) : [...s.health,h]})); break; }
     case 'clear': setState({org:gateDefaultOrg(),terr:'',cluster:'',am:'',co:'',bm:'',tm:'',health:[],search:''}); break;
