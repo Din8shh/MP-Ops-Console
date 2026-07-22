@@ -70,6 +70,23 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
 // in the mobile machine list (Load more bumps it); reset whenever the filter set changes.
 const MLIST_PAGE = 60;
 // state.st = active Indian-state scope: '' = all-India (default); else a 2-letter code (MP/MH/TG/GJ/RJ/PB/HR).
+
+// SINGLE source of truth for "is this view narrowed?" — feeds both `anyFilter` (the "(filtered)"
+// label + Clear button) and the mobile Filters badge, so the two can't drift apart.
+//
+// Measured against the ROLE's baseline, not the global one. A UPL/SWAL login has its org forced by
+// the gate, so testing `org !== 'Both'` marked every scoped user as permanently filtered: the
+// topbar always read "(filtered)" and a Clear button showed that could never clear anything.
+//
+// `st` is deliberately NOT counted. State is a scope, not a filter — it has its own labelled
+// control on desktop, `clear` does not reset it, and the active state is always visible in the
+// header ("MP Operations"). Counting it here would show a Clear button that leaves it behind.
+function activeFilterCount(){
+  const S=state;
+  return (S.org!==gateDefaultOrg()?1:0)
+       + (S.terr?1:0)+(S.cluster?1:0)+(S.am?1:0)+(S.co?1:0)
+       + (S.bm?1:0)+(S.tm?1:0)+(S.health.length?1:0)+(S.search?1:0);
+}
 let scale=1, tx=0, ty=0, _g=null, _pinMap={}, _pinLabel=null, _prevSig=null, mapLocked=true;
 
 /* ============================= helpers ============================= */
@@ -1074,7 +1091,7 @@ function vals(){
       lastPing:(m.lastPing&&String(m.lastPing).trim())||'—', daysSincePing:(m.daysSincePing!=null&&String(m.daysSincePing).trim()!=='')?m.daysSincePing:'—' };
   }
 
-  const anyFilter = S.org!=='Both'||!!S.terr||!!S.cluster||!!S.am||!!S.co||!!S.bm||!!S.tm||!!S.health.length||!!S.search;
+  const anyFilter = activeFilterCount()>0;
   // Mobile banner follows the active scope: the selected territory, else the selected/only state's
   // statewide point, else the all-India point. (Was hardcoded to MP, which was wrong in every other state.)
   const bannerSt = S.terr ? (S.st || (F[0]&&F[0].st) || wxScopeState()) : wxScopeState();
@@ -1707,17 +1724,6 @@ const M_VIEWS = [
 ];
 const mViews = () => M_VIEWS.filter(x=>!roleHidesView(x.k));
 const M_PRIMARY = 4;                       // bottom bar holds 4 + "More"; the rest live in the sheet
-
-// Count of filters the user has actually set — drives the badge on the Filters button.
-// Measured against the ROLE's baseline, not the global one: a UPL/SWAL login has org and state
-// forced by the gate, so counting those as "filters" would pin the badge on for every scoped user
-// and no amount of clearing could ever bring it back to zero.
-function activeFilterCount(){
-  const S=state;
-  return (S.org!==gateDefaultOrg()?1:0)+(S.st!==gateDefaultState()?1:0)
-       + (S.terr?1:0)+(S.cluster?1:0)+(S.am?1:0)+(S.co?1:0)
-       + (S.bm?1:0)+(S.tm?1:0)+(S.health.length?1:0)+(S.search?1:0);
-}
 
 // Generic bottom sheet. `tall` sheets scroll internally and clear the home indicator.
 function mSheetHTML(title, inner, act){

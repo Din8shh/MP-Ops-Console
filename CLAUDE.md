@@ -39,6 +39,14 @@ Territory→Cluster→Machine behaves identically on both.
   Load-more button. `render()` resets it whenever the filter signature changes, so a stale offset is
   never applied to a freshly-filtered (shorter) set.
 
+`activeFilterCount()` is the single source of truth for "is this view narrowed?" — it feeds both
+`anyFilter` (the "(filtered)" label + Clear button, desktop and mobile) and the mobile Filters badge.
+It measures against the **role's** baseline via `gateDefaultOrg()`, not the global one: a UPL/SWAL
+login has its org forced by the gate, so the old `org !== 'Both'` test marked every scoped user as
+permanently filtered. **`st` is deliberately excluded** — state is a scope, not a filter: it has its
+own labelled control on desktop, `clear` doesn't reset it, and the active state is always in the
+header. Counting it would render a Clear button that leaves it behind.
+
 ## Data
 One row = one machine. Live source is a published-CSV Google Sheet (see `CONFIG` in
 index.html). To go live, set `CONFIG.csvUrl` (Publish-to-web CSV link) or `CONFIG.sheetId`.
