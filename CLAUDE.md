@@ -59,9 +59,12 @@ client-side: health (Breakdown>Idle>Active), achieved %, ran-yesterday, operator
 `Unimart` rows, which stay UPL (business rule). **Deployed vs Plan:** the sheet carries a
 `Deployed status` (Yes/No) column and now includes not-yet-deployed rows. `ALL_ROWS` holds
 every parsed row; `ROWS` is the deployed subset (`deployed===1`) and drives every map/table/
-KPI view. MP is special: **all** MP sheet rows count as deployed regardless of status, and
-MP's plan is a fixed programme constant (`MP_PLAN` = UPL 270 / SWAL 230), not sheet-derived.
-Other states derive plan from `ALL_ROWS` (deployed + pending, incl. Open). `planTotals()` +
+KPI view. **Full-deployment states** (`FULL_DEPLOY` = MP/PB/HR/RJ) count **all** their sheet
+rows as deployed regardless of status — their sheets list every machine as deployed, so the
+`Deployed status` column is ignored for them. MP additionally has a fixed programme-constant
+plan (`MP_PLAN` = UPL 270 / SWAL 230), not sheet-derived; PB/HR/RJ still derive plan from the
+sheet, so their Plan and Deployed now coincide (~100% deployed, empty Pending view).
+Other states derive plan from `ALL_ROWS` (deployed + pending, incl. Open) and use the Yes flag. `planTotals()` +
 `planScope()` compute the per-org Plan; the **Plan KPI and the Pending Deployment view are
 admin-only**. Global filter dropdowns (territory/AM/CO/BM/TM) scope to the selected state.
 

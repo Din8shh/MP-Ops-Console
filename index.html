@@ -130,6 +130,8 @@ const canonTerr = s => { s=String(s||'').trim(); return TERR_CANON[s.toLowerCase
 // Multi-state: canonicalise a free-text state value (code or name, any casing/punctuation) to a 2-letter code.
 // Blank → 'MP' so the single-state MP sheet (no State column yet) behaves exactly as before.
 const STATE_NAMES = { MP:'Madhya Pradesh', MH:'Maharashtra', TG:'Telangana', GJ:'Gujarat', RJ:'Rajasthan', PB:'Punjab', HR:'Haryana' };
+// States where every sheet row counts as deployed regardless of the "Deployed status" column (their sheets list all machines as deployed).
+const FULL_DEPLOY = new Set(['MP','PB','HR','RJ']);
 const STATE_ALIAS = { mp:'MP', madhyapradesh:'MP', mh:'MH', maharashtra:'MH', tg:'TG', ts:'TG', telangana:'TG', gj:'GJ', guj:'GJ', gujarat:'GJ', rj:'RJ', raj:'RJ', rajasthan:'RJ', pb:'PB', pun:'PB', punjab:'PB', hr:'HR', har:'HR', haryana:'HR' };
 function canonState(v){ const raw=String(v||'').trim(); if(!raw) return 'MP'; const k=raw.toLowerCase().replace(/[^a-z]/g,''); return STATE_ALIAS[k] || (STATE_NAMES[raw.toUpperCase()]?raw.toUpperCase():raw); }
 const ensureSt = rows => (rows.forEach(m=>{ if(!m.st) m.st=canonState(m.state); }), rows); // demo/mock rows lack st → default MP
@@ -249,8 +251,8 @@ function rowsToMachines(grid){
               : orgRaw==='upl'  ? 'UPL'
               : (orgRaw==='unimart' && st==='MP') ? 'UPL'
               : 'Open';
-    // Deployed: MP shows every sheet row as deployed regardless of status; other states use the "Deployed status"=Yes flag.
-    const deployed = st==='MP' ? 1 : (txt(g(col.dep)).trim().toLowerCase()==='yes' ? 1 : 0);
+    // Deployed: full-deployment states (MP/PB/HR/RJ) show every sheet row as deployed regardless of status; other states use the "Deployed status"=Yes flag.
+    const deployed = FULL_DEPLOY.has(st) ? 1 : (txt(g(col.dep)).trim().toLowerCase()==='yes' ? 1 : 0);
     out.push({
       mc, org,
       deployed,
@@ -1018,8 +1020,8 @@ function vals(){
   });
 
   // Pending Deployment view (admin) — not-yet-deployed machines grouped AM → Cluster Officer → Machine.
-  // Sourced from ALL_ROWS (the pending rows never enter ROWS/F, so they stay out of every other view). MP has
-  // no pending rows (all MP sheet rows are treated as deployed), so this view is naturally empty for MP.
+  // Sourced from ALL_ROWS (the pending rows never enter ROWS/F, so they stay out of every other view). Full-deployment
+  // states (MP/PB/HR/RJ) have no pending rows (all their sheet rows are treated as deployed), so this view is empty for them.
   const pendAll = planScope(ALL_ROWS).filter(m=>m.deployed===0 && (S.org==='Both'||m.org===S.org));
   const orgMix = list => { let u=0,s=0,o=0; list.forEach(m=>m.org==='UPL'?u++:m.org==='SWAL'?s++:o++);
     return [u&&`UPL ${u}`, s&&`SWAL ${s}`, o&&`Open ${o}`].filter(Boolean).join(' · '); };
@@ -1536,7 +1538,7 @@ function pendViewHTML(v){
           <div>AM · Cluster Officer · Machine</div><div>Pending</div><div>Org mix</div><div>Org</div><div>Contact</div>
         </div>
         <div style="max-height:calc(100vh - 300px);overflow:auto">
-          ${empty?`<div style="padding:40px 18px;text-align:center;color:#9C988F;font-size:12.5px">No pending machines in this scope. ${v.tot.deployed?'Everything here is deployed. ':''}Madhya Pradesh has no pending list (all rows show as deployed).</div>`:
+          ${empty?`<div style="padding:40px 18px;text-align:center;color:#9C988F;font-size:12.5px">No pending machines in this scope. ${v.tot.deployed?'Everything here is deployed. ':''}MP, Punjab, Haryana &amp; Rajasthan have no pending list (all rows show as deployed).</div>`:
           v.pendRows.map(r=>`<div ${r.click?rowDataAttrs(r.click):''} style="${css({...grid,...r.rowStyle})}">
             <div style="display:flex;align-items:center;gap:9px;min-width:0;padding-left:${r.indent}">
               <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.roleStyle)}">${E(r.role)}</span><span style="${css(r.dotStyle)}"></span>
@@ -1903,7 +1905,7 @@ function mobileHTML(v){
   } else if(S.view==='pending'){
     body = mSectionTitle(`Pending deployment · ${v.pendCount}`, 'AM → Cluster Officer → Machine')
          + (v.pendRows.length ? v.pendRows.map(r=>mHierCardHTML(r,{pending:true})).join('')
-                              : mEmpty('No pending machines in this scope. Madhya Pradesh has no pending list (all rows show as deployed).'));
+                              : mEmpty('No pending machines in this scope. MP, Punjab, Haryana & Rajasthan have no pending list (all rows show as deployed).'));
   } else if(S.view==='leader'){
     const yday=v.lbScope==='yday';
     const medal=['#E0A93B','#AEB4BC','#C68A52'];
