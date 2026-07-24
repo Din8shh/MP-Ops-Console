@@ -124,6 +124,34 @@ try{
     if(qs.get('csv')||qs.get('sheet')) console.info('[MP-Ops] Phase-5 staging override active →', CONFIG.csvUrl||CONFIG.sheetId);
   }
 }catch(_){}
+/* ---------------------- name hygiene: casing + spelling ----------------------
+   The sheet is typed by many hands, so the same person / shop / place arrives as "GHANSHYAM KURMI",
+   "ghanshyam kurmi" and "Ghanshyam Kurmi", and as spelling variants ("Khategaon"/"Khategaonn",
+   "Dheeraj"/"Dhiraj", "Seva"/"Sewa"). Both split one entity into several rows in every table, filter
+   and leaderboard. These two helpers are the whole fix; canonicalizeNames() below applies them. */
+
+// Everything is displayed Title Case: first letter capital, rest small. A short ALL-CAPS token is left
+// alone when the value has lowercase elsewhere — that is deliberate initials or an acronym ("JP Bhaker",
+// "Gamee KSK"), not a stuck caps-lock. Non-letters (digits, &, /, -) pass through untouched.
+function titleCase(s){
+  const v=String(s==null?'':s).trim().replace(/\s+/g,' ');
+  if(!v) return '';
+  const mixed=/[a-z]/.test(v);
+  return v.replace(/[A-Za-z]+/g, w => (mixed && w.length<=3 && w===w.toUpperCase()) ? w
+                                    : w.charAt(0).toUpperCase()+w.slice(1).toLowerCase());
+}
+// Transliteration skeleton — the identity key two spellings of the same name share. Latin spellings of
+// Indian names disagree mostly on vowels, doubled letters and interchangeable consonants (v/w, s/sh,
+// f/ph, j/z), so fold those away and drop the vowels after the first character:
+//   Khategaon/Khategaonn -> ktgn · Dheeraj/Dhiraj -> drj · Seva/Sewa -> sv · Mandsor/Mandsaur -> mndsr
+// DIGITS ARE KEPT, so "Warangal 1" and "Warangal 2" stay two different territories.
+function nameKey(s){
+  let x=String(s==null?'':s).toLowerCase().replace(/[^a-z0-9]/g,'');
+  if(!x) return '';
+  x=x.replace(/ph/g,'f').replace(/w/g,'v').replace(/q/g,'k').replace(/x/g,'ks').replace(/z/g,'j')
+     .replace(/chh/g,'ch').replace(/sh/g,'s').replace(/(.)\1+/g,'$1');
+  return x.charAt(0)+x.slice(1).replace(/[aeiouyh]/g,'');
+}
 // canonicalise territory names to the map's casing so e.g. "khargone"/"Khargone" merge into one territory
 const TERR_CANON={}; for(const k in COORDS) TERR_CANON[k.toLowerCase()]=k;
 const canonTerr = s => { s=String(s||'').trim(); return TERR_CANON[s.toLowerCase()]||s; };
@@ -272,16 +300,43 @@ function rowsToMachines(grid){
   }
   return out;
 }
-// Merge name groups that differ only by case or whitespace. For each field, normalise
-// (trim + collapse internal spaces + lowercase) as the grouping key, then rewrite every
-// row's value to the most-common original spelling for that key (ties → first seen).
-// Keeps grouping in Tables / AM / Leaderboard / filters from splitting on casing noise.
+// Every text field a view groups or displays by. [field, mobile field, merge spellings?] — the mobile
+// number is the identity anchor that decides whether two similar spellings are one person or two.
+const NAME_FIELDS=[
+  ['territory','',1], ['cluster','',1], ['am','amNum',1], ['co','coMob',1], ['opName','opNum',1],
+  ['bmName','bmMob',1], ['tmName','tmMob',1], ['foName','foMob',1], ['retailerName','retailerMob',1],
+  ['retailerLoc','',0],          // shown as a label only, never grouped → case-fix but don't merge
+];
+// Two spellings clash when each carries mobile numbers and they share none — two different people whose
+// names happen to look alike (HR "Satpal" 98… vs "Sat Pal" 99…), so they must NOT be merged.
+const phoneClash=(a,b)=>{ const ka=Object.keys(a); return !!ka.length && !!Object.keys(b).length && !ka.some(p=>p in b); };
+// Normalise every name field: Title Case unconditionally, then collapse spelling variants onto the most
+// common spelling. Merging is deliberately conservative — scoped per state, skipped for skeletons under
+// 3 characters (too little signal to be sure), and blocked by a phone clash. Everything downstream
+// (tables, AM/BM trees, leaderboards, filter dropdowns, CSV export) reads these fields, so one entity
+// now appears once, spelled and cased the same way, in all of them.
 function canonicalizeNames(rows){
-  ['cluster','am','co','opName','bmName','tmName','foName','retailerName'].forEach(f=>{
-    const cnt={}, disp={};
-    rows.forEach(m=>{ const v=String(m[f]||'').trim().replace(/\s+/g,' '); if(!v) return; const k=v.toLowerCase(); cnt[k]=(cnt[k]||0)+1; (disp[k]||(disp[k]={}))[v]=(disp[k][v]||0)+1; });
-    const canon={}; for(const k in disp){ canon[k]=Object.keys(disp[k]).sort((a,b)=>disp[k][b]-disp[k][a])[0]; }
-    rows.forEach(m=>{ const v=String(m[f]||'').trim().replace(/\s+/g,' '); if(v) m[f]=canon[v.toLowerCase()]; });
+  NAME_FIELDS.forEach(([f,mf,merge])=>{
+    const buckets={};                       // "ST|skeleton" -> { spelling: {n, ph:{}} }
+    rows.forEach(m=>{
+      const v=titleCase(m[f]); if(!v){ if(m[f]) m[f]=''; return; }
+      m[f]=v;                               // (1) casing — applied to every row, always
+      if(!merge) return;
+      const k=nameKey(v); if(k.length<3) return;
+      const b=buckets[m.st+'|'+k] || (buckets[m.st+'|'+k]={});
+      const e=b[v] || (b[v]={n:0,ph:{}}); e.n++;
+      if(mf){ const p=phoneKey(m[mf]); if(p) e.ph[p]=1; }
+    });
+    const canon={};                         // "ST|skeleton|spelling" -> winning spelling
+    for(const bk in buckets){
+      const b=buckets[bk], sps=Object.keys(b); if(sps.length<2) continue;
+      const heads=[];                       // most-common spelling first; each variant joins the first head it doesn't clash with
+      sps.sort((x,y)=>b[y].n-b[x].n||x.localeCompare(y)).forEach(sp=>{
+        const hit=heads.find(h=>!phoneClash(b[h].ph,b[sp].ph));
+        if(hit) canon[bk+'|'+sp]=hit; else heads.push(sp);
+      });
+    }
+    rows.forEach(m=>{ const v=m[f]; if(!v) return; const c=canon[m.st+'|'+nameKey(v)+'|'+v]; if(c) m[f]=c; });
   });
   return rows;
 }
@@ -293,27 +348,43 @@ function phoneKey(v){ let d=String(v==null?'':v).replace(/\D/g,''); if(d.length=
 function _lev(a,b){ const m=a.length,n=b.length; if(!m)return n; if(!n)return m; let prev=[]; for(let j=0;j<=n;j++)prev[j]=j;
   for(let i=1;i<=m;i++){ const cur=[i]; for(let j=1;j<=n;j++){ cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1)); } prev=cur; } return prev[n]; }
 function nameSim(a,b){ a=String(a||'').toLowerCase().replace(/\s+/g,' ').trim(); b=String(b||'').toLowerCase().replace(/\s+/g,' ').trim(); if(!a||!b)return 0; if(a===b)return 1; return 1-_lev(a,b)/Math.max(a.length,b.length); }
-const NAME_SIM_THRESHOLD=0.6;   // merge same-mobile variants at/above this similarity; below → treat as different names
+// Merge same-mobile variants at/above this similarity; below → treat as different names. PEOPLE are held
+// to a stricter bar than shops: a person's name should differ by a typo at most, so 0.6 was loose enough
+// to rewrite one CO into another ("Pawan Kumar" → "Rahul Kumar", 0.64, one mistyped shared number). Shop
+// names on a single phone legitimately vary far more (branch suffixes, Agro/Agri, trading-name changes),
+// so retailers keep the looser bar.
+const NAME_SIM_THRESHOLD=0.72, NAME_SIM_SHOP=0.6;
+// …and one name being the other written more fully counts as a match on its own, however badly it scores
+// on string similarity: "Vikram"/"Vikram Singh", "Kdcms"/"Kdcms-Galipalli", "Raj Agro"/"Raj Agro Sales",
+// "Karthikeya"/"Karthikeya Fertilizer". Compared on the skeleton, so it also sees through the spelling.
+const skelPrefix=(a,b)=>{ const x=nameKey(a), y=nameKey(b); return x.length>=3 && y.length>=3 && (x.startsWith(y)||y.startsWith(x)); };
 function canonicalizeByMobile(rows){
-  [['opName','opNum'],['co','coMob'],['am','amNum'],['bmName','bmMob'],['tmName','tmMob'],['foName','foMob'],['retailerName','retailerMob']].forEach(([nf,mf])=>{
+  [['opName','opNum'],['co','coMob'],['am','amNum'],['bmName','bmMob'],['tmName','tmMob'],['foName','foMob'],['retailerName','retailerMob',NAME_SIM_SHOP]].forEach(([nf,mf,thr])=>{
+    const lim = thr || NAME_SIM_THRESHOLD;
     const groups={};   // phoneKey -> { spelling: count }
     rows.forEach(m=>{ const ph=phoneKey(m[mf]); const nm=String(m[nf]||'').trim().replace(/\s+/g,' '); if(!ph||!nm)return; (groups[ph]||(groups[ph]={}))[nm]=(groups[ph][nm]||0)+1; });
     const map={};      // phoneKey -> { variantSpelling: canonSpelling }
     for(const ph in groups){ const g=groups[ph]; const names=Object.keys(g).sort((a,b)=>g[b]-g[a]||a.localeCompare(b)); const dom=names[0]; const mm={};
-      names.forEach(n=>{ mm[n]=(n===dom||nameSim(n,dom)>=NAME_SIM_THRESHOLD)?dom:n; }); map[ph]=mm; }
+      names.forEach(n=>{ mm[n]=(n===dom||nameSim(n,dom)>=lim||skelPrefix(n,dom))?dom:n; }); map[ph]=mm; }
     rows.forEach(m=>{ const ph=phoneKey(m[mf]); const nm=String(m[nf]||'').trim().replace(/\s+/g,' '); if(ph&&map[ph]&&map[ph][nm]) m[nf]=map[ph][nm]; });
   });
   return rows;
 }
+// Everything a freshly parsed dataset goes through before any view sees it: state → phone-anchored
+// spellings → casing + spelling merge → territory names pinned back to the real district vocabulary.
+// The territory pin runs LAST because the merge picks the most common spelling, which on a bad day is
+// the misspelled one; the district list is ground truth and overrides it. It is a no-op on the very
+// first load (no geometry yet) — loadWeather re-runs it the moment the district files arrive.
+const hygiene = rows => { canonicalizeNames(canonicalizeByMobile(ensureSt(rows))); alignTerritories(rows); return rows; };
 async function loadData(){
   const url=liveUrl();
-  if(!url){ dataMode='demo'; applyRows(canonicalizeNames(canonicalizeByMobile(ensureSt(MACHINES_MOCK)))); lastUpdated=nowIST(); render(); loadWeather(); return; }
+  if(!url){ dataMode='demo'; applyRows(hygiene(MACHINES_MOCK)); lastUpdated=nowIST(); render(); loadWeather(); return; }
   try{
     const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
     const machines=rowsToMachines(parseCSV(await res.text()));
     if(!machines.length) throw new Error('no rows parsed');
-    applyRows(canonicalizeNames(canonicalizeByMobile(ensureSt(machines)))); dataMode='live'; lastUpdated=nowIST(); render(); loadWeather();
-  }catch(e){ applyRows(canonicalizeNames(canonicalizeByMobile(ensureSt(MACHINES_MOCK)))); dataMode='error'; lastUpdated=nowIST(); render(); loadWeather(); console.error('CSV load failed:', e); }
+    applyRows(hygiene(machines)); dataMode='live'; lastUpdated=nowIST(); render(); loadWeather();
+  }catch(e){ applyRows(hygiene(MACHINES_MOCK)); dataMode='error'; lastUpdated=nowIST(); render(); loadWeather(); console.error('CSV load failed:', e); }
 }
 
 /* ============================= derived ============================= */
@@ -516,8 +587,11 @@ const WX_BATCH=100;   // locations per Open-Meteo request — keeps the URL well
 // be loaded, and switching state.st needs no re-fetch.
 async function loadWeather(){
   try{
-    const states=[...new Set(ROWS.map(m=>m.st))].filter(Boolean);
+    const states=[...new Set(ALL_ROWS.map(m=>m.st))].filter(Boolean);
     await buildWxGeo(states);
+    // Fix stray territory spellings first: an aligned name now has a centroid, so it gets live weather
+    // and stops showing as a second territory. Only re-render when something actually changed.
+    if(alignTerritories(ALL_ROWS)) render();
     const seen=new Set(), pts=[], byState={};
     ROWS.forEach(m=>{
       const k=wxKey(m.st,m.territory); if(seen.has(k)) return; seen.add(k);
@@ -607,12 +681,28 @@ async function ensureGeo(key){ if(!GEO_CACHE[key]){ if(!GEO_LOADERS[key]) return
 // centroids. Weather needs every state's districts at once, so mirror them into one state-qualified
 // lookup that no geometry swap can disturb. Populating GEO_CACHE here also warms the state switcher.
 const WX_GEO={};                       // "ST|terrlower" -> [lon,lat]
+const DIST_BY_KEY={};                  // "ST|skeleton" -> district name ('' once two districts collide)
 async function buildWxGeo(states){
   for(const st of states){
     if(!knownGeo(st)) continue;
     const g=await ensureGeo(st); if(!g||!g.COORDS) continue;
-    for(const k in g.COORDS) WX_GEO[wxKey(st,k)]=g.COORDS[k];
+    for(const k in g.COORDS){ WX_GEO[wxKey(st,k)]=g.COORDS[k];
+      const dk=st+'|'+nameKey(k); DIST_BY_KEY[dk] = (dk in DIST_BY_KEY && DIST_BY_KEY[dk]!==k) ? '' : k; }
   }
+}
+// Territory spellings the sheet invented, checked against the real district vocabulary. canonicalizeNames
+// can only merge variants that BOTH appear in the sheet; this catches a misspelling that has no correctly
+// spelled twin (a lone "Mandsor" with no "Mandsaur" anywhere) by matching its skeleton to the district
+// list. Runs once every state's geometry is loaded — until then a stray spelling simply shows unmapped.
+// A value that already resolves to a centroid is never touched, and an ambiguous skeleton is skipped.
+function alignTerritories(rows){
+  let n=0;
+  rows.forEach(m=>{
+    if(!m.territory || wxCoords(m.st,m.territory)) return;
+    const hit=DIST_BY_KEY[m.st+'|'+nameKey(m.territory)];
+    if(hit && hit!==m.territory){ m.territory=hit; n++; }
+  });
+  return n;
 }
 // Territory names arrive alias-resolved (aliasTerr) but not necessarily in the map's casing, so match
 // case-insensitively — wxKey lowercases both sides.
