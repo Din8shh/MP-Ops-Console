@@ -65,7 +65,10 @@ const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#15923
 const PHONE_MQ = '(max-width:820px)';
 const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', day:'yday', lbScope:'total', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
-  sheet:null, listLimit:60 };
+  sheet:null, listLimit:60,
+  // Cumulative (snake) view: its own independent scope — region + a day-level fiscal range stored as offsets
+  // (0 = Apr 1 … 364 = Mar 31). NOT tied to the machine filter bar.
+  snState:'ALL', snFrom:0, snTo:364 };
 // state.sheet = which mobile overlay is up: null | 'filters' | 'more'. state.listLimit = rows shown
 // in the mobile machine list (Load more bumps it); reset whenever the filter set changes.
 const MLIST_PAGE = 60;
@@ -109,6 +112,10 @@ function trackView(view){ track('page_view', { page_title:'MP Ops · '+view, vie
 //   2) CONFIG.sheetId  — the sheet's ID (it must be shared "anyone with the link can view")
 // Leave both blank to run on bundled demo data (machines.js).
 const CONFIG = { csvUrl:'', sheetId:'1YFZD6RoccFJulCMyZB0jF0Z7ZoRU-8YaAMr6as8MTBs', sheetName:'Sheet1', refreshMinutes:10 };
+// Cumulative "snake chart" tab — a SEPARATE tab in the same workbook (day, month, region, 3 FY cumulative cols).
+// Independent of the per-machine data; fetched on demand for the admin-only Cumulative view. Uses gid (the tab's
+// numeric id) rather than a name so a tab rename doesn't silently fall back to Sheet1.
+const SNAKE_GID = '603091795';
 // Phase-5 staging override (localhost ONLY): repoint the data source at a COPY sheet for multi-state testing
 // without ever committing a non-live id. Committed CONFIG always keeps the LIVE sheet, so nothing needs reverting
 // at cutover and production is unaffected (this block is inert off localhost). Usage:
@@ -390,6 +397,107 @@ async function loadData(){
   }catch(e){ applyRows(hygiene(MACHINES_MOCK)); dataMode='error'; lastUpdated=nowIST(); render(); loadWeather(); console.error('CSV load failed:', e); }
 }
 
+/* ===================== cumulative "snake chart" data =====================
+   A self-contained second dataset (see SNAKE_GID). Each FY column is a daily running cumulative that starts on
+   April 1 and runs to March 31 (financial year), so we never re-accumulate or rebase — we reshape it into
+   per-region, per-FY point arrays on the shared fiscal axis (April 1 = offset 0 … March 31 = offset 364). The
+   current season stops at its last real day (the sheet forward-fills it flat; we trim that tail). All-India is
+   the sum of the 7 states. Admin-only, fetched lazily on first view. */
+const SNAKE_FYS = [
+  { key:'fy2425', col:3, label:'FY 24-25', short:"’24-25", color:'#9C988F' },   // two seasons ago
+  { key:'fy2526', col:4, label:'FY 25-26', short:"’25-26", color:'#4C7399' },   // last season
+  { key:'fy2627', col:5, label:'FY 26-27', short:"’26-27", color:'#F5821F', cur:true },  // current season
+];
+// Uppercase region_name in the tab → dashboard state code. Only the 7 dashboard states are kept; the tab also
+// carries AP/KA/UP/J&K, which are ignored so the chart matches the rest of the console's scope.
+const SNAKE_REGION = { 'MADHYA PRADESH':'MP', 'MAHARASHTRA':'MH', 'TELANGANA':'TG', 'GUJARAT':'GJ', 'RAJASTHAN':'RJ', 'PUNJAB':'PB', 'HARYANA':'HR' };
+const SNAKE_MDAYS = { 1:31, 2:28, 3:31, 4:30, 5:31, 6:30, 7:31, 8:31, 9:30, 10:31, 11:30, 12:31 };
+// Financial year: April → March. The x-axis and every day-offset run in fiscal order (Apr..Dec then Jan..Mar),
+// so each FY column is read as a cumulative that starts on April 1 and ends on March 31 of the next year.
+const SNAKE_FMONTHS = [4,5,6,7,8,9,10,11,12,1,2,3];
+const SNAKE_LEN = SNAKE_FMONTHS.reduce((a,m)=>a+SNAKE_MDAYS[m],0);             // 365 offsets, 0..364 (Apr 1 → Mar 31)
+// Day-offset from April 1 (=0), counting forward through the fiscal year Apr..Mar.
+function snakeOff(month,day){ let off=0; for(const m of SNAKE_FMONTHS){ if(m===month) return off+(day-1); off+=SNAKE_MDAYS[m]; } return off; }
+// The From/To range is picked with day-level <input type="date"> constrained to one representative fiscal cycle
+// (Apr SNAKE_FY_Y0 → Mar +1). The chosen calendar day maps to a fiscal offset the year-agnostic axis shows for all
+// three seasons — so the year in the picker is just the current cycle's label, not a filter to that year.
+const SNAKE_FY_Y0 = 2026;
+function snakeOffToDate(off){ let o=Math.max(0,Math.min(SNAKE_LEN-1, off|0)); for(const m of SNAKE_FMONTHS){ if(o<SNAKE_MDAYS[m]){ const y=m>=4?SNAKE_FY_Y0:SNAKE_FY_Y0+1; return `${y}-${String(m).padStart(2,'0')}-${String(o+1).padStart(2,'0')}`; } o-=SNAKE_MDAYS[m]; } return `${SNAKE_FY_Y0}-04-01`; }
+function snakeDateToOff(s){ const p=String(s||'').split('-'); const m=+p[1], d=+p[2]; return (m>=1&&m<=12&&d>=1)?snakeOff(m,d):null; }
+// Fiscal month boundaries (offset of each month's day 1), for the x-axis ticks — Apr,May,…,Dec,Jan,Feb,Mar.
+const SNAKE_TICKS = SNAKE_FMONTHS.map(m=>({ m, off:snakeOff(m,1), label:['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m] }));
+
+const SNAKE = { loading:false, loaded:false, error:false, at:'', S:{} };  // S[code][fyKey] = [{off,val}] rebased, trimmed
+function snakeUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${SNAKE_GID}&t=${Date.now()}`; }
+
+// Forward-fill a cumulative: carry the last known value to the end, null only BEFORE the first datum. No trim —
+// this is the summation form (a state's cumulative doesn't drop after its last update, so it must stay carried,
+// not fall to 0, or the All-India sum nosedives as the earliest-ending state drops out).
+function snakeCarry(known){
+  const d=new Array(SNAKE_LEN).fill(null); let last=null;
+  for(let o=0;o<SNAKE_LEN;o++){ if(known[o]!=null) last=known[o]; d[o]=last; }
+  return d;
+}
+// Null the trailing constant run (the sheet forward-fills the current season flat to December, and older seasons
+// can dead-flat at year end) so a drawn line stops at its last real day instead of running flat into the future.
+function snakeTrim(dense){
+  const d=dense.slice(); let end=SNAKE_LEN-1;
+  while(end>0 && d[end]!=null && d[end-1]!=null && d[end]===d[end-1]) end--;
+  for(let o=end+1;o<SNAKE_LEN;o++) d[o]=null;
+  return d;
+}
+const snakePoints = dense => dense.map((v,o)=>v==null?null:{off:o,val:v}).filter(Boolean);
+function snakeBuild(rows){
+  if(!rows.length) throw new Error('snake: no rows');
+  const body = rows.slice(1).filter(r=>r && r.length>=6);
+  // raw[code][fyKey][fiscalOff] = the sheet's cumulative value for that day (already April-1-based; no rebasing)
+  const raw={};
+  for(const r of body){
+    const day=parseInt(r[0],10), month=parseInt(r[1],10);
+    const code=SNAKE_REGION[String(r[2]||'').trim().toUpperCase()];
+    if(!code || !isFinite(day) || !isFinite(month) || month<1 || month>12) continue;
+    raw[code]=raw[code]||{};
+    for(const fy of SNAKE_FYS){
+      const cell=r[fy.col]; if(cell==null || String(cell).trim()==='') continue;
+      const val=num(cell); if(!isFinite(val)) continue;
+      raw[code][fy.key]=raw[code][fy.key]||{};
+      raw[code][fy.key][snakeOff(month,day)]=val;   // fiscal offset (Apr..Mar); value used as-is
+    }
+  }
+  // per-state dense arrays
+  const codes=Object.keys(SNAKE_REGION).map(k=>SNAKE_REGION[k]);
+  const S={}; const carryByState={};   // carryByState = untrimmed carry-forward form, summed for All-India
+  for(const code of Object.keys(raw)){
+    S[code]={}; carryByState[code]={};
+    for(const fy of SNAKE_FYS){
+      const known=new Array(SNAKE_LEN).fill(null);
+      const src=raw[code][fy.key]||{};
+      for(const o in src){ known[o]=src[o]; }
+      const carry=snakeCarry(known);
+      carryByState[code][fy.key]=carry;
+      S[code][fy.key]=snakePoints(snakeTrim(carry));               // trimmed form for the state's own line
+    }
+  }
+  // All-India = sum of the 7 states' carry-forward curves (null before a state starts → 0), trimmed once at the end.
+  S.ALL={};
+  for(const fy of SNAKE_FYS){
+    const sum=new Array(SNAKE_LEN).fill(0); let any=false;
+    for(const code of codes){ const d=carryByState[code] && carryByState[code][fy.key]; if(!d) continue; any=true;
+      for(let o=0;o<SNAKE_LEN;o++) sum[o]+= (d[o]==null?0:d[o]); }
+    S.ALL[fy.key]= any ? snakePoints(snakeTrim(sum)) : [];
+  }
+  SNAKE.S=S;
+}
+async function loadSnake(){
+  if(SNAKE.loading) return; SNAKE.loading=true; SNAKE.error=false; render();
+  try{
+    const res=await fetch(snakeUrl()); if(!res.ok) throw new Error('HTTP '+res.status);
+    snakeBuild(parseCSV(await res.text()));
+    SNAKE.loaded=true; SNAKE.at=nowIST();
+  }catch(e){ SNAKE.error=true; console.error('snake load failed:', e); }
+  finally{ SNAKE.loading=false; render(); }
+}
+
 /* ============================= derived ============================= */
 // Global Yesterday/Today toggle (state.day = 'yday' | 'today', default 'yday'). acD(m) is the single accessor
 // for "acres on the selected day": it swaps the sheet's "Acres yesterday" (col L) for "Today acres" (col AH)
@@ -470,7 +578,7 @@ function planTotals(){
 function isAdmin(){ return !!(GATE.cur && GATE.cur.role==='admin'); }
 // Non-admin (UPL/SWAL) desktop views drop the Territory-breakdown, Area-Manager and Leaderboard tabs.
 // 'pending' (undeployed) view is admin-only, alongside the existing admin-only desktop tabs.
-function roleHidesView(view){ return !isAdmin() && (view==='tables'||view==='am'||view==='leader'||view==='pending'); }
+function roleHidesView(view){ return !isAdmin() && (view==='tables'||view==='am'||view==='leader'||view==='pending'||view==='snake'); }
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
@@ -896,6 +1004,7 @@ const I = {
   bm:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></svg>',
   leader:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0Z"/><path d="M17 5h2.5a1.5 1.5 0 0 1 0 5H17M7 5H4.5a1.5 1.5 0 0 0 0 5H7"/></svg>',
   pending:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  snake:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20V4M3 20h18"/><path d="M6 15l4-5 4 3 5-8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   mobile:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>',
   more:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>',
   filter:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 5h18M6 12h12M10 19h4"/></svg>',
@@ -1246,7 +1355,7 @@ function railHTML(){
   return `<aside style="width:74px;flex-shrink:0;background:#1B1A17;display:flex;flex-direction:column;align-items:center;padding:16px 0">
     <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;letter-spacing:.02em;color:#fff;margin-bottom:26px">UPL</div>
     <nav style="display:flex;flex-direction:column;gap:8px;flex:1">
-      ${navBtn('map',I.map,v==='map')}${roleHidesView('tables')?'':navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${roleHidesView('am')?'':navBtn('am',I.am,v==='am')}${navBtn('bm',I.bm,v==='bm')}${roleHidesView('pending')?'':navBtn('pending',I.pending,v==='pending')}${roleHidesView('leader')?'':navBtn('leader',I.leader,v==='leader')}
+      ${navBtn('map',I.map,v==='map')}${roleHidesView('tables')?'':navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${roleHidesView('am')?'':navBtn('am',I.am,v==='am')}${navBtn('bm',I.bm,v==='bm')}${roleHidesView('pending')?'':navBtn('pending',I.pending,v==='pending')}${roleHidesView('leader')?'':navBtn('leader',I.leader,v==='leader')}${roleHidesView('snake')?'':navBtn('snake',I.snake,v==='snake')}
     </nav>
     <button data-act="device" title="Mobile view" style="${css({...navStyle(false),marginBottom:'8px'})}">${I.mobile}</button>
     <div style="writing-mode:vertical-rl;font-size:8.5px;letter-spacing:.14em;color:#6b675f;margin-top:14px;text-transform:uppercase">Confidential</div>
@@ -1453,6 +1562,125 @@ function rainCell(val,swatch,sep){
   return `<div style="display:flex;align-items:center;justify-content:flex-end;gap:7px${sep?';border-left:1px solid #F2F0EB;padding-left:12px':''}">
     <span style="width:11px;height:11px;border-radius:3px;flex-shrink:0;${swatch}"></span>
     <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;color:#3A6FA0">${E(val)}</span></div>`;
+}
+/* ===================== cumulative (snake) chart view ===================== */
+const SNAKE_MON = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function niceNum(x){ if(x<=0) return 1; const e=Math.floor(Math.log10(x)), f=x/Math.pow(10,e); const nf=f<=1?1:f<=2?2:f<=5?5:10; return nf*Math.pow(10,e); }
+// dense[off] value (forward-filled, trimmed) reconstructed from the stored point list — used for hover interpolation.
+function snakeDenseFor(code,fyKey){ const pts=(SNAKE.S[code]&&SNAKE.S[code][fyKey])||[]; const a=new Array(SNAKE_LEN).fill(null); for(const p of pts) a[p.off]=p.val; return a; }
+// off (days since Apr 1) → "12 Jul"
+function snakeOffLabel(off){ let o=off; for(const m of SNAKE_FMONTHS){ if(o<SNAKE_MDAYS[m]) return (o+1)+' '+SNAKE_MON[m]; o-=SNAKE_MDAYS[m]; } return '31 '+SNAKE_MON[3]; }
+
+let _snakeGeo=null;
+// Builds the inline SVG for one region across the fiscal-day range [fromOff,toOff]; stashes geometry in _snakeGeo
+// for the hover handler.
+function buildSnakeSVG(code,fromOff,toOff){
+  const W=980,H=430, mL=66,mR=18,mT=16,mB=40;
+  const x0=mL,x1=W-mR,y0=mT,y1=H-mB;
+  const span=Math.max(1,toOff-fromOff);
+  const series=SNAKE_FYS.map(fy=>({ fy, pts:((SNAKE.S[code]&&SNAKE.S[code][fy.key])||[]).filter(p=>p.off>=fromOff&&p.off<=toOff), dense:snakeDenseFor(code,fy.key) }));
+  let maxV=0; series.forEach(s=>s.pts.forEach(p=>{ if(p.val>maxV) maxV=p.val; }));
+  const hasData=series.some(s=>s.pts.length);
+  const step=niceNum(Math.max(1,maxV)/5), nMax=Math.max(step, Math.ceil(maxV/step)*step);
+  const X=off=> x0+(off-fromOff)/span*(x1-x0);
+  const Y=val=> y1-(val/nMax)*(y1-y0);
+  let grid=''; for(let t=0;t<=nMax+1e-6;t+=step){ const y=Y(t); grid+=`<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="#EFEDE7"/><text x="${x0-9}" y="${(y+3.6).toFixed(1)}" text-anchor="end" font-size="10.5" fill="#9C988F" font-family="'IBM Plex Mono'">${fmt(t)}</text>`; }
+  let xt=''; SNAKE_TICKS.filter(tk=>tk.off>=fromOff&&tk.off<=toOff).forEach(tk=>{ const x=X(tk.off); xt+=`<line x1="${x.toFixed(1)}" y1="${y0}" x2="${x.toFixed(1)}" y2="${y1}" stroke="#F4F2EE"/><text x="${x.toFixed(1)}" y="${y1+16}" text-anchor="middle" font-size="10.5" fill="#9C988F" font-family="'Noto Sans'">${tk.label}</text>`; });
+  let lines=''; series.forEach(s=>{ if(!s.pts.length) return;
+    const d=s.pts.map((p,i)=>`${i?'L':'M'}${X(p.off).toFixed(1)} ${Y(p.val).toFixed(1)}`).join(' ');
+    lines+=`<path d="${d}" fill="none" stroke="${s.fy.color}" stroke-width="${s.fy.cur?2.7:1.7}" stroke-linejoin="round" stroke-linecap="round" opacity="${s.fy.cur?1:.92}"/>`;
+    const last=s.pts[s.pts.length-1]; lines+=`<circle cx="${X(last.off).toFixed(1)}" cy="${Y(last.val).toFixed(1)}" r="${s.fy.cur?4.2:3}" fill="${s.fy.color}"/>`; });
+  _snakeGeo = hasData ? {W,x0,x1,y0,y1,fromOff,toOff,span,code,
+    series:series.filter(s=>s.pts.length).map(s=>({label:s.fy.label,color:s.fy.color,dense:s.dense}))} : null;
+  const svg=`<svg id="snakeSvg" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">
+    ${grid}${xt}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC"/>${lines}
+    <line id="snakeGuide" x1="0" y1="${y0}" x2="0" y2="${y1}" stroke="#1B1A17" stroke-width="1" stroke-dasharray="3 3" opacity="0"/></svg>`;
+  return {svg,hasData};
+}
+// Core content (controls + legend + chart), shared by desktop section and mobile.
+function snakeBodyHTML(mob){
+  const S=state, code=S.snState||'ALL';
+  const regionName = code==='ALL' ? 'All India' : (STATE_NAMES[code]||code);
+  if(!SNAKE.loaded){
+    if(!SNAKE.loading && !SNAKE.error) setTimeout(loadSnake,0);
+    const msg = SNAKE.error ? 'Could not load the cumulative sheet.' : 'Loading cumulative acres…';
+    return `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:60px 20px;text-align:center;color:#9C988F;font-size:13px">
+      ${SNAKE.error?'⚠ ':''}${msg}${SNAKE.error?`<div style="margin-top:14px"><button data-act="snakeretry" style="padding:8px 16px;border:1px solid #E9E6DF;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Retry</button></div>`:''}</div>`;
+  }
+  const sel="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none";
+  const stateOpts=[{v:'ALL',t:'All India'},...['MP','MH','TG','GJ','RJ','PB','HR'].map(c=>({v:c,t:STATE_NAMES[c]}))];
+  const ctrl=(label,id,opts,cur)=>`<div style="display:flex;align-items:center;gap:7px">
+      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">${label}</span>
+      <div style="position:relative"><select id="${id}" style="${sel}">${optionsHTML(opts,String(cur))}</select>${I.caret}</div></div>`;
+  // Day-level range: native date pickers over one representative fiscal cycle; value/min/max derive from offsets.
+  const dateCtrl=(label,id,off)=>`<div style="display:flex;align-items:center;gap:7px">
+      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">${label}</span>
+      <input type="date" id="${id}" value="${snakeOffToDate(off)}" min="${snakeOffToDate(0)}" max="${snakeOffToDate(SNAKE_LEN-1)}" style="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 10px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;outline:none;cursor:pointer"></div>`;
+  // Legend totals + "ahead/behind last season" delta are all read at the RIGHT EDGE of the selected range,
+  // so they stay consistent with the (range-clipped) chart the user is looking at.
+  const fromOff=S.snFrom, toOff=S.snTo;   // already fiscal day-offsets
+  const inRange=p=>p.off>=fromOff && p.off<=toOff;
+  const cur=SNAKE_FYS[2], prev=SNAKE_FYS[1];
+  const curPts=((SNAKE.S[code]&&SNAKE.S[code][cur.key])||[]).filter(inRange);
+  const lastCur=curPts[curPts.length-1];
+  let delta='';
+  if(lastCur){ const pd=snakeDenseFor(code,prev.key); const pv = pd[lastCur.off]!=null ? pd[lastCur.off] : null;
+    if(pv!=null){ const diff=lastCur.val-pv, ahead=diff>=0;
+      delta=`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;background:${ahead?C.softG:C.softR};color:${ahead?C.greenD:C.brk};font-size:11.5px;font-weight:600">${ahead?'▲':'▼'} ${fmt(Math.abs(diff))} ac ${ahead?'ahead of':'behind'} last season <span style="color:#9C988F;font-weight:500">· as of ${snakeOffLabel(lastCur.off)}</span></span>`; }
+  }
+  const legend=SNAKE_FYS.map(fy=>{ const pts=((SNAKE.S[code]&&SNAKE.S[code][fy.key])||[]).filter(inRange); const lp=pts[pts.length-1];
+    return `<div style="display:flex;align-items:center;gap:8px">
+      <span style="width:14px;height:${fy.cur?4:3}px;border-radius:2px;background:${fy.color};flex-shrink:0"></span>
+      <span style="font-size:12px;font-weight:${fy.cur?700:500};color:#46433d">${fy.label}</span>
+      <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600">${lp?fmt(lp.val):'—'}</span></div>`; }).join('');
+  const chart=buildSnakeSVG(code, S.snFrom, S.snTo);
+  const header=`<div style="display:flex;align-items:center;gap:${mob?'10px':'14px'};flex-wrap:wrap">
+      ${ctrl('State','snStateSel',stateOpts,code)}
+      ${dateCtrl('From','snFromSel',S.snFrom)}
+      ${dateCtrl('To','snToSel',S.snTo)}
+      <div style="flex:1"></div>
+      <span style="font-size:10.5px;color:#9C988F">Cumulative sheet · ${SNAKE.at||'—'} <button data-act="snakeretry" title="Reload" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>
+    </div>`;
+  return `<div style="display:flex;flex-direction:column;gap:14px">
+    ${header}
+    <div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
+      <div style="padding:14px 16px 4px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:700">${E(regionName)} · cumulative acres · FY Apr–Mar</div>
+          <div style="font-size:11px;color:#9C988F;margin-top:2px">Financial year April 1 → March 31 · current season runs to the latest logged day</div>
+        </div>
+        ${delta}
+      </div>
+      <div style="display:flex;gap:${mob?'14px':'22px'};flex-wrap:wrap;padding:2px 16px 10px">${legend}</div>
+      <div id="snakeHost" style="position:relative;padding:4px 8px 12px">
+        ${chart.hasData?chart.svg:`<div style="padding:60px 20px;text-align:center;color:#9C988F;font-size:12.5px">No cumulative data for ${E(regionName)} in this range.</div>`}
+        <div id="snakeTip" style="position:absolute;display:none;pointer-events:none;background:#fff;border:1px solid #E9E6DF;border-radius:9px;box-shadow:0 6px 20px rgba(0,0,0,.10);padding:8px 10px;min-width:132px;z-index:5"></div>
+      </div>
+    </div>
+  </div>`;
+}
+function snakeViewHTML(v){ return `<section style="padding:18px 22px">${snakeBodyHTML(false)}</section>`; }
+// Hover crosshair + readout. Wired from paint() whenever the snake view is mounted.
+function wireSnakeHover(){
+  const host=document.getElementById('snakeHost'), svg=document.getElementById('snakeSvg'),
+        tip=document.getElementById('snakeTip'), guide=document.getElementById('snakeGuide');
+  if(!host||!svg||!guide||!tip||!_snakeGeo) return;
+  const G=_snakeGeo;
+  const move=e=>{ const cx=(e.touches&&e.touches[0]?e.touches[0].clientX:e.clientX);
+    const r=svg.getBoundingClientRect(); if(!r.width) return;
+    const vx=(cx-r.left)/r.width*G.W; const frac=(vx-G.x0)/(G.x1-G.x0);
+    let off=Math.round(G.fromOff+frac*G.span); off=Math.max(G.fromOff,Math.min(G.toOff,off));
+    const gx=G.x0+(off-G.fromOff)/G.span*(G.x1-G.x0);
+    guide.setAttribute('x1',gx); guide.setAttribute('x2',gx); guide.setAttribute('opacity','1');
+    const rows=G.series.map(s=>({label:s.label,color:s.color,v:s.dense[off]})).filter(s=>s.v!=null);
+    if(!rows.length){ tip.style.display='none'; return; }
+    tip.innerHTML=`<div style="font-weight:700;font-size:11px;margin-bottom:5px">${snakeOffLabel(off)}</div>`+rows.map(s=>`<div style="display:flex;align-items:center;gap:7px;font-size:11px;line-height:1.7"><span style="width:9px;height:9px;border-radius:2px;background:${s.color}"></span><span style="flex:1;color:#46433d">${s.label}</span><span style="font-family:'IBM Plex Mono';font-weight:600">${fmt(s.v)}</span></div>`).join('');
+    const hostR=host.getBoundingClientRect(), px=r.left+vx/G.W*r.width - hostR.left;
+    let left=px+14; if(left>hostR.width-150) left=px-146;
+    tip.style.display='block'; tip.style.left=Math.max(4,left)+'px'; tip.style.top='8px';
+  };
+  const leave=()=>{ guide.setAttribute('opacity','0'); tip.style.display='none'; };
+  host.onmousemove=move; host.onmouseleave=leave; host.ontouchmove=move; host.ontouchend=leave;
 }
 function weatherViewHTML(v){
   return `<section style="padding:18px 22px;display:flex;flex-direction:column;gap:16px">
@@ -1807,6 +2035,7 @@ function contentHTML(v){
     case 'bm': return bmViewHTML(v);
     case 'pending': return pendViewHTML(v);
     case 'leader': return leaderViewHTML(v);
+    case 'snake': return snakeViewHTML(v);
     default: return mapViewHTML(v);
   }
 }
@@ -1814,7 +2043,7 @@ function desktopHTML(v){
   return `<div style="height:100vh;display:flex;background:#F6F5F2;color:#1B1A17;overflow:hidden">
     ${railHTML()}
     <div style="flex:1;display:flex;flex-direction:column;min-width:0">
-      ${topbarHTML(v)}${filterBarHTML(v)}${kpiStripHTML(v)}
+      ${topbarHTML(v)}${state.view==='snake'?'':filterBarHTML(v)}${state.view==='snake'?'':kpiStripHTML(v)}
       <main style="flex:1;overflow:auto;position:relative">${contentHTML(v)}</main>
     </div>
     ${drawerHTML(v)}
@@ -1836,6 +2065,7 @@ const M_VIEWS = [
   { k:'bm',       label:'BMs',       icon:()=>I.bm },
   { k:'pending',  label:'Pending',   icon:()=>I.pending },
   { k:'leader',   label:'Leaders',   icon:()=>I.leader },
+  { k:'snake',    label:'Cumulative',icon:()=>I.snake },
 ];
 const mViews = () => M_VIEWS.filter(x=>!roleHidesView(x.k));
 const M_PRIMARY = 4;                       // bottom bar holds 4 + "More"; the rest live in the sheet
@@ -2042,6 +2272,8 @@ function mobileHTML(v){
       <div style="height:8px"></div>
       ${mSectionTitle('Top operators','Top 20 · '+(yday?'by acres '+dayWord().toLowerCase():'by total acres achieved'))}
       ${v.opLeaders.length ? v.opLeaders.map((o,i)=>row(o,i,`${o.machines} mc · ${E(o.co||'—')} · ${E(o.terr||'—')}`)).join('') : mEmpty('No data for the current filters.')}`;
+  } else if(S.view==='snake'){
+    body = snakeBodyHTML(true);
   } else {
     body=`<div style="margin-bottom:10px">${wxDayStripHTML(v.wxDay,true)}</div>
       <div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:10px;margin-bottom:12px">
@@ -2137,13 +2369,13 @@ function mobileHTML(v){
       <!-- phone: no padding-top on the scroller — sticky offsets resolve against the padding box,
            so a top pad would pin the tab bar below the edge and leak rows through the gap. -->
       <div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:${ph?'0':'14px'} 16px ${ph?'calc(env(safe-area-inset-bottom) + 28px)':'24px'}">
-        <div style="display:flex;align-items:center;gap:11px;background:${v.mobileWeather.bg};border:1px solid ${v.mobileWeather.border};border-radius:14px;padding:12px 14px;${ph?'margin:14px 0 14px':'margin-bottom:14px'}">
+        ${S.view==='snake'?`<div style="height:${ph?'14px':'0'}"></div>`:`<div style="display:flex;align-items:center;gap:11px;background:${v.mobileWeather.bg};border:1px solid ${v.mobileWeather.border};border-radius:14px;padding:12px 14px;${ph?'margin:14px 0 14px':'margin-bottom:14px'}">
           <span style="font-size:22px">${v.mobileWeather.icon}</span>
           <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:${v.mobileWeather.ink}">${E(v.mobileWeather.label)}</div><div style="font-size:11px;color:#6E6A62;margin-top:1px">${E(v.mobileWeather.line)}</div></div>
         </div>
         <div style="display:flex;gap:9px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:3px;margin-bottom:14px">
           ${v.kpis.map(k=>`<div style="flex-shrink:0;min-width:84px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px"><div style="${css(k.valStyle)}">${E(k.value)}</div><div style="font-size:9px;font-weight:600;letter-spacing:.04em;color:#9C988F;text-transform:uppercase;margin-top:4px;white-space:nowrap">${E(k.label)}</div></div>`).join('')}
-        </div>
+        </div>`}
         ${body}
       </div>
       ${mBottomNavHTML()}
@@ -2184,6 +2416,7 @@ function paint(){
     if(S.view==='map') drawMap(mob?'mMapHost':'mapHost', S.metric);
     else if(S.view==='weather') drawMap(mob?'mwMapHost':'wMapHost', 'weather');
     else if(S.view==='machines') drawPins(mob?'mPinHost':'pinHost');
+    else if(S.view==='snake') wireSnakeHover();
     if(!mob && S.selected) drawDrawerMap();
   }catch(err){ console.error('paint failed:', err); }
 }
@@ -2198,6 +2431,10 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='coSelect') setState({co:e.target.value});
   else if(e.target.id==='bmSelect') setState({bm:e.target.value, tm:''});
   else if(e.target.id==='tmSelect') setState({tm:e.target.value});
+  else if(e.target.id==='snStateSel') setState({snState:e.target.value});
+  // Date pickers → fiscal day-offset (0=Apr 1 … 364=Mar 31); offsets sort in fiscal order so the clamp is numeric.
+  else if(e.target.id==='snFromSel'){ const f=snakeDateToOff(e.target.value); if(f!=null) setState({snFrom:f, snTo:Math.max(f,state.snTo)}); }
+  else if(e.target.id==='snToSel'){ const t=snakeDateToOff(e.target.value); if(t!=null) setState({snTo:t, snFrom:Math.min(t,state.snFrom)}); }
 });
 app.addEventListener('click', e=>{
   if(e.target.closest('a[data-stop]')) { e.stopPropagation(); return; } // let tel: link work, don't open row
@@ -2229,6 +2466,7 @@ app.addEventListener('click', e=>{
     case 'zoomin': setMapLock(false); scale=Math.min(6,scale*1.25); applyTransform(); break;
     case 'zoomout': setMapLock(false); scale=Math.max(0.6,scale*0.8); applyTransform(); break;
     case 'zoomreset': setMapLock(true); scale=1;tx=0;ty=0; applyTransform(); break;
+    case 'snakeretry': SNAKE.loaded=false; SNAKE.error=false; loadSnake(); break;
   }
 });
 // machine table row <-> pin cross-highlight
