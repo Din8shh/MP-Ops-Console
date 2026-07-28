@@ -64,7 +64,7 @@ const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#15923
 // The same breakpoint drives both, so `device` and the chrome never disagree.
 const PHONE_MQ = '(max-width:820px)';
 const isPhone = () => window.matchMedia(PHONE_MQ).matches;
-const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', lbScope:'total', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
+const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', day:'yday', lbScope:'total', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60 };
 // state.sheet = which mobile overlay is up: null | 'filters' | 'more'. state.listLimit = rows shown
 // in the mobile machine list (Load more bumps it); reset whenever the filter set changes.
@@ -226,6 +226,7 @@ function resolveCols(header){
     achieved: find(x=>x.includes('achieved')),
     mtd: find(x=>x.includes('mtd')),
     acresY: find(x=>x.includes('yesterday')&&x.includes('acres')&&!x.includes('iot')&&!x.includes('ping'), x=>x.includes('yesterday')&&!x.includes('iot')&&!x.includes('ping')),
+    acresT: find(x=>x.includes('today')&&x.includes('acres')&&!x.includes('iot')&&!x.includes('ping')),   // "Today acres" — feeds the global Yesterday/Today toggle
     iotAcresY: find(x=>x.includes('iot')),
     pinged: find(x=>x.includes('ping')&&x.includes('yesterday'), x=>x.includes('pinged')&&!x.includes('date')&&!x.includes('days')&&!x.includes('since')),
     lastPing: find(x=>x.includes('ping')&&x.includes('date')),
@@ -263,6 +264,8 @@ function resolveCols(header){
   if(c.retailerName<0 && h.length>28) c.retailerName=28;
   if(c.retailerMob<0 && h.length>29) c.retailerMob=29;
   if(c.retailerLoc<0 && h.length>30) c.retailerLoc=30;
+  // Positional fallback for the appended "Today acres" column — cols … State(31)/Deployed status(32)/Today acres(33).
+  if(c.acresT<0 && h.length>33) c.acresT=33;
   return c;
 }
 function rowsToMachines(grid){
@@ -287,7 +290,7 @@ function rowsToMachines(grid){
       st,
       territory:aliasTerr(st, canonTerr(txt(g(col.territory))))||'Unassigned', cluster:txt(g(col.cluster))||'Unassigned',
       co:txt(g(col.co)), coMob:txt(g(col.coMob)), am:txt(g(col.am)), amNum:txt(g(col.amNum)),
-      target:num(g(col.target)), achieved:num(g(col.achieved)), mtd:num(g(col.mtd)), acresY:num(g(col.acresY)), iotAcresY:num(g(col.iotAcresY)),
+      target:num(g(col.target)), achieved:num(g(col.achieved)), mtd:num(g(col.mtd)), acresY:num(g(col.acresY)), acresT:num(g(col.acresT)), iotAcresY:num(g(col.iotAcresY)),
       scanned:parseScanned(g(col.scanned)),
       breakdown:(txt(g(col.breakdown))==='1'?1:0), opMapped:(txt(g(col.opMapped))==='1'?1:0),
       pinged:(txt(g(col.pinged))==='1'?1:0), lastPing:txt(g(col.lastPing)), daysSincePing:txt(g(col.daysSincePing)),
@@ -388,6 +391,14 @@ async function loadData(){
 }
 
 /* ============================= derived ============================= */
+// Global Yesterday/Today toggle (state.day = 'yday' | 'today', default 'yday'). acD(m) is the single accessor
+// for "acres on the selected day": it swaps the sheet's "Acres yesterday" (col L) for "Today acres" (col AH)
+// everywhere acres feeds a figure OR the health model (Active = acres>0). IoT-acres, "pinged yesterday" and
+// weather have no today column, so they stay pinned to yesterday.
+const acD = m => state.day==='today' ? (m.acresT||0) : (m.acresY||0);
+const isToday  = () => state.day==='today';
+const dayShort = () => isToday() ? 'today' : 'y’day';   // "y'day"
+const dayWord  = () => isToday() ? 'Today' : 'Yesterday';
 // Effective breakdown state is ROLE-DEPENDENT (bdEff centralises it; roll(), getF() health filter and
 // hstate() all route through it):
 //  - admin: purely the BD-status flag, regardless of acres. A machine that ran AND is flagged counts as
@@ -395,10 +406,10 @@ async function loadData(){
 //  - UPL/SWAL (non-admin): a breakdown is only counted if the machine did NOT run yesterday
 //    (bd flag && acresY<=0). A flagged machine that still logged acres is Active, not Breakdown — the
 //    three categories are mutually exclusive again and sum to the machine count (pre-65aba88 model).
-const bdEff = m => !!m.breakdown && (isAdmin() || !(m.acresY>0));
+const bdEff = m => !!m.breakdown && (isAdmin() || !(acD(m)>0));
 // Single colour/label per machine: effective-Breakdown wins for admin; for non-admin a machine that ran
 // is Active (ran-yesterday priority).
-const hstate = m => bdEff(m) ? 'Breakdown' : (m.acresY>0 ? 'Active' : 'Idle');
+const hstate = m => bdEff(m) ? 'Breakdown' : (acD(m)>0 ? 'Active' : 'Idle');
 const hcolor = s => s==='Active'?C.act : s==='Idle'?C.idle : C.brk;
 // org chip colours (Open added alongside UPL/SWAL)
 const orgSoft = o => o==='UPL'?C.softO : o==='SWAL'?C.softG : C.softB;
@@ -419,7 +430,7 @@ function getF(){
     if(state.bm && (m.bmName||'').trim().toLowerCase()!==state.bm.trim().toLowerCase()) return false;
     if(state.tm && (m.tmName||'').trim().toLowerCase()!==state.tm.trim().toLowerCase()) return false;
     if(state.health.length){ const H=state.health;
-      const ok=(H.includes('Active')&&m.acresY>0)||(H.includes('Idle')&&!bdEff(m)&&!(m.acresY>0))||(H.includes('Breakdown')&&bdEff(m));
+      const ok=(H.includes('Active')&&acD(m)>0)||(H.includes('Idle')&&!bdEff(m)&&!(acD(m)>0))||(H.includes('Breakdown')&&bdEff(m));
       if(!ok) return false; }
     if(s && !(m.mc.toLowerCase().includes(s) || (m.opName&&m.opName.toLowerCase().includes(s)) || m.territory.toLowerCase().includes(s))) return false;
     return true;
@@ -463,9 +474,9 @@ function roleHidesView(view){ return !isAdmin() && (view==='tables'||view==='am'
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
-    if(m.acresY>0) o.Active++; if(bdEff(m)) o.Breakdown++; else if(!(m.acresY>0)) o.Idle++;
-    o.target+=m.target; o.achieved+=m.achieved; o.mtd+=m.mtd; o.acresY+=m.acresY; o.iotAcresY+=(m.iotAcresY||0); o.pinged+=(m.pinged?1:0); if(m.opName&&m.opNum&&m.opNum!=='0')o.opMappedCount++; });
-  o.pct = o.target ? o.achieved/o.target : 0; o.band=band(o.pct); o.ranY=list.filter(m=>m.acresY>0).length; return o;
+    if(acD(m)>0) o.Active++; if(bdEff(m)) o.Breakdown++; else if(!(acD(m)>0)) o.Idle++;
+    o.target+=m.target; o.achieved+=m.achieved; o.mtd+=m.mtd; o.acresY+=acD(m); o.iotAcresY+=(m.iotAcresY||0); o.pinged+=(m.pinged?1:0); if(m.opName&&m.opNum&&m.opNum!=='0')o.opMappedCount++; });
+  o.pct = o.target ? o.achieved/o.target : 0; o.band=band(o.pct); o.ranY=list.filter(m=>acD(m)>0).length; return o;
 }
 function opMapLabel(r){ return r.opMappedCount+'/'+r.deployed; }
 // dominant name by count (case-insensitive), returning the most-common original spelling + "+N" for extra distinct names
@@ -780,7 +791,7 @@ function drawMap(hostId, metric){
     });
     attachPanZoom(svg); drawLegend('weather'); return;
   }
-  const val=(list)=>{ if(metric==='active')return list.filter(m=>m.acresY>0).length; if(metric==='acresY')return list.reduce((s,m)=>s+m.acresY,0); return list.length; };
+  const val=(list)=>{ if(metric==='active')return list.filter(m=>acD(m)>0).length; if(metric==='acresY')return list.reduce((s,m)=>s+acD(m),0); return list.length; };
   let maxV=1; Object.values(byT).forEach(l=>maxV=Math.max(maxV,val(l)));
   const rOf=v=>6+30*Math.sqrt(v/maxV);
   const wedge=(cx,cy,r,a0,a1,fill)=>{ const x0=cx+r*Math.cos(a0),y0=cy+r*Math.sin(a0),x1=cx+r*Math.cos(a1),y1=cy+r*Math.sin(a1),lg=(a1-a0)>Math.PI?1:0; const pa=document.createElementNS(NS,'path'); pa.setAttribute('d',`M${cx} ${cy}L${x0.toFixed(1)} ${y0.toFixed(1)}A${r} ${r} 0 ${lg} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}Z`); pa.setAttribute('fill',fill); return pa; };
@@ -819,8 +830,8 @@ function drawLegend(metric){
   const row=(c,l,shape)=>`<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><span style="width:13px;height:13px;border-radius:${shape==='sq'?'3px':'50%'};background:${c};flex-shrink:0"></span><span style="font-size:11.5px;color:#6E6A62">${l}</span></div>`;
   if(metric==='weather') html=`${rainLegendHTML()}<div style="font-size:11px;color:#6E6A62;margin-top:9px">Fill = rainfall for <b>${wxDayLabel(state.wxDay).toLowerCase()}</b>. The <b>number</b> in each district is machines that ran / total deployed.</div>`;
   else if(metric==='deploy') html=row(C.orange,'UPL')+row(C.green,'SWAL')+row(C.open,'Open')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Bubble size = machines deployed. Split shows UPL / SWAL / Open share.</div>`;
-  else if(metric==='active') html=row(C.act,'Active machines')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Size = machines that ran yesterday.</div>`;
-  else if(metric==='acresY') html=row('#7C6FE0','Acres sprayed yesterday')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Size = acres covered yesterday.</div>`;
+  else if(metric==='active') html=row(C.act,'Active machines')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Size = machines that ran ${dayShort()}.</div>`;
+  else if(metric==='acresY') html=row('#7C6FE0','Acres sprayed '+dayShort())+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Size = acres covered ${dayShort()}.</div>`;
   else html=row(C.act,'Active')+row(C.idle,'Idle')+row(C.brk,'Breakdown')+`<div style="font-size:11px;color:#9C988F;margin-top:6px">Pie = health mix per territory.</div>`;
   html+=`<div style="font-size:11px;color:#9C988F;margin-top:10px;padding-top:10px;border-top:1px solid #F2F0EB">Click a ${metric==='weather'?'district':'bubble'} to drill into that territory.</div>`;
   host.innerHTML=html;
@@ -841,14 +852,14 @@ function drawPins(hostId){
   const lbTx=document.createElementNS(NS,'text'); lbTx.setAttribute('font-family',"'IBM Plex Mono',monospace"); lbTx.setAttribute('font-size','13'); lbTx.setAttribute('font-weight','600'); lbTx.setAttribute('fill','#fff'); lbTx.setAttribute('text-anchor','middle');
   labelG.appendChild(lbBg); labelG.appendChild(lbTx);
   const showLabel=(cx,cy,txt)=>{ lbTx.textContent=txt; lbTx.setAttribute('x',cx); lbTx.setAttribute('y',cy-13); const w=txt.length*8+14; lbBg.setAttribute('x',cx-w/2); lbBg.setAttribute('y',cy-26); lbBg.setAttribute('width',w); lbBg.setAttribute('height',18); labelG.style.opacity='1'; };
-  F.forEach(m=>{ const [cx,cy]=proj(m.lon,m.lat); const col= mode==='acres'? acresColor(m.acresY) : hcolor(hstate(m));
+  F.forEach(m=>{ const [cx,cy]=proj(m.lon,m.lat); const col= mode==='acres'? acresColor(acD(m)) : hcolor(hstate(m));
     const c=document.createElementNS(NS,'circle'); c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r','4.2'); c.setAttribute('fill',col); c.setAttribute('fill-opacity','0.92'); c.setAttribute('stroke','#fff'); c.setAttribute('stroke-width','1'); c.style.cursor='pointer'; c.style.transition='r .1s';
     _pinMap[m.mc]={c,cx,cy};
     const enter=()=>{ c.setAttribute('r','7.5'); c.setAttribute('stroke','#1B1A17'); c.setAttribute('stroke-width','1.6'); showLabel(cx,cy,m.mc); const row=document.querySelector('#machineTable [data-mc="'+CSS.escape(m.mc)+'"]'); if(row){ row.style.background='#FCF3E9'; } };
     const leave=()=>{ c.setAttribute('r','4.2'); c.setAttribute('stroke','#fff'); c.setAttribute('stroke-width','1'); labelG.style.opacity='0'; const row=document.querySelector('#machineTable [data-mc="'+CSS.escape(m.mc)+'"]'); if(row){ row.style.background=''; } };
     c.addEventListener('mouseenter',enter); c.addEventListener('mouseleave',leave);
     c.addEventListener('click',(e)=>{ e.stopPropagation(); setState({selected:m}); });
-    const ti=document.createElementNS(NS,'title'); ti.textContent=`${m.mc} · ${m.opName} · ${hstate(m)} · ${m.acresY} ac y'day`; c.appendChild(ti);
+    const ti=document.createElementNS(NS,'title'); ti.textContent=`${m.mc} · ${m.opName} · ${hstate(m)} · ${acD(m)} ac ${dayShort()}`; c.appendChild(ti);
     g.appendChild(c);
   });
   g.appendChild(labelG);
@@ -939,10 +950,10 @@ function vals(){
     ...((S.org==='Both'||S.org==='UPL')?[{label:'UPL',value:fmt(tot.upl),unit:'',valStyle:mono22(C.orange)}]:[]),
     ...((S.org==='Both'||S.org==='SWAL')?[{label:'SWAL',value:fmt(tot.swal),unit:'',valStyle:mono22(C.green)}]:[]),
     ...(((S.org==='Both'&&tot.open>0)||S.org==='Open')?[{label:'Open',value:fmt(tot.open),unit:'',valStyle:mono22(C.open)}]:[]),
-    {label:'Active y’day',value:fmt(tot.Active),unit:'',valStyle:mono22(C.act)},
+    {label:'Active '+dayShort(),value:fmt(tot.Active),unit:'',valStyle:mono22(C.act)},
     {label:'Idle',value:fmt(tot.Idle),unit:'',valStyle:mono22(C.idle)},
     {label:'Breakdown',value:fmt(tot.Breakdown),unit:'',valStyle:mono22(C.brk)},
-    {label:'Acres y’day',value:fmt(tot.acresY),unit:'ac',valStyle:mono22(C.ink)},
+    {label:'Acres '+dayShort(),value:fmt(tot.acresY),unit:'ac',valStyle:mono22(C.ink)},
     {label:'MTD acres',value:fmt(tot.mtd),unit:'ac',valStyle:mono22(C.ink)},
     {label:'Achieved',value:pctTxt+'%',unit:'',valStyle:mono22(bcolor(band(tot.pct)))},
   ];
@@ -996,7 +1007,7 @@ function vals(){
               name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName, subStyle:{fontSize:'11px',color:'#9C988F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'},
               deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},orgOStyle:{display:'none'},
               mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
-              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk) });
+              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(acD(m)), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk) });
           });
         }
       });
@@ -1050,7 +1061,7 @@ function vals(){
               name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName+' · '+m.territory, subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
               deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},orgOStyle:{display:'none'},
               mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
-              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk),
+              paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(acD(m)), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk),
               contact:m.opNum, callTel:'tel:'+m.opNum, callStyle:callBtn });
           });
         }
@@ -1099,7 +1110,7 @@ function vals(){
                   name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:(m.foName?('FO · '+m.foName+' · '):'')+m.opName, subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
                   deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},orgOStyle:{display:'none'},
                   mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
-                  paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(m.acresY), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk),
+                  paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(acD(m)), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk),
                   contact:m.opNum, callTel:'tel:'+m.opNum, callStyle:callBtn });
               });
             }
@@ -1152,17 +1163,17 @@ function vals(){
 
   // Machine table
   const ord={Breakdown:0,Idle:1,Active:2};
-  const machineTable=F.slice().sort((a,b)=>{ const d=ord[hstate(a)]-ord[hstate(b)]; return d!==0?d:(b.acresY-a.acresY); }).map(m=>{ const hs=hstate(m), col=hcolor(hs);
-    return { mc:m.mc, org:m.org, opName:m.opName, opNum:m.opNum, geo:`${m.territory} · ${m.cluster}`, acresY:m.acresY>0?fmt(m.acresY):'0', co:m.co, am:m.am,
+  const machineTable=F.slice().sort((a,b)=>{ const d=ord[hstate(a)]-ord[hstate(b)]; return d!==0?d:(acD(b)-acD(a)); }).map(m=>{ const hs=hstate(m), col=hcolor(hs);
+    return { mc:m.mc, org:m.org, opName:m.opName, opNum:m.opNum, geo:`${m.territory} · ${m.cluster}`, acresY:acD(m)>0?fmt(acD(m)):'0', co:m.co, am:m.am,
       orgStyle:{display:'inline-flex',fontSize:'9.5px',fontWeight:700,letterSpacing:'.02em',padding:'2px 7px',borderRadius:'5px',background:orgSoft(m.org),color:orgInk(m.org)},
       healthStyle:{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10.5px',fontWeight:600,color:col}, healthDot:{width:'8px',height:'8px',borderRadius:'50%',background:col,flexShrink:0,display:'block'}, health:hs,
-      acresStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12.5px',fontWeight:600,color:m.acresY>0?C.ink:'#B6B1A8',textAlign:'right'} }; });
+      acresStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12.5px',fontWeight:600,color:acD(m)>0?C.ink:'#B6B1A8',textAlign:'right'} }; });
 
   // Drawer
   let d=null;
   if(S.selected){ const m=S.selected; const hs=hstate(m), p=pctOf(m); const w=weather(m.territory, m.st);
-    const maxF=Math.max(m.target,m.achieved,m.mtd,m.acresY,1);
-    const funnel=[['Target',m.target,'#C9C4BA'],['Achieved',m.achieved,bcolor(band(p))],['MTD',m.mtd,'#8C8780'],['Yesterday',m.acresY,C.act]].map(([label,v,col])=>({label,value:fmt(v),barStyle:{display:'block',height:'100%',width:(100*v/maxF)+'%',background:col}}));
+    const maxF=Math.max(m.target,m.achieved,m.mtd,acD(m),1);
+    const funnel=[['Target',m.target,'#C9C4BA'],['Achieved',m.achieved,bcolor(band(p))],['MTD',m.mtd,'#8C8780'],[dayWord(),acD(m),C.act]].map(([label,v,col])=>({label,value:fmt(v),barStyle:{display:'block',height:'100%',width:(100*v/maxF)+'%',background:col}}));
     const maxP=Math.max(1,...m.scanned.map(s=>s.acres));
     const products=(m.scanned.length?m.scanned:[{product:'Unspecified',acres:0}]).map(s=>({product:s.product,acres:fmt(s.acres),barStyle:{display:'block',height:'100%',width:(100*s.acres/maxP)+'%',background:C.orange}}));
     const opMapped=m.opMapped===1;
@@ -1192,7 +1203,7 @@ function vals(){
     return { mc:m.mc, org:m.org, opName:m.opName, geo:`${m.territory} · ${m.cluster}`,
       orgStyle:{display:'inline-flex',fontSize:'9px',fontWeight:700,padding:'1px 6px',borderRadius:'5px',background:orgSoft(m.org),color:orgInk(m.org)},
       dotStyle:{width:'9px',height:'9px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
-      acresLabel: m.acresY>0? fmt(m.acresY)+' ac' : (m.breakdown?'down':'idle') }; });
+      acresLabel: acD(m)>0? fmt(acD(m))+' ac' : (m.breakdown?'down':'idle') }; });
 
   // Leaderboard — aggregate filtered machines by Cluster Officer and by Operator
   const lbScope = S.lbScope==='yday' ? 'yday' : 'total';
@@ -1200,7 +1211,7 @@ function vals(){
   const coAgg={};
   F.forEach(m=>{ const nm=(m.co||'').trim(); if(!nm) return; const k=nm.toLowerCase();
     const o=coAgg[k] || (coAgg[k]={names:[],ams:[],machines:0,achieved:0,target:0,acresY:0,opMapped:0});
-    o.names.push(m.co); o.ams.push(m.am); o.machines++; o.achieved+=m.achieved; o.target+=m.target; o.acresY+=m.acresY;
+    o.names.push(m.co); o.ams.push(m.am); o.machines++; o.achieved+=m.achieved; o.target+=m.target; o.acresY+=acD(m);
     if(m.opName&&m.opNum&&m.opNum!=='0') o.opMapped++; });
   const coLeaders = Object.values(coAgg).map(o=>{ const val=o[sortKey];
     return { name:domStr(o.names), am:domStr(o.ams), machines:o.machines, achieved:o.achieved, target:o.target, acresY:o.acresY,
@@ -1209,7 +1220,7 @@ function vals(){
   const opAgg={};
   F.forEach(m=>{ const nm=(m.opName||'').trim(); if(!nm) return; const k=nm.toLowerCase()+'|'+(m.opNum||'').trim();
     const o=opAgg[k] || (opAgg[k]={names:[],num:m.opNum,cos:[],terrs:[],machines:0,achieved:0,target:0,acresY:0});
-    o.names.push(m.opName); o.machines++; o.achieved+=m.achieved; o.target+=m.target; o.acresY+=m.acresY; o.cos.push(m.co); o.terrs.push(m.territory); });
+    o.names.push(m.opName); o.machines++; o.achieved+=m.achieved; o.target+=m.target; o.acresY+=acD(m); o.cos.push(m.co); o.terrs.push(m.territory); });
   const opLeaders = Object.values(opAgg).map(o=>{ const val=o[sortKey];
     return { name:domStr(o.names), num:o.num, co:domStr(o.cos), terr:domStr(o.terrs), machines:o.machines,
       achieved:o.achieved, target:o.target, acresY:o.acresY, pct:o.target? o.achieved/o.target : 0, val }; })
@@ -1219,7 +1230,7 @@ function vals(){
     multiState, stOptions, stName:(S.st?(STATE_NAMES[S.st]||S.st):''), canSwitchStates:gateCanSwitchStates(),
     scopeLabel:(S.st ? S.st : (multiState ? 'India' : (allStates[0]||'MP'))),  // header/title scope: state code when scoped, 'India' for multi-state all-India, sole state when single-state
     anyFilter, amCount:amKeys.length, bmCount:bmKeys.length, pinCount:F.length, mListCount:F.length, mListShown:mobileList.length,
-    pinB10:fmt(F.filter(m=>m.acresY>10).length), pinB5:fmt(F.filter(m=>m.acresY>=5&&m.acresY<=10).length), pinB1:fmt(F.filter(m=>m.acresY>=1&&m.acresY<5).length), pinB0:fmt(F.filter(m=>m.acresY<1).length),
+    pinB10:fmt(F.filter(m=>acD(m)>10).length), pinB5:fmt(F.filter(m=>acD(m)>=5&&acD(m)<=10).length), pinB1:fmt(F.filter(m=>acD(m)>=1&&acD(m)<5).length), pinB0:fmt(F.filter(m=>acD(m)<1).length),
     freshCount:`${fmt(tot.deployed)} machines${anyFilter?' (filtered)':''}`, mobileWeather,
     statusDot: dataMode==='live'?'#15A24A':dataMode==='error'?'#DC3A2B':'#9aa3b1',
     statusRing: dataMode==='live'?'rgba(21,162,74,.16)':dataMode==='error'?'rgba(220,58,43,.16)':'rgba(0,0,0,.06)',
@@ -1271,6 +1282,13 @@ function filterBarHTML(v){
         <button data-act="org" data-org="UPL" style="${css(seg(S.org==='UPL'))}">UPL</button>
         <button data-act="org" data-org="SWAL" style="${css(seg(S.org==='SWAL'))}">SWAL</button>
         <button data-act="org" data-org="Open" style="${css(seg(S.org==='Open'))}">Open</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Day</span>
+      <div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
+        <button data-act="day" data-day="yday" style="${css(seg(S.day!=='today'))}">Yesterday</button>
+        <button data-act="day" data-day="today" style="${css(seg(S.day==='today'))}">Today</button>
       </div>
     </div>
     ${(v.multiState && v.canSwitchStates)?`<div style="display:flex;align-items:center;gap:7px">
@@ -1325,7 +1343,7 @@ function mapViewHTML(v){
         <div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
           <button data-act="metric" data-metric="deploy" style="${mt('deploy')}">Deployment</button>
           <button data-act="metric" data-metric="active" style="${mt('active')}">Active</button>
-          <button data-act="metric" data-metric="acresY" style="${mt('acresY')}">Acres y'day</button>
+          <button data-act="metric" data-metric="acresY" style="${mt('acresY')}">Acres ${dayShort()}</button>
           <button data-act="metric" data-metric="health" style="${mt('health')}">Health</button>
         </div>
         <div style="flex:1"></div>${zoomCtrls}
@@ -1366,7 +1384,7 @@ function downloadFilteredCSV(){
     ['Field Officer', m=>m.foName], ['FO Mobile', m=>m.foMob],
     ['Retailer', m=>m.retailerName], ['Retailer Mobile', m=>m.retailerMob], ['Retailer Location', m=>m.retailerLoc],
     ['Operator', m=>m.opName], ['Operator Number', m=>m.opNum], ['Health', m=>hstate(m)],
-    ['Target', m=>m.target], ['Achieved', m=>m.achieved], ['MTD Acres', m=>m.mtd], ['Acres Yesterday', m=>m.acresY],
+    ['Target', m=>m.target], ['Achieved', m=>m.achieved], ['MTD Acres', m=>m.mtd], ['Acres '+dayWord(), m=>acD(m)],
     ['Breakdown', m=>m.breakdown?'Yes':'No'], ['Operator Mapped', m=>m.opMapped?'Yes':'No'],
     ['Lat', m=>m.lat==null?'':m.lat], ['Lon', m=>m.lon==null?'':m.lon],
   ];
@@ -1394,7 +1412,7 @@ function tablesViewHTML(v){
         ${downloadBtnHTML(v)}
       </div>
       <div style="display:grid;grid-template-columns:${v.adm?'288px 110px 132px 1fr 84px 90px 78px 86px':'300px 124px 150px 1fr 96px 96px'};gap:14px;padding:11px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;font-size:10px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase">
-        <div>Territory · Cluster · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel (achieved / target)</div><div style="text-align:right">Acres y'day</div>${v.adm?`<div style="text-align:right">IoT ac y'day</div><div style="text-align:right">Pinged</div>`:''}<div style="text-align:right">Operators</div>
+        <div>Territory · Cluster · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel (achieved / target)</div><div style="text-align:right">Acres ${dayShort()}</div>${v.adm?`<div style="text-align:right">IoT ac y'day</div><div style="text-align:right">Pinged</div>`:''}<div style="text-align:right">Operators</div>
       </div>
       <div style="max-height:calc(100vh - 320px);overflow:auto">
         ${v.rows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
@@ -1470,7 +1488,7 @@ function weatherViewHTML(v){
       </div>
       <div style="overflow-x:auto"><div style="min-width:1260px">
         <div style="display:grid;${WX_TCOLS};gap:12px;padding:10px 18px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
-          <div>Territory</div><div>Deployed (UPL / SWAL)</div><div style="text-align:right">Active</div><div style="text-align:right">Idle</div><div style="text-align:right">Breakdown</div><div style="text-align:right">Acres y'day</div><div style="text-align:right">MTD ac</div>
+          <div>Territory</div><div>Deployed (UPL / SWAL)</div><div style="text-align:right">Active</div><div style="text-align:right">Idle</div><div style="text-align:right">Breakdown</div><div style="text-align:right">Acres ${dayShort()}</div><div style="text-align:right">MTD ac</div>
           <div style="text-align:right;color:#3A6FA0;border-left:1px solid #E9E6DF;padding-left:12px" title="Cumulative rainfall over the 3 completed days ending yesterday${wxRangeTitle(0,WX_I_YDAY)}">Past 3d ▸</div>
           <div style="text-align:right;color:#3A6FA0" title="Rainfall yesterday${wxRangeTitle(WX_I_YDAY,WX_I_YDAY)}">Y'day</div>
           <div style="text-align:right;color:#3A6FA0" title="Rainfall today${wxRangeTitle(WX_I_TODAY,WX_I_TODAY)}">Today</div>
@@ -1503,7 +1521,7 @@ function machinesViewHTML(v){
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid #F6F4F0"><span style="display:flex;align-items:center;gap:9px"><span style="width:12px;height:12px;border-radius:50%;background:#DC3A2B"></span><span style="font-size:11.5px;color:#6E6A62">Breakdown</span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;color:#DC3A2B">${fmt(v.tot.Breakdown)}</span></div>
       </div>`
     : `<div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;padding:15px 16px">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:11px">Acres sprayed yesterday</div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:11px">Acres sprayed ${dayWord().toLowerCase()}</div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0"><span style="display:flex;align-items:center;gap:9px"><span style="width:12px;height:12px;border-radius:50%;background:#0E7C39"></span><span style="font-size:11.5px;color:#6E6A62">More than 10 ac</span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${v.pinB10}</span></div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid #F6F4F0"><span style="display:flex;align-items:center;gap:9px"><span style="width:12px;height:12px;border-radius:50%;background:#56B36C"></span><span style="font-size:11.5px;color:#6E6A62">5 – 10 ac</span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${v.pinB5}</span></div>
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid #F6F4F0"><span style="display:flex;align-items:center;gap:9px"><span style="width:12px;height:12px;border-radius:50%;background:#A9D8B4"></span><span style="font-size:11.5px;color:#6E6A62">1 – 5 ac</span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${v.pinB1}</span></div>
@@ -1518,7 +1536,7 @@ function machinesViewHTML(v){
         <div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;font-weight:600;color:#9C988F">Colour by</span>
           <div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
             <button data-act="pinmode" data-mode="health" style="${css(seg(S.pinMode==='health'))}">Health</button>
-            <button data-act="pinmode" data-mode="acres" style="${css(seg(S.pinMode==='acres'))}">Acres y'day</button>
+            <button data-act="pinmode" data-mode="acres" style="${css(seg(S.pinMode==='acres'))}">Acres ${dayShort()}</button>
           </div>
         </div>${zoomCtrls}
       </div>
@@ -1537,7 +1555,7 @@ function machinesViewHTML(v){
       </div>
       <div style="overflow-x:auto"><div style="min-width:980px">
         <div style="display:grid;grid-template-columns:120px 64px 116px 1fr 220px 84px 1fr;gap:14px;padding:10px 18px;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
-          <div>Machine no.</div><div>Org</div><div>Health</div><div>Operator</div><div>Territory · Cluster</div><div style="text-align:right">Acres y'day</div><div>Cluster Officer · AM</div>
+          <div>Machine no.</div><div>Org</div><div>Health</div><div>Operator</div><div>Territory · Cluster</div><div style="text-align:right">Acres ${dayShort()}</div><div>Cluster Officer · AM</div>
         </div>
         <div style="max-height:calc(100vh - 640px);min-height:230px;overflow:auto" id="machineTable">
           ${v.machineTable.map(r=>`<div data-mc="${E(r.mc)}" data-act="open" style="display:grid;grid-template-columns:120px 64px 116px 1fr 220px 84px 1fr;gap:14px;padding:9px 18px;border-bottom:1px solid #F4F2EE;align-items:center;cursor:pointer">
@@ -1563,7 +1581,7 @@ function amViewHTML(v){
       </div>
       <div style="overflow-x:auto"><div style="min-width:${v.adm?'1240px':'1120px'}">
         <div style="display:grid;grid-template-columns:${v.adm?'320px 110px 132px 1fr 78px 84px 74px 84px 150px':'330px 120px 150px 1fr 84px 96px 168px'};gap:14px;padding:10px 18px;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">
-          <div>AM · Cluster Officer · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div style="text-align:right">Acres y'day</div>${v.adm?`<div style="text-align:right">IoT ac y'day</div><div style="text-align:right">Pinged</div>`:''}<div style="text-align:right">Operators</div><div>Contact</div>
+          <div>AM · Cluster Officer · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div style="text-align:right">Acres ${dayShort()}</div>${v.adm?`<div style="text-align:right">IoT ac y'day</div><div style="text-align:right">Pinged</div>`:''}<div style="text-align:right">Operators</div><div>Contact</div>
         </div>
         <div style="max-height:calc(100vh - 300px);overflow:auto">
           ${v.amRows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
@@ -1593,7 +1611,7 @@ function bmViewHTML(v){
       </div>
       <div style="overflow-x:auto"><div style="min-width:${v.adm?'1240px':'1120px'}">
         <div style="display:grid;grid-template-columns:${v.adm?'320px 110px 132px 1fr 78px 84px 74px 84px 150px':'330px 120px 150px 1fr 84px 96px 168px'};gap:14px;padding:10px 18px;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">
-          <div>BM · TM · Retailer · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div style="text-align:right">Acres y'day</div>${v.adm?`<div style="text-align:right">IoT ac y'day</div><div style="text-align:right">Pinged</div>`:''}<div style="text-align:right">Operators</div><div>Contact</div>
+          <div>BM · TM · Retailer · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div style="text-align:right">Acres ${dayShort()}</div>${v.adm?`<div style="text-align:right">IoT ac y'day</div><div style="text-align:right">Pinged</div>`:''}<div style="text-align:right">Operators</div><div>Contact</div>
         </div>
         <div style="max-height:calc(100vh - 300px);overflow:auto">
           ${v.bmRows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
@@ -1646,15 +1664,15 @@ function pendViewHTML(v){
 }
 function leaderViewHTML(v){
   const yday = v.lbScope==='yday';
-  const sub = (yday?'by acres sprayed yesterday':'by total acres achieved') + (v.anyFilter?' · filtered':'');
+  const sub = (yday?'by acres sprayed '+dayWord().toLowerCase():'by total acres achieved') + (v.anyFilter?' · filtered':'');
   const seg2 = on => css({...seg(on),padding:'6px 14px'});
   const toggle = `<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
       <button data-act="lbscope" data-scope="total" style="${seg2(!yday)}">Total · so far</button>
-      <button data-act="lbscope" data-scope="yday" style="${seg2(yday)}">Yesterday</button>
+      <button data-act="lbscope" data-scope="yday" style="${seg2(yday)}">${dayWord()}</button>
     </div>`;
   const medal=['#E0A93B','#AEB4BC','#C68A52'];
   const rankChip = i => `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:${i<3?medal[i]:'#F2F0EB'};color:${i<3?'#fff':'#807c73'};font-size:11px;font-weight:700;font-family:'IBM Plex Mono'">${i+1}</span>`;
-  const metricHead = yday ? "Acres y'day" : 'Achieved / target';
+  const metricHead = yday ? 'Acres '+dayShort() : 'Achieved / target';
   const metricCell = o => yday
     ? `<div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700;text-align:right">${fmt(o.acresY)}<span style="font-size:10px;color:#9C988F;font-weight:500"> ac</span></div>`
     : `<div style="text-align:right">
@@ -1845,11 +1863,16 @@ function mFiltersHTML(v){
   const lab=t=>`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin:0 0 7px">${t}</div>`;
   const field=(inner)=>`<div style="position:relative;margin-bottom:10px">${inner}${I.caret}</div>`;
   const segB=(o,t)=>`<button data-act="org" data-org="${o}" style="${css({...segM(S.org===o,true),borderRadius:'8px'})}">${t}</button>`;
+  const dayB=(d,t)=>`<button data-act="day" data-day="${d}" style="${css({...segM((d==='today')===(S.day==='today'),true),borderRadius:'8px'})}">${t}</button>`;
   return `${lab('Search')}
     <input id="searchInput" placeholder="Machine no. or operator…" value="${E(S.search)}" style="width:100%;height:44px;border:1px solid #E9E6DF;border-radius:10px;background:#FAF9F6;padding:0 13px;font-family:'Noto Sans';font-size:15px;color:#1B1A17;outline:none;margin-bottom:16px" />
     ${lab('Org')}
     <div style="display:flex;background:#F2F0EB;border-radius:10px;padding:3px;gap:2px;margin-bottom:16px">
       ${segB('Both','All')}${segB('UPL','UPL')}${segB('SWAL','SWAL')}${segB('Open','Open')}
+    </div>
+    ${lab('Day')}
+    <div style="display:flex;background:#F2F0EB;border-radius:10px;padding:3px;gap:2px;margin-bottom:16px">
+      ${dayB('yday','Yesterday')}${dayB('today','Today')}
     </div>
     ${(v.multiState && v.canSwitchStates)?lab('State')+field(`<select id="stSelect" style="${sel}">${optionsHTML(v.stOptions,S.st)}</select>`):''}
     ${isAdmin()?`${lab('Geo')}
@@ -1915,7 +1938,7 @@ function mHierCardHTML(r, opts){
            ${r.org?`<div><div style="font-size:9px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">Org</div><div style="margin-top:3px"><span style="${css(r.orgStyle)}">${E(r.org)}</span></div></div>`:stat('Org mix', E(r.mix)||'—')}
          </div>${r.org?'':''}`
       : `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:11px">
-           ${stat('Deployed', E(r.deployed))}${stat("Acres y'day", E(r.ranY))}${stat('Operators', E(r.opMap))}
+           ${stat('Deployed', E(r.deployed))}${stat('Acres '+dayShort(), E(r.ranY))}${stat('Operators', E(r.opMap))}
          </div>
          <div style="margin-top:11px">
            <div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div>
@@ -1964,7 +1987,7 @@ function mobileHTML(v){
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
           <div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px;flex:1">
             <button data-act="pinmode" data-mode="health" style="${css(segM(S.pinMode==='health',ph))}">Health</button>
-            <button data-act="pinmode" data-mode="acres" style="${css(segM(S.pinMode==='acres',ph))}">Acres y'day</button>
+            <button data-act="pinmode" data-mode="acres" style="${css(segM(S.pinMode==='acres',ph))}">Acres ${dayShort()}</button>
           </div>${zc}
         </div>
         <div id="mPinHost" style="width:100%;height:${ph?'min(42vh,360px)':'280px'};background:#FBFAF8;border-radius:8px;overflow:hidden;cursor:default"></div>
@@ -2012,12 +2035,12 @@ function mobileHTML(v){
       </div>`;
     body=`<div style="display:flex;background:#EDEAE3;border-radius:11px;padding:3px;gap:2px;margin-bottom:14px">
         <button data-act="lbscope" data-scope="total" style="${css(segM(!yday,ph))}">Total · so far</button>
-        <button data-act="lbscope" data-scope="yday" style="${css(segM(yday,ph))}">Yesterday</button>
+        <button data-act="lbscope" data-scope="yday" style="${css(segM(yday,ph))}">${dayWord()}</button>
       </div>
-      ${mSectionTitle('Top cluster officers','Top 10 · '+(yday?'by acres yesterday':'by total acres achieved'))}
+      ${mSectionTitle('Top cluster officers','Top 10 · '+(yday?'by acres '+dayWord().toLowerCase():'by total acres achieved'))}
       ${v.coLeaders.length ? v.coLeaders.map((o,i)=>row(o,i,`${o.machines} mc · ${o.opMapped}/${o.machines} mapped · AM ${E(o.am||'—')}`)).join('') : mEmpty('No data for the current filters.')}
       <div style="height:8px"></div>
-      ${mSectionTitle('Top operators','Top 20 · '+(yday?'by acres yesterday':'by total acres achieved'))}
+      ${mSectionTitle('Top operators','Top 20 · '+(yday?'by acres '+dayWord().toLowerCase():'by total acres achieved'))}
       ${v.opLeaders.length ? v.opLeaders.map((o,i)=>row(o,i,`${o.machines} mc · ${E(o.co||'—')} · ${E(o.terr||'—')}`)).join('') : mEmpty('No data for the current filters.')}`;
   } else {
     body=`<div style="margin-bottom:10px">${wxDayStripHTML(v.wxDay,true)}</div>
@@ -2190,6 +2213,7 @@ app.addEventListener('click', e=>{
     case 'loadmore': setState(s=>({listLimit:s.listLimit+MLIST_PAGE})); break;
     case 'org': { const want=el.dataset.org; if(gateAllows(want)){ setState({org:want, bm:'', tm:''}); } else { gateShow(()=>setState({org: gateAllows(want)?want:gateDefaultOrg(), bm:'', tm:''}), `Enter PIN for ${want} access`, true); } break; }
     case 'metric': setState({metric:el.dataset.metric}); break;
+    case 'day': { const d=el.dataset.day==='today'?'today':'yday'; setState({day:d}); track('day_scope',{day:d}); break; }
     case 'lbscope': setState({lbScope:el.dataset.scope}); break;
     case 'wxday': setState({wxDay:wxDayIdx(+el.dataset.day||0)}); track('weather_day',{day:wxDayLabel(wxDayIdx(+el.dataset.day||0))}); break;
     case 'pinmode': setState({pinMode:el.dataset.mode}); break;
