@@ -1794,7 +1794,7 @@ function snakeBodyHTML(mob){
           <div style="font-size:14px;font-weight:700;line-height:1.25">${E(regionName)} · day-wise acres · season-over-season</div>
           <div style="font-size:11px;color:#9C988F;margin-top:2px">Daily rise in cumulative · last ${win} days to today · same fiscal days across seasons</div>
         </div>
-        <div style="display:flex;gap:7px">${[10,15,30].map(tag).join('')}</div>
+        <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">${[10,15,30].map(tag).join('')}${trend.hasData?dlChartBtn('trend'):''}</div>
       </div>
       <div style="display:flex;gap:${mob?'12px':'22px'};flex-wrap:wrap;padding:0 16px 8px">${trendLegend}</div>
       <div id="trendHost" style="position:relative;padding:2px ${mob?'2px':'8px'} 12px">
@@ -1811,6 +1811,7 @@ function snakeBodyHTML(mob){
           <div style="font-size:11px;color:#9C988F;margin-top:2px">Financial year April 1 → March 31 · current season runs to the latest logged day</div>
         </div>
         ${delta}
+        ${chart.hasData?dlChartBtn('snake'):''}
       </div>
       <div style="display:flex;gap:${mob?'12px':'22px'};flex-wrap:wrap;padding:2px 16px 10px">${legend}</div>
       <div id="snakeHost" style="position:relative;padding:4px ${mob?'2px':'8px'} 12px">
@@ -1866,6 +1867,73 @@ function wireTrendHover(){
   };
   const leave=()=>{ guide.setAttribute('opacity','0'); tip.style.display='none'; };
   host.onmousemove=move; host.onmouseleave=leave; host.ontouchmove=move; host.ontouchend=leave;
+}
+
+/* ===================== chart → PNG export =====================
+   Rebuilds the currently-rendered chart SVG as a standalone, deck-ready image: white background, a title bar and a
+   season legend drawn IN the SVG (the on-page title/legend are HTML, so they wouldn't otherwise be captured), then
+   the live plot nested underneath. Rasterised to PNG at 2× for crisp slides. Reflects the current region / range /
+   window selection because it reads the live <svg>. */
+const DL_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M12 3v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M4.5 20h15"/></svg>`;
+const dlChartBtn = kind => `<button data-act="dlChart" data-kind="${kind}" title="Download this chart as a PNG image" style="display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#46433d;font-family:'Noto Sans';font-size:12px;font-weight:600;cursor:pointer">${DL_ICON} PNG</button>`;
+function chartFilename(kind){
+  const code=state.snState||'ALL', region = code==='ALL'?'All-India':code;
+  const d=new Date(), iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `MP-Ops_${region}_${kind==='trend'?'day-wise-acres':'cumulative-acres'}_${iso}.png`;
+}
+// Compose the standalone export SVG (title + legend + nested live plot). Returns {xml,W,H} or null if the chart
+// isn't on screen (no data).
+function buildChartExportSVG(kind){
+  const svg=document.getElementById(kind==='trend'?'trendSvg':'snakeSvg'); if(!svg||!svg.viewBox||!svg.viewBox.baseVal) return null;
+  const W=svg.viewBox.baseVal.width, H=svg.viewBox.baseVal.height, headerH=64, pad=18;
+  const code=state.snState||'ALL', regionName = code==='ALL' ? 'All India' : (STATE_NAMES[code]||code);
+  let title, items;
+  if(kind==='trend'){
+    const win=[10,15,30].includes(state.snTrendWin)?state.snTrendWin:30;
+    title=`${regionName} · day-wise acres · last ${win} days`;
+    const today=snakeTodayOff(), fromOff=Math.max(1,today-win+1);
+    items=SNAKE_FYS.map(fy=>{ const dense=snakeDenseFor(code,fy.key); let tot=0;
+      for(let o=fromOff;o<=today;o++){ if(dense[o]!=null&&dense[o-1]!=null) tot+=Math.max(0,dense[o]-dense[o-1]); }
+      return {label:fy.label,color:fy.color,val:tot}; });
+  } else {
+    title=`${regionName} · cumulative acres · FY Apr–Mar`;
+    const inR=p=>p.off>=state.snFrom&&p.off<=state.snTo;
+    items=SNAKE_FYS.map(fy=>{ const pts=((SNAKE.S[code]&&SNAKE.S[code][fy.key])||[]).filter(inR); const lp=pts[pts.length-1];
+      return {label:fy.label,color:fy.color,val:lp?lp.val:null}; });
+  }
+  // Legend laid out with a running x (approx char widths; only 3 items, generous gaps → no overlap at W≥400).
+  let leg='', lx=pad; const legY=50;
+  items.forEach(it=>{ const valTxt = it.val==null?'—':fmt(it.val);
+    leg+=`<rect x="${lx}" y="${legY-9}" width="15" height="4" rx="2" fill="${it.color}"/>`;
+    leg+=`<text x="${lx+21}" y="${legY-1}" font-size="12.5" font-family="'Noto Sans',sans-serif" font-weight="600" fill="#46433d">${E(it.label)}</text>`;
+    const lblW = it.label.length*7 + 6;
+    leg+=`<text x="${lx+21+lblW}" y="${legY-1}" font-size="12.5" font-family="'IBM Plex Mono',ui-monospace,monospace" font-weight="700" fill="#1B1A17">${valTxt}</text>`;
+    lx += 21 + lblW + valTxt.length*7.3 + 26;
+  });
+  const clone=svg.cloneNode(true); const g=clone.querySelector('#snakeGuide,#trendGuide'); if(g) g.remove();
+  const inner=clone.innerHTML;
+  const xml=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H+headerH}" viewBox="0 0 ${W} ${H+headerH}">`+
+    `<rect x="0" y="0" width="${W}" height="${H+headerH}" fill="#FFFFFF"/>`+
+    `<text x="${pad}" y="26" font-size="16" font-family="'Noto Sans',sans-serif" font-weight="700" fill="#1B1A17">${E(title)}</text>`+
+    leg+
+    `<svg x="0" y="${headerH}" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${inner}</svg></svg>`;
+  return {xml, W, H:H+headerH};
+}
+function downloadChart(kind){
+  const built=buildChartExportSVG(kind); if(!built){ console.warn('chart export: no rendered chart for', kind); return; }
+  const scale=2, img=new Image();
+  img.onload=()=>{
+    const canvas=document.createElement('canvas'); canvas.width=Math.round(built.W*scale); canvas.height=Math.round(built.H*scale);
+    const ctx=canvas.getContext('2d'); ctx.fillStyle='#FFFFFF'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    canvas.toBlob(blob=>{ if(!blob){ console.error('chart export: toBlob failed'); return; }
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=chartFilename(kind);
+      document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+      track('chart_download',{ kind, region:state.snState||'ALL' });
+    }, 'image/png');
+  };
+  img.onerror=()=>{ console.error('chart export: SVG rasterisation failed'); alert('Sorry — could not generate the chart image.'); };
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(built.xml);
 }
 function productViewHTML(v){ return `<section style="padding:18px 22px">${productBodyHTML(false)}</section>`; }
 // Product Insights — a self-contained page over the "Product data" tab. Controls (company / state / crop / measure)
@@ -2876,6 +2944,7 @@ app.addEventListener('click', e=>{
     case 'zoomreset': setMapLock(true); scale=1;tx=0;ty=0; applyTransform(); break;
     case 'snakeretry': SNAKE.loaded=false; SNAKE.error=false; loadSnake(); break;
     case 'snTrendWin': setState({snTrendWin:+el.dataset.win||30}); break;
+    case 'dlChart': downloadChart(el.dataset.kind); break;
     case 'pmco': setState({pmCo:el.dataset.co}); track('product_company',{co:el.dataset.co}); break;
     case 'pmmeasure': setState({pmMeasure:el.dataset.m==='yday'?'yday':'ytd'}); break;
     case 'pmstate': setState({pmState:el.dataset.st}); break;   // drill from the state-breakdown row
