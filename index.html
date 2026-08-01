@@ -2576,20 +2576,25 @@ function insWeekSegments(A,W){
   if(insISO(W.d0)!==WKP_WEEK.start || insISO(W.d1)!==WKP_WEEK.end) return { wrongWeek:true };
   const map={}; PROD.rows.forEach(r=>{ if(!map[r.brandKey]) map[r.brandKey]=r.portfolio; });
   const scope=r=>(!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
-  const by={}; let dropped=0, unmatched=0;
+  const by={};
   WKP.rows.filter(scope).forEach(r=>{
+    if(r.st==='OT') return;                                 // dashboard states only
     const seg=map[r.key];
-    if(!seg){ unmatched+=r.acres; return; }                 // no portfolio known for this product
-    if(INS_SEG_DROP[seg]){ dropped+=r.acres; return; }      // deliberately outside the base
-    const e=by[r.st]||(by[r.st]={ st:r.st, name:STATE_NAMES[r.st]||(r.st==='OT'?'Other states':r.st), base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0 });
+    if(!seg || INS_SEG_DROP[seg]) return;                   // unknown or deliberately outside the base
+    const e=by[r.st]||(by[r.st]={ st:r.st, name:STATE_NAMES[r.st]||r.st, base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0, prod:{} });
     const k = INS_SEGS.indexOf(seg)>=0 ? seg : 'Other';
     e[k]+=r.acres; e.base+=r.acres;
+    const p=e.prod[r.key]||(e.prod[r.key]={ disp:r.product, ac:0 }); p.ac+=r.acres;   // for the top-products line
   });
-  const rows=Object.keys(by).map(k=>by[k]).filter(x=>x.base>0).sort((a,b)=>b.base-a.base);
+  const topOf=o=>Object.keys(o).map(k=>o[k]).sort((a,b)=>b.ac-a.ac).slice(0,3);
+  const rows=Object.keys(by).map(k=>by[k]).filter(x=>x.base>0).sort((a,b)=>b.base-a.base)
+    .map(r=>({ ...r, top: topOf(r.prod) }));
   if(!rows.length) return { empty:true };
-  const tot={ st:'', name:'All shown', base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0 };
-  rows.forEach(r=>{ tot.base+=r.base; INS_SEGS.concat('Other').forEach(k=>{ tot[k]+=r[k]; }); });
-  return { rows, tot, dropped, unmatched };
+  const tot={ st:'', name:'All shown', base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0, prod:{} };
+  rows.forEach(r=>{ tot.base+=r.base; INS_SEGS.concat('Other').forEach(k=>{ tot[k]+=r[k]; });
+    Object.keys(r.prod).forEach(k=>{ const p=tot.prod[k]||(tot.prod[k]={ disp:r.prod[k].disp, ac:0 }); p.ac+=r.prod[k].ac; }); });
+  tot.top=topOf(tot.prod);
+  return { rows, tot };
 }
 
 /* ===== focus-product daily trend =====
@@ -2891,8 +2896,8 @@ function insightsBodyHTML(mob){
         </div></div>
       <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-top:1px solid #EFEDE7">
         ${big(fmt(W.acres/7),'acres per day', W.bestDay?`best ${W.bestDay.dow} · ${fmt(W.bestDay.ac)} ac`:'7-day average',C.orangeD)}
-        ${big(W.machAvg!=null?fmt(W.machAvg):'—','machines per day', W.machPeak!=null?`peak ${fmt(W.machPeak)}`:'')}
-        ${big(W.acPerMachine!=null?fmt(W.acPerMachine):'—','acres per running machine', W.machDays?`over ${fmt(W.machDays)} machine-days`:'')}
+        ${big(W.machPeak!=null?fmt(W.machPeak):'—','machines ran this week', W.machAvg!=null?`highest in a single day · ${fmt(W.machAvg)} on an average day`:'highest in a single day')}
+        ${big(W.acPerMachine!=null?fmt(W.acPerMachine):'—','acres per running machine','average for a machine on a day it ran')}
         ${big(W.ly!=null?fmt(W.ly):'—','same week last year', W.ly!=null?`${W.acres>=W.ly?'+':'−'}${fmt(Math.abs(W.acres-W.ly))} ac`:'')}
       </div>`);
 
@@ -3005,23 +3010,24 @@ function insightsBodyHTML(mob){
       const SEGL=INS_SEGS.concat('Other');
       const bar=r=>`<span style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#F2F0EB">${SEGL.map(k=>r[k]>0?`<span style="width:${r[k]/r.base*100}%;background:${SEG_C[k]}"></span>`:'').join('')}</span>`;
       const gc=mob?'1fr 54px 54px 54px':'1.3fr 1.1fr 78px 62px 62px 62px 58px';
-      const hdr=(mob?['State','Herb','Ins','Fung']:['State','','Acres','Herb','Ins','Fung','Other']);
+      const hdr=(mob?['State · top products','Herb','Ins','Fung']:['State · top products','','Acres','Herb','Ins','Fung','Other']);
+      // Top products sit under the state name rather than in a column: they are the "what", the percentages are
+      // the "shape", and a seventh column would crowd both off a projector.
+      const topLine=r=>(r.top&&r.top.length)?`<div style="font-size:10.5px;color:#9C988F;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.top.map(p=>`${E(p.disp)} <span style="font-family:'IBM Plex Mono';color:#6E6A62">${fmt(p.ac)}</span>`).join(' · ')}</div>`:'';
       const row=(r,i,isTot)=>`<div style="display:grid;grid-template-columns:${gc};gap:10px;align-items:center;padding:${isTot?'11px':'10px'} 16px;border-top:1px solid ${isTot?'#E9E6DF':'#F4F2EE'};${isTot?'background:#FBFAF8':''}">
-          <span style="font-size:12.5px;font-weight:${isTot?700:600};${isTot?'':''}">${E(r.name)}</span>
+          <div style="min-width:0"><span style="font-size:12.5px;font-weight:${isTot?700:600}">${E(r.name)}</span>${topLine(r)}</div>
           ${mob?'':`<div>${bar(r)}</div>`}
           ${mob?'':`<span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:${isTot?700:600};text-align:right">${fmt(r.base)}</span>`}
           ${SEGL.map(k=>(mob&&k==='Other')?'':`<span style="font-family:'IBM Plex Mono';font-size:12.5px;text-align:right;color:${r[k]>0?C.ink:'#C9C4BA'};font-weight:${isTot?700:400}">${r.base?(r[k]/r.base*100).toFixed(0)+'%':'—'}</span>`).join('')}
         </div>`;
       const legend=`<div style="display:flex;gap:14px;flex-wrap:wrap;padding:11px 16px 4px">${SEGL.map(k=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#6E6A62"><span style="width:10px;height:10px;border-radius:3px;background:${SEG_C[k]}"></span>${k}</span>`).join('')}</div>`;
-      const excl = (SG.dropped||SG.unmatched) ? `<div style="padding:10px 16px 13px;font-size:10.5px;color:#B6B1A8">Outside the base: ${fmt(SG.dropped)} ac of soil &amp; seed health and unclassified products${SG.unmatched?`, plus ${fmt(SG.unmatched)} ac whose product is not in the portfolio list`:''}. Shares are of the ${fmt(SG.tot.base)} ac carrying one of the four segments.</div>` : '';
       segCard=card(`${cHead(`Product segments by state · ${E(A.gst?A.regionName:'all India')}`,
-          'Share of each state’s product acres by segment · soil &amp; seed health and unclassified products are excluded from the base')}
+          'Share of each state’s product acres by segment, with the largest products in each')}
         ${legend}
         <div style="display:grid;grid-template-columns:${gc};gap:10px;padding:8px 16px 10px;border-bottom:1px solid #EFEDE7">
           ${hdr.map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;${['Acres','Herb','Ins','Fung','Other'].includes(h)?'text-align:right':''}">${h}</span>`).join('')}</div>
         ${SG.rows.map((r,i)=>row(r,i,false)).join('')}
-        ${SG.rows.length>1?row(SG.tot,0,true):''}
-        ${excl}`);
+        ${SG.rows.length>1?row(SG.tot,0,true):''}`);
     }
 
     /* ---- focus-product daily trend, with the UPL/SWAL equivalents combined into one line ---- */

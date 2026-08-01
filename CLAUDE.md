@@ -140,7 +140,8 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   so it asserted the obvious instead of informing.
 - **Product segments by state** joins the weekly sheet to the summary tab's brand → portfolio map (~99% of acres
   match). Soil & Seed Health and Unclassified are excluded from the base entirely, so Herbicide / Insecticide /
-  Fungicide / Other sum to 100% of what remains; the excluded acres are stated under the table so it reconciles.
+  Fungicide / Other sum to 100% of what remains. Non-dashboard states are dropped, and the exclusions are NOT
+  narrated on the page — the table shows the four segments and the largest products per state, nothing else.
 - **Every Week-mode card exports to PNG** (`downloadCard`, `dlWrap`). No library: the app styles inline, so a card
   serialises straight into an SVG `<foreignObject>` and rasterises at 2× on white with a title and the week's
   dates. Weekly review only — the other modes are read on screen. Web fonts do not load inside a rasterised
