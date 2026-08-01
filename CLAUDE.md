@@ -107,6 +107,32 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   "new" is derived from the data itself (transitions and milestone-length streaks score full; a condition that
   has merely been true a while is damped to 45%). Two diversity rules cap it at one signal per scope (when there
   is more than one) and two per detector type, so a day when every state inflects doesn't produce four identical rows.
+- **Two MODES, one page (`state.insMode`).** *Season* answers "are we going to make the number, and what do we
+  correct over weeks". *Yesterday* answers "what broke, and who do I ring this morning". They are not one list
+  re-sorted: measured against live data the chronic territories and the acute ones overlap by **zero** (Harda has
+  6,359 season acres and did nothing yesterday — a call; Morbi has never sprayed — a season problem).
+  Yesterday mode is **detector-led and carries no leaderboards on purpose** — the separate `recap` view is the
+  descriptive roster of the day, and duplicating it here would put two competing Yesterday screens in the nav.
+- **Yesterday imputes NO expected value to anybody — it is an account, not a grade.** An earlier build scored each
+  territory against "expected acres = the state's acres yesterday × the territory's share of the season". That was
+  removed and must not come back: it assumes a territory's share of one day matches its share of a whole season,
+  which is false for any territory whose crop calendar differs from its state's average, and it renders a loose
+  assumption as a precise number — the combination that earns "says who?". Every figure on the page is now a
+  **count from a column**: "24 of Hanumangarh's 43 machines have an operator, have sprayed this season, and did
+  not run" is unarguable in a way that "195 ac short" never was.
+- **`insDayAgg` decomposes idleness into mutually exclusive, observed buckets** that sum exactly to the idle
+  count: flagged breakdown → no operator mapped → never sprayed this season → **unexplained**. First match wins.
+  The breakdown bucket is kept first *even though it is empty in today's data* (see the flag caveat below) so the
+  account stays correct if that column is ever fixed, instead of silently misfiling those machines as unexplained.
+- **The one surviving comparison is the 14-day norm**, and only because it is a different kind of claim: the same
+  series against **its own recent past** (snake tab, real daily history), not a cross-sectional guess about how
+  one territory ought to behave. Rain is an **annotation only** — never a scoring weight, since a count needs no
+  re-weighting to stay true. Clusters rank by machine count, with the idle machines' season acres as magnitude.
+- **CAVEAT — the breakdown flag does not mean "down today".** Measured on live data: 90 machines are flagged and
+  **all 90 also logged acres yesterday**; not one of the 1,038 idle machines is flagged. A present-state field
+  cannot behave that way, so the column evidently records a reported/historical event. This also means the main
+  dashboard's Breakdown KPI does not support the reading "90 machines are down". Not fixed here — it is a
+  sheet-side question.
 - **Two levels: All India and one state — never territory.** The snake tab has a full per-state series, so a state
   view carries the *same seven cards* at the same richness. Territory is where that collapses (no sub-state history,
   and the product tab has no territory column), which is exactly where the level stops.

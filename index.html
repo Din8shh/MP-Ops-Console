@@ -78,7 +78,10 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
   // Insights view: its own state scope ('' = all India, else a state code), page-local like snState/pmState so
   // nothing this page does can move the machine filter bar or any other view. The gate's state LOCK still
   // overrides it (see insAgg) — a state-restricted login can never widen its scope through this control.
-  insSt:'' };
+  // insMode = which question the page is answering. 'season' → the trend, and what to correct over weeks.
+  // 'yday' → what deviated yesterday and needs a call this morning. Deliberately two modes of ONE page: same
+  // spine, same scope, different time horizon and different kind of action.
+  insSt:'', insMode:'season' };
 // state.sheet = which mobile overlay is up: null | 'filters' | 'more'. state.listLimit = rows shown
 // in the mobile machine list (Load more bumps it); reset whenever the filter set changes.
 const MLIST_PAGE = 60;
@@ -2336,6 +2339,93 @@ function insSignals(A){
   return top;
 }
 
+/* ===================== Yesterday mode =====================
+   The season view answers "are we going to make the number, and what do we correct over the coming weeks".
+   This one answers a different question with a different response time: "what broke yesterday, and who do I ring
+   this morning". They are NOT the same list re-sorted — measured against live data, the chronic territories and
+   the acute ones overlap by zero. Harda has 6,359 season acres and did nothing yesterday (a call); Morbi has
+   never sprayed at all (a season problem, and it belongs on the other tab).
+
+   NO COUNTERFACTUALS. An earlier build scored each territory against an "expected acres" figure derived from its
+   share of the season. That was wrong and was removed: it assumed a territory's share of any single day matches
+   its share of the whole season, which is false for any territory whose crop calendar differs from its state's
+   average — and it dressed a loose assumption up as a precise number, which invites "says who?" and deserves it.
+
+   Everything here is instead a COUNT you can point at in a column. Rather than "Hanumangarh was 195 ac short",
+   the page says "24 of Hanumangarh's 43 machines have an operator, have sprayed this season, and did not run".
+   The idleness buckets are mutually exclusive and sum exactly to the idle total, so the account always balances.
+
+   THE ONE BASELINE that survives is the 14-day norm, and only because it is a different kind of claim: the same
+   series measured against its own recent past (the snake tab's real daily history), not a cross-sectional guess
+   about how one territory ought to behave.
+
+   CONFIDENCE. These still rest on a single day, where the season tab rests on cumulative totals. Rain is carried
+   as an annotation from the Open-Meteo data the app already holds — never as a scoring weight, since a count does
+   not need re-weighting to stay true. */
+const INS_DAY = { MIN_MC:4, WET_MM:5, SLOTS:7, CONC_TOP:3 };
+function insDayAgg(A){
+  const dep=A.dep||[];
+  const ran=[], idle=[];
+  dep.forEach(m=> ((m.acresY||0)>0 ? ran : idle).push(m));
+  const D={ deployed:dep.length, ran:ran.length, idle:idle.length,
+            acres:dep.reduce((a,m)=>a+(m.acresY||0),0), flagged:dep.filter(m=>!!m.breakdown).length };
+
+  /* ---- why the idle fleet didn't run: mutually exclusive, first match wins, sums to idle.length ----
+     The breakdown bucket is kept first even though it is empty in today's data — every flagged machine also
+     logged acres, so the flag evidently records a reported event rather than "down right now". Keeping the
+     bucket means the account stays correct if that column's meaning is ever fixed, instead of silently
+     misfiling those machines into "unexplained". */
+  const B={ broken:[], noOp:[], never:[], unexplained:[] };
+  idle.forEach(m=>{
+    if(m.breakdown) B.broken.push(m);
+    else if(!m.opMapped) B.noOp.push(m);
+    else if(!((m.achieved||0)>0)) B.never.push(m);
+    else B.unexplained.push(m);                       // has an operator, has sprayed this season, simply sat out
+  });
+  D.buckets=[
+    { key:'broken', n:B.broken.length, label:'Flagged breakdown', hint:'machine reported down', c:C.open },
+    { key:'noOp',   n:B.noOp.length,   label:'No operator mapped', hint:'nobody assigned to run it', c:C.idle },
+    { key:'never',  n:B.never.length,  label:'Never sprayed this season', hint:'a season problem, not a yesterday one', c:C.ink3 },
+    { key:'unexplained', n:B.unexplained.length, label:'Unexplained', hint:'has an operator, has sprayed before, sat out', c:C.brk },
+  ].filter(x=>x.n>0);
+  D.unexplainedN = B.unexplained.length;
+  D.unexplainedCapability = B.unexplained.reduce((a,m)=>a+(m.achieved||0),0);   // proven acres now sitting still
+
+  /* ---- unexplained idle, grouped by territory. Ranked by MACHINE COUNT — a fact — with the season acres those
+         machines have already produced as the magnitude, so a big idle fleet outranks a small one. ---- */
+  const G={};
+  B.unexplained.forEach(m=>{
+    const t=String(m.territory||'').trim(); if(insJunkTerr(t)) return;
+    const k=m.st+'|'+t, g=G[k]||(G[k]={ st:m.st, name:t, n:0, cap:0 });
+    g.n++; g.cap+=(m.achieved||0);
+  });
+  const size={}, activeT={};
+  dep.forEach(m=>{ const t=String(m.territory||'').trim(); if(insJunkTerr(t)) return;
+    const k=m.st+'|'+t; size[k]=(size[k]||0)+1; if((m.acresY||0)>0) activeT[k]=(activeT[k]||0)+(m.acresY||0); });
+  D.clusters=Object.keys(G).map(k=>{
+    const g=G[k]; let rain=null; try{ rain=rainAbs(g.name, WX_I_YDAY, g.st); }catch(_){}
+    return { ...g, deployed:size[k]||g.n, ranAcres:activeT[k]||0, rain };
+  }).filter(g=>g.deployed>=INS_DAY.MIN_MC && g.n>=3)
+    .sort((a,b)=> b.n-a.n || b.cap-a.cap);
+
+  /* ---- where the work happened: participation and concentration, both pure observation ---- */
+  const keys=Object.keys(size);
+  D.terrTotal=keys.length; D.terrActive=Object.keys(activeT).length;
+  const acresSorted=ran.map(m=>m.acresY||0).sort((a,b)=>b-a);
+  let half=0, nHalf=0;
+  for(const v of acresSorted){ if(half>=D.acres/2) break; half+=v; nHalf++; }
+  D.machinesForHalf=nHalf;
+  const topT=Object.keys(activeT).map(k=>({k,v:activeT[k]})).sort((a,b)=>b.v-a.v).slice(0,INS_DAY.CONC_TOP);
+  D.topShare = D.acres? topT.reduce((a,x)=>a+x.v,0)/D.acres*100 : 0;
+  D.topNames = topT.map(x=>x.k.split('|')[1]);
+
+  /* ---- the one legitimate baseline: this scope's own 14-day norm, from the snake tab's real daily history ---- */
+  D.dayAc=null; D.norm=null;
+  if(A.season){ const d=insDaily(A.snCode,INS_CUR.key); D.dayAc=d[A.season.off]; D.norm=insRoll(d,A.season.off,14); }
+  D.prodY = A.prod ? A.prod.yday : null;
+  return D;
+}
+
 /* Day-by-day acres, this season against last, over the trailing three weeks. Bars rather than lines: the question
    is "did we out-work the same day last year", which is a per-day comparison, not a shape. */
 function buildInsBarsSVG(A,mob){
@@ -2410,13 +2500,91 @@ function insightsBodyHTML(mob){
       <div style="position:relative"><select id="insStateSel" style="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none">${
         optionsHTML([{v:'',t:'All India'},...INS_STATES.filter(gateAllowsState).map(c=>({v:c,t:STATE_NAMES[c]}))], A.gst)
       }</select>${I.caret}</div></div>` : '';
+  const mode = state.insMode==='yday' ? 'yday' : 'season';
+  const modeToggle = `<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
+      <button data-act="insmode" data-m="season" style="${css(seg(mode==='season'))}">Season</button>
+      <button data-act="insmode" data-m="yday" style="${css(seg(mode==='yday'))}">Yesterday</button></div>`;
+  const subtitle = mode==='yday'
+    ? `${A.gst?E(A.regionName):'Seven states'} · what deviated yesterday — leads to check this morning`
+    : `${A.gst?E(A.regionName):'Seven states'} · the season trend — what to correct over the coming weeks`;
   // flex-basis, not flex:1 — with the mode toggle, the scope picker and the freshness line all competing for the
   // row, a purely greedy title collapses to two cramped lines before the row ever wraps.
   const header = `<div style="display:flex;align-items:center;gap:${mob?'10px':'14px'};flex-wrap:wrap">
       <div style="flex:1 1 260px;min-width:210px">
         <div style="font-size:${mob?'15px':'16.5px'};font-weight:700;letter-spacing:-.01em">Programme insights</div>
-        <div style="font-size:11.5px;color:#9C988F;margin-top:2px">${A.gst?E(A.regionName):'Seven states'} · one page · no filters — ${A.scoped?`scoped to ${E(A.og)}`:'everything'}</div>
-      </div>${stSel}${mob?'':`<div style="flex:0 1 auto">${src}</div>`}</div>`;
+        <div style="font-size:11.5px;color:#9C988F;margin-top:2px">${subtitle}${A.scoped?` · ${E(A.og)} only`:''}</div>
+      </div>${modeToggle}${stSel}${mob?'':`<div style="flex:0 1 auto">${src}</div>`}</div>`;
+
+  /* ================= Yesterday mode =================
+     Deliberately detector-led and deliberately NOT a second copy of the Yesterday (recap) view. Recap is the
+     roster — what happened, completely, with leaderboards. This is the exceptions — what deviated and needs a
+     call. Keeping leaderboards out of here is what stops the two pages competing. */
+  if(mode==='yday'){
+    const D=insDayAgg(A);
+    const dayPct = (D.dayAc!=null && D.norm) ? D.dayAc/D.norm*100-100 : null;
+    const runPct = D.deployed ? D.ran/D.deployed*100 : 0;
+    const wetC=r=>r.rain!=null && r.rain>=INS_DAY.WET_MM;
+    const dstat=(v,l,ink,sub)=>`<div style="flex:1 0 auto;min-width:${mob?'44%':'150px'};padding:13px 16px;border-right:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
+        <div style="font-family:'IBM Plex Mono';font-size:${mob?'18px':'20px'};font-weight:700;color:${ink||C.ink}">${v}</div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">${l}</div>
+        ${sub?`<div style="font-size:10.5px;color:#B6B1A8;margin-top:3px">${sub}</div>`:''}</div>`;
+    const band=card(`${cHead(`Yesterday · ${s?E(s.label):'—'}`,
+        `Machine sheet · ${A.gst?E(A.regionName):'all seven states'}${D.norm?` · the day against its own 14-day norm`:''}`)}
+      <div style="display:flex;flex-wrap:wrap;background:#FBFAF8">
+        ${dstat(fmt(D.ran),'machines ran', runPct>=40?C.act:runPct>=20?C.idle:C.brk, runPct.toFixed(0)+'% of '+fmt(D.deployed)+' deployed')}
+        ${dstat(fmt(D.acres),'acres sprayed',C.orangeD, D.ran?fmt(D.acres/D.ran)+' ac per running machine':'')}
+        ${dstat(dayPct==null?'—':`${dayPct>=0?'+':'−'}${Math.abs(dayPct).toFixed(0)}%`,'vs 14-day norm', dayPct==null?C.ink:dayPct>=0?C.act:C.brk, D.norm?`norm ${fmt(D.norm)} ac/day`:'')}
+        ${dstat(D.prodY==null?'—':fmt(D.prodY),'product-attributed', C.ink, D.prodY!=null&&D.acres?`${(D.prodY/D.acres*100).toFixed(0)}% of the day's acres`:'')}
+        ${dstat(fmt(D.idle),'machines idle', D.idle?C.brk:C.ink, D.deployed?`${(D.idle/D.deployed*100).toFixed(0)}% of the deployed fleet`:'')}
+      </div>`);
+
+    /* ---- why the idle fleet didn't run: the account, not a judgement ---- */
+    const bTot=D.buckets.reduce((a,x)=>a+x.n,0)||1;
+    const bar=`<div style="display:flex;height:26px;border-radius:8px;overflow:hidden;background:#F2F0EB;margin-bottom:14px">
+        ${D.buckets.map(x=>`<div title="${E(x.label)}" style="width:${x.n/bTot*100}%;background:${x.c}"></div>`).join('')}</div>`;
+    const legend=D.buckets.map(x=>`<div style="display:flex;align-items:baseline;gap:9px;padding:7px 0;border-top:1px solid #F4F2EE">
+        <span style="width:10px;height:10px;border-radius:3px;background:${x.c};flex-shrink:0;align-self:center"></span>
+        <span style="font-size:12.5px;font-weight:${x.key==='unexplained'?700:600};min-width:0">${x.label}</span>
+        <span style="font-size:11px;color:#9C988F;flex:1;min-width:0">${x.hint}</span>
+        <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700">${fmt(x.n)}</span>
+        <span style="font-family:'IBM Plex Mono';font-size:11px;color:#B6B1A8;width:38px;text-align:right">${(x.n/bTot*100).toFixed(0)}%</span>
+      </div>`).join('');
+    const why=card(`${cHead(`Why ${fmt(D.idle)} machines didn’t run`,
+        'Every bucket is a column in the machine sheet · mutually exclusive · they sum to the idle count')}
+      <div style="padding:14px 16px 12px">${bar}${legend}
+        ${D.unexplainedN?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid #EFEDE7;font-size:11.5px;color:#6E6A62;line-height:1.6">The unexplained group has already sprayed <strong style="color:#46433d">${fmt(D.unexplainedCapability)} acres</strong> this season between them — proven capability that stood still yesterday.</div>`:''}
+      </div>`);
+
+    /* ---- unexplained idle by territory: ranked by machines, a count, never a modelled gap ---- */
+    const cl=D.clusters.slice(0,INS_DAY.SLOTS);
+    const clusters = cl.length ? card(`${cHead('Where the unexplained idle machines are',
+        'Machines with an operator and a season record that did not run · ranked by how many · rain shown where it may explain the day')}
+      ${cl.map((r,i)=>`<div data-act="insdrill" data-key="${E(r.st)}" style="display:flex;gap:11px;padding:12px 16px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
+          <span style="width:8px;height:8px;border-radius:50%;background:${wetC(r)?C.idle:C.brk};margin-top:5px;flex-shrink:0"></span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12.5px;font-weight:700;line-height:1.35">${E(r.name)}${A.gst?'':' · '+E(STATE_NAMES[r.st]||r.st)} — ${fmt(r.n)} of ${fmt(r.deployed)} machines idle</div>
+            <div style="font-size:11.5px;color:#6E6A62;margin-top:3px;line-height:1.5">Between them they have sprayed ${fmt(r.cap)} ac this season${r.ranAcres>0?`; the rest of the territory logged ${fmt(r.ranAcres)} ac yesterday`:'; the territory logged nothing at all yesterday'}.${wetC(r)?` <span style="color:${C.openD}">${r.rain} mm of rain — likely weather.</span>`:(r.rain!=null?` Dry (${r.rain} mm).`:'')}</div>
+          </div></div>`).join('')}`)
+      : card(`${cHead('Where the unexplained idle machines are','')}${waiting(false,'No territory has three or more unexplained idle machines.','insrefresh')}`);
+
+    /* ---- where the work happened: participation + concentration, pure observation ---- */
+    const wstat=(v,l)=>`<div style="flex:1 0 auto;min-width:${mob?'44%':'190px'};padding:13px 16px;border-right:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
+        <div style="font-family:'IBM Plex Mono';font-size:${mob?'18px':'20px'};font-weight:700">${v}</div>
+        <div style="font-size:11px;color:#9C988F;margin-top:5px;line-height:1.45">${l}</div></div>`;
+    const where=card(`${cHead('Where the work happened','Participation and concentration · counted, not compared to any expectation')}
+      <div style="display:flex;flex-wrap:wrap;background:#FBFAF8">
+        ${wstat(`${fmt(D.terrActive)} / ${fmt(D.terrTotal)}`,'territories logged any acres at all')}
+        ${wstat(`${D.topShare.toFixed(0)}%`,`of the day came from the top ${INS_DAY.CONC_TOP} territories${D.topNames.length?` — ${D.topNames.map(E).join(', ')}`:''}`)}
+        ${wstat(fmt(D.machinesForHalf),`machines produced half the day’s acres, of ${fmt(D.ran)} that ran`)}
+      </div>`);
+
+    const note=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;padding:13px 16px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">How to read this page</div>
+        <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">Every figure here is a <strong style="color:#46433d">count from a column</strong> — no acre target is imputed to any territory, because a territory's share of one day need not match its share of a season. The single comparison on the page is the 14-day norm, which measures this scope against <strong style="color:#46433d">its own recent past</strong> rather than against an assumption. Rain is shown where it may explain a quiet day; it is never used to score. These still rest on one day, so treat them as leads to check rather than verdicts.</div></div>`;
+    return `<div style="display:flex;flex-direction:column;gap:14px">
+      ${header}${band}${why}${clusters}${where}${note}
+      ${mob?`<div style="text-align:center;padding:2px 0 4px">${src}</div>`:''}</div>`;
+  }
 
   /* ---------- 1 · verdict ---------- */
   let hero;
@@ -3664,6 +3832,7 @@ app.addEventListener('click', e=>{
     // leaves state.st (and therefore every other view's filter bar) exactly where the user left it.
     case 'insdrill': { const w=el.dataset.key; if(gateAllowsState(w)) setState({insSt:w}); break; }
     case 'insclear': setState({insSt:''}); break;
+    case 'insmode': setState({insMode: el.dataset.m==='yday'?'yday':'season'}); track('insights_mode',{mode:el.dataset.m}); break;
   }
 });
 // machine table row <-> pin cross-highlight
