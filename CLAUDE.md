@@ -108,7 +108,7 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   has merely been true a while is damped to 45%). Two diversity rules cap it at one signal per scope (when there
   is more than one) and two per detector type, so a day when every state inflects doesn't produce four identical rows.
 - **Three MODES, one page (`state.insMode`).** *Season* — the trend, and what to correct over weeks. *Week* — one
-  completed Mon–Sun for the Monday review. *Yesterday* — what broke, and who to ring this morning. Same spine,
+  completed Sat–Fri week for the weekly review. *Yesterday* — what broke, and who to ring this morning. Same spine,
   same scope picker, three horizons. Season and Yesterday are not one list re-sorted: on live data the chronic
   territories and the acute ones overlap by **zero** (Harda has 6,359 season acres and did nothing yesterday — a
   call; Morbi has never sprayed — a season problem). Yesterday is **detector-led with no leaderboards on purpose**
@@ -117,7 +117,9 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
 - **Week mode is state-grain ONLY, and says so on the page.** The cumulative tab is the only source with daily
   history, so what a territory or AM did *during* a past week is unrecoverable — the machine sheet is overwritten
   daily. Per-territory weekly detail needs a weekly snapshot of its cumulative column, which does not exist yet.
-  Boundaries are REAL Mon–Sun computed from the calendar then mapped onto the fiscal axis (`insWeekWindow`); a
+  The programme's week runs **Saturday → Friday**, not ISO Mon–Sun; `INS_WEEK_END_DOW` is the single source of
+  that — window, day-column order and every piece of copy derive from it, so moving the week is a one-line change.
+  Boundaries are real calendar weeks computed from the date then mapped onto the fiscal axis (`insWeekWindow`); a
   week straddling 31 March is skipped, not clipped. Year-over-year on the same fiscal offsets is sound even though
   an offset falls on a different weekday each year — any 7-day window holds all seven weekdays exactly once, so
   weekday rhythm cancels out of the sum.

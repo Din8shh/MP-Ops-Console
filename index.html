@@ -79,7 +79,7 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
   // nothing this page does can move the machine filter bar or any other view. The gate's state LOCK still
   // overrides it (see insAgg) — a state-restricted login can never widen its scope through this control.
   // insMode = which question the page is answering. 'season' → the trend, and what to correct over weeks.
-  // 'week' → the Monday review: a deep dive on one completed Mon–Sun. 'yday' → what deviated yesterday and needs
+  // 'week' → the weekly review: a deep dive on one completed Sat–Fri week. 'yday' → what deviated yesterday and needs
   // a call this morning. Three modes of ONE page: same spine, same scope, different horizon and different action.
   // insWeekBack = how many complete weeks back the Week view is looking; 0 = the week that just ended.
   insSt:'', insMode:'season', insWeekBack:0 };
@@ -2378,11 +2378,11 @@ function insSignals(A){
 }
 
 /* ===================== Week mode — the Monday review =====================
-   A third horizon, for the weekly deep-dive: one completed Mon–Sun, reviewed the Monday after. It asks neither
+   A third horizon, for the weekly deep-dive: one completed Sat–Fri week, reviewed after it closes. It asks neither
    "are we on track" (season) nor "who do I ring" (yesterday) but "what actually happened last week, and how do
    we explain it to the room".
 
-   Boundaries are REAL calendar weeks. The fiscal axis is year-agnostic, so the Mon–Sun is computed from the real
+   Boundaries are REAL calendar weeks. The fiscal axis is year-agnostic, so the Sat–Fri window is computed from the real
    date and then mapped onto it; `back` steps through earlier weeks. A week that straddles 31 March is skipped
    rather than silently clipped, since half of it would land in a different fiscal year's column.
 
@@ -2392,14 +2392,22 @@ function insSignals(A){
    SCOPE LIMIT, stated on the page rather than hidden: everything here is state-grain. Sheet1 has no history, so
    what a territory or an AM did *during* a past week is not recoverable — only where they stand today. Weekly
    territory detail needs a weekly snapshot of the sheet's cumulative column, which does not exist yet. */
+// The programme's week runs SATURDAY → FRIDAY, not the ISO Mon–Sun. This constant is the single source of that
+// fact: the window, the day-column order, the axis labels and every piece of copy derive from it, so moving the
+// week again is a one-line change rather than a hunt through strings.
+const INS_WEEK_END_DOW = 5;                 // JS getDay(): 0=Sun … 5=Fri … 6=Sat
+const INS_WEEK_PHRASE  = 'Saturday to Friday';
+const INS_WEEK_SHORT   = 'Sat–Fri';
+const INS_DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function insWeekWindow(back){
   const now=new Date();
-  const dow=(now.getDay()+6)%7;                                  // 0=Mon … 6=Sun
-  const sun=new Date(now); sun.setDate(now.getDate()-dow-1-7*(back||0));   // the most recent COMPLETE Sunday
-  const mon=new Date(sun); mon.setDate(sun.getDate()-6);
-  const from=snakeOff(mon.getMonth()+1,mon.getDate()), to=snakeOff(sun.getMonth()+1,sun.getDate());
+  let gap=(now.getDay()-INS_WEEK_END_DOW+7)%7;
+  if(gap===0) gap=7;                                             // today is never a complete day, so never an end
+  const d1=new Date(now); d1.setDate(now.getDate()-gap-7*(back||0));   // most recent COMPLETE week-end (a Friday)
+  const d0=new Date(d1); d0.setDate(d1.getDate()-6);
+  const from=snakeOff(d0.getMonth()+1,d0.getDate()), to=snakeOff(d1.getMonth()+1,d1.getDate());
   if(from==null || to==null || to-from!==6) return null;         // straddles the fiscal year boundary
-  return { mon, sun, from, to };
+  return { d0, d1, from, to };
 }
 const insWeekLabel = d => { try{ return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}); }catch(_){ return ''; } };
 function insWeekSum(code,key,a,b){
@@ -2420,8 +2428,9 @@ function insWeekAgg(A,back){
   W.hasData = W.acres!=null && W.acres>0;
 
   const d=insDaily(code,INS_CUR.key), dp=insDaily(code,INS_PREV.key), m=insMach(code);
-  const DOW=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  W.days=[]; for(let i=0;i<7;i++){ const o=w.from+i; W.days.push({ off:o, dow:DOW[i], ac:d[o], ly:dp[o], mc:m[o] }); }
+  W.days=[];
+  for(let i=0;i<7;i++){ const o=w.from+i, dt=new Date(w.d0); dt.setDate(w.d0.getDate()+i);
+    W.days.push({ off:o, dow:INS_DOW[dt.getDay()], ac:d[o], ly:dp[o], mc:m[o] }); }
   const mm=W.days.map(x=>x.mc).filter(x=>x!=null);
   W.machAvg = mm.length? mm.reduce((a,b)=>a+b,0)/mm.length : null;
   W.machPeak= mm.length? Math.max.apply(null,mm) : null;
@@ -2453,7 +2462,7 @@ const insISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')
 function insWeekProducts(A,W){
   if(!TX.loaded || !W) return null;
   const shift=(d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
-  const a=insISO(W.mon), b=insISO(W.sun), pa=insISO(shift(W.mon,-7)), pb=insISO(shift(W.sun,-7));
+  const a=insISO(W.d0), b=insISO(W.d1), pa=insISO(shift(W.d0,-7)), pb=insISO(shift(W.d1,-7));
   const scope=r=>(!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
   const wk=TX.rows.filter(r=>scope(r) && r.d>=a && r.d<=b);
   const pv=TX.rows.filter(r=>scope(r) && r.d>=pa && r.d<=pb);
@@ -2473,8 +2482,8 @@ function insWeekProducts(A,W){
   const total=sum(wk), prev=sum(pv);
   return { total, prev, wow: prev? total/prev*100-100 : null, brands, crops, regions,
     upl: sum(wk.filter(r=>r.company==='UPL')), swal: sum(wk.filter(r=>r.company==='SWAL')),
-    days: Array.from({length:7},(_,i)=>{ const iso=insISO(shift(W.mon,i));
-      return { dow:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i], ac: sum(wk.filter(r=>r.d===iso)) }; }) };
+    days: Array.from({length:7},(_,i)=>{ const dt=shift(W.d0,i);
+      return { dow: INS_DOW[dt.getDay()], ac: sum(wk.filter(r=>r.d===insISO(dt))) }; }) };
 }
 
 /* The week's shape, this year against the same seven fiscal days last year. Bars, because the question is
@@ -2668,7 +2677,7 @@ function insightsBodyHTML(mob){
   // page is read by whoever opens it, not narrated to a presenter — so "both measures moved" and not "worth
   // saying both ways", "yesterday in detail" and not "leads to check this morning".
   const subtitle = mode==='yday' ? `${scopeName} · yesterday in detail`
-    : mode==='week' ? `${scopeName} · one completed week, Monday to Sunday`
+    : mode==='week' ? `${scopeName} · one completed week, ${INS_WEEK_PHRASE}`
     : `${scopeName} · the season so far`;
   // flex-basis, not flex:1 — with the mode toggle, the scope picker and the freshness line all competing for the
   // row, a purely greedy title collapses to two cramped lines before the row ever wraps.
@@ -2685,11 +2694,11 @@ function insightsBodyHTML(mob){
     const W=insWeekAgg(A, state.insWeekBack|0);
     const stepper=`<div style="display:flex;align-items:center;gap:8px">
         <button data-act="insweek" data-d="-1" title="Earlier week" style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#46433d;font-size:15px;cursor:pointer;line-height:1">‹</button>
-        <span style="font-size:12.5px;font-weight:600;min-width:${mob?'120px':'132px'};text-align:center">${W?`${E(insWeekLabel(W.mon))} – ${E(insWeekLabel(W.sun))}`:'—'}</span>
+        <span style="font-size:12.5px;font-weight:600;min-width:${mob?'120px':'132px'};text-align:center">${W?`${E(insWeekLabel(W.d0))} – ${E(insWeekLabel(W.d1))}`:'—'}</span>
         <button data-act="insweek" data-d="1" title="Later week" ${state.insWeekBack<=0?'disabled':''} style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:${state.insWeekBack<=0?'#F6F5F2':'#fff'};color:${state.insWeekBack<=0?'#C9C4BA':'#46433d'};font-size:15px;cursor:${state.insWeekBack<=0?'default':'pointer'};line-height:1">›</button>
       </div>`;
     const wHead=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:-2px">${stepper}
-        <span style="font-size:11px;color:#B6B1A8">${state.insWeekBack===0?'the week that just ended':`${state.insWeekBack} week${state.insWeekBack===1?'':'s'} earlier`} · Mon–Sun</span></div>`;
+        <span style="font-size:11px;color:#B6B1A8">${state.insWeekBack===0?'the week that just ended':`${state.insWeekBack} week${state.insWeekBack===1?'':'s'} earlier`} · ${INS_WEEK_SHORT}</span></div>`;
     if(!W || !SNAKE.loaded || !W.hasData){
       return `<div style="display:flex;flex-direction:column;gap:14px">${header}${wHead}
         ${card(waiting(SNAKE.error, SNAKE.error?'Could not load the cumulative tab.':(SNAKE.loaded?'No acres were logged in this week.':'Loading the season history…'),'snakeretry'))}
@@ -2703,7 +2712,7 @@ function insightsBodyHTML(mob){
     // Local: the league's vsCell is declared further down this function and would be in the temporal dead zone here.
     const wVs=v=>v==null?`<span style="color:#C9C4BA">—</span>`:`<span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700;color:${v>=0?C.greenD:C.brk}">${v>=0?'+':'−'}${Math.abs(v).toFixed(0)}%</span>`;
     const hero=card(`<div style="padding:${mob?'16px':'20px'}">
-        <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Week of ${E(insWeekLabel(W.mon))} – ${E(insWeekLabel(W.sun))} · ${E(A.gst?A.regionName:'all India')}</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Week of ${E(insWeekLabel(W.d0))} – ${E(insWeekLabel(W.d1))} · ${E(A.gst?A.regionName:'all India')}</div>
         <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
           <div style="font-family:'IBM Plex Mono';font-size:${mob?'36px':'48px'};font-weight:700;line-height:1;letter-spacing:-.02em">${fmt(W.acres)}<span style="font-size:${mob?'15px':'18px'};color:#B6B1A8;font-weight:500"> ac</span></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:6px">${pill2(W.wow,' vs prev week')}${pill2(W.yoy,' vs same week ’25-26')}${pill2(W.yoy2,' vs ’24-25')}</div>
@@ -2734,7 +2743,7 @@ function insightsBodyHTML(mob){
       // The cells show MAGNITUDES, so the delta beneath them must be the change in that magnitude — otherwise a
       // growing lead would read as a negative number sitting under a rising figure.
       const dMag = Math.abs(POS.ac1) - Math.abs(POS.ac0);
-      posCard=card(`${cHead('Where the week left the season','Cumulative position against last season, measured on the Sunday before and the Sunday after')}
+      posCard=card(`${cHead('Where the week left the season','Cumulative position against last season, measured the day before the week began and on its final day')}
         <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-bottom:1px solid #EFEDE7">
           ${big(`${POS.pct0>=0?'+':'−'}${Math.abs(POS.pct0).toFixed(1)}%`,`${POS.pct0>=0?'lead':'gap'} · week start`)}
           ${big(`${POS.pct1>=0?'+':'−'}${Math.abs(POS.pct1).toFixed(1)}%`,`${noun} · week end`, `${dPct>=0?'+':''}${dPct.toFixed(1)} pp`, dPct>=0?C.act:C.brk)}
@@ -2753,7 +2762,7 @@ function insightsBodyHTML(mob){
       <div style="padding:2px ${mob?'2px':'8px'} 12px">${bars.svg}</div>`);
 
     const gcols=mob?null:'1.5fr .9fr .8fr .7fr .7fr .8fr';
-    const states = W.states.length>1 ? card(`${cHead(`States · week of ${E(insWeekLabel(W.mon))}`,'Ranked by acres in the week · a row scopes the page to that state')}
+    const states = W.states.length>1 ? card(`${cHead(`States · week of ${E(insWeekLabel(W.d0))}`,'Ranked by acres in the week · a row scopes the page to that state')}
       ${mob ? W.states.map((r,i)=>`<div data-act="insdrill" data-key="${r.code}" style="padding:12px 15px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
           <div style="display:flex;align-items:baseline;gap:8px">
             <span style="flex:1;font-size:13px;font-weight:700">${E(r.name)}</span>
