@@ -134,6 +134,17 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   `POS.ac*` is (last season − this season), so a negative value means ahead, and the noun (`lead`/`gap`), the
   label (`acres ahead`/`acres behind`) and the verb (`grew`/`shrank` vs `narrowed`/`widened`) all switch on it.
   Cells show magnitudes, so the delta under them is the change in that magnitude, not the raw signed difference.
+- **Week mode metrics were chosen so the headline decomposes.** The week's acres = (machines that ran) ×
+  (ground each covered), so the stat band carries acres/day, machines/day and **acres per running machine** over
+  the week's machine-days. A "days with acres" count was removed: at national scope it can only ever read 7/7,
+  so it asserted the obvious instead of informing.
+- **Product segments by state** joins the weekly sheet to the summary tab's brand → portfolio map (~99% of acres
+  match). Soil & Seed Health and Unclassified are excluded from the base entirely, so Herbicide / Insecticide /
+  Fungicide / Other sum to 100% of what remains; the excluded acres are stated under the table so it reconciles.
+- **Every Week-mode card exports to PNG** (`downloadCard`, `dlWrap`). No library: the app styles inline, so a card
+  serialises straight into an SVG `<foreignObject>` and rasterises at 2× on white with a title and the week's
+  dates. Weekly review only — the other modes are read on screen. Web fonts do not load inside a rasterised
+  foreignObject, so exported text falls back to the system UI font; layout and numbers are unaffected.
 - **Week mode carries TWO product cards, from two different sources.**
   *Products this week* ← `WKP` (gid 1973671649), a **hand-built tab covering ONE named week** (`WKP_WEEK`,
   25–31 Jul 2026). It has no date column — the tab IS the week — so it renders only when the selected week

@@ -2054,6 +2054,45 @@ function buildChartExportSVG(kind){
     `<svg x="0" y="${headerH}" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${inner}</svg></svg>`;
   return {xml, W, H:H+headerH};
 }
+/* ===================== card → PNG export (Week mode) =====================
+   Every card in the weekly review can be lifted straight into a deck. This works without any library because the
+   whole app styles inline: serialise the card's DOM into an SVG <foreignObject> and the appearance comes with it.
+   No external CSS to inline, no images to fetch — the charts are already inline SVG.
+
+   Rasterised at 2× on white with a title line and the week's dates, so a pasted image stands alone in a slide.
+   Web fonts do not load inside a rasterised foreignObject, so exported text falls back to the system UI font;
+   layout and numbers are unaffected. */
+function downloadCard(id){
+  const host=document.getElementById(id); if(!host){ console.warn('card export: no node', id); return; }
+  const node=host.firstElementChild||host;
+  const r=node.getBoundingClientRect();
+  const W=Math.max(320,Math.ceil(r.width)), pad=20, headH=host.dataset.title?52:0;
+  const H=Math.ceil(r.height)+pad*2+headH;
+  let body;
+  try{ body=new XMLSerializer().serializeToString(node); }
+  catch(e){ console.error('card export: serialise failed', e); return; }
+  const title=host.dataset.title||'', sub=host.dataset.sub||'';
+  const xml=`<svg xmlns="http://www.w3.org/2000/svg" width="${W+pad*2}" height="${H}" viewBox="0 0 ${W+pad*2} ${H}">`+
+    `<rect x="0" y="0" width="${W+pad*2}" height="${H}" fill="#FFFFFF"/>`+
+    (title?`<text x="${pad}" y="28" font-size="16" font-family="'Noto Sans',system-ui,sans-serif" font-weight="700" fill="#1B1A17">${E(title)}</text>`+
+           `<text x="${pad}" y="45" font-size="11.5" font-family="'Noto Sans',system-ui,sans-serif" fill="#9C988F">${E(sub)}</text>`:'')+
+    `<foreignObject x="${pad}" y="${headH+pad}" width="${W}" height="${Math.ceil(r.height)}">`+
+      `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${W}px;font-family:'Noto Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased">${body}</div>`+
+    `</foreignObject></svg>`;
+  const img=new Image(), scale=2;
+  img.onload=()=>{
+    const cv=document.createElement('canvas'); cv.width=Math.round((W+pad*2)*scale); cv.height=Math.round(H*scale);
+    const ctx=cv.getContext('2d'); ctx.fillStyle='#FFFFFF'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.drawImage(img,0,0,cv.width,cv.height);
+    cv.toBlob(blob=>{ if(!blob){ console.error('card export: toBlob failed'); return; }
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+      a.download=`MP-Ops_${(host.dataset.file||id).replace(/[^A-Za-z0-9._-]+/g,'-')}.png`;
+      document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500);
+    },'image/png');
+  };
+  img.onerror=e=>console.error('card export: rasterise failed for', id, e);
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(xml);
+}
 function downloadChart(kind){
   const built=buildChartExportSVG(kind); if(!built){ console.warn('chart export: no rendered chart for', kind); return; }
   const scale=2, img=new Image();
@@ -2473,7 +2512,11 @@ function insWeekAgg(A,back){
   const mm=W.days.map(x=>x.mc).filter(x=>x!=null);
   W.machAvg = mm.length? mm.reduce((a,b)=>a+b,0)/mm.length : null;
   W.machPeak= mm.length? Math.max.apply(null,mm) : null;
-  W.activeDays = W.days.filter(x=>x.ac>0).length;
+  // Machine-DAYS worked across the week, and therefore acres per running machine. The week's output is
+  // (machines that ran) × (ground each covered); showing both makes the headline explainable rather than just
+  // stated. This replaces a "days with acres" count, which at national scope can never be anything but 7/7.
+  W.machDays = mm.length? mm.reduce((a,b)=>a+b,0) : null;
+  W.acPerMachine = (W.machDays && W.acres!=null) ? W.acres/W.machDays : null;
   const best=W.days.filter(x=>x.ac!=null).sort((a,b)=>b.ac-a.ac)[0];
   W.bestDay = best && best.ac>0 ? best : null;
 
@@ -2516,6 +2559,37 @@ function insWeekProducts(A,W){
     products: listOf(pm,(k,v)=>({ key:k, ...meta[k], ac:v })),
     crops:    listOf(cm,(k,v)=>({ key:k, ac:v })),
     regions:  listOf(rm,(k,v)=>({ st:k, name: k==='OT'?'Other':(STATE_NAMES[k]||k), ac:v })) };
+}
+
+/* ===== product segments by state =====
+   The weekly product sheet has no portfolio column, so the segment is joined on from the SUMMARY tab's
+   brand → portfolio map. That join covers ~99% of the week's product acres; whatever misses is reported rather
+   than quietly folded into a bucket.
+
+   Soil & Seed Health and Unclassified are excluded from the base entirely (they are not spray segments in the
+   sense this table is asking about), so the four shares sum to 100% of what remains. Everything that is neither
+   herbicide, insecticide nor fungicide — in practice Bio Solution — lands in Other. */
+const INS_SEGS = ['Herbicide','Insecticide','Fungicide'];
+const INS_SEG_DROP = { 'Soil and Seed Health':1, 'Unclassified':1 };
+function insWeekSegments(A,W){
+  if(!WKP.loaded || !PROD.loaded || !W) return null;
+  if(insISO(W.d0)!==WKP_WEEK.start || insISO(W.d1)!==WKP_WEEK.end) return { wrongWeek:true };
+  const map={}; PROD.rows.forEach(r=>{ if(!map[r.brandKey]) map[r.brandKey]=r.portfolio; });
+  const scope=r=>(!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
+  const by={}; let dropped=0, unmatched=0;
+  WKP.rows.filter(scope).forEach(r=>{
+    const seg=map[r.key];
+    if(!seg){ unmatched+=r.acres; return; }                 // no portfolio known for this product
+    if(INS_SEG_DROP[seg]){ dropped+=r.acres; return; }      // deliberately outside the base
+    const e=by[r.st]||(by[r.st]={ st:r.st, name:STATE_NAMES[r.st]||(r.st==='OT'?'Other states':r.st), base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0 });
+    const k = INS_SEGS.indexOf(seg)>=0 ? seg : 'Other';
+    e[k]+=r.acres; e.base+=r.acres;
+  });
+  const rows=Object.keys(by).map(k=>by[k]).filter(x=>x.base>0).sort((a,b)=>b.base-a.base);
+  if(!rows.length) return { empty:true };
+  const tot={ st:'', name:'All shown', base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0 };
+  rows.forEach(r=>{ tot.base+=r.base; INS_SEGS.concat('Other').forEach(k=>{ tot[k]+=r[k]; }); });
+  return { rows, tot, dropped, unmatched };
 }
 
 /* ===== focus-product daily trend =====
@@ -2780,6 +2854,7 @@ function insightsBodyHTML(mob){
   if(mode==='week'){
     if(!TX.loaded  && !TX.loading  && !TX.error ) setTimeout(loadTx,0);    // day-level products, for the trend
     if(!WKP.loaded && !WKP.loading && !WKP.error) setTimeout(loadWkp,0);   // weekly per-product detail
+    if(!PROD.loaded && !PROD.loading && !PROD.error) setTimeout(loadProduct,0);   // brand → portfolio, for segments
     const W=insWeekAgg(A, state.insWeekBack|0);
     const stepper=`<div style="display:flex;align-items:center;gap:8px">
         <button data-act="insweek" data-d="-1" title="Earlier week" style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#46433d;font-size:15px;cursor:pointer;line-height:1">‹</button>
@@ -2793,6 +2868,14 @@ function insightsBodyHTML(mob){
         ${card(waiting(SNAKE.error, SNAKE.error?'Could not load the cumulative tab.':(SNAKE.loaded?'No acres were logged in this week.':'Loading the season history…'),'snakeretry'))}
         </div>`;
     }
+    /* Export scaffold: wrap a card in a titled host the exporter can serialise, and hang a PNG button on it.
+       Weekly review only — the other modes are read on screen, not lifted into slides. */
+    const wkSub=`${insWeekLabel(W.d0)} – ${insWeekLabel(W.d1)} · ${A.gst?A.regionName:'all India'}`;
+    const dlWrap=(id,title,inner)=> inner ? `<div style="position:relative">
+        <div id="${id}" data-title="${E(title)}" data-sub="${E(wkSub)}" data-file="${id}_${insISO(W.d1)}">${inner}</div>
+        <button data-act="dlcard" data-id="${id}" title="Download this as a PNG for your deck"
+          style="position:absolute;top:11px;right:12px;display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;font-family:'Noto Sans';font-size:11px;font-weight:600;cursor:pointer;z-index:2">${DL_ICON}PNG</button>
+      </div>` : '';
     const big=(v,l,sub,ink)=>`<div style="flex:1 0 auto;min-width:${mob?'46%':'168px'};padding:${mob?'14px 16px':'16px 20px'};border-right:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
         <div style="font-family:'IBM Plex Mono';font-size:${mob?'21px':'26px'};font-weight:700;color:${ink||C.ink};line-height:1">${v}</div>
         <div style="font-size:10.5px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:7px">${l}</div>
@@ -2807,9 +2890,9 @@ function insightsBodyHTML(mob){
           <div style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:6px">${pill2(W.wow,' vs prev week')}${pill2(W.yoy,' vs same week ’25-26')}${pill2(W.yoy2,' vs ’24-25')}</div>
         </div></div>
       <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-top:1px solid #EFEDE7">
-        ${big(fmt(W.acres/7),'acres per day','7-day average',C.orangeD)}
+        ${big(fmt(W.acres/7),'acres per day', W.bestDay?`best ${W.bestDay.dow} · ${fmt(W.bestDay.ac)} ac`:'7-day average',C.orangeD)}
         ${big(W.machAvg!=null?fmt(W.machAvg):'—','machines per day', W.machPeak!=null?`peak ${fmt(W.machPeak)}`:'')}
-        ${big(`${W.activeDays}/7`,'days with acres', W.bestDay?`best ${W.bestDay.dow} · ${fmt(W.bestDay.ac)} ac`:'')}
+        ${big(W.acPerMachine!=null?fmt(W.acPerMachine):'—','acres per running machine', W.machDays?`over ${fmt(W.machDays)} machine-days`:'')}
         ${big(W.ly!=null?fmt(W.ly):'—','same week last year', W.ly!=null?`${W.acres>=W.ly?'+':'−'}${fmt(Math.abs(W.acres-W.ly))} ac`:'')}
       </div>`);
 
@@ -2908,6 +2991,39 @@ function insightsBodyHTML(mob){
         ${regStrip}`);
     }
 
+    /* ---- product segments by state ---- */
+    const SG=insWeekSegments(A,W);
+    const SEG_C={ Herbicide:C.green, Insecticide:C.orange, Fungicide:C.open, Other:'#B6B1A8' };
+    let segCard='';
+    if(!WKP.loaded || !PROD.loaded){
+      segCard=card(`${cHead('Product segments by state','Weekly product sheet × portfolio')}${waiting(WKP.error||PROD.error, (WKP.error||PROD.error)?'Could not load the product sheets.':'Loading product segments…','wkpretry')}`);
+    } else if(SG && SG.wrongWeek){
+      segCard='';                                            // the week card already explains the coverage
+    } else if(!SG || SG.empty){
+      segCard=card(`${cHead('Product segments by state','Weekly product sheet × portfolio')}${waiting(false,'No segment-classified product acres for this scope.','wkpretry')}`);
+    } else {
+      const SEGL=INS_SEGS.concat('Other');
+      const bar=r=>`<span style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#F2F0EB">${SEGL.map(k=>r[k]>0?`<span style="width:${r[k]/r.base*100}%;background:${SEG_C[k]}"></span>`:'').join('')}</span>`;
+      const gc=mob?'1fr 54px 54px 54px':'1.3fr 1.1fr 78px 62px 62px 62px 58px';
+      const hdr=(mob?['State','Herb','Ins','Fung']:['State','','Acres','Herb','Ins','Fung','Other']);
+      const row=(r,i,isTot)=>`<div style="display:grid;grid-template-columns:${gc};gap:10px;align-items:center;padding:${isTot?'11px':'10px'} 16px;border-top:1px solid ${isTot?'#E9E6DF':'#F4F2EE'};${isTot?'background:#FBFAF8':''}">
+          <span style="font-size:12.5px;font-weight:${isTot?700:600};${isTot?'':''}">${E(r.name)}</span>
+          ${mob?'':`<div>${bar(r)}</div>`}
+          ${mob?'':`<span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:${isTot?700:600};text-align:right">${fmt(r.base)}</span>`}
+          ${SEGL.map(k=>(mob&&k==='Other')?'':`<span style="font-family:'IBM Plex Mono';font-size:12.5px;text-align:right;color:${r[k]>0?C.ink:'#C9C4BA'};font-weight:${isTot?700:400}">${r.base?(r[k]/r.base*100).toFixed(0)+'%':'—'}</span>`).join('')}
+        </div>`;
+      const legend=`<div style="display:flex;gap:14px;flex-wrap:wrap;padding:11px 16px 4px">${SEGL.map(k=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#6E6A62"><span style="width:10px;height:10px;border-radius:3px;background:${SEG_C[k]}"></span>${k}</span>`).join('')}</div>`;
+      const excl = (SG.dropped||SG.unmatched) ? `<div style="padding:10px 16px 13px;font-size:10.5px;color:#B6B1A8">Outside the base: ${fmt(SG.dropped)} ac of soil &amp; seed health and unclassified products${SG.unmatched?`, plus ${fmt(SG.unmatched)} ac whose product is not in the portfolio list`:''}. Shares are of the ${fmt(SG.tot.base)} ac carrying one of the four segments.</div>` : '';
+      segCard=card(`${cHead(`Product segments by state · ${E(A.gst?A.regionName:'all India')}`,
+          'Share of each state’s product acres by segment · soil &amp; seed health and unclassified products are excluded from the base')}
+        ${legend}
+        <div style="display:grid;grid-template-columns:${gc};gap:10px;padding:8px 16px 10px;border-bottom:1px solid #EFEDE7">
+          ${hdr.map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;${['Acres','Herb','Ins','Fung','Other'].includes(h)?'text-align:right':''}">${h}</span>`).join('')}</div>
+        ${SG.rows.map((r,i)=>row(r,i,false)).join('')}
+        ${SG.rows.length>1?row(SG.tot,0,true):''}
+        ${excl}`);
+    }
+
     /* ---- focus-product daily trend, with the UPL/SWAL equivalents combined into one line ---- */
     const T=insProdTrend(A);
     let prodTrend='';
@@ -2944,7 +3060,7 @@ function insightsBodyHTML(mob){
         <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Scope of this view</div>
         <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">Everything here is <strong style="color:#46433d">state level</strong>, from the cumulative tab — the only source with daily history. What a territory or an AM did <em>during</em> a past week is not recoverable: the machine sheet is overwritten each day, so it can only show where they stand today, which is what the Season and Yesterday views show. Per-territory weekly detail would need a weekly snapshot of the sheet's cumulative column, which does not exist yet. Year-over-year is measured on the same seven fiscal days; because any week contains all seven weekdays, weekday rhythm cancels out of the comparison.</div></div>`;
     return `<div style="display:flex;flex-direction:column;gap:14px">
-      ${header}${wHead}${hero}${posCard}${shape}${states}${prodWk}${prodTrend}${note}
+      ${header}${wHead}${dlWrap('wk-summary','The week in summary',hero)}${dlWrap('wk-season','Where the week left the season',posCard)}${dlWrap('wk-daily','The week day by day',shape)}${dlWrap('wk-states','States',states)}${dlWrap('wk-products','Products this week',prodWk)}${dlWrap('wk-segments','Product segments by state',segCard)}${dlWrap('wk-trend','Focus product trend',prodTrend)}${note}
       ${mob?`<div style="text-align:center;padding:2px 0 4px">${src}</div>`:''}</div>`;
   }
 
@@ -4255,6 +4371,7 @@ app.addEventListener('click', e=>{
     case 'snakeretry': SNAKE.loaded=false; SNAKE.error=false; loadSnake(); break;
     case 'snTrendWin': setState({snTrendWin:+el.dataset.win||30}); break;
     case 'dlChart': downloadChart(el.dataset.kind); break;
+    case 'dlcard': downloadCard(el.dataset.id); track('week_card_export',{card:el.dataset.id}); break;
     case 'pmco': setState({pmCo:el.dataset.co}); track('product_company',{co:el.dataset.co}); break;
     case 'pmmeasure': setState({pmMeasure:el.dataset.m==='yday'?'yday':'ytd'}); break;
     case 'pmstate': setState({pmState:el.dataset.st}); break;   // drill from the state-breakdown row
