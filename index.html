@@ -514,27 +514,41 @@ async function loadSnake(){
    brand belongs to exactly one company, so company is a deterministic attribute of the brand. This dataset is
    INDEPENDENT of the machine spray acres (a machine sprays many products, so these acres aggregate differently);
    it drives the admin-only Product Insights view and is never mixed into the machine KPIs. Fetched lazily on
-   first view. Fetched by sheet NAME (like the primary machine loader) — the tab has no stable gid we can read. */
-const PROD_SHEET = 'Product data';
+   first view. Fetched by gid (the tab's numeric id) rather than a name so a tab rename doesn't silently fall
+   back to Sheet1 — same rationale as the snake-chart tab. */
+const PROD_GID = '1039187695';
+const PROD_SHEET = 'Product data';   // retained for logs/labels only; the fetch keys off PROD_GID
 // Uppercase region_name in the tab → dashboard state code. Anything outside the 7 dashboard states (the tab also
 // carries AP/UP/Andaman — together <0.5% of acres) folds into 'OT' so the totals still reconcile to the sheet.
 const PROD_REGION = { 'MADHYA PRADESH':'MP', 'MAHARASHTRA':'MH', 'TELANGANA':'TG', 'GUJARAT':'GJ', 'RAJASTHAN':'RJ', 'PUNJAB':'PB', 'HARYANA':'HR' };
 const PROD_STATES = ['MP','MH','TG','GJ','RJ','PB','HR'];   // dashboard state order for the state picker
-const PROD = { loading:false, loaded:false, error:false, at:'', rows:[] };  // rows: {st,stName,crop,brand,brandKey,company,ytd,yday}
-function productUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(PROD_SHEET)}&t=${Date.now()}`; }
+// The tab's columns, by position. `portfolio` was inserted at index 4 after this parser was first written, which
+// silently shifted both acre columns — YTD was reading the portfolio TEXT (→0) and "yesterday" was reading YTD.
+// Named indices so the next insertion is a one-line fix instead of a silent one.
+const PROD_COL = { region:0, crop:1, brand:2, company:3, portfolio:4, ytd:5, yday:6 };
+// Portfolio arrives free-typed ("INSECTICIDES" alongside "Insecticide", and ~7% blank).
+const PROD_PORTFOLIOS = ['Herbicide','Insecticide','Fungicide','Bio Solution','Soil and Seed Health'];
+function prodPortfolio(s){
+  const t=String(s||'').trim(); if(!t) return 'Unclassified';
+  const u=t.toUpperCase().replace(/S$/,'');
+  return PROD_PORTFOLIOS.find(p=>p.toUpperCase().replace(/S$/,'')===u) || titleCase(t);
+}
+const PROD = { loading:false, loaded:false, error:false, at:'', rows:[] };  // rows: {st,stName,crop,brand,brandKey,company,portfolio,ytd,yday}
+function productUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${PROD_GID}&t=${Date.now()}`; }
 function productBuild(rows){
   if(!rows.length) throw new Error('product: no rows');
-  const body = rows.slice(1).filter(r=>r && r.length>=6);
+  const K=PROD_COL;
+  const body = rows.slice(1).filter(r=>r && r.length>K.ytd);
   const out=[];
   for(const r of body){
-    const region=String(r[0]||'').trim(); if(!region) continue;
+    const region=String(r[K.region]||'').trim(); if(!region) continue;
     const st = PROD_REGION[region.toUpperCase()] || 'OT';
-    const brandRaw=String(r[2]||'').trim(); if(!brandRaw) continue;
-    let comp=String(r[3]||'').trim().toUpperCase();
+    const brandRaw=String(r[K.brand]||'').trim(); if(!brandRaw) continue;
+    let comp=String(r[K.company]||'').trim().toUpperCase();
     comp = comp==='SWAL' ? 'SWAL' : comp==='UPL' ? 'UPL' : null; if(!comp) continue;   // strictly the two companies
-    out.push({ st, stName: st==='OT' ? 'Other states' : STATE_NAMES[st], crop: titleCase(r[1])||'—',
+    out.push({ st, stName: st==='OT' ? 'Other states' : STATE_NAMES[st], crop: titleCase(r[K.crop])||'—',
       brand: titleCase(brandRaw), brandKey: brandRaw.toUpperCase().replace(/\s+/g,' '), company:comp,
-      ytd:num(r[4]), yday:num(r[5]) });
+      portfolio: prodPortfolio(r[K.portfolio]), ytd:num(r[K.ytd]), yday:num(r[K.yday]) });
   }
   PROD.rows=out;
 }
