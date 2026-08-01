@@ -74,7 +74,11 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
   // Product Insights view: its own independent scope over the "Product data" tab (State × Crop × Company ×
   // {YTD, yesterday}). Deliberately NOT tied to the machine filter bar — product-scanned acres are a separate
   // metric from machine spray acres. pmCo = ALL|UPL|SWAL, pmMeasure = ytd|yday.
-  pmCo:'ALL', pmState:'ALL', pmCrop:'ALL', pmMeasure:'ytd' };
+  pmCo:'ALL', pmState:'ALL', pmCrop:'ALL', pmMeasure:'ytd',
+  // Insights view: its own state scope ('' = all India, else a state code), page-local like snState/pmState so
+  // nothing this page does can move the machine filter bar or any other view. The gate's state LOCK still
+  // overrides it (see insAgg) — a state-restricted login can never widen its scope through this control.
+  insSt:'' };
 // state.sheet = which mobile overlay is up: null | 'filters' | 'more'. state.listLimit = rows shown
 // in the mobile machine list (Load more bumps it); reset whenever the filter set changes.
 const MLIST_PAGE = 60;
@@ -410,7 +414,7 @@ async function loadData(){
    current season stops at its last real day (the sheet forward-fills it flat; we trim that tail). All-India is
    the sum of the 7 states. Admin-only, fetched lazily on first view. */
 // `col` = the running-cumulative column (drives the snake chart); `dcol` = that season's PER-DAY column, which the
-// snake chart derives by differencing but other views read directly (the sheet's own daily figure is the
+// snake chart derives by differencing but the Insights page reads directly (the sheet's own daily figure is the
 // authority for momentum, and differencing a forward-filled cumulative can't tell a genuine 0 from a stale day).
 const SNAKE_FYS = [
   { key:'fy2425', col:3, dcol:7, label:'FY 24-25', short:"’24-25", color:'#9C988F' },   // two seasons ago
@@ -442,7 +446,7 @@ state.snTo = snakeTodayOff();
 const SNAKE_TICKS = SNAKE_FMONTHS.map(m=>({ m, off:snakeOff(m,1), label:['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m] }));
 
 // S[code][fyKey] = [{off,val}] cumulative, trimmed (the snake chart).  D[code][fyKey][off] = that day's acres and
-// M[code][off] = machines that ran that day — both dense arrays, null where the sheet has nothing.
+// M[code][off] = machines that ran that day — both dense arrays, null where the sheet has nothing (the Insights page).
 const SNAKE = { loading:false, loaded:false, error:false, at:'', S:{}, D:{}, M:{} };
 function snakeUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${SNAKE_GID}&t=${Date.now()}`; }
 
@@ -467,7 +471,7 @@ function snakeBuild(rows){
   if(!rows.length) throw new Error('snake: no rows');
   const body = rows.slice(1).filter(r=>r && r.length>=6);
   // raw[code][fyKey][fiscalOff] = the sheet's cumulative value for that day (already April-1-based; no rebasing)
-  // rawD / rawM = the same shape for the per-day acres and the machines-ran count.
+  // rawD / rawM = the same shape for the per-day acres and the machines-ran count (Insights page).
   const raw={}, rawD={}, rawM={};
   for(const r of body){
     const day=parseInt(r[0],10), month=parseInt(r[1],10);
@@ -716,10 +720,10 @@ function planTotals(){
 function isAdmin(){ return !!(GATE.cur && GATE.cur.role==='admin'); }
 // Non-admin (UPL/SWAL) desktop views drop the Territory-breakdown, Area-Manager and Leaderboard tabs.
 // 'pending' (undeployed) view is admin-only, alongside the existing admin-only desktop tabs.
-function roleHidesView(view){ return !isAdmin() && (view==='tables'||view==='am'||view==='leader'||view==='pending'||view==='snake'||view==='product'||view==='recap'); }
+function roleHidesView(view){ return !isAdmin() && (view==='insights'||view==='tables'||view==='am'||view==='leader'||view==='pending'||view==='snake'||view==='product'||view==='recap'); }
 // Views that render their OWN controls and so drop the shared machine filter bar + KPI strip (desktop) and the
 // weather banner + KPI cards (mobile): the standalone rollup/insight pages.
-const CHROMELESS = new Set(['snake','product','recap']);
+const CHROMELESS = new Set(['insights','snake','product','recap']);
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
@@ -1146,6 +1150,7 @@ const I = {
   leader:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0Z"/><path d="M17 5h2.5a1.5 1.5 0 0 1 0 5H17M7 5H4.5a1.5 1.5 0 0 0 0 5H7"/></svg>',
   pending:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   snake:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20V4M3 20h18"/><path d="M6 15l4-5 4 3 5-8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  insights:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 12V3a9 9 0 0 1 7.8 4.5Z"/><path d="M12 12l6.4 6.4"/></svg>',
   product:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M9 3h6M10 3v5.5L5.4 17a2 2 0 0 0 1.8 3h9.6a2 2 0 0 0 1.8-3L14 8.5V3"/><path d="M7.7 14h8.6"/></svg>',
   recap:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"/><path d="M7 18a5 5 0 0 1 10 0"/><path d="M12 3v3M4.6 8.6l1.4 1.4M19.4 8.6 18 10M2.5 14H4M20 14h1.5"/></svg>',
   mobile:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>',
@@ -1498,7 +1503,7 @@ function railHTML(){
   return `<aside style="width:74px;flex-shrink:0;background:#1B1A17;display:flex;flex-direction:column;align-items:center;padding:16px 0">
     <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;letter-spacing:.02em;color:#fff;margin-bottom:26px">UPL</div>
     <nav style="display:flex;flex-direction:column;gap:8px;flex:1">
-      ${navBtn('map',I.map,v==='map')}${roleHidesView('tables')?'':navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${roleHidesView('am')?'':navBtn('am',I.am,v==='am')}${navBtn('bm',I.bm,v==='bm')}${roleHidesView('pending')?'':navBtn('pending',I.pending,v==='pending')}${roleHidesView('recap')?'':navBtn('recap',I.recap,v==='recap')}${roleHidesView('leader')?'':navBtn('leader',I.leader,v==='leader')}${roleHidesView('product')?'':navBtn('product',I.product,v==='product')}${roleHidesView('snake')?'':navBtn('snake',I.snake,v==='snake')}
+      ${roleHidesView('insights')?'':navBtn('insights',I.insights,v==='insights')}${navBtn('map',I.map,v==='map')}${roleHidesView('tables')?'':navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${roleHidesView('am')?'':navBtn('am',I.am,v==='am')}${navBtn('bm',I.bm,v==='bm')}${roleHidesView('pending')?'':navBtn('pending',I.pending,v==='pending')}${roleHidesView('recap')?'':navBtn('recap',I.recap,v==='recap')}${roleHidesView('leader')?'':navBtn('leader',I.leader,v==='leader')}${roleHidesView('product')?'':navBtn('product',I.product,v==='product')}${roleHidesView('snake')?'':navBtn('snake',I.snake,v==='snake')}
     </nav>
     <button data-act="device" title="Mobile view" style="${css({...navStyle(false),marginBottom:'8px'})}">${I.mobile}</button>
     <div style="writing-mode:vertical-rl;font-size:8.5px;letter-spacing:.14em;color:#6b675f;margin-top:14px;text-transform:uppercase">Confidential</div>
@@ -1985,6 +1990,648 @@ function downloadChart(kind){
   img.onerror=()=>{ console.error('chart export: SVG rasterisation failed'); alert('Sorry — could not generate the chart image.'); };
   img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(built.xml);
 }
+/* ===================== Insights — the cross-tab summary =====================
+   The one page that answers "how is the programme doing?" without a filter in sight, and the only view that reads
+   all three tabs at once. Each tab answers exactly one question and is used for nothing else here:
+     · Snake tab   → are we ahead or behind?  (this season vs the two before it, on the same fiscal day)
+     · Sheet1      → is the fleet actually working?  (deployed / ran / broken down / never started)
+     · Product tab → what is being sprayed, and whose product is it?
+
+   Visible to EVERY role, so it deliberately carries no Plan/target and no pending-deployment count — both are
+   admin-only concepts elsewhere in the console and must not leak through a universal page. A login scoped to one
+   org scopes the machine and product figures; the season curve has no company dimension in the sheet at all and
+   is labelled as covering everything.
+
+   THREE ACRE TOTALS ON ONE PAGE. They disagree because they measure different things, and the page says so
+   rather than quietly picking one and hoping nobody reconciles it:
+     · Season-to-date (snake tab)      — every acre since 1 April, all crops. THE headline, because it is the only
+                                         figure that is comparable year-over-year.
+     · Kharif achieved (Sheet1)        — the Kharif programme's own acre count. A subset of the above.
+     · Product-identified (Product tab)— acres attributed to a named brand; roughly half the season's acres. */
+const INS_CUR=SNAKE_FYS[2], INS_PREV=SNAKE_FYS[1], INS_PREV2=SNAKE_FYS[0];
+const INS_STATES=['MP','HR','RJ','PB','MH','GJ','TG'];
+const INS_NULLS=new Array(SNAKE_LEN).fill(null);              // read-only stand-in for a region with no series
+const INS_TERR_MIN=4;                                         // deployed-machine floor for a territory row
+// The sheet carries ~50 rows whose territory is a placeholder rather than a place. They must not become table rows.
+const insJunkTerr = t => { const s=String(t||'').trim().toLowerCase(); return !s || s==='0' || s==='-' || s==='—' || s==='not in plan'; };
+const insDaily=(code,key)=>(SNAKE.D[code]&&SNAKE.D[code][key])||INS_NULLS;
+const insMach =code=>SNAKE.M[code]||INS_NULLS;
+
+// The season cursor — ALWAYS a closed day. The sheet writes the current day's row while the day is still running,
+// so today is structurally incomplete; comparing it against a full day a year ago invents a shortfall that
+// disappears overnight. Today (and anything dated beyond it) is therefore dropped outright by the CALENDAR, not
+// by how big it looks — a magnitude test would release today the moment it crossed some fraction of a normal day,
+// which is exactly the mid-afternoon flip this rule exists to prevent. The page reads through yesterday.
+function insAnchor(code){
+  const d=insDaily(code,INS_CUR.key);
+  const today=snakeTodayOff();
+  const act=[]; for(let o=0;o<SNAKE_LEN;o++) if(d[o]!=null && d[o]>0) act.push(o);
+  if(!act.length) return null;
+  const closed=act.filter(o=>o<today);
+  const pool=closed.length?closed:act;        // 1 April, or a season with nothing closed yet: best effort
+  const last=pool[pool.length-1], prior=pool.slice(-8,-1);
+  // Backstop for a YESTERDAY that is itself only half-written (an overnight batch that hasn't finished): a
+  // trailing day far below the recent norm steps back one more day rather than reporting a partial total.
+  let partial=false;
+  if(prior.length>=3){
+    const med=prior.map(o=>d[o]).sort((a,b)=>a-b)[Math.floor(prior.length/2)];
+    if(med>0 && d[last]<med*0.35) partial=true;
+  }
+  return { anchor:(partial&&pool.length>1)?pool[pool.length-2]:last, last, partial, today };
+}
+// Mean acres/day over the n fiscal days ending at `end`. Divides by n rather than by the days actually present,
+// so a season that simply didn't report on some days isn't flattered into a higher daily average than one that
+// ran every day. Returns null when the window holds no data at all.
+function insRoll(arr,end,n){
+  let s=0,seen=0;
+  for(let o=Math.max(0,end-n+1);o<=end;o++){ if(arr[o]!=null){ s+=arr[o]; seen++; } }
+  return seen? s/n : null;
+}
+function insAgg(){
+  // The gate is TWO-dimensional and this page has to honour both axes. Org scopes the machine and product
+  // figures; STATE scopes everything including which season curve is the headline — a login locked to one state
+  // must never see the national roll-up, which is what "all India" would silently hand it.
+  const og=gateDefaultOrg(), scoped=(og==='UPL'||og==='SWAL'||og==='Open');
+  // Effective state scope. The gate's LOCK wins outright, so a state-restricted login can never widen its view
+  // through the page's own picker; only an unlocked (admin) login falls through to the page-local `insSt`.
+  const lock=gateDefaultState();                      // '' = may see every state; otherwise the single allowed code
+  const pick=(state.insSt && gateAllowsState(state.insSt)) ? state.insSt : '';
+  const gst = lock || pick;
+  const snCode = gst || 'ALL';
+  const keep=m=>(!scoped||m.org===og) && (!gst||m.st===gst);
+  const all=ALL_ROWS.filter(keep), dep=ROWS.filter(keep);
+  const A={ og, scoped, gst, lock, snCode, regionName: gst?(STATE_NAMES[gst]||gst):'all India' };
+
+  /* ---- fleet (Sheet1). Pinned to YESTERDAY: this page carries no Today/Yesterday toggle, and the season
+         figures it sits beside are themselves closed-day numbers. ---- */
+  const f={
+    total:all.length, deployed:dep.length, pending:all.length-dep.length,
+    ran:dep.filter(m=>(m.acresY||0)>0).length,
+    acresY:dep.reduce((a,m)=>a+(m.acresY||0),0),
+    breakdown:dep.filter(m=>!!m.breakdown).length,
+    noOp:dep.filter(m=>!m.opMapped).length,
+    neverRan:dep.filter(m=>!((m.achieved||0)>0)).length,
+    kharif:dep.reduce((a,m)=>a+(m.achieved||0),0) };
+  f.runPct = f.deployed? f.ran/f.deployed*100 : 0;
+  f.bdPct  = f.deployed? f.breakdown/f.deployed*100 : 0;
+  A.fleet=f; A.dep=dep;                                // dep is handed to the peer detectors (Family B)
+
+  /* ---- trajectory (snake tab) ---- */
+  A.season=null;
+  if(SNAKE.loaded){
+    const an=insAnchor(snCode);
+    if(an){
+      const o=an.anchor;
+      const cCur=snakeDenseFor(snCode,INS_CUR.key), cPrev=snakeDenseFor(snCode,INS_PREV.key), cPrev2=snakeDenseFor(snCode,INS_PREV2.key);
+      const dCur=insDaily(snCode,INS_CUR.key), dPrev=insDaily(snCode,INS_PREV.key), mach=insMach(snCode);
+      const cur=cCur[o]||0, prev=cPrev[o], prev2=cPrev2[o];
+      // Gap vs last season across the trailing five weeks — the single most useful thing here, because it says
+      // whether a shortfall is opening or closing rather than just how big it is today.
+      const hist=[28,21,14,7,0].map(b=>{ const oo=o-b; if(oo<0) return null;
+        const c=cCur[oo], p=cPrev[oo];
+        return (c==null||p==null||!p)?null:{ off:oo, cur:c, prev:p, pct:c/p*100-100 }; }).filter(Boolean);
+      const machSeen=mach.filter(x=>x!=null);
+      const s={ off:o, label:snakeOffLabel(o),
+        // How far behind real time the closed day is, so the page can say "through yesterday" only when true.
+        asOf: (o===an.today-1) ? 'through yesterday' : 'latest closed day',
+        cur, prev, prev2,
+        vsPrev: prev? cur/prev*100-100 : null, vsPrev2: prev2? cur/prev2*100-100 : null,
+        gapAc: prev!=null? prev-cur : null,
+        roll7: insRoll(dCur,o,7), roll7Prev: insRoll(dPrev,o,7),
+        machToday: mach[o]||0, machPeak: machSeen.length?Math.max.apply(null,machSeen):0,
+        hist };
+      s.momentum  = (s.roll7!=null && s.roll7Prev) ? s.roll7/s.roll7Prev*100-100 : null;
+      s.trendTurn = hist.length>=2 ? hist[hist.length-1].pct - hist[0].pct : null;   // >0 = this season gaining
+      A.season=s;
+    }
+  }
+
+  /* ---- product mix (Product data tab) ---- */
+  A.prod=null;
+  if(PROD.loaded){
+    const rows=PROD.rows.filter(r=>(!scoped || (og!=='Open' && r.company===og)) && (!gst || r.st===gst));
+    const by=f2=>{ const m={}; rows.forEach(r=>{ const k=f2(r); const e=m[k]||(m[k]={key:k,ytd:0,yday:0,UPL:0,SWAL:0});
+        e.ytd+=r.ytd; e.yday+=r.yday; e[r.company]+=r.ytd; });
+      return Object.keys(m).map(k=>m[k]).filter(x=>x.ytd>0).sort((a,b)=>b.ytd-a.ytd); };
+    const bm={}; rows.forEach(r=>{ const b=bm[r.brandKey]||(bm[r.brandKey]={disp:r.brand,company:r.company,ytd:0,yday:0}); b.ytd+=r.ytd; b.yday+=r.yday; });
+    const brands=Object.keys(bm).map(k=>bm[k]).filter(b=>b.ytd>0).sort((a,b)=>b.ytd-a.ytd);
+    const p={ naOrg: scoped&&og==='Open',
+      ytd: rows.reduce((a,r)=>a+r.ytd,0), yday: rows.reduce((a,r)=>a+r.yday,0),
+      upl: rows.reduce((a,r)=>a+(r.company==='UPL'?r.ytd:0),0),
+      swal:rows.reduce((a,r)=>a+(r.company==='SWAL'?r.ytd:0),0),
+      crops:by(r=>r.crop), portfolios:by(r=>r.portfolio), brands, nBrands:brands.length };
+    p.nCrops=p.crops.length;
+    // Coverage only means something when numerator and denominator share a scope. Under an org-scoped login the
+    // branded acres are that org's while the season curve is every company's, so the ratio would be nonsense —
+    // withhold it rather than print a number that reads like under-reporting.
+    p.coverage = (!scoped && A.season && A.season.cur) ? p.ytd/A.season.cur*100 : null;
+    A.prod=p;
+  }
+
+  /* ---- state league: all three tabs joined, one row per state the login may actually see ---- */
+  A.league=INS_STATES.filter(gateAllowsState).map(code=>{
+    const sAll=all.filter(m=>m.st===code), sDep=dep.filter(m=>m.st===code);
+    const ran=sDep.filter(m=>(m.acresY||0)>0).length;
+    // Gap decomposition (connector #24): a state's shortfall is fleet size × utilisation × productivity, and only
+    // the join gives all three. Utilisation = snake's machines-ran ÷ Sheet1's deployed; productivity = acres ÷
+    // machines-ran. Both on a 7-day mean, never a single day — one day's count is far too noisy to rank on.
+    let cur=null, prev=null, vs=null, util=null, acRun=null;
+    if(SNAKE.loaded){
+      const an=insAnchor(code);
+      if(an){ cur=snakeDenseFor(code,INS_CUR.key)[an.anchor]; prev=snakeDenseFor(code,INS_PREV.key)[an.anchor];
+        vs=(cur!=null&&prev)?cur/prev*100-100:null;
+        const m7=insRoll(insMach(code),an.anchor,7), a7=insRoll(insDaily(code,INS_CUR.key),an.anchor,7);
+        if(m7!=null && sDep.length) util=m7/sDep.length*100;
+        if(m7) acRun=a7/m7;
+      }
+    }
+    const prodYtd = PROD.loaded
+      ? PROD.rows.reduce((a,r)=>a+((r.st===code && (!scoped || (og!=='Open' && r.company===og)))?r.ytd:0),0)
+      : null;
+    return { code, name:STATE_NAMES[code], machines:sAll.length, deployed:sDep.length, ran,
+      runPct: sDep.length? ran/sDep.length*100 : 0, acresY:sDep.reduce((a,m)=>a+(m.acresY||0),0),
+      breakdown:sDep.filter(m=>!!m.breakdown).length, cur, prev, vs, prodYtd, util, acRun };
+  }).filter(r=>r.machines>0 || r.cur!=null).sort((a,b)=>(b.cur||0)-(a.cur||0));
+
+  /* ---- territory league — only under a state scope, and Sheet1-only by necessity ----
+     The snake tab has no sub-state grain and the product tab has no territory column, so this table carries no
+     season, no vs-LY and no branded acres. Those columns are absent rather than blank: an empty column reads as
+     missing data, and this is missing DIMENSION. */
+  A.terrs=null; A.terrHidden=0;
+  if(gst){
+    const byT={};
+    for(const m of dep){
+      const t=String(m.territory||'').trim(); if(insJunkTerr(t)) continue;
+      const e=byT[t]||(byT[t]={ name:t, deployed:0, ran:0, acresY:0, breakdown:0, never:0, noOp:0 });
+      e.deployed++; if((m.acresY||0)>0) e.ran++; e.acresY+=(m.acresY||0);
+      if(m.breakdown) e.breakdown++;
+      if(!((m.achieved||0)>0)) e.never++;
+      if(!m.opMapped) e.noOp++;
+    }
+    const list=Object.keys(byT).map(k=>byT[k]);
+    A.terrs=list.filter(t=>t.deployed>=INS_TERR_MIN)
+      .map(t=>({ ...t, runPct:t.deployed?t.ran/t.deployed*100:0, neverPct:t.deployed?t.never/t.deployed*100:0 }))
+      .sort((a,b)=>b.acresY-a.acresY || b.deployed-a.deployed);
+    A.terrHidden=list.length-A.terrs.length;   // surfaced in the UI — a silent floor hides real problems
+  }
+  return A;
+}
+
+/* ===================== "What changed" — detectors over the season history =====================
+   The rest of the page is a fixed spine: same cards, same order, new numbers. This strip is the opposite — it
+   composes itself each morning out of whatever the data is actually doing, so the page reads differently day to
+   day without the layout moving under anyone.
+
+   Only the SNAKE tab can drive this today: it is the one source with history (three seasons of per-day acres and
+   machines-ran, per state). The machine and product tabs are overwritten in place, so "breakdowns doubled this
+   week" is simply not computable until a daily snapshot tab exists.
+
+   Each detector either stays silent or emits a candidate; candidates are scored, deduped and the top few render.
+   Three things keep it honest rather than horoscopic:
+     · FLOORS — a state moving 2 → 6 machines is a 150% swing and complete noise. Every detector carries an
+       absolute minimum (machines, acres/day) so small denominators cannot manufacture drama.
+     · MAGNITUDE WEIGHTING — score scales with the scope's share of national acres, so Gujarat's wobble cannot
+       outrank Madhya Pradesh's.
+     · STATELESS NOVELTY — nothing is remembered between visits (there is nowhere to remember it). Instead,
+       "new" is derived from the data: transitions and milestone streaks score full, a condition that has merely
+       been true for a while is damped to 45%. A 15-day streak is old news; a 14-day one is a milestone. */
+const INS_SIG = { MACH_BASE:20, MACH_DELTA:15, ACRES_DAY:150, MILES:[3,7,14,21,30,45,60], SLOTS:5,
+                  TERR_MIN:6, AM_MIN:8 };   // peer-group floors: below these, a percentage is just noise
+function insSignals(A){
+  if(!SNAKE.loaded || !A.season) return [];
+  const anchor=A.season.off, nat=A.season.cur||1, out=[];
+  const scopes=[{ code:A.snCode, name:A.gst?A.regionName:'All India', national:true }];
+  if(!A.gst) INS_STATES.filter(gateAllowsState).forEach(c=>scopes.push({ code:c, name:STATE_NAMES[c] }));
+  const pc = p => (p>=0?'+':'−')+Math.abs(p).toFixed(1)+'%';
+  const med = a => { const s=a.slice().sort((x,y)=>x-y); return s[Math.floor(s.length/2)]; };
+
+  for(const sc of scopes){
+    const c26=snakeDenseFor(sc.code,INS_CUR.key), c25=snakeDenseFor(sc.code,INS_PREV.key);
+    const d26=insDaily(sc.code,INS_CUR.key), d25=insDaily(sc.code,INS_PREV.key), mm=insMach(sc.code);
+    const cur=c26[anchor]; if(cur==null) continue;
+    const share=sc.national?1:Math.min(1,cur/nat);
+    // novel===false damps a standing condition; the magnitude term keeps a big scope ahead of a small one.
+    const add=(id,weight,tone,title,detail,novel)=>out.push({ scope:sc.code, drill: sc.national?null:sc.code, id, tone, title, detail,
+      score: weight*(0.45+0.55*share)*(novel===false?0.45:1) });
+    const gp=o=>(c26[o]!=null&&c25[o])?c26[o]/c25[o]*100-100:null;
+
+    // 1 · inflection — the gap vs last season changed direction. The single most useful signal on the page:
+    //     the spine shows the gap's SIZE, only this says whether it just turned.
+    const g0=gp(anchor), g7=gp(anchor-7), g14=gp(anchor-14);
+    if(g0!=null && g7!=null && g14!=null){
+      const was=g7-g14, now=g0-g7, ahead=g0>=0;
+      // "last week" is load-bearing: the hero reports the same quantity over four weeks and can legitimately say
+      // the opposite. Both are true; only the stated window keeps them from reading as a contradiction.
+      if(was<-0.4 && now>0.4) add('inflect',80,'good',`${sc.name}: ${ahead?'the lead started growing again last week':'the gap stopped widening last week'}`,
+        `Against last season on the same days: ${pc(g14)} → ${pc(g7)} → ${pc(g0)}.`);
+      else if(was>0.4 && now<-0.4) add('inflect',80,'bad',`${sc.name}: ${ahead?'the lead started shrinking last week':'the gap started widening again last week'}`,
+        `Against last season on the same days: ${pc(g14)} → ${pc(g7)} → ${pc(g0)}.`);
+    }
+    // 2 · streak — consecutive days beating (or losing to) the same date a year ago.
+    let up=0,dn=0;
+    for(let o=anchor;o>anchor-90;o--){ const a=d26[o],b=d25[o]; if(a==null||b==null||!(a>b)) break; up++; }
+    for(let o=anchor;o>anchor-90;o--){ const a=d26[o],b=d25[o]; if(a==null||b==null||!(a<b)) break; dn++; }
+    if(up>=3)      add('streak',74,'good',`${sc.name}: ${up} straight days ahead of last season`,
+      `Every day since ${snakeOffLabel(anchor-up+1)} out-worked the same date a year ago.`, INS_SIG.MILES.includes(up));
+    else if(dn>=3) add('streak',74,'bad',`${sc.name}: ${dn} straight days behind last season`,
+      `Every day since ${snakeOffLabel(anchor-dn+1)} fell short of the same date a year ago.`, INS_SIG.MILES.includes(dn));
+    // 3 · crossover / projection against last season's FULL year.
+    let fyPrev=0; for(let o=0;o<SNAKE_LEN;o++) if(c25[o]!=null && c25[o]>fyPrev) fyPrev=c25[o];
+    const roll7=insRoll(d26,anchor,7);
+    if(fyPrev>0){
+      if(cur>=fyPrev) add('crossed',95,'good',`${sc.name} has passed last season's entire year`,
+        `${fmt(cur)} ac against a full FY 25-26 of ${fmt(fyPrev)} ac, with ${SNAKE_LEN-1-anchor} days still to run.`, false);
+      else if(roll7>0){
+        const days=Math.ceil((fyPrev-cur)/roll7);
+        if(days<=60) add('project', days<=14?88:days<=30?78:66,'good',`${sc.name} is ${days} days from last season's full-year total`,
+          `At the current ${fmt(roll7)} ac/day it clears ${fmt(fyPrev)} ac around ${snakeOffLabel(Math.min(SNAKE_LEN-1,anchor+days))}.`);
+      }
+    }
+    // 4 · peak — the season's biggest single day, only while it is still fresh.
+    let pk=-1,pv=0; for(let o=0;o<=anchor;o++){ const v=d26[o]; if(v!=null&&v>pv){ pv=v; pk=o; } }
+    if(pk>=0 && anchor-pk<=2 && pv>0) add('peak',72,'good',`${sc.name}: ${snakeOffLabel(pk)} was the season's biggest day`,
+      `${fmt(pv)} ac in a single day${mm[pk]?` from ${fmt(mm[pk])} machines`:''}.`, anchor===pk);
+    // 5 · fleet — machines running per day, week over week. Floors kill the 2→6 "150% surge".
+    const m7=insRoll(mm,anchor,7), m14=insRoll(mm,anchor-7,7);
+    if(m7!=null && m14!=null && m14>=INS_SIG.MACH_BASE && Math.abs(m7-m14)>=INS_SIG.MACH_DELTA){
+      const p=m7/m14*100-100;
+      add('fleet',70,p>0?'good':'bad',`${sc.name}: ${Math.abs(p).toFixed(0)}% ${p>0?'more':'fewer'} machines running`,
+        `${fmt(m14)} → ${fmt(m7)} machines a day, week over week.`);
+    }
+    // 6 · productivity — acres per RUNNING machine against its own 3-week baseline (not a fleet-size effect).
+    const per=[]; for(let o=anchor-27;o<=anchor;o++) if(mm[o]>0 && d26[o]!=null) per.push(d26[o]/mm[o]);
+    if(per.length>=14 && roll7>=INS_SIG.ACRES_DAY){
+      const r=med(per.slice(-7)), b=med(per.slice(0,-7));
+      if(b>0 && Math.abs(r/b*100-100)>=25){ const p=r/b*100-100;
+        add('prod',68,p>0?'good':'bad',`${sc.name}: each running machine is covering ${p>0?'more':'less'} ground`,
+          `${r.toFixed(1)} ac per running machine against a ${b.toFixed(1)} ac baseline (${pc(p)}).`);
+      }
+    }
+    // 7 · stall — consecutive days with nothing logged at all.
+    let z=0; for(let o=anchor;o>anchor-21;o--){ const v=d26[o]; if(v==null||v>0) break; z++; }
+    if(z>=3) add('stall',82,'bad',`${sc.name} has logged nothing for ${z} days`,
+      `No acres recorded since ${snakeOffLabel(anchor-z)}.`, INS_SIG.MILES.includes(z));
+  }
+  /* ---- #22 · trust check (snake ⋈ Sheet1) --------------------------------------------------------------
+     Two independent pipelines report the same day's acres. When they agree (1.3% apart today) that is quiet
+     assurance; when they diverge, every other number on this page is suspect, so it outranks everything.
+     Only run when the season anchor IS yesterday — if the anchor stepped back to an earlier closed day the two
+     sides are measuring different days and any "divergence" would be an artefact of the comparison, not the data. */
+  if(A.fleet && A.season.asOf==='through yesterday'){
+    const snY=insDaily(A.snCode,INS_CUR.key)[anchor], shY=A.fleet.acresY;
+    if(snY>0 && shY>0 && !A.scoped){                   // org-scoped machine rows can't match an all-company series
+      const diff=Math.abs(shY-snY)/snY*100;
+      if(diff>10) out.push({ scope:'TRUST', drill:null, id:'trust', tone:'bad', score:1e6,
+        title:`The two acre feeds disagree by ${diff.toFixed(0)}%`,
+        detail:`The season sheet logged ${fmt(snY)} ac for ${snakeOffLabel(anchor)}; the machine sheet reports ${fmt(shY)} ac for yesterday. Treat every figure on this page with caution until that resolves.` });
+    }
+  }
+
+  /* ---- Family B · peer outliers over the machine sheet ---------------------------------------------------
+     No history required: these compare a territory or AM against ITS OWN STATE's peers rather than against its
+     own past. Both are anchored on never-sprayed — a SEASON total — because Sheet1's daily fields are a single
+     observation with nothing to smooth them. Yesterday's utilisation only ever corroborates; it never triggers.
+     (An AM can post 0% on a quiet day and still own the best cluster officer in the programme.) */
+  const byState={};
+  (A.dep||[]).forEach(m=>{ if(m.st) (byState[m.st]=byState[m.st]||[]).push(m); });
+  const grp=(rows,key)=>{ const g={}; rows.forEach(m=>{ const k=String(m[key]||'').trim(); if(k) (g[k]=g[k]||[]).push(m); }); return g; };
+  for(const stc in byState){
+    const srows=byState[stc], sName=STATE_NAMES[stc]||stc, tag=A.gst?'':' · '+sName;
+    const sNever=srows.filter(m=>!((m.achieved||0)>0)).length/srows.length;
+    const sRan=srows.filter(m=>(m.acresY||0)>0).length/srows.length;
+    const T=grp(srows,'territory');
+    for(const t in T){                                  // #14 · zero-output cluster
+      const rs=T[t]; if(rs.length<INS_SIG.TERR_MIN || insJunkTerr(t)) continue;
+      const never=rs.filter(m=>!((m.achieved||0)>0)).length;
+      if(never/rs.length>=0.6 && never>=5)
+        out.push({ scope:'T:'+stc+':'+t, drill:stc, id:'zero', tone:'bad',
+          score: 86*(0.5+0.5*Math.min(1,rs.length/40)),
+          title:`${t}${tag}: ${never} of ${rs.length} machines have never sprayed`,
+          detail:`A season total, not a quiet day. The ${sName} average is ${(sNever*100).toFixed(0)}% never-sprayed.` });
+    }
+    const AM=grp(srows,'am');
+    for(const a in AM){                                 // #13 · AM chronic underperformance
+      const rs=AM[a]; if(rs.length<INS_SIG.AM_MIN || insJunkTerr(a)) continue;
+      const never=rs.filter(m=>!((m.achieved||0)>0)).length/rs.length;
+      const ran=rs.filter(m=>(m.acresY||0)>0).length/rs.length;
+      if(never>=sNever*1.5 && never>=0.2 && ran<sRan)
+        out.push({ scope:'A:'+stc+':'+a, drill:stc, id:'am', tone:'bad',
+          score: 80*(0.5+0.5*Math.min(1,rs.length/60)),
+          title:`${a}${tag}: ${(never*100).toFixed(0)}% of ${rs.length} machines have never sprayed`,
+          detail:`Against a ${(sNever*100).toFixed(0)}% ${sName} average · ${(ran*100).toFixed(0)}% ran yesterday vs ${(sRan*100).toFixed(0)}% statewide.` });
+    }
+  }
+
+  // Two diversity rules, both about readability rather than statistics: one signal per scope, so the strip spreads
+  // across the country instead of stacking on the loudest state; and at most two of any one detector, or a day
+  // when every state inflects at once produces four identically-worded rows and the strip reads as boilerplate.
+  out.sort((a,b)=>b.score-a.score);
+  const perScope = scopes.length>1 ? 1 : INS_SIG.SLOTS;   // a state-locked login has one scope; don't starve it
+  const used={}, kind={}, top=[];
+  for(const s of out){
+    if((used[s.scope]||0)>=perScope || (kind[s.id]||0)>=2) continue;
+    used[s.scope]=(used[s.scope]||0)+1; kind[s.id]=(kind[s.id]||0)+1; top.push(s);
+    if(top.length>=INS_SIG.SLOTS) break;
+  }
+  return top;
+}
+
+/* Day-by-day acres, this season against last, over the trailing three weeks. Bars rather than lines: the question
+   is "did we out-work the same day last year", which is a per-day comparison, not a shape. */
+function buildInsBarsSVG(A,mob){
+  const s=A.season; if(!s) return {has:false,svg:''};
+  const n=mob?14:21, from=Math.max(0,s.off-n+1);
+  const dCur=insDaily(A.snCode,INS_CUR.key), dPrev=insDaily(A.snCode,INS_PREV.key);
+  const vals=[]; for(let o=from;o<=s.off;o++) vals.push({off:o, cur:dCur[o], prev:dPrev[o]});
+  if(!vals.length) return {has:false,svg:''};
+  let maxV=1; vals.forEach(v=>{ maxV=Math.max(maxV, v.cur||0, v.prev||0); });
+  const W=mob?400:980, H=mob?230:250, mL=mob?46:62, mR=mob?10:16, mT=14, mB=mob?36:34;
+  const x0=mL,x1=W-mR,y0=mT,y1=H-mB;
+  const bw=(x1-x0)/vals.length, gap=Math.min(4,bw*0.16), half=Math.max(1,(bw-gap*2)/2);
+  const step=niceNum(maxV/4), nMax=Math.max(step,Math.ceil(maxV/step)*step);
+  const Y=v=>y1-(v/nMax)*(y1-y0);
+  let grid=''; for(let t=0;t<=nMax+1e-6;t+=step){ const y=Y(t);
+    grid+=`<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="#EFEDE7"/><text x="${x0-8}" y="${(y+3.6).toFixed(1)}" text-anchor="end" font-size="10" fill="#9C988F" font-family="'IBM Plex Mono'">${snakeFmtK(t)}</text>`; }
+  const every=Math.max(1,Math.ceil(vals.length/(mob?5:11)));
+  let bars='', lab='';
+  vals.forEach((v,i)=>{ const bx=x0+i*bw+gap;
+    if(v.prev!=null&&v.prev>0) bars+=`<rect x="${bx.toFixed(1)}" y="${Y(v.prev).toFixed(1)}" width="${half.toFixed(1)}" height="${Math.max(0,y1-Y(v.prev)).toFixed(1)}" fill="${INS_PREV.color}" opacity=".5" rx="1.5"/>`;
+    if(v.cur!=null&&v.cur>0)  bars+=`<rect x="${(bx+half).toFixed(1)}" y="${Y(v.cur).toFixed(1)}" width="${half.toFixed(1)}" height="${Math.max(0,y1-Y(v.cur)).toFixed(1)}" fill="${INS_CUR.color}" rx="1.5"/>`;
+    if(i%every===0||i===vals.length-1) lab+=`<text x="${(bx+half).toFixed(1)}" y="${y1+14}" text-anchor="middle" font-size="9.5" fill="#9C988F" font-family="'Noto Sans'">${snakeOffLabel(v.off)}</text>`;
+  });
+  return { has:true, svg:`<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC"/>${bars}</svg>` };
+}
+/* Machines that logged acres each day, last 60 days — the fleet's pulse next to the acres it produced. */
+function buildInsSparkSVG(A){
+  const s=A.season; if(!s) return {has:false,svg:''};
+  const m=insMach(A.snCode), pts=[];
+  for(let o=Math.max(0,s.off-59);o<=s.off;o++) if(m[o]!=null) pts.push(m[o]);
+  if(pts.length<2) return {has:false,svg:''};
+  const W=520,H=58,x0=1,x1=W-1,y0=5,y1=H-5;
+  let maxV=1; pts.forEach(v=>{ if(v>maxV) maxV=v; });
+  const X=i=>x0+i/(pts.length-1)*(x1-x0), Y=v=>y1-(v/maxV)*(y1-y0);
+  const line=pts.map((v,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
+  return { has:true, svg:`<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none" style="display:block;height:${H}px">
+    <path d="${line} L${X(pts.length-1).toFixed(1)} ${y1} L${X(0).toFixed(1)} ${y1} Z" fill="${C.softO}"/>
+    <path d="${line}" fill="none" stroke="${C.orange}" stroke-width="1.7" stroke-linejoin="round"/>
+    <circle cx="${X(pts.length-1).toFixed(1)}" cy="${Y(pts[pts.length-1]).toFixed(1)}" r="3" fill="${C.orangeD}"/></svg>` };
+}
+
+function insightsBodyHTML(mob){
+  if(!SNAKE.loaded && !SNAKE.loading && !SNAKE.error) setTimeout(loadSnake,0);
+  if(!PROD.loaded  && !PROD.loading  && !PROD.error ) setTimeout(loadProduct,0);
+  const A=insAgg(), s=A.season, P=A.prod, f=A.fleet;
+
+  const card = inner => `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">${inner}</div>`;
+  const cHead = (t,sub,right) => `<div style="padding:13px 16px;border-bottom:1px solid #EFEDE7;display:flex;align-items:flex-start;gap:12px">
+      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">${t}</div>${sub?`<div style="font-size:11px;color:#9C988F;margin-top:2px">${sub}</div>`:''}</div>${right||''}</div>`;
+  const waiting = (err,msg,act) => `<div style="padding:34px 18px;text-align:center;color:#9C988F;font-size:12.5px">${err?'⚠ ':''}${msg}${err?`<div style="margin-top:12px"><button data-act="${act}" style="padding:7px 15px;border:1px solid #E9E6DF;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Retry</button></div>`:''}</div>`;
+  const pill = (txt,bg,ink) => `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;background:${bg};color:${ink};font-size:11.5px;font-weight:600;white-space:nowrap">${txt}</span>`;
+  const dpill = pct => pct==null?'' : pill(`${pct>=0?'▲':'▼'} ${Math.abs(pct).toFixed(1)}%`, pct>=0?C.softG:C.softR, pct>=0?C.greenD:C.brk);
+  const mini = (v,l,ink) => `<div><div style="font-family:'IBM Plex Mono';font-size:16px;font-weight:700;color:${ink||C.ink}">${v}</div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:4px">${l}</div></div>`;
+  const barRow = (label,val,tot,colour,sub) => { const w=tot?Math.max(1.5,val/tot*100):0;
+    return `<div style="padding:8px 0">
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
+        <span style="flex:1;min-width:0;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</span>
+        ${sub?`<span style="font-size:10.5px;color:#B6B1A8">${sub}</span>`:''}
+        <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600">${fmt(val)}</span></div>
+      <span style="display:block;height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${w}%;background:${colour};border-radius:4px"></span></span></div>`; };
+
+  /* ---------- header ---------- */
+  const src = `<span style="font-size:10.5px;color:#9C988F">Machines ${lastUpdated||'—'} · season ${SNAKE.at||'—'} · products ${PROD.at||'—'}
+      <button data-act="insrefresh" title="Reload all three tabs" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>`;
+  // State picker — page-local (writes state.insSt, never state.st), and only offered to a login the gate has
+  // not already pinned to one state. Options are filtered by gateAllowsState so the list can't advertise a
+  // state the user may not open.
+  const canPick = !A.lock && gateCanSwitchStates();
+  const stSel = canPick ? `<div style="display:flex;align-items:center;gap:7px">
+      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Scope</span>
+      <div style="position:relative"><select id="insStateSel" style="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none">${
+        optionsHTML([{v:'',t:'All India'},...INS_STATES.filter(gateAllowsState).map(c=>({v:c,t:STATE_NAMES[c]}))], A.gst)
+      }</select>${I.caret}</div></div>` : '';
+  // flex-basis, not flex:1 — with the mode toggle, the scope picker and the freshness line all competing for the
+  // row, a purely greedy title collapses to two cramped lines before the row ever wraps.
+  const header = `<div style="display:flex;align-items:center;gap:${mob?'10px':'14px'};flex-wrap:wrap">
+      <div style="flex:1 1 260px;min-width:210px">
+        <div style="font-size:${mob?'15px':'16.5px'};font-weight:700;letter-spacing:-.01em">Programme insights</div>
+        <div style="font-size:11.5px;color:#9C988F;margin-top:2px">${A.gst?E(A.regionName):'Seven states'} · one page · no filters — ${A.scoped?`scoped to ${E(A.og)}`:'everything'}</div>
+      </div>${stSel}${mob?'':`<div style="flex:0 1 auto">${src}</div>`}</div>`;
+
+  /* ---------- 1 · verdict ---------- */
+  let hero;
+  if(!s){
+    hero=card(waiting(SNAKE.error,SNAKE.error?'Could not load the cumulative tab — the season verdict needs it.':'Reading the season…','snakeretry'));
+  } else {
+    const behind = s.vsPrev!=null && s.vsPrev<0;
+    // The window is stated explicitly because the What-changed strip reports the SAME quantity over a shorter one,
+    // and a four-week widening can sit on top of a one-week recovery. Naming both windows is the difference
+    // between two views of one trend and two cards that appear to contradict each other.
+    const turnWord = s.trendTurn==null ? '' : behind ? (s.trendTurn>0?'narrowed':'widened') : (s.trendTurn>0?'grown':'shrunk');
+    const verdict = s.vsPrev==null ? 'No comparable day in last season to measure against.'
+      : `<strong style="font-weight:700">${fmt(Math.abs(s.gapAc))} acres ${behind?'behind':'ahead of'} last season</strong> on the same day.`
+        + (s.momentum!=null ? ` The last 7 days ran ${s.momentum>=0?'+':'−'}${Math.abs(s.momentum).toFixed(0)}% against the same week a year ago` : '')
+        + (turnWord ? `, and across four weeks the ${behind?'gap':'lead'} has ${turnWord}.` : s.momentum!=null?'.':'');
+    const scopeNote = A.scoped
+      ? `<div style="font-size:10.5px;color:#B6B1A8;margin-top:9px">Machine and product figures below are ${E(A.og)}-only. The season curve has no company split in the source and covers every machine.</div>` : '';
+    hero=card(`<div style="padding:${mob?'16px':'18px 20px'}">
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase">Season to date · ${E(s.label)}</span>
+        <span style="font-size:10.5px;color:#B6B1A8">FY 26-27 · 1 Apr → ${E(s.asOf)} · all crops, all companies</span>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+        <div style="font-family:'IBM Plex Mono';font-size:${mob?'34px':'44px'};font-weight:700;line-height:1;letter-spacing:-.02em">${fmt(s.cur)}<span style="font-size:${mob?'14px':'17px'};color:#B6B1A8;font-weight:500"> ac</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:6px;align-items:center">
+          ${s.vsPrev!=null?`${dpill(s.vsPrev)}<span style="font-size:10.5px;color:#9C988F">vs ’25-26</span>`:''}
+          ${s.vsPrev2!=null?`${dpill(s.vsPrev2)}<span style="font-size:10.5px;color:#9C988F">vs ’24-25</span>`:''}
+        </div>
+      </div>
+      <div style="font-size:${mob?'12.5px':'13.5px'};color:#46433d;margin-top:12px;line-height:1.55">${verdict}</div>
+      ${scopeNote}
+      <div style="display:flex;gap:${mob?'18px':'34px'};flex-wrap:wrap;margin-top:14px;padding-top:13px;border-top:1px solid #F2F0EB">
+        ${mini(s.prev!=null?fmt(s.prev):'—','’25-26 same day')}
+        ${mini(s.prev2!=null?fmt(s.prev2):'—','’24-25 same day')}
+        ${mini(s.roll7!=null?fmt(s.roll7):'—','ac/day · last 7',C.orangeD)}
+        ${mini(fmt(s.machToday),'machines ran')}
+        ${mini(fmt(f.deployed),'machines deployed')}
+      </div></div>`);
+  }
+
+  /* ---------- 1b · what changed (the one part of the page that recomposes daily) ---------- */
+  const sig=insSignals(A);
+  const sigCard = sig.length ? card(`${cHead('What changed',
+      'Detected from the season history · ranked by size and how unusual they are · this strip differs most days')}
+    ${sig.map((x,i)=>`<div ${x.drill?`data-act="insdrill" data-key="${E(x.drill)}"`:''} style="display:flex;gap:11px;padding:${mob?'12px 15px':'12px 16px'};border-top:${i?'1px solid #F4F2EE':'none'};${x.drill?'cursor:pointer':''}">
+        <span style="width:8px;height:8px;border-radius:50%;background:${x.tone==='good'?C.act:x.tone==='bad'?C.brk:C.idle};margin-top:5px;flex-shrink:0"></span>
+        <div style="min-width:0">
+          <div style="font-size:12.5px;font-weight:700;line-height:1.35">${E(x.title)}</div>
+          <div style="font-size:11.5px;color:#6E6A62;margin-top:3px;line-height:1.5">${E(x.detail)}</div>
+        </div></div>`).join('')}`) : '';
+
+  /* ---------- 2 · trajectory (reuses the snake engine + its hover wiring) ---------- */
+  let traj;
+  if(!s){ traj=''; }
+  else{
+    const chart=buildSnakeSVG(A.snCode,0,s.off,mob);
+    const legend=SNAKE_FYS.map(fy=>{ const d=snakeDenseFor(A.snCode,fy.key), val=d[s.off];
+      return `<div style="display:flex;align-items:center;gap:8px">
+        <span style="width:14px;height:${fy.cur?4:3}px;border-radius:2px;background:${fy.color};flex-shrink:0"></span>
+        <span style="font-size:12px;font-weight:${fy.cur?700:500};color:#46433d">${fy.label}</span>
+        <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600">${val!=null?fmt(val):'—'}</span></div>`; }).join('');
+    const gapStrip = s.hist.length>1 ? `<div style="display:flex;border-top:1px solid #EFEDE7">${s.hist.map((h,i)=>`
+        <div style="flex:1;padding:10px 4px;text-align:center;${i?'border-left:1px solid #F4F2EE':''}">
+          <div style="font-size:10px;color:#9C988F">${E(snakeOffLabel(h.off))}</div>
+          <div style="font-family:'IBM Plex Mono';font-size:${mob?'12px':'13.5px'};font-weight:700;margin-top:3px;color:${h.pct>=0?C.greenD:C.brk}">${h.pct>=0?'+':'−'}${Math.abs(h.pct).toFixed(1)}%</div>
+        </div>`).join('')}</div>` : '';
+    traj=card(`${cHead('Season trajectory · '+E(A.regionName),'Cumulative acres on the fiscal calendar · 1 Apr → '+E(s.label))}
+      <div style="display:flex;gap:${mob?'12px':'22px'};flex-wrap:wrap;padding:11px 16px 4px">${legend}</div>
+      <div id="snakeHost" style="position:relative;padding:2px ${mob?'2px':'8px'} 10px">
+        ${chart.hasData?chart.svg:waiting(false,'No cumulative data yet.','snakeretry')}
+        <div id="snakeTip" style="position:absolute;display:none;pointer-events:none;background:#fff;border:1px solid #E9E6DF;border-radius:9px;box-shadow:0 6px 20px rgba(0,0,0,.10);padding:8px 10px;min-width:132px;z-index:5"></div>
+      </div>
+      ${gapStrip?`<div style="padding:0 16px 4px;font-size:10px;font-weight:600;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">Gap vs last season · past five weeks</div>${gapStrip}`:''}`);
+  }
+
+  /* ---------- 3 · momentum ---------- */
+  let mom='';
+  if(s){
+    const bars=buildInsBarsSVG(A,mob), spark=buildInsSparkSVG(A);
+    const legend=`<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border-radius:3px;background:${INS_CUR.color}"></span><span style="font-size:11.5px;font-weight:600">This season</span><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${s.roll7!=null?fmt(s.roll7):'—'}/day</span></div>
+        <div style="display:flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border-radius:3px;background:${INS_PREV.color};opacity:.5"></span><span style="font-size:11.5px;font-weight:600">Last season</span><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${s.roll7Prev!=null?fmt(s.roll7Prev):'—'}/day</span></div>
+        ${s.momentum!=null?dpill(s.momentum):''}</div>`;
+    mom=card(`${cHead('Daily acres · this season vs last','Same fiscal days, side by side · trailing '+(mob?14:21)+' days')}
+      <div style="padding:11px 16px 2px">${legend}</div>
+      <div style="padding:2px ${mob?'2px':'8px'} 8px">${bars.has?bars.svg:waiting(false,'No day-wise data yet.','snakeretry')}</div>
+      ${spark.has?`<div style="border-top:1px solid #EFEDE7;padding:12px 16px 14px">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:7px">
+          <span style="font-size:11.5px;font-weight:700">Machines running per day</span>
+          <span style="font-size:10.5px;color:#9C988F">last 60 days · now ${fmt(s.machToday)} · peak ${fmt(s.machPeak)}</span></div>
+        ${spark.svg}</div>`:''}`);
+  }
+
+  /* ---------- 4 · fleet ---------- */
+  const stat=(v,l,ink,sub)=>`<div style="flex:1 0 auto;min-width:${mob?'44%':'150px'};padding:13px 16px;border-right:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
+      <div style="font-family:'IBM Plex Mono';font-size:${mob?'18px':'20px'};font-weight:700;color:${ink||C.ink}">${v}</div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">${l}</div>
+      ${sub?`<div style="font-size:10.5px;color:#B6B1A8;margin-top:3px">${sub}</div>`:''}</div>`;
+  const runInk = f.runPct>=40?C.act : f.runPct>=20?C.idle : C.brk;
+  const fleet=card(`${cHead('Fleet yesterday','Machine sheet · '+fmt(f.deployed)+' deployed of '+fmt(f.total)+' on the books')}
+    <div style="display:flex;flex-wrap:wrap;background:#FBFAF8">
+      ${stat(fmt(f.ran),'ran yesterday',runInk, f.runPct.toFixed(0)+'% of deployed')}
+      ${stat(fmt(f.acresY),'acres yesterday',C.orangeD, f.ran?fmt(f.acresY/f.ran)+' ac per running machine':'')}
+      ${stat(fmt(f.breakdown),'in breakdown',f.breakdown?C.brk:C.ink, f.bdPct.toFixed(0)+'% of deployed')}
+      ${stat(fmt(f.neverRan),'never sprayed',f.neverRan?C.idle:C.ink,'zero acres all season')}
+      ${stat(fmt(f.noOp),'no operator mapped',f.noOp?C.idle:C.ink,'deployed machines')}
+      ${stat(fmt(f.kharif),'kharif acres',C.ink,'programme count · Sheet1')}
+    </div>`);
+
+  /* ---------- 5 · product mix ---------- */
+  let prodCard;
+  if(!P){
+    prodCard=card(`${cHead('Product mix','Product data tab')}${waiting(PROD.error,PROD.error?'Could not load the Product data tab.':'Loading product mix…','productretry')}`);
+  } else if(P.naOrg || !P.ytd){
+    prodCard=card(`${cHead('Product mix','Product data tab')}${waiting(false,P.naOrg?'The product tab only splits UPL and SWAL — nothing to show for an Open-scoped login.':'No product acres recorded yet.','productretry')}`);
+  } else {
+    const uP=P.ytd?P.upl/P.ytd*100:0, sP=100-uP;
+    const lbl=(pct,side)=> pct>=14?`<span style="position:absolute;${side}:10px;top:50%;transform:translateY(-50%);color:#fff;font-size:11px;font-weight:700;font-family:'IBM Plex Mono'">${Math.round(pct)}%</span>`:'';
+    const split = A.scoped ? '' : `<div style="padding:14px 16px 4px">
+        <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:9px"><span style="font-size:11.5px;font-weight:700">UPL vs SWAL</span><span style="font-size:10.5px;color:#9C988F">${fmt(P.upl)} ac · ${fmt(P.swal)} ac</span></div>
+        <div style="position:relative;display:flex;height:30px;border-radius:8px;overflow:hidden;background:#F2F0EB">
+          <div style="position:relative;width:${uP}%;background:${C.orange}">${lbl(uP,'left')}</div>
+          <div style="position:relative;width:${sP}%;background:${C.green}">${lbl(sP,'right')}</div></div></div>`;
+    const col=(title,list,colour,n)=>`<div style="flex:1;min-width:${mob?'100%':'240px'};padding:12px 16px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:4px">${title}</div>
+        ${list.slice(0,n).map(x=>barRow(E(x.key||x.disp), x.ytd, list[0].ytd, colour)).join('') || `<div style="font-size:11.5px;color:#B6B1A8;padding:8px 0">—</div>`}</div>`;
+    const brandList=P.brands.map(b=>({key:b.disp, ytd:b.ytd, company:b.company}));
+    prodCard=card(`${cHead('Product mix · season to date',
+        `Product data tab · ${fmt(P.ytd)} ac carry a named brand${P.coverage!=null?` — ${P.coverage.toFixed(0)}% of the season's acres`:''} · ${fmt(P.nBrands)} brands · ${fmt(P.nCrops)} crops`)}
+      ${split}
+      <div style="display:flex;flex-wrap:wrap;border-top:${A.scoped?'none':'1px solid #EFEDE7'}">
+        ${col('By crop',P.crops,C.orange,6)}
+        ${col('By portfolio',P.portfolios,C.open,6)}
+        ${col('Top brands',brandList,C.green,6)}
+      </div>
+      <div style="padding:0 16px 13px;font-size:10.5px;color:#B6B1A8">Sprayed yesterday · ${fmt(P.yday)} ac product-identified${f.acresY?` of ${fmt(f.acresY)} ac logged by the fleet`:''}</div>`);
+  }
+
+  /* ---------- 6 · state league ---------- */
+  const L=A.league;
+  const vsCell=v=>v==null?`<span style="color:#C9C4BA">—</span>`:`<span style="font-family:'IBM Plex Mono';font-weight:700;color:${v>=0?C.greenD:C.brk}">${v>=0?'+':'−'}${Math.abs(v).toFixed(0)}%</span>`;
+  const utilInk=u=>u==null?C.ink3:u>=30?C.act:u>=15?C.idle:C.brk;
+  const n1=(v,suf)=>v==null?`<span style="color:#C9C4BA">—</span>`:`${v.toFixed(v<10?1:0)}${suf||''}`;
+  let league;
+  /* Under a state scope the league drops a level, to TERRITORIES. Sheet1 is the only tab with that grain, so the
+     season and branded-acres columns simply do not exist here — see A.terrs. */
+  if(A.gst && A.terrs){
+    const T=A.terrs;
+    const foot = A.terrHidden ? `<div style="padding:9px 16px 12px;font-size:10.5px;color:#B6B1A8">${A.terrHidden} territor${A.terrHidden===1?'y':'ies'} below ${INS_TERR_MIN} deployed machines not shown — too small for a rate to mean anything.</div>` : '';
+    const head=cHead(`Territories · ${E(A.regionName)}`,
+      `Machine sheet only — the season and product tabs have no territory grain, so there is no vs-LY here`);
+    league = !T.length ? card(`${head}${waiting(false,'No territory has enough deployed machines to rank.','insrefresh')}`)
+      : mob ? card(`${head}${T.map((t,i)=>`<div style="padding:12px 15px;border-top:${i?'1px solid #F4F2EE':'none'}">
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="flex:1;font-size:13px;font-weight:700">${E(t.name)}</span>
+            <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${fmt(t.acresY)}<span style="font-size:10px;color:#B6B1A8"> ac</span></span></div>
+          <div style="font-size:11px;color:#9C988F;margin-top:4px">${fmt(t.deployed)} deployed · ${fmt(t.ran)} ran (${t.runPct.toFixed(0)}%) · <span style="color:${t.neverPct>=50?C.brk:'#9C988F'}">${fmt(t.never)} never sprayed</span> · ${fmt(t.breakdown)} down</div>
+        </div>`).join('')}${foot}`)
+      : card(`${head}
+        <div style="display:grid;grid-template-columns:1.5fr .8fr .9fr 1fr .7fr .9fr;gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7;background:#FBFAF8">
+          ${['Territory','Deployed','Ran y’day','Never sprayed','Down','Acres y’day'].map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">${h}</span>`).join('')}</div>
+        ${T.map((t,i)=>`<div style="display:grid;grid-template-columns:1.5fr .8fr .9fr 1fr .7fr .9fr;gap:10px;align-items:center;padding:11px 16px;border-top:${i?'1px solid #F4F2EE':'none'}">
+          <span style="font-size:12.5px;font-weight:600">${E(t.name)}</span>
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px">${fmt(t.deployed)}</span>
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px;color:${utilInk(t.runPct)};font-weight:600">${fmt(t.ran)} · ${t.runPct.toFixed(0)}%</span>
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:${t.neverPct>=50?700:400};color:${t.neverPct>=50?C.brk:C.ink}">${fmt(t.never)} · ${t.neverPct.toFixed(0)}%</span>
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px;color:${t.breakdown?C.brk:'#C9C4BA'}">${fmt(t.breakdown)}</span>
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600">${fmt(t.acresY)}</span>
+        </div>`).join('')}${foot}`);
+  }
+  // A login locked to one state would get a one-row table restating the hero — drop it rather than pad the page.
+  else if(L.length<2){ league=''; }
+  else if(mob){
+    league=card(`${cHead('States','Ranked by season-to-date acres · tap to open the map')}
+      ${L.map((r,i)=>`<div data-act="insdrill" data-key="${r.code}" style="padding:12px 15px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <span style="flex:1;font-size:13px;font-weight:700">${E(r.name)}</span>
+          <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${r.cur!=null?fmt(r.cur):'—'}</span>
+          ${vsCell(r.vs)}</div>
+        <div style="font-size:11px;color:#9C988F;margin-top:4px">${fmt(r.deployed)} deployed · util <span style="color:${utilInk(r.util)};font-weight:600">${n1(r.util,'%')}</span> · ${n1(r.acRun)} ac/run · ${fmt(r.breakdown)} down${r.prodYtd!=null?` · ${fmt(r.prodYtd)} ac branded`:''}</div>
+      </div>`).join('')}`);
+  } else {
+    // Util % and Ac/run ARE the gap decomposition — a state's shortfall is fleet × utilisation × productivity, and
+    // showing all three beside vs-LY is what turns "Gujarat is −70%" into "Gujarat's fleet is idle, not missing".
+    const gridCols='1.35fr .8fr .7fr .7fr .9fr .6fr .8fr';
+    const th=t=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">${t}</span>`;
+    league=card(`${cHead('States','Every tab joined · ranked by season-to-date acres · click a row to scope this page to it')}
+      <div style="display:grid;grid-template-columns:${gridCols};gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7;background:#FBFAF8">
+        ${th('State')}${th('Deployed')}${th('Util %')}${th('Ac/run')}${th('Season ac')}${th('vs LY')}${th('Branded')}</div>
+      ${L.map((r,i)=>`<div data-act="insdrill" data-key="${r.code}" style="display:grid;grid-template-columns:${gridCols};gap:10px;align-items:center;padding:11px 16px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
+        <span style="font-size:12.5px;font-weight:600">${E(r.name)}</span>
+        <span style="font-family:'IBM Plex Mono';font-size:12.5px">${fmt(r.deployed)}<span style="color:#C9C4BA">/${fmt(r.machines)}</span></span>
+        <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;color:${utilInk(r.util)}">${n1(r.util,'%')}</span>
+        <span style="font-family:'IBM Plex Mono';font-size:12.5px">${n1(r.acRun)}</span>
+        <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600">${r.cur!=null?fmt(r.cur):'—'}</span>
+        ${vsCell(r.vs)}
+        <span style="font-family:'IBM Plex Mono';font-size:12.5px;color:#6E6A62">${r.prodYtd!=null?fmt(r.prodYtd):'—'}</span>
+      </div>`).join('')}
+      <div style="padding:9px 16px 12px;font-size:10.5px;color:#B6B1A8">Util % = machines running per day (7-day mean) ÷ deployed · Ac/run = acres per running machine. Together with vs-LY they separate a fleet problem from an idleness problem from a productivity one.</div>`);
+  }
+
+  /* ---------- 7 · why the three totals differ ---------- */
+  const foot=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;padding:13px 16px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Three acre totals, three questions</div>
+      <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">
+        <strong style="color:#46433d">${s?fmt(s.cur):'—'} ac season-to-date</strong> is every acre since 1 April across all crops (cumulative tab) — the only figure comparable year-over-year, so it is the headline.
+        <strong style="color:#46433d">${fmt(f.kharif)} ac Kharif</strong> is the programme's own count from the machine sheet, a subset of it.
+        <strong style="color:#46433d">${P?fmt(P.ytd):'—'} ac</strong> carry a named brand (product tab)${P&&P.coverage!=null?` — ${P.coverage.toFixed(0)}% of the season`:''}; the rest was sprayed without a product recorded.
+      </div></div>`;
+
+  return `<div style="display:flex;flex-direction:column;gap:14px">
+    ${header}${hero}${sigCard}${traj}${mom}${fleet}${prodCard}${league}${foot}
+    ${mob?`<div style="text-align:center;padding:2px 0 4px">${src}</div>`:''}</div>`;
+}
+function insightsViewHTML(v){ return `<section style="padding:18px 22px">${insightsBodyHTML(false)}</section>`; }
 function productViewHTML(v){ return `<section style="padding:18px 22px">${productBodyHTML(false)}</section>`; }
 // Product Insights — a self-contained page over the "Product data" tab. Controls (company / state / crop / measure)
 // are page-local; the machine filter bar + KPI strip are suppressed for this view (like the Cumulative view).
@@ -2544,6 +3191,7 @@ function drawerHTML(v){
 }
 function contentHTML(v){
   switch(state.view){
+    case 'insights': return insightsViewHTML(v);
     case 'tables': return tablesViewHTML(v);
     case 'weather': return weatherViewHTML(v);
     case 'machines': return machinesViewHTML(v);
@@ -2574,11 +3222,16 @@ function desktopHTML(v){
    the shared data-act="exp" handler, so Territory→Cluster→Machine works identically. */
 
 // Every view the phone exposes, in bottom-bar order. Role gating is the desktop rail's.
+// Insights sits at position 5 ON PURPOSE. The bottom bar holds M_PRIMARY (4) inline, and there is no way to add a
+// twelfth view to a four-slot bar without displacing one — putting Insights first pushed Weather into "More" for
+// admins. It leads the desktop rail instead, where the list is vertical and nothing is displaced, and heads the
+// phone's "More" sheet. Move it up only if you intend to knock Weather off the bar.
 const M_VIEWS = [
   { k:'map',      label:'Map',       icon:()=>I.map },
   { k:'tables',   label:'Territory', icon:()=>I.tables },
   { k:'machines', label:'Machines',  icon:()=>I.machines },
   { k:'weather',  label:'Weather',   icon:()=>I.weather },
+  { k:'insights', label:'Insights',  icon:()=>I.insights },
   { k:'am',       label:'AMs',       icon:()=>I.am },
   { k:'bm',       label:'BMs',       icon:()=>I.bm },
   { k:'pending',  label:'Pending',   icon:()=>I.pending },
@@ -2792,6 +3445,8 @@ function mobileHTML(v){
       <div style="height:8px"></div>
       ${mSectionTitle('Top operators','Top 20 · '+(yday?'by acres '+dayWord().toLowerCase():'by total acres achieved'))}
       ${v.opLeaders.length ? v.opLeaders.map((o,i)=>row(o,i,`${o.machines} mc · ${E(o.co||'—')} · ${E(o.terr||'—')}`)).join('') : mEmpty('No data for the current filters.')}`;
+  } else if(S.view==='insights'){
+    body = insightsBodyHTML(true);
   } else if(S.view==='snake'){
     body = snakeBodyHTML(true);
   } else if(S.view==='product'){
@@ -2941,6 +3596,7 @@ function paint(){
     else if(S.view==='weather') drawMap(mob?'mwMapHost':'wMapHost', 'weather');
     else if(S.view==='machines') drawPins(mob?'mPinHost':'pinHost');
     else if(S.view==='snake'){ wireSnakeHover(); wireTrendHover(); }
+    else if(S.view==='insights') wireSnakeHover();   // the trajectory card reuses the snake SVG + its crosshair
     if(!mob && S.selected) drawDrawerMap();
   }catch(err){ console.error('paint failed:', err); }
 }
@@ -2960,6 +3616,7 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='snFromSel'){ const f=snakeDateToOff(e.target.value); if(f!=null) setState({snFrom:f, snTo:Math.max(f,state.snTo)}); }
   else if(e.target.id==='snToSel'){ const t=snakeDateToOff(e.target.value); if(t!=null) setState({snTo:t, snFrom:Math.min(t,state.snFrom)}); }
   else if(e.target.id==='pmStateSel') setState({pmState:e.target.value});
+  else if(e.target.id==='insStateSel') setState({insSt:e.target.value});   // page-local; never touches state.st
   else if(e.target.id==='pmCropSel') setState({pmCrop:e.target.value});
 });
 app.addEventListener('click', e=>{
@@ -2999,6 +3656,14 @@ app.addEventListener('click', e=>{
     case 'pmmeasure': setState({pmMeasure:el.dataset.m==='yday'?'yday':'ytd'}); break;
     case 'pmstate': setState({pmState:el.dataset.st}); break;   // drill from the state-breakdown row
     case 'productretry': PROD.loaded=false; PROD.error=false; loadProduct(); break;
+    // Insights reads all three tabs, so its refresh reloads all three rather than just the machine sheet.
+    case 'insrefresh': state.refreshing=true; render();
+      SNAKE.loaded=false; SNAKE.error=false; PROD.loaded=false; PROD.error=false;
+      Promise.all([loadData(), loadSnake(), loadProduct()]).finally(()=>{ state.refreshing=false; render(); }); break;
+    // Drill a league row into that state's own Insights. Deliberately page-local: it re-scopes THIS page only and
+    // leaves state.st (and therefore every other view's filter bar) exactly where the user left it.
+    case 'insdrill': { const w=el.dataset.key; if(gateAllowsState(w)) setState({insSt:w}); break; }
+    case 'insclear': setState({insSt:''}); break;
   }
 });
 // machine table row <-> pin cross-highlight

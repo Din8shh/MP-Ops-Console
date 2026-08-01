@@ -5,8 +5,8 @@ PRD. Recreated from the Claude Design handoff `MP Ops Console.dc.html` as plain
 HTML/CSS/JS + inline-SVG maps. Same deploy shape as `din8shh.github.io/MP-map-view`.
 
 ## Files
-- `index.html` — the whole app: state machine, the 5 views (Map / Territory tables /
-  Machine locations / Weather / Area Managers), global filter bar, KPI strip,
+- `index.html` — the whole app: state machine, the views (Insights / Map / Territory tables /
+  Machine locations / Weather / Area Managers, …), global filter bar, KPI strip,
   machine-detail drawer, mobile layout, plus the SVG map/pin/choropleth engines and
   the **data layer** (CSV fetch → parse → derive → demo fallback).
 - `machines.js` — 401 **mock** rows (`export const MACHINES`) in the exact object shape
@@ -71,6 +71,65 @@ admin-only**. Global filter dropdowns (territory/AM/CO/BM/TM) scope to the selec
 Object shape: `{ mc, org, deployed(1/0), territory, cluster, co, coMob, am, amNum, target,
 achieved, mtd, acresY, scanned:[{product,acres}], breakdown(1/0), opMapped(1/0), opName,
 opNum, lat, lon }`.
+
+## Insights (the cross-tab summary)
+`insights` is the only view that reads all three tabs at once. **Admin-only** (in `roleHidesView`, like
+Cumulative / Products / Leaders); it sits first in the rail and first in the phone's bottom bar for those who
+have it. Chromeless (no filter bar, no KPI strip) and filter-free by design; the state league table is its only
+navigation (`data-act="insdrill"` → that state's map).
+
+Each tab answers exactly one question and is used for nothing else: **snake** → ahead or behind (vs the two
+prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken down / never sprayed, pinned to
+*yesterday* since the page has no Today toggle); **Product data** → what is sprayed and whose brand it is.
+
+- **Season cursor — the page always reads through YESTERDAY.** `insAnchor()` drops today (and anything dated
+  beyond it) by the **calendar**, comparing each logged offset against `snakeTodayOff()`. This is deliberately not
+  a magnitude test: the sheet writes the current day's row as the day runs, so a "is it big enough to be real"
+  rule releases today around midday and then compares a half-finished day against a full day a year ago —
+  a shortfall that appears every afternoon and vanishes overnight. A median-vs-prior-7-days test survives only as
+  a **backstop for a half-written yesterday** (an overnight batch that didn't finish), stepping back one more day.
+- **Gap trend beats gap size.** The five-week strip (`season.hist`) is the point of the page: it shows whether a
+  shortfall is opening or closing, which a single "−13%" cannot.
+- **"What changed" (`insSignals`) is the one part that recomposes daily.** Everything else is a fixed spine —
+  same cards, same order, new numbers — because comparison needs consistency. This strip is detector-driven:
+  Two families run over every scope, emit scored candidates, and the top 5 render.
+  **Family A (snake, across TIME)** — inflection, streak, crossover/projection vs last season's full year, peak day,
+  fleet week-over-week, productivity per running machine, stall. **Family B (Sheet1, across PEERS — no history
+  needed)** — territory zero-output clusters and AM chronic underperformance, each compared against *its own
+  state's* peers rather than its own past. Plus the **trust check**: snake's daily acres vs Sheet1's yesterday
+  (1.3% apart today); a >10% divergence outranks everything, because it means the page itself is unreliable. It
+  only runs when the anchor IS yesterday — otherwise the two sides are measuring different days.
+  **Family B is anchored on never-sprayed, a SEASON total, never on "ran yesterday".** Sheet1's daily fields are a
+  single observation with no history to smooth them; utilisation only ever corroborates. An AM can post 0% on a
+  quiet day and still own the programme's top cluster officer, which is precisely the false positive this rule kills. Three guards stop it becoming
+  horoscope: absolute **floors** (a state going 2→6 machines is a 150% swing and pure noise), **magnitude
+  weighting** by share of national acres, and **stateless novelty** — nothing is remembered between visits, so
+  "new" is derived from the data itself (transitions and milestone-length streaks score full; a condition that
+  has merely been true a while is damped to 45%). Two diversity rules cap it at one signal per scope (when there
+  is more than one) and two per detector type, so a day when every state inflects doesn't produce four identical rows.
+- **Two levels: All India and one state — never territory.** The snake tab has a full per-state series, so a state
+  view carries the *same seven cards* at the same richness. Territory is where that collapses (no sub-state history,
+  and the product tab has no territory column), which is exactly where the level stops.
+- **Scope is PAGE-LOCAL (`state.insSt`), like `snState`/`pmState`.** Nothing this page does may move `state.st`,
+  the machine filter bar, or any other view — that isolation is a deliberate constraint, not an accident. The
+  gate's state LOCK still overrides `insSt`, so a state-restricted login can never widen its scope through the
+  picker, and the picker is only rendered when `gateCanSwitchStates()`.
+- **The league drops a level with the scope.** All-India → states, carrying **Util % and Ac/run** (connector #24:
+  a shortfall decomposes into fleet × utilisation × productivity, which is what separates "Gujarat has no machines"
+  from "Gujarat's machines are idle"). Scoped → **territories**, Sheet1-only: the season, vs-LY and branded columns
+  are *absent rather than blank*, because the dimension is missing, not the data. Territories below
+  `INS_TERR_MIN` deployed machines are dropped and the count is **stated in the UI** — a silent floor hides real
+  problems. `insJunkTerr` filters the ~50 placeholder territory rows (`0`, `Not in Plan`, …).
+- **Windows are named in the copy on purpose.** The hero reports the gap over four weeks; the inflection detector
+  reports the same quantity over one. Both can be true and opposite ("across four weeks the gap has widened" +
+  "the gap stopped widening last week"). Naming both windows is all that stops adjacent cards reading as a
+  contradiction — do not drop those phrases when editing copy.
+- **`M_VIEWS` position 5 is deliberate** — see the comment there. Insights leads the desktop rail but stays off the
+  phone's 4-slot primary bar, because adding a twelfth view to it would displace Weather for admins.
+- **Three acre totals, deliberately reconciled on-page.** Season-to-date (snake, the headline — the only
+  year-comparable one) > Kharif achieved (Sheet1) > product-identified (~half the season). The footer card says
+  why they differ. Product **coverage %** is withheld under an org-scoped login: the branded numerator would be
+  one company's against an all-company season denominator.
 
 ## Weather (live)
 Rainfall + spray window come from **Open-Meteo** (Asia/Kolkata, `past_days=1&forecast_days=4`),
