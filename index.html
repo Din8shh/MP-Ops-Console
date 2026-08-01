@@ -2581,19 +2581,21 @@ function insWeekSegments(A,W){
     if(r.st==='OT') return;                                 // dashboard states only
     const seg=map[r.key];
     if(!seg || INS_SEG_DROP[seg]) return;                   // unknown or deliberately outside the base
-    const e=by[r.st]||(by[r.st]={ st:r.st, name:STATE_NAMES[r.st]||r.st, base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0, prod:{} });
+    const e=by[r.st]||(by[r.st]={ st:r.st, name:STATE_NAMES[r.st]||r.st, base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0, prod:{}, crop:{} });
     const k = INS_SEGS.indexOf(seg)>=0 ? seg : 'Other';
     e[k]+=r.acres; e.base+=r.acres;
     const p=e.prod[r.key]||(e.prod[r.key]={ disp:r.product, ac:0 }); p.ac+=r.acres;   // for the top-products line
+    const c=e.crop[r.crop]||(e.crop[r.crop]={ disp:r.crop, ac:0 }); c.ac+=r.acres;      // and the top-crops line
   });
   const topOf=o=>Object.keys(o).map(k=>o[k]).sort((a,b)=>b.ac-a.ac).slice(0,3);
   const rows=Object.keys(by).map(k=>by[k]).filter(x=>x.base>0).sort((a,b)=>b.base-a.base)
-    .map(r=>({ ...r, top: topOf(r.prod) }));
+    .map(r=>({ ...r, top: topOf(r.prod), topCrop: topOf(r.crop) }));
   if(!rows.length) return { empty:true };
-  const tot={ st:'', name:'All shown', base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0, prod:{} };
+  const tot={ st:'', name:'All shown', base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0, prod:{}, crop:{} };
   rows.forEach(r=>{ tot.base+=r.base; INS_SEGS.concat('Other').forEach(k=>{ tot[k]+=r[k]; });
-    Object.keys(r.prod).forEach(k=>{ const p=tot.prod[k]||(tot.prod[k]={ disp:r.prod[k].disp, ac:0 }); p.ac+=r.prod[k].ac; }); });
-  tot.top=topOf(tot.prod);
+    Object.keys(r.prod).forEach(k=>{ const p=tot.prod[k]||(tot.prod[k]={ disp:r.prod[k].disp, ac:0 }); p.ac+=r.prod[k].ac; });
+    Object.keys(r.crop).forEach(k=>{ const c=tot.crop[k]||(tot.crop[k]={ disp:r.crop[k].disp, ac:0 }); c.ac+=r.crop[k].ac; }); });
+  tot.top=topOf(tot.prod); tot.topCrop=topOf(tot.crop);
   return { rows, tot };
 }
 
@@ -2658,21 +2660,31 @@ function buildProdTrendSVG(T,mob){
 function buildWeekBarsSVG(W,mob){
   const days=W.days; let max=1;
   days.forEach(d=>{ max=Math.max(max, d.ac||0, d.ly||0); });
-  const Wd=mob?400:960, H=mob?230:250, mL=mob?48:64, mR=14, mT=14, mB=48;
+  const Wd=mob?400:960, H=mob?240:260, mL=mob?48:64, mR=20, mT=18, mB=50;
   const x0=mL,x1=Wd-mR,y0=mT,y1=H-mB;
-  const bw=(x1-x0)/7, gap=Math.min(10,bw*0.14), half=Math.max(2,(bw-gap*2)/2);
   const step=niceNum(max/4), nMax=Math.max(step,Math.ceil(max/step)*step);
+  const X=i=>x0+(days.length>1 ? i/(days.length-1)*(x1-x0) : (x1-x0)/2);
   const Y=v=>y1-(v/nMax)*(y1-y0);
   let grid=''; for(let t=0;t<=nMax+1e-6;t+=step){ const y=Y(t);
     grid+=`<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="#EFEDE7"/><text x="${x0-9}" y="${(y+3.6).toFixed(1)}" text-anchor="end" font-size="10.5" fill="#9C988F" font-family="'IBM Plex Mono'">${snakeFmtK(t)}</text>`; }
-  let bars='', lab='';
-  days.forEach((d,i)=>{ const bx=x0+i*bw+gap;
-    if(d.ly!=null&&d.ly>0) bars+=`<rect x="${bx.toFixed(1)}" y="${Y(d.ly).toFixed(1)}" width="${half.toFixed(1)}" height="${Math.max(0,y1-Y(d.ly)).toFixed(1)}" fill="${INS_PREV.color}" opacity=".45" rx="2"/>`;
-    if(d.ac!=null&&d.ac>0) bars+=`<rect x="${(bx+half).toFixed(1)}" y="${Y(d.ac).toFixed(1)}" width="${half.toFixed(1)}" height="${Math.max(0,y1-Y(d.ac)).toFixed(1)}" fill="${INS_CUR.color}" rx="2"/>`;
-    lab+=`<text x="${(bx+half).toFixed(1)}" y="${y1+17}" text-anchor="middle" font-size="12" font-weight="600" fill="#46433d" font-family="'Noto Sans'">${d.dow}</text>`;
-    lab+=`<text x="${(bx+half).toFixed(1)}" y="${y1+32}" text-anchor="middle" font-size="10" fill="#B6B1A8" font-family="'IBM Plex Mono'">${d.mc!=null?fmt(d.mc)+' mc':''}</text>`;
+  // One line per season over the same seven days. Lines rather than paired bars: the week's SHAPE — where it
+  // climbed, where it broke — is what the review talks about, and two bars per day fragments exactly that.
+  const line=(key,color,width,dash)=>{
+    const pts=days.map((d,i)=>({i,v:d[key]})).filter(p=>p.v!=null);
+    if(pts.length<2) return '';
+    const d=pts.map((p,k)=>`${k?'L':'M'}${X(p.i).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(' ');
+    return `<path d="${d}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linejoin="round" stroke-linecap="round"${dash?` stroke-dasharray="${dash}"`:''}/>`
+      + pts.map(p=>`<circle cx="${X(p.i).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="${width>2?3.6:2.8}" fill="#fff" stroke="${color}" stroke-width="${width>2?2.4:1.8}"/>`).join('');
+  };
+  const area=(()=>{ const pts=days.map((d,i)=>({i,v:d.ac})).filter(p=>p.v!=null);
+    if(pts.length<2) return '';
+    return `<path d="${pts.map((p,k)=>`${k?'L':'M'}${X(p.i).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(' ')} L${X(pts[pts.length-1].i).toFixed(1)} ${y1} L${X(pts[0].i).toFixed(1)} ${y1} Z" fill="${C.softO}" opacity=".55"/>`; })();
+  let lab='';
+  days.forEach((d,i)=>{
+    lab+=`<text x="${X(i).toFixed(1)}" y="${y1+19}" text-anchor="middle" font-size="12" font-weight="600" fill="#46433d" font-family="'Noto Sans'">${d.dow}</text>`;
+    lab+=`<text x="${X(i).toFixed(1)}" y="${y1+34}" text-anchor="middle" font-size="10" fill="#B6B1A8" font-family="'IBM Plex Mono'">${d.mc!=null?fmt(d.mc)+' mc':''}</text>`;
   });
-  return { svg:`<svg viewBox="0 0 ${Wd} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC"/>${bars}</svg>` };
+  return { svg:`<svg viewBox="0 0 ${Wd} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC"/>${area}${line('ly',INS_PREV.color,1.8,'5 4')}${line('ac',INS_CUR.color,2.8,'')}</svg>` };
 }
 
 /* ===================== Yesterday mode =====================
@@ -2896,8 +2908,8 @@ function insightsBodyHTML(mob){
         </div></div>
       <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-top:1px solid #EFEDE7">
         ${big(fmt(W.acres/7),'acres per day', W.bestDay?`best ${W.bestDay.dow} · ${fmt(W.bestDay.ac)} ac`:'7-day average',C.orangeD)}
-        ${big(W.machPeak!=null?fmt(W.machPeak):'—','machines ran this week', W.machAvg!=null?`highest in a single day · ${fmt(W.machAvg)} on an average day`:'highest in a single day')}
-        ${big(W.acPerMachine!=null?fmt(W.acPerMachine):'—','acres per running machine','average for a machine on a day it ran')}
+        ${big(W.machPeak!=null?fmt(W.machPeak):'—','machines ran this week', W.machAvg!=null?`highest in a day · avg ${fmt(W.machAvg)}`:'highest in a day')}
+        ${big(W.acPerMachine!=null?fmt(W.acPerMachine):'—','acres per running machine','average on a day it ran')}
         ${big(W.ly!=null?fmt(W.ly):'—','same week last year', W.ly!=null?`${W.acres>=W.ly?'+':'−'}${fmt(Math.abs(W.acres-W.ly))} ac`:'')}
       </div>`);
 
@@ -2972,7 +2984,7 @@ function insightsBodyHTML(mob){
       const share = W.acres ? TP.total/W.acres*100 : null;
       const pMax = TP.products.length ? TP.products[0].ac : 1;
       const top = TP.products.slice(0,12);
-      const pRow = (x,i) => `<div style="display:grid;grid-template-columns:${mob?'1fr 66px':'1.5fr 1fr 78px 58px'};gap:10px;align-items:center;padding:9px 16px;border-top:${i?'1px solid #F4F2EE':'none'}">
+      const pRow = (x,i) => `<div style="display:grid;grid-template-columns:${mob?'1fr 66px':'minmax(150px,300px) minmax(0,1fr) 84px 58px'};gap:10px;align-items:center;padding:9px 16px;border-top:${i?'1px solid #F4F2EE':'none'}">
           <div style="display:flex;align-items:center;gap:7px;min-width:0"><span style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(x.disp)}</span>${chip(x.company)}</div>
           ${mob?'':`<span style="display:block;height:8px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(1,x.ac/pMax*100)}%;background:${x.company==='UPL'?C.orange:C.green};border-radius:4px"></span></span>`}
           <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700;text-align:right">${fmt(x.ac)}</span>
@@ -2988,7 +3000,7 @@ function insightsBodyHTML(mob){
           ${big(fmt(TP.swal),'SWAL', TP.total?`${(TP.swal/TP.total*100).toFixed(0)}% of product acres`:'', C.greenD)}
           ${big(TP.crops.length?E(TP.crops[0].key):'—','top crop', TP.crops.length?`${fmt(TP.crops[0].ac)} ac`:'')}
         </div>
-        <div style="display:grid;grid-template-columns:${mob?'1fr 66px':'1.5fr 1fr 78px 58px'};gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7">
+        <div style="display:grid;grid-template-columns:${mob?'1fr 66px':'minmax(150px,300px) minmax(0,1fr) 84px 58px'};gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7">
           ${(mob?['Product','Acres']:['Product','','Acres','Share']).map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;${h==='Acres'||h==='Share'?'text-align:right':''}">${h}</span>`).join('')}</div>
         ${top.map(pRow).join('')}
         ${TP.products.length>top.length?`<div style="padding:9px 16px;border-top:1px solid #F4F2EE;font-size:11px;color:#B6B1A8">${fmt(TP.products.length-top.length)} further products account for ${fmt(TP.total-top.reduce((s,x)=>s+x.ac,0))} ac.</div>`:''}
@@ -3009,11 +3021,12 @@ function insightsBodyHTML(mob){
     } else {
       const SEGL=INS_SEGS.concat('Other');
       const bar=r=>`<span style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#F2F0EB">${SEGL.map(k=>r[k]>0?`<span style="width:${r[k]/r.base*100}%;background:${SEG_C[k]}"></span>`:'').join('')}</span>`;
-      const gc=mob?'1fr 54px 54px 54px':'1.3fr 1.1fr 78px 62px 62px 62px 58px';
-      const hdr=(mob?['State · top products','Herb','Ins','Fung']:['State · top products','','Acres','Herb','Ins','Fung','Other']);
+      const gc=mob?'1fr 54px 54px 54px':'minmax(0,2.5fr) 132px 76px 58px 58px 58px 54px';
+      const hdr=(mob?['State · top products and crops','Herb','Ins','Fung']:['State · top products and crops','','Acres','Herb','Ins','Fung','Other']);
       // Top products sit under the state name rather than in a column: they are the "what", the percentages are
       // the "shape", and a seventh column would crowd both off a projector.
-      const topLine=r=>(r.top&&r.top.length)?`<div style="font-size:10.5px;color:#9C988F;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.top.map(p=>`${E(p.disp)} <span style="font-family:'IBM Plex Mono';color:#6E6A62">${fmt(p.ac)}</span>`).join(' · ')}</div>`:'';
+      const subLine=(tag,list)=>(list&&list.length)?`<div style="font-size:10.5px;color:#9C988F;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="display:inline-block;min-width:${mob?'46px':'52px'};color:#C1BCB2">${tag}</span>${list.map(p=>`${E(p.disp)} <span style="font-family:'IBM Plex Mono';color:#6E6A62">${fmt(p.ac)}</span>`).join(' · ')}</div>`:'';
+      const topLine=r=>subLine('Products',r.top)+subLine('Crops',r.topCrop);
       const row=(r,i,isTot)=>`<div style="display:grid;grid-template-columns:${gc};gap:10px;align-items:center;padding:${isTot?'11px':'10px'} 16px;border-top:1px solid ${isTot?'#E9E6DF':'#F4F2EE'};${isTot?'background:#FBFAF8':''}">
           <div style="min-width:0"><span style="font-size:12.5px;font-weight:${isTot?700:600}">${E(r.name)}</span>${topLine(r)}</div>
           ${mob?'':`<div>${bar(r)}</div>`}
@@ -3022,7 +3035,7 @@ function insightsBodyHTML(mob){
         </div>`;
       const legend=`<div style="display:flex;gap:14px;flex-wrap:wrap;padding:11px 16px 4px">${SEGL.map(k=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#6E6A62"><span style="width:10px;height:10px;border-radius:3px;background:${SEG_C[k]}"></span>${k}</span>`).join('')}</div>`;
       segCard=card(`${cHead(`Product segments by state · ${E(A.gst?A.regionName:'all India')}`,
-          'Share of each state’s product acres by segment, with the largest products in each')}
+          'Share of each state’s product acres by segment, with its largest products and crops')}
         ${legend}
         <div style="display:grid;grid-template-columns:${gc};gap:10px;padding:8px 16px 10px;border-bottom:1px solid #EFEDE7">
           ${hdr.map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;${['Acres','Herb','Ins','Fung','Other'].includes(h)?'text-align:right':''}">${h}</span>`).join('')}</div>

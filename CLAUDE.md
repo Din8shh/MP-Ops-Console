@@ -142,7 +142,10 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
 - **Product segments by state** joins the weekly sheet to the summary tab's brand → portfolio map (~99% of acres
   match). Soil & Seed Health and Unclassified are excluded from the base entirely, so Herbicide / Insecticide /
   Fungicide / Other sum to 100% of what remains. Non-dashboard states are dropped, and the exclusions are NOT
-  narrated on the page — the table shows the four segments and the largest products per state, nothing else.
+  narrated on the page. Each state carries its top three **products AND crops** as labelled sub-lines under the
+  name — which also fixes the dead space that a wide label column with short content used to leave before the
+  bars. Where a label column can't be filled (the products table), the BAR takes the slack instead:
+  `minmax(150px,300px) minmax(0,1fr)` rather than a greedy `fr` on the name.
 - **Every Week-mode card exports to PNG** (`downloadCard`, `dlWrap`). No library: the app styles inline, so a card
   serialises straight into an SVG `<foreignObject>` and rasterises at 2× on white with a title and the week's
   dates. Weekly review only — the other modes are read on screen. Web fonts do not load inside a rasterised
@@ -153,6 +156,8 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   matches and otherwise says which week it covers, rather than relabelling those numbers as another week's.
   It is the real product mix: 101 products, ~62% of that week's fleet acres. Replace `WKP_WEEK` and the gid when
   the definitive recurring sheet arrives.
+  The week-day-by-day chart is a LINE chart, not paired bars: the week's shape — where it climbed, where it
+  broke, where it crossed last season — is what the review discusses, and two bars per day fragments exactly that.
   *Focus product trend* ← `TX` (gid 718502150), the day-level tab: five focus brands since 1 June, the only
   product source with a date and therefore the only one that can show daily movement.
 - **The trend COMBINES two products into one line, by design.** UPL and SWAL each sell an equivalent of the same
