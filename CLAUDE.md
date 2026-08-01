@@ -134,11 +134,21 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   `POS.ac*` is (last season − this season), so a negative value means ahead, and the noun (`lead`/`gap`), the
   label (`acres ahead`/`acres behind`) and the verb (`grew`/`shrank` vs `narrowed`/`widened`) all switch on it.
   Cells show magnitudes, so the delta under them is the change in that magnitude, not the raw signed difference.
-- **Week mode's product panel comes from the DAY-LEVEL tab (`TX`, gid 718502150)** — the only product source with
-  a date, so the only one that can answer "what moved last week". It is narrow by nature: five herbicide brands
-  since 1 June, ~6% of a week's machine acres, ~60% of it in MP. It is labelled a *tracked-product* panel and
-  always states its share of the fleet's acres, because reading it as "the product mix" would badly misstate the
-  programme. The summary tab (`PROD`) still drives Season mode; it carries YTD and yesterday only.
+- **Week mode carries TWO product cards, from two different sources.**
+  *Products this week* ← `WKP` (gid 1973671649), a **hand-built tab covering ONE named week** (`WKP_WEEK`,
+  25–31 Jul 2026). It has no date column — the tab IS the week — so it renders only when the selected week
+  matches and otherwise says which week it covers, rather than relabelling those numbers as another week's.
+  It is the real product mix: 101 products, ~62% of that week's fleet acres. Replace `WKP_WEEK` and the gid when
+  the definitive recurring sheet arrives.
+  *Focus product trend* ← `TX` (gid 718502150), the day-level tab: five focus brands since 1 June, the only
+  product source with a date and therefore the only one that can show daily movement.
+- **The trend COMBINES two products into one line, by design.** UPL and SWAL each sell an equivalent of the same
+  product (Iris ↔ Patela), so "is this family growing across India?" is only answerable when the pair is summed —
+  two separate lines answer a different, weaker question. Both slots (`state.insPa` / `insPb`) are user-chosen and
+  either may be cleared. Daily product acres are very spiky, so the chart draws a 7-day rolling mean over the raw
+  daily line and the direction figure compares the last 7 days with the 7 before.
+  **Caveat: IRIS is not in the day-level tab** (it has only Amicus, Alito, Patela, Brucia, Canora), so the
+  Iris ↔ Patela pair cannot be charted until that feed is widened.
 - **Yesterday imputes NO expected value to anybody — it is an account, not a grade.** An earlier build scored each
   territory against "expected acres = the state's acres yesterday × the territory's share of the season". That was
   removed and must not come back: it assumes a territory's share of one day matches its share of a whole season,

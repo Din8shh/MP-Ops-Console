@@ -82,7 +82,9 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
   // 'week' → the weekly review: a deep dive on one completed Sat–Fri week. 'yday' → what deviated yesterday and needs
   // a call this morning. Three modes of ONE page: same spine, same scope, different horizon and different action.
   // insWeekBack = how many complete weeks back the Week view is looking; 0 = the week that just ended.
-  insSt:'', insMode:'season', insWeekBack:0 };
+  // insPa / insPb = the two products combined into one line on the focus-product trend. UPL and SWAL sell
+  // equivalents of the same product, so the family only reads correctly when the pair is summed.
+  insSt:'', insMode:'season', insWeekBack:0, insPa:'', insPb:'' };
 // state.sheet = which mobile overlay is up: null | 'filters' | 'more'. state.listLimit = rows shown
 // in the mobile machine list (Load more bumps it); reset whenever the filter set changes.
 const MLIST_PAGE = 60;
@@ -679,6 +681,43 @@ async function loadTx(){
     TX.loaded=true; TX.at=nowIST();
   }catch(e){ TX.error=true; console.error('product-day load failed:', e); }
   finally{ TX.loading=false; render(); }
+}
+
+/* ===================== weekly product detail (manual tab) =====================
+   A hand-built tab covering ONE named week, added because neither product source could give a full weekly
+   product picture: the summary tab has no dates, and the day-level tab carries only five focus brands. This one
+   has 101 products and ~62% of the fleet's acres for its week — the real product mix.
+
+   It has no date column: the tab IS the week. So it is pinned to WKP_WEEK and shown only when the selected week
+   matches; stepping to any other week says so rather than silently mislabelling this week's numbers as that
+   week's. Replace WKP_WEEK (and the gid) when the definitive recurring sheet arrives. */
+const WKP_GID  = '1973671649';
+const WKP_WEEK = { start:'2026-07-25', end:'2026-07-31' };            // the week this manual tab covers
+const WKP_COL  = { region:0, crop:1, product:2, company:3, acres:4 };
+const WKP = { loading:false, loaded:false, error:false, at:'', rows:[] };
+function wkpUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${WKP_GID}&t=${Date.now()}`; }
+function wkpBuild(rows){
+  if(!rows.length) throw new Error('weekly product: no rows');
+  const K=WKP_COL, out=[];
+  for(const r of rows.slice(1)){
+    if(!r || r.length<=K.acres) continue;
+    const region=String(r[K.region]||'').trim(); if(!region) continue;
+    const p=String(r[K.product]||'').trim(); if(!p) continue;
+    let comp=String(r[K.company]||'').trim().toUpperCase();
+    comp = comp==='SWAL' ? 'SWAL' : comp==='UPL' ? 'UPL' : null; if(!comp) continue;
+    out.push({ st: PROD_REGION[region.toUpperCase()] || 'OT', crop: titleCase(r[K.crop])||'—',
+      product: titleCase(p), key: p.toUpperCase().replace(/\s+/g,' '), company:comp, acres: num(r[K.acres]) });
+  }
+  WKP.rows=out;
+}
+async function loadWkp(){
+  if(WKP.loading) return; WKP.loading=true; WKP.error=false; render();
+  try{
+    const res=await fetch(wkpUrl()); if(!res.ok) throw new Error('HTTP '+res.status);
+    wkpBuild(parseCSV(await res.text()));
+    WKP.loaded=true; WKP.at=nowIST();
+  }catch(e){ WKP.error=true; console.error('weekly product load failed:', e); }
+  finally{ WKP.loading=false; render(); }
 }
 
 /* ============================= derived ============================= */
@@ -2460,30 +2499,79 @@ function insWeekAgg(A,back){
    always paired with the previous week so a brand's direction is visible rather than just its size. */
 const insISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 function insWeekProducts(A,W){
-  if(!TX.loaded || !W) return null;
-  const shift=(d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
-  const a=insISO(W.d0), b=insISO(W.d1), pa=insISO(shift(W.d0,-7)), pb=insISO(shift(W.d1,-7));
+  if(!WKP.loaded || !W) return null;
+  // The manual tab has no dates — it IS one named week. Anything else must say so rather than relabel it.
+  if(insISO(W.d0)!==WKP_WEEK.start || insISO(W.d1)!==WKP_WEEK.end) return { wrongWeek:true };
   const scope=r=>(!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
-  const wk=TX.rows.filter(r=>scope(r) && r.d>=a && r.d<=b);
-  const pv=TX.rows.filter(r=>scope(r) && r.d>=pa && r.d<=pb);
-  if(!wk.length && !pv.length) return { empty:true, total:0 };
-  const sum=list=>list.reduce((s,r)=>s+r.acres,0);
-  const roll=(list,key)=>{ const m={}; list.forEach(r=>{ const k=key(r); m[k]=(m[k]||0)+r.acres; }); return m; };
-  const now=roll(wk,r=>r.brandKey), was=roll(pv,r=>r.brandKey);
-  const meta={}; wk.concat(pv).forEach(r=>{ meta[r.brandKey]=meta[r.brandKey]||{ disp:r.brand, company:r.company }; });
-  const brands=Object.keys(meta).map(k=>({ key:k, ...meta[k], ac:now[k]||0, prev:was[k]||0,
-      wow: was[k] ? (now[k]||0)/was[k]*100-100 : null }))
-    .filter(x=>x.ac>0||x.prev>0).sort((x,y)=>y.ac-x.ac);
-  const cropM=roll(wk,r=>r.crop);
-  const crops=Object.keys(cropM).map(k=>({key:k, ac:cropM[k]})).filter(x=>x.ac>0).sort((x,y)=>y.ac-x.ac);
-  const regM=roll(wk,r=>r.st);
-  const regions=Object.keys(regM).map(k=>({ st:k, name: k==='OT'?'Other':(STATE_NAMES[k]||k), ac:regM[k] }))
-    .filter(x=>x.ac>0).sort((x,y)=>y.ac-x.ac);
-  const total=sum(wk), prev=sum(pv);
-  return { total, prev, wow: prev? total/prev*100-100 : null, brands, crops, regions,
-    upl: sum(wk.filter(r=>r.company==='UPL')), swal: sum(wk.filter(r=>r.company==='SWAL')),
-    days: Array.from({length:7},(_,i)=>{ const dt=shift(W.d0,i);
-      return { dow: INS_DOW[dt.getDay()], ac: sum(wk.filter(r=>r.d===insISO(dt))) }; }) };
+  const rows=WKP.rows.filter(scope);
+  if(!rows.length) return { empty:true };
+  const roll=key=>{ const m={}; rows.forEach(r=>{ const k=key(r); m[k]=(m[k]||0)+r.acres; }); return m; };
+  const meta={}; rows.forEach(r=>{ meta[r.key]=meta[r.key]||{ disp:r.product, company:r.company }; });
+  const pm=roll(r=>r.key), cm=roll(r=>r.crop), rm=roll(r=>r.st);
+  const listOf=(m,f)=>Object.keys(m).map(k=>f(k,m[k])).filter(x=>x.ac>0).sort((x,y)=>y.ac-x.ac);
+  return {
+    total: rows.reduce((s,r)=>s+r.acres,0),
+    upl:   rows.reduce((s,r)=>s+(r.company==='UPL'?r.acres:0),0),
+    swal:  rows.reduce((s,r)=>s+(r.company==='SWAL'?r.acres:0),0),
+    products: listOf(pm,(k,v)=>({ key:k, ...meta[k], ac:v })),
+    crops:    listOf(cm,(k,v)=>({ key:k, ac:v })),
+    regions:  listOf(rm,(k,v)=>({ st:k, name: k==='OT'?'Other':(STATE_NAMES[k]||k), ac:v })) };
+}
+
+/* ===== focus-product daily trend =====
+   UPL and SWAL each sell an equivalent of the same product (Iris ↔ Patela), so "is this product family growing
+   across India?" is only answerable when the pair is ADDED TOGETHER — two separate lines answer a different and
+   much less useful question. Both slots are user-chosen and either may be cleared.
+
+   Daily product acres are extremely spiky, so a raw daily line cannot be read for direction; the chart carries a
+   7-day rolling mean on top of it and the headline compares the last 7 days with the 7 before. */
+function insProdTrend(A){
+  if(!TX.loaded) return null;
+  const scope=r=>(!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
+  const rows=TX.rows.filter(scope);
+  const meta={}; rows.forEach(r=>{ const m=meta[r.brandKey]||(meta[r.brandKey]={ disp:r.brand, company:r.company, ac:0 }); m.ac+=r.acres; });
+  const options=Object.keys(meta).map(k=>({ key:k, ...meta[k] })).sort((x,y)=>y.ac-x.ac);
+  if(!options.length) return { options:[] };
+  const defA=(options.find(o=>o.company==='UPL')||options[0]).key;
+  const defB=(options.find(o=>o.company==='SWAL')||options[1]||{key:''}).key;
+  const ok=v=>v && meta[v] ? v : null;
+  const a=ok(state.insPa)||defA;
+  const b=state.insPb==='none' ? null : (ok(state.insPb)||(defB!==a?defB:null));
+  const sel=[a,b].filter(Boolean);
+  const dates=rows.map(r=>r.d).sort();
+  if(!dates.length) return { options };
+  const per={}; rows.forEach(r=>{ if(sel.indexOf(r.brandKey)>=0) per[r.d]=(per[r.d]||0)+r.acres; });
+  // Walk every calendar day in range so a day with no sale reads as 0, not as a gap in the line.
+  const series=[], cur=new Date(dates[0]+'T00:00:00'), end=new Date(dates[dates.length-1]+'T00:00:00');
+  while(cur<=end){ const iso=insISO(cur); series.push({ d:iso, v:per[iso]||0 }); cur.setDate(cur.getDate()+1); }
+  series.forEach((p,i)=>{ let s=0,n=0; for(let j=Math.max(0,i-6);j<=i;j++){ s+=series[j].v; n++; } p.avg=s/n; });
+  const last7=series.slice(-7).reduce((s,p)=>s+p.v,0), prior7=series.slice(-14,-7).reduce((s,p)=>s+p.v,0);
+  return { options, a, b, sel, series, total:series.reduce((s,p)=>s+p.v,0), last7, prior7,
+    trend: prior7 ? last7/prior7*100-100 : null,
+    label: sel.map(k=>meta[k].disp).join(' + '),
+    companies: sel.map(k=>meta[k].company) };
+}
+function buildProdTrendSVG(T,mob){
+  const s=T&&T.series; if(!s || s.length<2) return { has:false, svg:'' };
+  let max=1; s.forEach(p=>{ max=Math.max(max,p.v,p.avg); });
+  const Wd=mob?400:960, H=mob?230:260, mL=mob?46:62, mR=14, mT=14, mB=38;
+  const x0=mL,x1=Wd-mR,y0=mT,y1=H-mB;
+  const step=niceNum(max/4), nMax=Math.max(step,Math.ceil(max/step)*step);
+  const X=i=>x0+i/(s.length-1)*(x1-x0), Y=v=>y1-(v/nMax)*(y1-y0);
+  let grid=''; for(let t=0;t<=nMax+1e-6;t+=step){ const y=Y(t);
+    grid+=`<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="#EFEDE7"/><text x="${x0-9}" y="${(y+3.6).toFixed(1)}" text-anchor="end" font-size="10.5" fill="#9C988F" font-family="'IBM Plex Mono'">${snakeFmtK(t)}</text>`; }
+  const every=Math.max(1,Math.ceil(s.length/(mob?5:12)));
+  let lab=''; s.forEach((p,i)=>{ if(i%every===0||i===s.length-1){
+    const dd=new Date(p.d+'T00:00:00');
+    lab+=`<text x="${X(i).toFixed(1)}" y="${y1+15}" text-anchor="middle" font-size="9.5" fill="#9C988F" font-family="'Noto Sans'">${dd.getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dd.getMonth()]}</text>`; } });
+  const path=(key,w,op)=>s.map((p,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(p[key]).toFixed(1)}`).join(' ');
+  const area=`${s.map((p,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(p.avg).toFixed(1)}`).join(' ')} L${X(s.length-1).toFixed(1)} ${y1} L${X(0).toFixed(1)} ${y1} Z`;
+  return { has:true, svg:`<svg viewBox="0 0 ${Wd} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">
+    ${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC"/>
+    <path d="${area}" fill="${C.softO}" opacity=".7"/>
+    <path d="${path('v')}" fill="none" stroke="${C.orange}" stroke-width="1" opacity=".45" stroke-linejoin="round"/>
+    <path d="${path('avg')}" fill="none" stroke="${C.orangeD}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>` };
 }
 
 /* The week's shape, this year against the same seven fiscal days last year. Bars, because the question is
@@ -2690,7 +2778,8 @@ function insightsBodyHTML(mob){
   /* ================= Week mode · the Monday review =================
      Tuned to be read off a projector rather than scanned at a desk: fewer, larger numbers and one idea per card. */
   if(mode==='week'){
-    if(!TX.loaded && !TX.loading && !TX.error) setTimeout(loadTx,0);   // day-level products: only this mode needs them
+    if(!TX.loaded  && !TX.loading  && !TX.error ) setTimeout(loadTx,0);    // day-level products, for the trend
+    if(!WKP.loaded && !WKP.loading && !WKP.error) setTimeout(loadWkp,0);   // weekly per-product detail
     const W=insWeekAgg(A, state.insWeekBack|0);
     const stepper=`<div style="display:flex;align-items:center;gap:8px">
         <button data-act="insweek" data-d="-1" title="Earlier week" style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#46433d;font-size:15px;cursor:pointer;line-height:1">‹</button>
@@ -2783,45 +2872,79 @@ function insightsBodyHTML(mob){
 
     /* ---- tracked products for the week (day-level tab) ---- */
     const TP=insWeekProducts(A,W);
+    const chip = c => `<span style="display:inline-block;padding:1px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:.03em;background:${c==='UPL'?C.softO:C.softG};color:${c==='UPL'?C.orangeD:C.greenD}">${c}</span>`;
     let prodWk='';
-    if(!TX.loaded){
-      prodWk=card(`${cHead('Tracked products','Day-level product tab')}${waiting(TX.error, TX.error?'Could not load the day-level product tab.':'Loading day-level products…','txretry')}`);
+    if(!WKP.loaded){
+      prodWk=card(`${cHead('Products this week','Weekly product sheet')}${waiting(WKP.error, WKP.error?'Could not load the weekly product sheet.':'Loading the weekly product sheet…','wkpretry')}`);
+    } else if(TP && TP.wrongWeek){
+      prodWk=card(`${cHead('Products this week','Weekly product sheet')}${waiting(false,`Per-product detail is only available for ${E(insWeekLabel(new Date(WKP_WEEK.start+'T00:00:00')))} – ${E(insWeekLabel(new Date(WKP_WEEK.end+'T00:00:00')))}, the one week the sheet covers.`,'wkpretry')}`);
     } else if(!TP || TP.empty || !TP.total){
-      prodWk=card(`${cHead('Tracked products','Day-level product tab')}${waiting(false,'No tracked-product acres recorded in this week.','txretry')}`);
+      prodWk=card(`${cHead('Products this week','Weekly product sheet')}${waiting(false,'No product acres recorded for this scope.','wkpretry')}`);
     } else {
       const share = W.acres ? TP.total/W.acres*100 : null;
-      const bMax = TP.brands.length ? Math.max(TP.brands[0].ac, TP.brands[0].prev) : 1;
-      const chip = c => `<span style="display:inline-block;padding:1px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:.03em;background:${c==='UPL'?C.softO:C.softG};color:${c==='UPL'?C.orangeD:C.greenD}">${c}</span>`;
-      const bRow = (x,i) => `<div style="display:grid;grid-template-columns:${mob?'1fr 62px 60px':'1.4fr 1fr 74px 68px'};gap:10px;align-items:center;padding:9px 16px;border-top:${i?'1px solid #F4F2EE':'none'}">
+      const pMax = TP.products.length ? TP.products[0].ac : 1;
+      const top = TP.products.slice(0,12);
+      const pRow = (x,i) => `<div style="display:grid;grid-template-columns:${mob?'1fr 66px':'1.5fr 1fr 78px 58px'};gap:10px;align-items:center;padding:9px 16px;border-top:${i?'1px solid #F4F2EE':'none'}">
           <div style="display:flex;align-items:center;gap:7px;min-width:0"><span style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(x.disp)}</span>${chip(x.company)}</div>
-          ${mob?'':`<span style="display:block;height:8px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(1,x.ac/bMax*100)}%;background:${x.company==='UPL'?C.orange:C.green};border-radius:4px"></span></span>`}
+          ${mob?'':`<span style="display:block;height:8px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(1,x.ac/pMax*100)}%;background:${x.company==='UPL'?C.orange:C.green};border-radius:4px"></span></span>`}
           <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700;text-align:right">${fmt(x.ac)}</span>
-          <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;text-align:right;color:${x.wow==null?C.ink3:x.wow>=0?C.greenD:C.brk}">${x.wow==null?'new':(x.wow>=0?'+':'−')+Math.abs(x.wow).toFixed(0)+'%'}</span>
+          ${mob?'':`<span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#9C988F;text-align:right">${(x.ac/TP.total*100).toFixed(0)}%</span>`}
         </div>`;
       const regStrip = (!A.gst && TP.regions.length>1) ? `<div style="padding:11px 16px;border-top:1px solid #EFEDE7;display:flex;gap:14px;flex-wrap:wrap">
-          ${TP.regions.slice(0,5).map(r=>`<span style="font-size:11.5px;color:#6E6A62"><strong style="color:#46433d">${E(r.name)}</strong> ${fmt(r.ac)} ac<span style="color:#B6B1A8"> · ${(r.ac/TP.total*100).toFixed(0)}%</span></span>`).join('')}
-        </div>` : '';
-      prodWk=card(`${cHead(`Tracked products · ${E(A.gst?A.regionName:'all India')}`,
-          `Five herbicide brands recorded at day level${share!=null?` · ${fmt(TP.total)} ac this week, ${share.toFixed(0)}% of the ${fmt(W.acres)} ac the fleet sprayed`:''}`)}
+          ${TP.regions.slice(0,5).map(r=>`<span style="font-size:11.5px;color:#6E6A62"><strong style="color:#46433d">${E(r.name)}</strong> ${fmt(r.ac)} ac<span style="color:#B6B1A8"> · ${(r.ac/TP.total*100).toFixed(0)}%</span></span>`).join('')}</div>` : '';
+      prodWk=card(`${cHead(`Products this week · ${E(A.gst?A.regionName:'all India')}`,
+          `${fmt(TP.products.length)} products${share!=null?` · ${fmt(TP.total)} ac, ${share.toFixed(0)}% of the ${fmt(W.acres)} ac the fleet sprayed`:''}`)}
         <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-bottom:1px solid #EFEDE7">
-          ${big(fmt(TP.total),'tracked acres', TP.wow!=null?`${TP.wow>=0?'+':'−'}${Math.abs(TP.wow).toFixed(0)}% vs previous week`:'', C.orangeD)}
-          ${big(fmt(TP.upl),'UPL', TP.total?`${(TP.upl/TP.total*100).toFixed(0)}% of tracked`:'', C.orangeD)}
-          ${big(fmt(TP.swal),'SWAL', TP.total?`${(TP.swal/TP.total*100).toFixed(0)}% of tracked`:'', C.greenD)}
+          ${big(fmt(TP.total),'product acres', `${fmt(TP.products.length)} products, ${fmt(TP.crops.length)} crops`, C.orangeD)}
+          ${big(fmt(TP.upl),'UPL', TP.total?`${(TP.upl/TP.total*100).toFixed(0)}% of product acres`:'', C.orangeD)}
+          ${big(fmt(TP.swal),'SWAL', TP.total?`${(TP.swal/TP.total*100).toFixed(0)}% of product acres`:'', C.greenD)}
           ${big(TP.crops.length?E(TP.crops[0].key):'—','top crop', TP.crops.length?`${fmt(TP.crops[0].ac)} ac`:'')}
         </div>
-        <div style="display:grid;grid-template-columns:${mob?'1fr 62px 60px':'1.4fr 1fr 74px 68px'};gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7">
-          ${(mob?['Brand','Acres','WoW']:['Brand','','Acres','WoW']).map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;${h==='Acres'||h==='WoW'?'text-align:right':''}">${h}</span>`).join('')}
-        </div>
-        ${TP.brands.map(bRow).join('')}
+        <div style="display:grid;grid-template-columns:${mob?'1fr 66px':'1.5fr 1fr 78px 58px'};gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7">
+          ${(mob?['Product','Acres']:['Product','','Acres','Share']).map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;${h==='Acres'||h==='Share'?'text-align:right':''}">${h}</span>`).join('')}</div>
+        ${top.map(pRow).join('')}
+        ${TP.products.length>top.length?`<div style="padding:9px 16px;border-top:1px solid #F4F2EE;font-size:11px;color:#B6B1A8">${fmt(TP.products.length-top.length)} further products account for ${fmt(TP.total-top.reduce((s,x)=>s+x.ac,0))} ac.</div>`:''}
         ${TP.crops.length>1?`<div style="padding:11px 16px;border-top:1px solid #EFEDE7;font-size:11.5px;color:#6E6A62">By crop · ${TP.crops.slice(0,5).map(c=>`${E(c.key)} <span style="font-family:'IBM Plex Mono';color:#46433d">${fmt(c.ac)}</span>`).join(' · ')}</div>`:''}
         ${regStrip}`);
+    }
+
+    /* ---- focus-product daily trend, with the UPL/SWAL equivalents combined into one line ---- */
+    const T=insProdTrend(A);
+    let prodTrend='';
+    if(!TX.loaded){
+      prodTrend=card(`${cHead('Focus product trend','Day-level product tab')}${waiting(TX.error, TX.error?'Could not load the day-level product tab.':'Loading day-level products…','txretry')}`);
+    } else if(!T || !T.options.length){
+      prodTrend=card(`${cHead('Focus product trend','Day-level product tab')}${waiting(false,'No day-level product rows for this scope.','txretry')}`);
+    } else {
+      const chart=buildProdTrendSVG(T,mob);
+      const opts=(cur,withNone)=>optionsHTML(
+        (withNone?[{v:'none',t:'— none —'}]:[]).concat(T.options.map(o=>({v:o.key,t:`${o.disp} (${o.company})`}))),
+        String(cur||(withNone?'none':'')));
+      const sel="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none;max-width:190px";
+      const picker=`<div style="display:flex;align-items:center;gap:${mob?'8px':'12px'};flex-wrap:wrap;padding:12px 16px">
+          <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Combine</span>
+          <div style="position:relative"><select id="insPaSel" style="${sel}">${opts(T.a,false)}</select>${I.caret}</div>
+          <span style="font-size:13px;color:#9C988F;font-weight:600">+</span>
+          <div style="position:relative"><select id="insPbSel" style="${sel}">${opts(T.b||'none',true)}</select>${I.caret}</div>
+        </div>`;
+      const dir = T.trend==null ? null : T.trend>=0;
+      prodTrend=card(`${cHead(`Focus product trend · ${E(A.gst?A.regionName:'all India')}`,
+          `Daily scanned acres for the selected products added together · thin line is each day, thick line is the 7-day average`)}
+        ${picker}
+        <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-top:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
+          ${big(E(T.label||'—'),'combined series', T.sel.length>1?'two products shown as one line':'one product')}
+          ${big(fmt(T.total),'acres in the period', `${T.series.length} days`, C.orangeD)}
+          ${big(fmt(T.last7),'last 7 days', T.prior7?`against ${fmt(T.prior7)} the 7 before`:'')}
+          ${big(T.trend==null?'—':`${dir?'▲':'▼'} ${Math.abs(T.trend).toFixed(0)}%`,'direction', T.trend==null?'':(dir?'rising':'falling'), T.trend==null?C.ink:dir?C.act:C.brk)}
+        </div>
+        <div style="padding:6px ${mob?'2px':'8px'} 12px">${chart.has?chart.svg:waiting(false,'Not enough days to draw a trend.','txretry')}</div>`);
     }
 
     const note=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;padding:13px 16px">
         <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Scope of this view</div>
         <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">Everything here is <strong style="color:#46433d">state level</strong>, from the cumulative tab — the only source with daily history. What a territory or an AM did <em>during</em> a past week is not recoverable: the machine sheet is overwritten each day, so it can only show where they stand today, which is what the Season and Yesterday views show. Per-territory weekly detail would need a weekly snapshot of the sheet's cumulative column, which does not exist yet. Year-over-year is measured on the same seven fiscal days; because any week contains all seven weekdays, weekday rhythm cancels out of the comparison.</div></div>`;
     return `<div style="display:flex;flex-direction:column;gap:14px">
-      ${header}${wHead}${hero}${posCard}${shape}${states}${prodWk}${note}
+      ${header}${wHead}${hero}${posCard}${shape}${states}${prodWk}${prodTrend}${note}
       ${mob?`<div style="text-align:center;padding:2px 0 4px">${src}</div>`:''}</div>`;
   }
 
@@ -4095,6 +4218,8 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='snToSel'){ const t=snakeDateToOff(e.target.value); if(t!=null) setState({snTo:t, snFrom:Math.min(t,state.snFrom)}); }
   else if(e.target.id==='pmStateSel') setState({pmState:e.target.value});
   else if(e.target.id==='insStateSel') setState({insSt:e.target.value});   // page-local; never touches state.st
+  else if(e.target.id==='insPaSel') setState({insPa:e.target.value});
+  else if(e.target.id==='insPbSel') setState({insPb:e.target.value});
   else if(e.target.id==='pmCropSel') setState({pmCrop:e.target.value});
 });
 app.addEventListener('click', e=>{
@@ -4135,10 +4260,11 @@ app.addEventListener('click', e=>{
     case 'pmstate': setState({pmState:el.dataset.st}); break;   // drill from the state-breakdown row
     case 'productretry': PROD.loaded=false; PROD.error=false; loadProduct(); break;
     case 'txretry': TX.loaded=false; TX.error=false; loadTx(); break;
+    case 'wkpretry': WKP.loaded=false; WKP.error=false; loadWkp(); break;
     // Insights reads all three tabs, so its refresh reloads all three rather than just the machine sheet.
     case 'insrefresh': state.refreshing=true; render();
-      SNAKE.loaded=false; SNAKE.error=false; PROD.loaded=false; PROD.error=false; TX.loaded=false; TX.error=false;
-      Promise.all([loadData(), loadSnake(), loadProduct(), loadTx()]).finally(()=>{ state.refreshing=false; render(); }); break;
+      SNAKE.loaded=false; SNAKE.error=false; PROD.loaded=false; PROD.error=false; TX.loaded=false; TX.error=false; WKP.loaded=false; WKP.error=false;
+      Promise.all([loadData(), loadSnake(), loadProduct(), loadTx(), loadWkp()]).finally(()=>{ state.refreshing=false; render(); }); break;
     // Drill a league row into that state's own Insights. Deliberately page-local: it re-scopes THIS page only and
     // leaves state.st (and therefore every other view's filter bar) exactly where the user left it.
     case 'insdrill': { const w=el.dataset.key; if(gateAllowsState(w)) setState({insSt:w}); break; }
