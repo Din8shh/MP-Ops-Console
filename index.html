@@ -2109,10 +2109,13 @@ function exTable(cols,rows,y){
     let m=exW(c.label,EX.fHead,false);
     rows.forEach(r=>{
       m=Math.max(m, exW(r[c.key],EX.fCell,!!c.mono));
-      if(c.sub && r[c.sub]) m=Math.max(m, exW(r[c.sub],EX.fSubCell,false));
+      if(c.sub  && r[c.sub])  m=Math.max(m, exW(r[c.sub], EX.fSubCell,false));
+      if(c.sub2 && r[c.sub2]) m=Math.max(m, exW(r[c.sub2],EX.fSubCell,false));
     });
     return m+gap;
   });
+  // A row is as tall as the number of sub-lines it actually carries.
+  const subLines=cols.reduce((n,c)=>Math.max(n,(c.sub?1:0)+(c.sub2?1:0)),0);
   const total=need.reduce((a,b)=>a+b,0), avail=EX.W-EX.PAD*2;
   if(total<avail) need[0]+=avail-total; else { const k=avail/total; for(let i=0;i<need.length;i++) need[i]*=k; }
   const xs=[]; let x=EX.PAD; need.forEach(w=>{ xs.push(x); x+=w; });
@@ -2124,14 +2127,15 @@ function exTable(cols,rows,y){
     { size:EX.fHead, weight:700, fill:EX.ink3, anchor:c.align==='right'?'end':'start', ls:'0.06em' }); });
   let ry=y+EX.HEAD;
   rows.forEach(r=>{
-    const h=r._sub? EX.ROW+22 : EX.ROW;
+    const h=r._sub? EX.ROW+22*subLines : EX.ROW;
     if(r._total) s+=`<rect x="${EX.PAD}" y="${ry}" width="${avail}" height="${h}" fill="${EX.band}"/>`;
     s+=`<line x1="${EX.PAD}" y1="${ry.toFixed(1)}" x2="${(EX.PAD+avail).toFixed(1)}" y2="${ry.toFixed(1)}" stroke="${r._total?EX.rule:EX.hair}" stroke-width="${r._total?1.6:1}"/>`;
     cols.forEach((c,i)=>{
       const v=r[c.key]; if(v==null||v==='') return;
       s+=exText(cellX(i,c), ry+30, v, { size:EX.fCell, weight:(c.weight||(r._total?700:(i===0?700:400))), mono:!!c.mono,
         anchor:c.align==='right'?'end':'start', fill:r._mute&&i>0?EX.ink3:(r[c.key+'_ink']||EX.ink) });
-      if(c.sub && r[c.sub]) s+=exText(cellX(i,c), ry+50, r[c.sub], { size:EX.fSubCell, fill:EX.ink3, anchor:c.align==='right'?'end':'start' });
+      if(c.sub && r[c.sub])  s+=exText(cellX(i,c), ry+52, r[c.sub],  { size:EX.fSubCell, fill:EX.ink3, anchor:c.align==='right'?'end':'start' });
+      if(c.sub2 && r[c.sub2]) s+=exText(cellX(i,c), ry+74, r[c.sub2], { size:EX.fSubCell, fill:EX.ink3, anchor:c.align==='right'?'end':'start' });
     });
     ry+=h;
   });
@@ -2227,18 +2231,17 @@ function buildWeekExport(id){
     const L=exLegend([{label:'Herbicide',color:C.green},{label:'Insecticide',color:C.orange},{label:'Fungicide',color:C.open},{label:'Other',color:'#B6B1A8'}],y+8);
     out+=L.svg; y=L.y+10;
     const mk=r=>({ name:r.name,
-      prod:(r.top||[]).slice(0,3).map(p=>`${p.disp} ${fmt(p.ac)}`).join(' · '),
-      crop:(r.topCrop||[]).slice(0,3).map(p=>`${p.disp} ${fmt(p.ac)}`).join(' · '),
+      prod:(r.top||[]).length?'Products  '+(r.top).slice(0,3).map(p=>`${p.disp} ${fmt(p.ac)}`).join(' · '):'',
+      crop:(r.topCrop||[]).length?'Crops       '+(r.topCrop).slice(0,3).map(p=>`${p.disp} ${fmt(p.ac)}`).join(' · '):'',
       ac:fmt(r.base), h:(r.Herbicide/r.base*100).toFixed(0)+'%', i:(r.Insecticide/r.base*100).toFixed(0)+'%',
       f:(r.Fungicide/r.base*100).toFixed(0)+'%', o:(r.Other/r.base*100).toFixed(0)+'%', _sub:true });
     const rows=SG.rows.map(mk); const tr=mk(SG.tot); tr._total=true; rows.push(tr);
     const t=exTable([
-      {label:'State · top products',key:'name',sub:'prod'},
+      {label:'State · top products and crops',key:'name',sub:'prod',sub2:'crop'},
       {label:'Acres',key:'ac',mono:true,align:'right'},
       {label:'Herb',key:'h',mono:true,align:'right'},{label:'Ins',key:'i',mono:true,align:'right'},
       {label:'Fung',key:'f',mono:true,align:'right'},{label:'Other',key:'o',mono:true,align:'right'},
-    ],rows,y); out+=t.svg; y=t.y+26;
-    out+=exText(EX.PAD,y,'Top crops · '+SG.rows.map(r=>`${r.name}: ${(r.topCrop||[]).slice(0,2).map(c=>c.disp).join(', ')}`).slice(0,4).join('   ·   '),{size:EX.fSubCell,fill:EX.ink3});
+    ],rows,y); out+=t.svg; y=t.y;
     return exWrap(out,y+EX.PAD);
   }
 

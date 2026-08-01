@@ -159,7 +159,9 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   Primitives: `exHeader` / `exStats` / `exTable` / `exLegend` / `exWrap`, canvas `EX.W` wide, rasterised at 2×.
   Charts pass `exp=true` to their builders, which scales type and stroke widths and returns `{inner,vbW,vbH}` —
   and the export container must use the chart's OWN aspect (`cw*vbH/vbW`) or `preserveAspectRatio` letterboxes it.
-  Exports recompute their data, so an image can never disagree with the page.
+  Exports recompute their data, so an image can never disagree with the page — and an exported table must carry
+  the SAME sub-lines as the screen (`exTable` takes `sub` and `sub2`; the segments export shows Products AND
+  Crops per state, not a truncated footnote).
 - **Week mode carries TWO product cards, from two different sources.**
   *Products this week* ← `WKP` (gid 1973671649), a **hand-built tab covering ONE named week** (`WKP_WEEK`,
   25–31 Jul 2026). It has no date column — the tab IS the week — so it renders only when the selected week
