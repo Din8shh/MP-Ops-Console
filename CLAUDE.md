@@ -125,6 +125,18 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   widens — it did in the week of 20 Jul (−19.3% → −16.9%, but 30,347 → 32,047 ac) — because the base grew faster
   than the shortfall. A slide saying only "we closed the gap" is the kind of half-true that gets caught in the
   room, so the card shows both and explains the divergence in words.
+- **Copy rule for the whole Insights page: describe, never instruct.** The page is read by whoever opens it, not
+  narrated to a presenter — so "the season so far", not "what to correct over the coming weeks"; "both measures
+  moved", not "worth saying both ways in the review". Card headings are noun phrases naming what the card shows.
+- **Sign words flip with the sign.** A scope that is ahead is never described with "gap" or "acres behind":
+  `POS.ac*` is (last season − this season), so a negative value means ahead, and the noun (`lead`/`gap`), the
+  label (`acres ahead`/`acres behind`) and the verb (`grew`/`shrank` vs `narrowed`/`widened`) all switch on it.
+  Cells show magnitudes, so the delta under them is the change in that magnitude, not the raw signed difference.
+- **Week mode's product panel comes from the DAY-LEVEL tab (`TX`, gid 718502150)** — the only product source with
+  a date, so the only one that can answer "what moved last week". It is narrow by nature: five herbicide brands
+  since 1 June, ~6% of a week's machine acres, ~60% of it in MP. It is labelled a *tracked-product* panel and
+  always states its share of the fleet's acres, because reading it as "the product mix" would badly misstate the
+  programme. The summary tab (`PROD`) still drives Season mode; it carries YTD and yesterday only.
 - **Yesterday imputes NO expected value to anybody — it is an account, not a grade.** An earlier build scored each
   territory against "expected acres = the state's acres yesterday × the territory's share of the season". That was
   removed and must not come back: it assumes a territory's share of one day matches its share of a whole season,
