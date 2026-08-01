@@ -409,11 +409,15 @@ async function loadData(){
    per-region, per-FY point arrays on the shared fiscal axis (April 1 = offset 0 … March 31 = offset 364). The
    current season stops at its last real day (the sheet forward-fills it flat; we trim that tail). All-India is
    the sum of the 7 states. Admin-only, fetched lazily on first view. */
+// `col` = the running-cumulative column (drives the snake chart); `dcol` = that season's PER-DAY column, which the
+// snake chart derives by differencing but other views read directly (the sheet's own daily figure is the
+// authority for momentum, and differencing a forward-filled cumulative can't tell a genuine 0 from a stale day).
 const SNAKE_FYS = [
-  { key:'fy2425', col:3, label:'FY 24-25', short:"’24-25", color:'#9C988F' },   // two seasons ago
-  { key:'fy2526', col:4, label:'FY 25-26', short:"’25-26", color:'#4C7399' },   // last season
-  { key:'fy2627', col:5, label:'FY 26-27', short:"’26-27", color:'#F5821F', cur:true },  // current season
+  { key:'fy2425', col:3, dcol:7, label:'FY 24-25', short:"’24-25", color:'#9C988F' },   // two seasons ago
+  { key:'fy2526', col:4, dcol:8, label:'FY 25-26', short:"’25-26", color:'#4C7399' },   // last season
+  { key:'fy2627', col:5, dcol:9, label:'FY 26-27', short:"’26-27", color:'#F5821F', cur:true },  // current season
 ];
+const SNAKE_MCOL = 10;   // "Machine ran this year" — machines that logged acres that day, current season only
 // Uppercase region_name in the tab → dashboard state code. Only the 7 dashboard states are kept; the tab also
 // carries AP/KA/UP/J&K, which are ignored so the chart matches the rest of the console's scope.
 const SNAKE_REGION = { 'MADHYA PRADESH':'MP', 'MAHARASHTRA':'MH', 'TELANGANA':'TG', 'GUJARAT':'GJ', 'RAJASTHAN':'RJ', 'PUNJAB':'PB', 'HARYANA':'HR' };
@@ -437,7 +441,9 @@ state.snTo = snakeTodayOff();
 // Fiscal month boundaries (offset of each month's day 1), for the x-axis ticks — Apr,May,…,Dec,Jan,Feb,Mar.
 const SNAKE_TICKS = SNAKE_FMONTHS.map(m=>({ m, off:snakeOff(m,1), label:['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m] }));
 
-const SNAKE = { loading:false, loaded:false, error:false, at:'', S:{} };  // S[code][fyKey] = [{off,val}] rebased, trimmed
+// S[code][fyKey] = [{off,val}] cumulative, trimmed (the snake chart).  D[code][fyKey][off] = that day's acres and
+// M[code][off] = machines that ran that day — both dense arrays, null where the sheet has nothing.
+const SNAKE = { loading:false, loaded:false, error:false, at:'', S:{}, D:{}, M:{} };
 function snakeUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${SNAKE_GID}&t=${Date.now()}`; }
 
 // Forward-fill a cumulative: carry the last known value to the end, null only BEFORE the first datum. No trim —
@@ -461,18 +467,28 @@ function snakeBuild(rows){
   if(!rows.length) throw new Error('snake: no rows');
   const body = rows.slice(1).filter(r=>r && r.length>=6);
   // raw[code][fyKey][fiscalOff] = the sheet's cumulative value for that day (already April-1-based; no rebasing)
-  const raw={};
+  // rawD / rawM = the same shape for the per-day acres and the machines-ran count.
+  const raw={}, rawD={}, rawM={};
   for(const r of body){
     const day=parseInt(r[0],10), month=parseInt(r[1],10);
     const code=SNAKE_REGION[String(r[2]||'').trim().toUpperCase()];
     if(!code || !isFinite(day) || !isFinite(month) || month<1 || month>12) continue;
-    raw[code]=raw[code]||{};
+    const off=snakeOff(month,day);
+    raw[code]=raw[code]||{}; rawD[code]=rawD[code]||{};
     for(const fy of SNAKE_FYS){
-      const cell=r[fy.col]; if(cell==null || String(cell).trim()==='') continue;
-      const val=num(cell); if(!isFinite(val)) continue;
-      raw[code][fy.key]=raw[code][fy.key]||{};
-      raw[code][fy.key][snakeOff(month,day)]=val;   // fiscal offset (Apr..Mar); value used as-is
+      const cell=r[fy.col];
+      if(cell!=null && String(cell).trim()!==''){
+        const val=num(cell);
+        if(isFinite(val)){ raw[code][fy.key]=raw[code][fy.key]||{}; raw[code][fy.key][off]=val; }   // fiscal offset (Apr..Mar); value used as-is
+      }
+      const dcell=r[fy.dcol];
+      if(dcell!=null && String(dcell).trim()!==''){
+        const dval=num(dcell);
+        if(isFinite(dval)){ rawD[code][fy.key]=rawD[code][fy.key]||{}; rawD[code][fy.key][off]=dval; }
+      }
     }
+    const mcell=r[SNAKE_MCOL];
+    if(mcell!=null && String(mcell).trim()!==''){ const mv=num(mcell); if(isFinite(mv)){ rawM[code]=rawM[code]||{}; rawM[code][off]=mv; } }
   }
   // per-state dense arrays
   const codes=Object.keys(SNAKE_REGION).map(k=>SNAKE_REGION[k]);
@@ -497,6 +513,26 @@ function snakeBuild(rows){
     S.ALL[fy.key]= any ? snakePoints(snakeTrim(sum)) : [];
   }
   SNAKE.S=S;
+  // ---- per-day acres + machines-ran ----------------------------------------------------------------
+  // Deliberately NOT carried forward: a cumulative that hasn't moved must stay flat, but a *day* the sheet
+  // hasn't reached is unknown (null) and a day that logged nothing is a real 0. Conflating the two is what
+  // makes a season look alive after it has stopped reporting.
+  const D={}, M={};
+  const dense = src => { const a=new Array(SNAKE_LEN).fill(null); for(const o in src) a[o]=src[o]; return a; };
+  for(const code of Object.keys(rawD)){ D[code]={}; for(const fy of SNAKE_FYS) D[code][fy.key]=dense(rawD[code][fy.key]||{}); }
+  for(const code of Object.keys(rawM)) M[code]=dense(rawM[code]);
+  D.ALL={};
+  for(const fy of SNAKE_FYS){
+    const sum=new Array(SNAKE_LEN).fill(null);
+    for(const code of codes){ const d=D[code]&&D[code][fy.key]; if(!d) continue;
+      for(let o=0;o<SNAKE_LEN;o++) if(d[o]!=null) sum[o]=(sum[o]==null?0:sum[o])+d[o]; }
+    D.ALL[fy.key]=sum;
+  }
+  const mAll=new Array(SNAKE_LEN).fill(null);
+  for(const code of codes){ const d=M[code]; if(!d) continue;
+    for(let o=0;o<SNAKE_LEN;o++) if(d[o]!=null) mAll[o]=(mAll[o]==null?0:mAll[o])+d[o]; }
+  M.ALL=mAll;
+  SNAKE.D=D; SNAKE.M=M;
 }
 async function loadSnake(){
   if(SNAKE.loading) return; SNAKE.loading=true; SNAKE.error=false; render();
