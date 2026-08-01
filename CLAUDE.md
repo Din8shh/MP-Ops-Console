@@ -140,9 +140,13 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   read 7/7, so it asserted the obvious instead of informing. Sub-labels avoid internal jargon such as
   "machine-days" — they read the way the team says the number aloud.
 - **Product segments by state** joins the weekly sheet to the summary tab's brand → portfolio map (~99% of acres
-  match). Soil & Seed Health and Unclassified are excluded from the base entirely, so Herbicide / Insecticide /
-  Fungicide / Other sum to 100% of what remains. Non-dashboard states are dropped, and the exclusions are NOT
-  narrated on the page. Each state carries its top three **products AND crops** as labelled sub-lines under the
+  match). Herbicide / Insecticide / Fungicide are named and **everything else falls into Other** — soil & seed
+  health, unclassified, bio solution, or a product with no portfolio on record. Nothing is dropped from the base,
+  which is the point: an earlier build excluded those categories and the card then showed 23,337 ac beside the
+  products table's 24,284, two totals disagreeing on one screen with no footnote to explain it (the footnote had
+  been removed by request). Both product cards are also restricted to the seven dashboard states, so they now
+  report an identical total. Keep it that way — if a category is ever excluded again, the two totals must still
+  reconcile or the card has to say why. Each state carries its top three **products AND crops** as labelled sub-lines under the
   name — which also fixes the dead space that a wide label column with short content used to leave before the
   bars. Where a label column can't be filled (the products table), the BAR takes the slack instead:
   `minmax(150px,300px) minmax(0,1fr)` rather than a greedy `fr` on the name.

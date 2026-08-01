@@ -2545,7 +2545,8 @@ function insWeekProducts(A,W){
   if(!WKP.loaded || !W) return null;
   // The manual tab has no dates — it IS one named week. Anything else must say so rather than relabel it.
   if(insISO(W.d0)!==WKP_WEEK.start || insISO(W.d1)!==WKP_WEEK.end) return { wrongWeek:true };
-  const scope=r=>(!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
+  // Seven dashboard states only — matching the segments table, so the two cards report the same total.
+  const scope=r=>r.st!=='OT' && (!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
   const rows=WKP.rows.filter(scope);
   if(!rows.length) return { empty:true };
   const roll=key=>{ const m={}; rows.forEach(r=>{ const k=key(r); m[k]=(m[k]||0)+r.acres; }); return m; };
@@ -2570,7 +2571,6 @@ function insWeekProducts(A,W){
    sense this table is asking about), so the four shares sum to 100% of what remains. Everything that is neither
    herbicide, insecticide nor fungicide — in practice Bio Solution — lands in Other. */
 const INS_SEGS = ['Herbicide','Insecticide','Fungicide'];
-const INS_SEG_DROP = { 'Soil and Seed Health':1, 'Unclassified':1 };
 function insWeekSegments(A,W){
   if(!WKP.loaded || !PROD.loaded || !W) return null;
   if(insISO(W.d0)!==WKP_WEEK.start || insISO(W.d1)!==WKP_WEEK.end) return { wrongWeek:true };
@@ -2579,8 +2579,10 @@ function insWeekSegments(A,W){
   const by={};
   WKP.rows.filter(scope).forEach(r=>{
     if(r.st==='OT') return;                                 // dashboard states only
-    const seg=map[r.key];
-    if(!seg || INS_SEG_DROP[seg]) return;                   // unknown or deliberately outside the base
+    // Herbicide / Insecticide / Fungicide are named; EVERYTHING else — soil & seed health, unclassified,
+    // bio solution, or a product with no portfolio on record — falls into Other. Nothing is dropped, so this
+    // table's total equals the products table's, and the two cards on the same screen cannot disagree.
+    const seg=map[r.key]||'';
     const e=by[r.st]||(by[r.st]={ st:r.st, name:STATE_NAMES[r.st]||r.st, base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0, prod:{}, crop:{} });
     const k = INS_SEGS.indexOf(seg)>=0 ? seg : 'Other';
     e[k]+=r.acres; e.base+=r.acres;
