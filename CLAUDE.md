@@ -72,6 +72,42 @@ Object shape: `{ mc, org, deployed(1/0), territory, cluster, co, coMob, am, amNu
 achieved, mtd, acresY, scanned:[{product,acres}], breakdown(1/0), opMapped(1/0), opName,
 opNum, lat, lon }`.
 
+## Workbook tabs (one sheet, `CONFIG.sheetId`)
+Nine tabs; the app reads five. Mapped by inspection — do not re-derive this.
+
+| gid | What it is | Grain | History? | Used by |
+|---|---|---|---|---|
+| `0` | Machine master (`Sheet1`) | 1 row/machine | **No** — overwritten daily | everything |
+| `603091795` | Cumulative "snake" | fiscal-day × state × 3 FY | **Yes**, 3 seasons | Cumulative view, Insights |
+| `1039187695` | Product data (summary) | region × crop × brand | No (YTD + yesterday only) | Products view, Insights, segment join |
+| `718502150` | Product day-level (`TX`) | **date** × region × crop × brand | Yes, from 1 Jun | Week → focus-product trend |
+| `1973671649` | Weekly product sheet (`WKP`) | region × crop × product, ONE week | n/a — the tab IS the week | Week → products + segments |
+| `1199323704` | Richer machine feed (per-machine branded acres, lat/lon, ping) | 1 row/machine | No | **not wired** |
+| `1433754421` | Org roster (AM/CI/BM/TM/FO/retailer) | 1 row/machine | No | not wired |
+| `266726831` | The Athena SQL behind the machine feed | — | — | reference only |
+| `1999606625` | Scratch, misaligned columns | — | — | unusable |
+
+**Only the snake tab has real history.** That single fact drives most of the Insights design: anything asking "what changed over time" below state level is not computable today.
+
+## Deploy
+GitHub Pages serves **`main` at repo root** → **https://din8shh.github.io/MP-Ops-Console/**. Push to `main` = deploy;
+Pages rebuilds in ~1 min. The Pages *build API* lags, so verify by fetching the live `index.html` and diffing it
+against the local file — bytes are the authority, not the API's status field. Then load the live URL and check
+the console. Work on a branch and fast-forward `main`; don't commit straight to it.
+
+## Open items (none are code bugs)
+- **The breakdown flag does not mean "down today".** Measured live: 90 machines flagged, **all 90 also logged
+  acres**, and none of the 1,038 idle ones are flagged. So it records a reported/historical event. The main
+  dashboard's Breakdown KPI therefore does not support the reading "90 machines are down". Sheet-side question.
+- **IRIS is missing from the day-level product tab** (it has only Amicus, Alito, Patela, Brucia, Canora), so the
+  Iris ↔ Patela pair cannot be charted daily. The trend picker is generic — widen that export and it appears.
+- **`WKP_WEEK` is pinned to 25–31 Jul 2026**, because that tab is a manual one-off. When the recurring weekly
+  sheet lands, change `WKP_WEEK` + `WKP_GID` and nothing else.
+- **A weekly snapshot of Sheet1's cumulative column** (machine + `Kharif achieved`, appended each week) would
+  unlock territory/AM-level weekly history, which is the single biggest gap. ~15 lines of Apps Script.
+- **Open-Meteo quota is fragile** — heavy reloading triggers HTTP 429 and the app silently falls back to
+  *simulated* rain while still showing a green "Live" badge. See the weather note.
+
 ## Insights (the cross-tab summary)
 `insights` is the only view that reads all three tabs at once. **Admin-only** (in `roleHidesView`, like
 Cumulative / Products / Leaders); it sits first in the rail and first in the phone's bottom bar for those who
