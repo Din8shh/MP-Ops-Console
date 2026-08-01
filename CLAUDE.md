@@ -135,9 +135,10 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   label (`acres ahead`/`acres behind`) and the verb (`grew`/`shrank` vs `narrowed`/`widened`) all switch on it.
   Cells show magnitudes, so the delta under them is the change in that magnitude, not the raw signed difference.
 - **Week mode metrics were chosen so the headline decomposes.** The week's acres = (machines that ran) ×
-  (ground each covered), so the stat band carries acres/day, machines/day and **acres per running machine** over
-  the week's machine-days. A "days with acres" count was removed: at national scope it can only ever read 7/7,
-  so it asserted the obvious instead of informing.
+  (ground each covered), so the stat band carries acres/day, the **highest single-day machine count** of the week,
+  and **acres per running machine**. A "days with acres" count was removed: at national scope it can only ever
+  read 7/7, so it asserted the obvious instead of informing. Sub-labels avoid internal jargon such as
+  "machine-days" — they read the way the team says the number aloud.
 - **Product segments by state** joins the weekly sheet to the summary tab's brand → portfolio map (~99% of acres
   match). Soil & Seed Health and Unclassified are excluded from the base entirely, so Herbicide / Insecticide /
   Fungicide / Other sum to 100% of what remains. Non-dashboard states are dropped, and the exclusions are NOT
