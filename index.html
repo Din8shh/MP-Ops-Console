@@ -79,9 +79,10 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
   // nothing this page does can move the machine filter bar or any other view. The gate's state LOCK still
   // overrides it (see insAgg) — a state-restricted login can never widen its scope through this control.
   // insMode = which question the page is answering. 'season' → the trend, and what to correct over weeks.
-  // 'yday' → what deviated yesterday and needs a call this morning. Deliberately two modes of ONE page: same
-  // spine, same scope, different time horizon and different kind of action.
-  insSt:'', insMode:'season' };
+  // 'week' → the Monday review: a deep dive on one completed Mon–Sun. 'yday' → what deviated yesterday and needs
+  // a call this morning. Three modes of ONE page: same spine, same scope, different horizon and different action.
+  // insWeekBack = how many complete weeks back the Week view is looking; 0 = the week that just ended.
+  insSt:'', insMode:'season', insWeekBack:0 };
 // state.sheet = which mobile overlay is up: null | 'filters' | 'more'. state.listLimit = rows shown
 // in the mobile machine list (Load more bumps it); reset whenever the filter set changes.
 const MLIST_PAGE = 60;
@@ -2339,6 +2340,98 @@ function insSignals(A){
   return top;
 }
 
+/* ===================== Week mode — the Monday review =====================
+   A third horizon, for the weekly deep-dive: one completed Mon–Sun, reviewed the Monday after. It asks neither
+   "are we on track" (season) nor "who do I ring" (yesterday) but "what actually happened last week, and how do
+   we explain it to the room".
+
+   Boundaries are REAL calendar weeks. The fiscal axis is year-agnostic, so the Mon–Sun is computed from the real
+   date and then mapped onto it; `back` steps through earlier weeks. A week that straddles 31 March is skipped
+   rather than silently clipped, since half of it would land in a different fiscal year's column.
+
+   Comparing week-to-week across seasons is sound even though a given fiscal offset falls on a different weekday
+   each year: any 7-day window contains all seven weekdays exactly once, so weekday rhythm cancels out of the sum.
+
+   SCOPE LIMIT, stated on the page rather than hidden: everything here is state-grain. Sheet1 has no history, so
+   what a territory or an AM did *during* a past week is not recoverable — only where they stand today. Weekly
+   territory detail needs a weekly snapshot of the sheet's cumulative column, which does not exist yet. */
+function insWeekWindow(back){
+  const now=new Date();
+  const dow=(now.getDay()+6)%7;                                  // 0=Mon … 6=Sun
+  const sun=new Date(now); sun.setDate(now.getDate()-dow-1-7*(back||0));   // the most recent COMPLETE Sunday
+  const mon=new Date(sun); mon.setDate(sun.getDate()-6);
+  const from=snakeOff(mon.getMonth()+1,mon.getDate()), to=snakeOff(sun.getMonth()+1,sun.getDate());
+  if(from==null || to==null || to-from!==6) return null;         // straddles the fiscal year boundary
+  return { mon, sun, from, to };
+}
+const insWeekLabel = d => { try{ return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}); }catch(_){ return ''; } };
+function insWeekSum(code,key,a,b){
+  const d=insDaily(code,key); let s=0,n=0;
+  for(let o=Math.max(0,a);o<=b;o++) if(d[o]!=null){ s+=d[o]; n++; }
+  return n?s:null;
+}
+function insWeekAgg(A,back){
+  const w=insWeekWindow(back); if(!w) return null;
+  const code=A.snCode, W={ ...w, back };
+  W.acres=insWeekSum(code,INS_CUR.key,w.from,w.to);
+  W.prev =insWeekSum(code,INS_CUR.key,w.from-7,w.to-7);
+  W.ly   =insWeekSum(code,INS_PREV.key,w.from,w.to);
+  W.ly2  =insWeekSum(code,INS_PREV2.key,w.from,w.to);
+  W.wow  = (W.acres!=null&&W.prev)? W.acres/W.prev*100-100 : null;
+  W.yoy  = (W.acres!=null&&W.ly)?   W.acres/W.ly*100-100   : null;
+  W.yoy2 = (W.acres!=null&&W.ly2)?  W.acres/W.ly2*100-100  : null;
+  W.hasData = W.acres!=null && W.acres>0;
+
+  const d=insDaily(code,INS_CUR.key), dp=insDaily(code,INS_PREV.key), m=insMach(code);
+  const DOW=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  W.days=[]; for(let i=0;i<7;i++){ const o=w.from+i; W.days.push({ off:o, dow:DOW[i], ac:d[o], ly:dp[o], mc:m[o] }); }
+  const mm=W.days.map(x=>x.mc).filter(x=>x!=null);
+  W.machAvg = mm.length? mm.reduce((a,b)=>a+b,0)/mm.length : null;
+  W.machPeak= mm.length? Math.max.apply(null,mm) : null;
+  W.activeDays = W.days.filter(x=>x.ac>0).length;
+  const best=W.days.filter(x=>x.ac!=null).sort((a,b)=>b.ac-a.ac)[0];
+  W.bestDay = best && best.ac>0 ? best : null;
+
+  /* Season position across the week. Reported in BOTH units on purpose: the percentage gap can narrow while the
+     acre gap widens, because the base grows faster than the shortfall. Saying only "we closed the gap" is the
+     kind of half-true that gets caught in the review. */
+  const c26=snakeDenseFor(code,INS_CUR.key), c25=snakeDenseFor(code,INS_PREV.key);
+  const pct=o=>(c26[o]!=null&&c25[o])?c26[o]/c25[o]*100-100:null;
+  const acg=o=>(c26[o]!=null&&c25[o]!=null)?c25[o]-c26[o]:null;
+  W.pos={ pct0:pct(w.from-1), pct1:pct(w.to), ac0:acg(w.from-1), ac1:acg(w.to), cum:c26[w.to] };
+
+  W.states=(A.gst?[A.gst]:INS_STATES.filter(gateAllowsState)).map(c=>{
+    const ac=insWeekSum(c,INS_CUR.key,w.from,w.to), pv=insWeekSum(c,INS_CUR.key,w.from-7,w.to-7), l=insWeekSum(c,INS_PREV.key,w.from,w.to);
+    const mc=insMach(c), ms=[]; for(let o=w.from;o<=w.to;o++) if(mc[o]!=null) ms.push(mc[o]);
+    return { code:c, name:STATE_NAMES[c]||c, ac:ac||0,
+      wow:(ac!=null&&pv)?ac/pv*100-100:null, yoy:(ac!=null&&l)?ac/l*100-100:null, ly:l,
+      mach: ms.length? ms.reduce((a,b)=>a+b,0)/ms.length : null };
+  }).filter(x=>x.ac>0||x.ly>0).sort((a,b)=>b.ac-a.ac);
+  W.total=W.states.reduce((a,x)=>a+x.ac,0);
+  return W;
+}
+/* The week's shape, this year against the same seven fiscal days last year. Bars, because the question is
+   "which days did we work" — a per-day comparison, not a curve. */
+function buildWeekBarsSVG(W,mob){
+  const days=W.days; let max=1;
+  days.forEach(d=>{ max=Math.max(max, d.ac||0, d.ly||0); });
+  const Wd=mob?400:960, H=mob?230:250, mL=mob?48:64, mR=14, mT=14, mB=48;
+  const x0=mL,x1=Wd-mR,y0=mT,y1=H-mB;
+  const bw=(x1-x0)/7, gap=Math.min(10,bw*0.14), half=Math.max(2,(bw-gap*2)/2);
+  const step=niceNum(max/4), nMax=Math.max(step,Math.ceil(max/step)*step);
+  const Y=v=>y1-(v/nMax)*(y1-y0);
+  let grid=''; for(let t=0;t<=nMax+1e-6;t+=step){ const y=Y(t);
+    grid+=`<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="#EFEDE7"/><text x="${x0-9}" y="${(y+3.6).toFixed(1)}" text-anchor="end" font-size="10.5" fill="#9C988F" font-family="'IBM Plex Mono'">${snakeFmtK(t)}</text>`; }
+  let bars='', lab='';
+  days.forEach((d,i)=>{ const bx=x0+i*bw+gap;
+    if(d.ly!=null&&d.ly>0) bars+=`<rect x="${bx.toFixed(1)}" y="${Y(d.ly).toFixed(1)}" width="${half.toFixed(1)}" height="${Math.max(0,y1-Y(d.ly)).toFixed(1)}" fill="${INS_PREV.color}" opacity=".45" rx="2"/>`;
+    if(d.ac!=null&&d.ac>0) bars+=`<rect x="${(bx+half).toFixed(1)}" y="${Y(d.ac).toFixed(1)}" width="${half.toFixed(1)}" height="${Math.max(0,y1-Y(d.ac)).toFixed(1)}" fill="${INS_CUR.color}" rx="2"/>`;
+    lab+=`<text x="${(bx+half).toFixed(1)}" y="${y1+17}" text-anchor="middle" font-size="12" font-weight="600" fill="#46433d" font-family="'Noto Sans'">${d.dow}</text>`;
+    lab+=`<text x="${(bx+half).toFixed(1)}" y="${y1+32}" text-anchor="middle" font-size="10" fill="#B6B1A8" font-family="'IBM Plex Mono'">${d.mc!=null?fmt(d.mc)+' mc':''}</text>`;
+  });
+  return { svg:`<svg viewBox="0 0 ${Wd} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC"/>${bars}</svg>` };
+}
+
 /* ===================== Yesterday mode =====================
    The season view answers "are we going to make the number, and what do we correct over the coming weeks".
    This one answers a different question with a different response time: "what broke yesterday, and who do I ring
@@ -2500,13 +2593,13 @@ function insightsBodyHTML(mob){
       <div style="position:relative"><select id="insStateSel" style="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none">${
         optionsHTML([{v:'',t:'All India'},...INS_STATES.filter(gateAllowsState).map(c=>({v:c,t:STATE_NAMES[c]}))], A.gst)
       }</select>${I.caret}</div></div>` : '';
-  const mode = state.insMode==='yday' ? 'yday' : 'season';
+  const mode = ['yday','week'].includes(state.insMode) ? state.insMode : 'season';
   const modeToggle = `<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
-      <button data-act="insmode" data-m="season" style="${css(seg(mode==='season'))}">Season</button>
-      <button data-act="insmode" data-m="yday" style="${css(seg(mode==='yday'))}">Yesterday</button></div>`;
-  const subtitle = mode==='yday'
-    ? `${A.gst?E(A.regionName):'Seven states'} · what deviated yesterday — leads to check this morning`
-    : `${A.gst?E(A.regionName):'Seven states'} · the season trend — what to correct over the coming weeks`;
+      ${[['season','Season'],['week','Week'],['yday','Yesterday']].map(([k,t])=>`<button data-act="insmode" data-m="${k}" style="${css(seg(mode===k))}">${t}</button>`).join('')}</div>`;
+  const scopeName = A.gst?E(A.regionName):'Seven states';
+  const subtitle = mode==='yday' ? `${scopeName} · what deviated yesterday — leads to check this morning`
+    : mode==='week' ? `${scopeName} · last week in depth — for the Monday review`
+    : `${scopeName} · the season trend — what to correct over the coming weeks`;
   // flex-basis, not flex:1 — with the mode toggle, the scope picker and the freshness line all competing for the
   // row, a purely greedy title collapses to two cramped lines before the row ever wraps.
   const header = `<div style="display:flex;align-items:center;gap:${mob?'10px':'14px'};flex-wrap:wrap">
@@ -2514,6 +2607,98 @@ function insightsBodyHTML(mob){
         <div style="font-size:${mob?'15px':'16.5px'};font-weight:700;letter-spacing:-.01em">Programme insights</div>
         <div style="font-size:11.5px;color:#9C988F;margin-top:2px">${subtitle}${A.scoped?` · ${E(A.og)} only`:''}</div>
       </div>${modeToggle}${stSel}${mob?'':`<div style="flex:0 1 auto">${src}</div>`}</div>`;
+
+  /* ================= Week mode · the Monday review =================
+     Tuned to be read off a projector rather than scanned at a desk: fewer, larger numbers and one idea per card. */
+  if(mode==='week'){
+    const W=insWeekAgg(A, state.insWeekBack|0);
+    const stepper=`<div style="display:flex;align-items:center;gap:8px">
+        <button data-act="insweek" data-d="-1" title="Earlier week" style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#46433d;font-size:15px;cursor:pointer;line-height:1">‹</button>
+        <span style="font-size:12.5px;font-weight:600;min-width:${mob?'120px':'132px'};text-align:center">${W?`${E(insWeekLabel(W.mon))} – ${E(insWeekLabel(W.sun))}`:'—'}</span>
+        <button data-act="insweek" data-d="1" title="Later week" ${state.insWeekBack<=0?'disabled':''} style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:${state.insWeekBack<=0?'#F6F5F2':'#fff'};color:${state.insWeekBack<=0?'#C9C4BA':'#46433d'};font-size:15px;cursor:${state.insWeekBack<=0?'default':'pointer'};line-height:1">›</button>
+      </div>`;
+    const wHead=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:-2px">${stepper}
+        <span style="font-size:11px;color:#B6B1A8">${state.insWeekBack===0?'the week that just ended':`${state.insWeekBack} week${state.insWeekBack===1?'':'s'} earlier`} · Mon–Sun</span></div>`;
+    if(!W || !SNAKE.loaded || !W.hasData){
+      return `<div style="display:flex;flex-direction:column;gap:14px">${header}${wHead}
+        ${card(waiting(SNAKE.error, SNAKE.error?'Could not load the cumulative tab.':(SNAKE.loaded?'No acres were logged in this week.':'Loading the season history…'),'snakeretry'))}
+        </div>`;
+    }
+    const big=(v,l,sub,ink)=>`<div style="flex:1 0 auto;min-width:${mob?'46%':'168px'};padding:${mob?'14px 16px':'16px 20px'};border-right:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
+        <div style="font-family:'IBM Plex Mono';font-size:${mob?'21px':'26px'};font-weight:700;color:${ink||C.ink};line-height:1">${v}</div>
+        <div style="font-size:10.5px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:7px">${l}</div>
+        ${sub?`<div style="font-size:11px;color:#B6B1A8;margin-top:3px">${sub}</div>`:''}</div>`;
+    const pill2=(p,lab)=>p==null?'':`<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:${p>=0?C.softG:C.softR};color:${p>=0?C.greenD:C.brk};font-size:${mob?'12px':'13px'};font-weight:700;white-space:nowrap">${p>=0?'▲':'▼'} ${Math.abs(p).toFixed(0)}%<span style="color:#9C988F;font-weight:500">${lab}</span></span>`;
+    // Local: the league's vsCell is declared further down this function and would be in the temporal dead zone here.
+    const wVs=v=>v==null?`<span style="color:#C9C4BA">—</span>`:`<span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700;color:${v>=0?C.greenD:C.brk}">${v>=0?'+':'−'}${Math.abs(v).toFixed(0)}%</span>`;
+    const hero=card(`<div style="padding:${mob?'16px':'20px'}">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Week of ${E(insWeekLabel(W.mon))} – ${E(insWeekLabel(W.sun))} · ${E(A.gst?A.regionName:'all India')}</div>
+        <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+          <div style="font-family:'IBM Plex Mono';font-size:${mob?'36px':'48px'};font-weight:700;line-height:1;letter-spacing:-.02em">${fmt(W.acres)}<span style="font-size:${mob?'15px':'18px'};color:#B6B1A8;font-weight:500"> ac</span></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:6px">${pill2(W.wow,' vs prev week')}${pill2(W.yoy,' vs same week ’25-26')}${pill2(W.yoy2,' vs ’24-25')}</div>
+        </div></div>
+      <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-top:1px solid #EFEDE7">
+        ${big(fmt(W.acres/7),'acres per day','7-day average',C.orangeD)}
+        ${big(W.machAvg!=null?fmt(W.machAvg):'—','machines per day', W.machPeak!=null?`peak ${fmt(W.machPeak)}`:'')}
+        ${big(`${W.activeDays}/7`,'days with acres', W.bestDay?`best ${W.bestDay.dow} · ${fmt(W.bestDay.ac)} ac`:'')}
+        ${big(W.ly!=null?fmt(W.ly):'—','same week last year', W.ly!=null?`${W.acres>=W.ly?'+':'−'}${fmt(Math.abs(W.acres-W.ly))} ac`:'')}
+      </div>`);
+
+    /* Season position — always in BOTH units, because they can disagree. */
+    const POS=W.pos;
+    let posCard='';
+    if(POS.pct0!=null && POS.pct1!=null && POS.ac0!=null && POS.ac1!=null){
+      const dPct=POS.pct1-POS.pct0, dAc=POS.ac1-POS.ac0;
+      const pctWord = dPct>=0?'narrowed':'widened', acWord = dAc<=0?'narrowed':'widened';
+      const agree = (dPct>=0)===(dAc<=0);
+      const line = agree
+        ? `The season gap ${pctWord} on both measures this week — ${Math.abs(dPct).toFixed(1)} points and ${fmt(Math.abs(dAc))} acres.`
+        : `The percentage gap ${pctWord} by ${Math.abs(dPct).toFixed(1)} points, but in acres it ${acWord} by ${fmt(Math.abs(dAc))}. Both are true: the base grew faster than the shortfall, so the ratio improved while the absolute distance did not. Worth saying both ways in the review.`;
+      posCard=card(`${cHead('Where the week left the season','Cumulative position against last season, measured on the Sunday before and the Sunday after')}
+        <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-bottom:1px solid #EFEDE7">
+          ${big(`${POS.pct0>=0?'+':'−'}${Math.abs(POS.pct0).toFixed(1)}%`,'gap · week start')}
+          ${big(`${POS.pct1>=0?'+':'−'}${Math.abs(POS.pct1).toFixed(1)}%`,'gap · week end', `${dPct>=0?'+':''}${dPct.toFixed(1)} pp`, dPct>=0?C.act:C.brk)}
+          ${big(fmt(POS.ac0),'acres behind · start')}
+          ${big(fmt(POS.ac1),'acres behind · end', `${dAc<=0?'−':'+'}${fmt(Math.abs(dAc))} ac`, dAc<=0?C.act:C.brk)}
+        </div>
+        <div style="padding:13px 16px;font-size:${mob?'12.5px':'13.5px'};color:#46433d;line-height:1.6">${line}</div>`);
+    }
+
+    const bars=buildWeekBarsSVG(W,mob);
+    const shape=card(`${cHead('The week day by day','This season against the same seven fiscal days last season · machine count under each day')}
+      <div style="display:flex;gap:18px;flex-wrap:wrap;padding:12px 16px 2px">
+        <div style="display:flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border-radius:3px;background:${INS_CUR.color}"></span><span style="font-size:12px;font-weight:600">This week</span><span style="font-family:'IBM Plex Mono';font-size:12px;color:#6E6A62">${fmt(W.acres)}</span></div>
+        <div style="display:flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border-radius:3px;background:${INS_PREV.color};opacity:.45"></span><span style="font-size:12px;font-weight:600">Same week ’25-26</span><span style="font-family:'IBM Plex Mono';font-size:12px;color:#6E6A62">${W.ly!=null?fmt(W.ly):'—'}</span></div>
+      </div>
+      <div style="padding:2px ${mob?'2px':'8px'} 12px">${bars.svg}</div>`);
+
+    const gcols=mob?null:'1.5fr .9fr .8fr .7fr .7fr .8fr';
+    const states = W.states.length>1 ? card(`${cHead(`States · week of ${E(insWeekLabel(W.mon))}`,'Ranked by acres in the week · click a row to scope the page')}
+      ${mob ? W.states.map((r,i)=>`<div data-act="insdrill" data-key="${r.code}" style="padding:12px 15px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="flex:1;font-size:13px;font-weight:700">${E(r.name)}</span>
+            <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${fmt(r.ac)}</span>
+            ${wVs(r.yoy)}</div>
+          <div style="font-size:11px;color:#9C988F;margin-top:4px">${W.total?(r.ac/W.total*100).toFixed(0):0}% of the week · WoW ${r.wow==null?'—':(r.wow>=0?'+':'−')+Math.abs(r.wow).toFixed(0)+'%'} · ${r.mach!=null?fmt(r.mach)+' machines/day':'—'}</div>
+        </div>`).join('')
+      : `<div style="display:grid;grid-template-columns:${gcols};gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7;background:#FBFAF8">
+          ${['State','Acres','Share','WoW','vs LY','Machines/day'].map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">${h}</span>`).join('')}</div>
+        ${W.states.map((r,i)=>`<div data-act="insdrill" data-key="${r.code}" style="display:grid;grid-template-columns:${gcols};gap:10px;align-items:center;padding:12px 16px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
+          <span style="font-size:13px;font-weight:600">${E(r.name)}</span>
+          <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${fmt(r.ac)}</span>
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px;color:#6E6A62">${W.total?(r.ac/W.total*100).toFixed(0):0}%</span>
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;color:${r.wow==null?C.ink3:r.wow>=0?C.greenD:C.brk}">${r.wow==null?'—':(r.wow>=0?'+':'−')+Math.abs(r.wow).toFixed(0)+'%'}</span>
+          ${wVs(r.yoy)}
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px">${r.mach!=null?fmt(r.mach):'—'}</span>
+        </div>`).join('')}`}`) : '';
+
+    const note=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;padding:13px 16px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Scope of this view</div>
+        <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">Everything here is <strong style="color:#46433d">state level</strong>, from the cumulative tab — the only source with daily history. What a territory or an AM did <em>during</em> a past week is not recoverable: the machine sheet is overwritten each day, so it can only show where they stand today, which is what the Season and Yesterday tabs use it for. Per-territory weekly detail would need a weekly snapshot of the sheet's cumulative column, which does not exist yet. Year-over-year is measured on the same seven fiscal days; because any week contains all seven weekdays, weekday rhythm cancels out of the comparison.</div></div>`;
+    return `<div style="display:flex;flex-direction:column;gap:14px">
+      ${header}${wHead}${hero}${posCard}${shape}${states}${note}
+      ${mob?`<div style="text-align:center;padding:2px 0 4px">${src}</div>`:''}</div>`;
+  }
 
   /* ================= Yesterday mode =================
      Deliberately detector-led and deliberately NOT a second copy of the Yesterday (recap) view. Recap is the
@@ -3832,7 +4017,10 @@ app.addEventListener('click', e=>{
     // leaves state.st (and therefore every other view's filter bar) exactly where the user left it.
     case 'insdrill': { const w=el.dataset.key; if(gateAllowsState(w)) setState({insSt:w}); break; }
     case 'insclear': setState({insSt:''}); break;
-    case 'insmode': setState({insMode: el.dataset.m==='yday'?'yday':'season'}); track('insights_mode',{mode:el.dataset.m}); break;
+    case 'insmode': { const m=el.dataset.m; setState({insMode: ['yday','week'].includes(m)?m:'season'}); track('insights_mode',{mode:m}); break; }
+    // Step the Week view back/forward. `back` counts COMPLETE weeks behind the current one, so it never goes
+    // below 0 (there is no future complete week) and is capped at a fiscal year of history.
+    case 'insweek': setState(s=>({ insWeekBack: Math.max(0, Math.min(52, (s.insWeekBack|0) - (+el.dataset.d||0))) })); break;
   }
 });
 // machine table row <-> pin cross-highlight

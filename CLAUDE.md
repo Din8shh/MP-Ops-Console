@@ -107,12 +107,24 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   "new" is derived from the data itself (transitions and milestone-length streaks score full; a condition that
   has merely been true a while is damped to 45%). Two diversity rules cap it at one signal per scope (when there
   is more than one) and two per detector type, so a day when every state inflects doesn't produce four identical rows.
-- **Two MODES, one page (`state.insMode`).** *Season* answers "are we going to make the number, and what do we
-  correct over weeks". *Yesterday* answers "what broke, and who do I ring this morning". They are not one list
-  re-sorted: measured against live data the chronic territories and the acute ones overlap by **zero** (Harda has
-  6,359 season acres and did nothing yesterday — a call; Morbi has never sprayed — a season problem).
-  Yesterday mode is **detector-led and carries no leaderboards on purpose** — the separate `recap` view is the
-  descriptive roster of the day, and duplicating it here would put two competing Yesterday screens in the nav.
+- **Three MODES, one page (`state.insMode`).** *Season* — the trend, and what to correct over weeks. *Week* — one
+  completed Mon–Sun for the Monday review. *Yesterday* — what broke, and who to ring this morning. Same spine,
+  same scope picker, three horizons. Season and Yesterday are not one list re-sorted: on live data the chronic
+  territories and the acute ones overlap by **zero** (Harda has 6,359 season acres and did nothing yesterday — a
+  call; Morbi has never sprayed — a season problem). Yesterday is **detector-led with no leaderboards on purpose**
+  — the separate `recap` view is the descriptive roster, and duplicating it would put two competing Yesterday
+  screens in the nav.
+- **Week mode is state-grain ONLY, and says so on the page.** The cumulative tab is the only source with daily
+  history, so what a territory or AM did *during* a past week is unrecoverable — the machine sheet is overwritten
+  daily. Per-territory weekly detail needs a weekly snapshot of its cumulative column, which does not exist yet.
+  Boundaries are REAL Mon–Sun computed from the calendar then mapped onto the fiscal axis (`insWeekWindow`); a
+  week straddling 31 March is skipped, not clipped. Year-over-year on the same fiscal offsets is sound even though
+  an offset falls on a different weekday each year — any 7-day window holds all seven weekdays exactly once, so
+  weekday rhythm cancels out of the sum.
+- **Week mode reports the season gap in BOTH units, always.** The percentage gap can narrow while the acre gap
+  widens — it did in the week of 20 Jul (−19.3% → −16.9%, but 30,347 → 32,047 ac) — because the base grew faster
+  than the shortfall. A slide saying only "we closed the gap" is the kind of half-true that gets caught in the
+  room, so the card shows both and explains the divergence in words.
 - **Yesterday imputes NO expected value to anybody — it is an account, not a grade.** An earlier build scored each
   territory against "expected acres = the state's acres yesterday × the territory's share of the season". That was
   removed and must not come back: it assumes a territory's share of one day matches its share of a whole season,
