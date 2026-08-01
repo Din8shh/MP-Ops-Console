@@ -150,10 +150,16 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   name — which also fixes the dead space that a wide label column with short content used to leave before the
   bars. Where a label column can't be filled (the products table), the BAR takes the slack instead:
   `minmax(150px,300px) minmax(0,1fr)` rather than a greedy `fr` on the name.
-- **Every Week-mode card exports to PNG** (`downloadCard`, `dlWrap`). No library: the app styles inline, so a card
-  serialises straight into an SVG `<foreignObject>` and rasterises at 2× on white with a title and the week's
-  dates. Weekly review only — the other modes are read on screen. Web fonts do not load inside a rasterised
-  foreignObject, so exported text falls back to the system UI font; layout and numbers are unaffected.
+- **Every Week-mode card exports to PNG, REDRAWN for a slide** (`buildWeekExport` → `downloadCard`). The export
+  does NOT serialise the DOM. A slide is not a dashboard: on screen the cards are deliberately quiet — hairline
+  rules, small grey labels, columns sized for a filter bar — which washes out on a projector. So each card is
+  redrawn as a standalone SVG **from the same aggregates**, with heavier type, stronger contrast, and every
+  column measured to its content (`exW`) so there is no dead space between a label and its number. Numbers are
+  right-aligned monospace; headers bold and uppercase; slack goes to the label column, never between figures.
+  Primitives: `exHeader` / `exStats` / `exTable` / `exLegend` / `exWrap`, canvas `EX.W` wide, rasterised at 2×.
+  Charts pass `exp=true` to their builders, which scales type and stroke widths and returns `{inner,vbW,vbH}` —
+  and the export container must use the chart's OWN aspect (`cw*vbH/vbW`) or `preserveAspectRatio` letterboxes it.
+  Exports recompute their data, so an image can never disagree with the page.
 - **Week mode carries TWO product cards, from two different sources.**
   *Products this week* ← `WKP` (gid 1973671649), a **hand-built tab covering ONE named week** (`WKP_WEEK`,
   25–31 Jul 2026). It has no date column — the tab IS the week — so it renders only when the selected week

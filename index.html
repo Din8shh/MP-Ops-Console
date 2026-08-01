@@ -1795,7 +1795,7 @@ function rainCell(val,swatch,sep){
 const SNAKE_MON = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function niceNum(x){ if(x<=0) return 1; const e=Math.floor(Math.log10(x)), f=x/Math.pow(10,e); const nf=f<=1?1:f<=2?2:f<=5?5:10; return nf*Math.pow(10,e); }
 // Compact axis number for the narrow mobile y-axis so labels don't clip: 8,00,000 → 8L, 50,000 → 50k.
-const snakeFmtK = n => n>=100000 ? +(n/100000).toFixed(1)+'L' : n>=1000 ? Math.round(n/1000)+'k' : String(Math.round(n));
+const snakeFmtK = n => n>=100000 ? +(n/100000).toFixed(1)+'L' : n>=1000 ? +(n/1000).toFixed(1)+'k' : String(Math.round(n));
 // dense[off] value (forward-filled, trimmed) reconstructed from the stored point list — used for hover interpolation.
 function snakeDenseFor(code,fyKey){ const pts=(SNAKE.S[code]&&SNAKE.S[code][fyKey])||[]; const a=new Array(SNAKE_LEN).fill(null); for(const p of pts) a[p.off]=p.val; return a; }
 // off (days since Apr 1) → "12 Jul"
@@ -2062,32 +2062,224 @@ function buildChartExportSVG(kind){
    Rasterised at 2× on white with a title line and the week's dates, so a pasted image stands alone in a slide.
    Web fonts do not load inside a rasterised foreignObject, so exported text falls back to the system UI font;
    layout and numbers are unaffected. */
+/* ===================== deck-ready export =====================
+   A slide is not a dashboard. On screen these cards are deliberately quiet — hairline rules, small grey labels,
+   columns sized for a filter bar that isn't there — which is right for scanning at a desk and washes out on a
+   projector. So the export does NOT serialise the DOM. It redraws each card as a standalone SVG from the same
+   data, with heavier type, stronger contrast, and every column measured to its content so there is no dead space
+   between a label and its number. Numbers are right-aligned monospace; headers are bold and uppercase. */
+const EX = { W:1240, PAD:46, ROW:46, HEAD:38,
+  ink:'#14120F', ink2:'#4A4640', ink3:'#7C776E', rule:'#DCD8D0', hair:'#EFEDE7', band:'#F7F5F1',
+  fTitle:34, fSub:18, fHead:15, fCell:21, fSubCell:14, fBig:46, fBigLab:14 };
+const EXF = { sans:"'Noto Sans',system-ui,-apple-system,sans-serif", mono:"'IBM Plex Mono',ui-monospace,'SF Mono',monospace" };
+// Rough advance-width model. Only used to FIT columns to their content, so being a few px generous is harmless
+// while being short would clip — the constants lean high on purpose.
+const exW = (s,size,mono)=> String(s==null?'':s).length * size * (mono?0.605:0.545);
+function exText(x,y,t,o){
+  o=o||{};
+  return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="${o.size||EX.fCell}" font-weight="${o.weight||400}" fill="${o.fill||EX.ink}" text-anchor="${o.anchor||'start'}" font-family="${o.mono?EXF.mono:EXF.sans}"${o.ls?` letter-spacing="${o.ls}"`:''}>${E(t)}</text>`;
+}
+function exHeader(title,sub,y){
+  let s=exText(EX.PAD,y+34,title,{size:EX.fTitle,weight:700});
+  if(sub) s+=exText(EX.PAD,y+62,sub,{size:EX.fSub,fill:EX.ink3});
+  return { svg:s, y:y+(sub?86:58) };
+}
+/* A row of large figures. Widths are shared equally only when that fits; otherwise each cell takes what its
+   content needs, so four short numbers don't sprawl across a metre of slide. */
+function exStats(items,y){
+  const n=items.length, gap=26, avail=EX.W-EX.PAD*2;
+  const need=items.map(it=>Math.max(exW(it.v,EX.fBig,true), exW(it.label,EX.fBigLab,false), exW(it.sub||'',EX.fSubCell,false))+gap);
+  const total=need.reduce((a,b)=>a+b,0);
+  const w=total<avail ? need.map(x=>x+(avail-total)/n) : need.map(x=>x*avail/total);
+  let s='', x=EX.PAD;
+  items.forEach((it,i)=>{
+    s+=exText(x,y+EX.fBig,it.v,{size:EX.fBig,weight:700,mono:true,fill:it.ink||EX.ink});
+    s+=exText(x,y+EX.fBig+26,String(it.label).toUpperCase(),{size:EX.fBigLab,weight:700,fill:EX.ink3,ls:'0.06em'});
+    if(it.sub) s+=exText(x,y+EX.fBig+48,it.sub,{size:EX.fSubCell,fill:EX.ink3});
+    if(i<n-1) s+=`<line x1="${(x+w[i]-gap/2).toFixed(1)}" y1="${y-4}" x2="${(x+w[i]-gap/2).toFixed(1)}" y2="${y+EX.fBig+56}" stroke="${EX.hair}"/>`;
+    x+=w[i];
+  });
+  return { svg:s, y:y+EX.fBig+(items.some(i=>i.sub)?74:56) };
+}
+/* Content-fitted table. cols: {label, key, mono, align, weight, sub}. Every column is measured against its own
+   cells and header, then any slack goes to the first (label) column — never spread as gaps between numbers. */
+function exTable(cols,rows,y){
+  const gap=30;
+  const need=cols.map(c=>{
+    let m=exW(c.label,EX.fHead,false);
+    rows.forEach(r=>{
+      m=Math.max(m, exW(r[c.key],EX.fCell,!!c.mono));
+      if(c.sub && r[c.sub]) m=Math.max(m, exW(r[c.sub],EX.fSubCell,false));
+    });
+    return m+gap;
+  });
+  const total=need.reduce((a,b)=>a+b,0), avail=EX.W-EX.PAD*2;
+  if(total<avail) need[0]+=avail-total; else { const k=avail/total; for(let i=0;i<need.length;i++) need[i]*=k; }
+  const xs=[]; let x=EX.PAD; need.forEach(w=>{ xs.push(x); x+=w; });
+  const cellX=(i,c)=> c.align==='right' ? xs[i]+need[i]-gap/2 : xs[i];
+  let s='';
+  // header
+  s+=`<rect x="${EX.PAD}" y="${y}" width="${avail}" height="${EX.HEAD}" fill="${EX.band}"/>`;
+  cols.forEach((c,i)=>{ s+=exText(cellX(i,c), y+EX.HEAD-13, String(c.label).toUpperCase(),
+    { size:EX.fHead, weight:700, fill:EX.ink3, anchor:c.align==='right'?'end':'start', ls:'0.06em' }); });
+  let ry=y+EX.HEAD;
+  rows.forEach(r=>{
+    const h=r._sub? EX.ROW+22 : EX.ROW;
+    if(r._total) s+=`<rect x="${EX.PAD}" y="${ry}" width="${avail}" height="${h}" fill="${EX.band}"/>`;
+    s+=`<line x1="${EX.PAD}" y1="${ry.toFixed(1)}" x2="${(EX.PAD+avail).toFixed(1)}" y2="${ry.toFixed(1)}" stroke="${r._total?EX.rule:EX.hair}" stroke-width="${r._total?1.6:1}"/>`;
+    cols.forEach((c,i)=>{
+      const v=r[c.key]; if(v==null||v==='') return;
+      s+=exText(cellX(i,c), ry+30, v, { size:EX.fCell, weight:(c.weight||(r._total?700:(i===0?700:400))), mono:!!c.mono,
+        anchor:c.align==='right'?'end':'start', fill:r._mute&&i>0?EX.ink3:(r[c.key+'_ink']||EX.ink) });
+      if(c.sub && r[c.sub]) s+=exText(cellX(i,c), ry+50, r[c.sub], { size:EX.fSubCell, fill:EX.ink3, anchor:c.align==='right'?'end':'start' });
+    });
+    ry+=h;
+  });
+  s+=`<line x1="${EX.PAD}" y1="${ry.toFixed(1)}" x2="${(EX.PAD+avail).toFixed(1)}" y2="${ry.toFixed(1)}" stroke="${EX.rule}" stroke-width="1.6"/>`;
+  return { svg:s, y:ry };
+}
+function exLegend(items,y){
+  let s='', x=EX.PAD;
+  items.forEach(it=>{
+    s+=`<rect x="${x}" y="${y-11}" width="14" height="14" rx="3" fill="${it.color}"/>`;
+    s+=exText(x+22,y+1,it.label,{size:17,weight:600,fill:EX.ink2});
+    x+=22+exW(it.label,17,false)+34;
+  });
+  return { svg:s, y:y+22 };
+}
+function exWrap(inner,H){
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${EX.W}" height="${Math.ceil(H)}" viewBox="0 0 ${EX.W} ${Math.ceil(H)}">`+
+    `<rect x="0" y="0" width="${EX.W}" height="${Math.ceil(H)}" fill="#FFFFFF"/>${inner}</svg>`;
+}
+// Pull every aggregate the exports need, recomputed so an image can never disagree with the page.
+function exWeekData(){
+  const A=insAgg(); const W=insWeekAgg(A, state.insWeekBack|0);
+  return { A, W, TP:insWeekProducts(A,W), SG:insWeekSegments(A,W), T:insProdTrend(A) };
+}
+function buildWeekExport(id){
+  const D=exWeekData(), A=D.A, W=D.W; if(!W) return null;
+  const scopeName=A.gst?A.regionName:'All India';
+  const range=`${insWeekLabel(W.d0)} – ${insWeekLabel(W.d1)}`;
+  const sub=`${range} · ${scopeName}`;
+  const pc=v=>v==null?'—':`${v>=0?'+':'−'}${Math.abs(v).toFixed(0)}%`;
+  const ink=v=>v==null?EX.ink:(v>=0?C.greenD:C.brk);
+  let out='', y=EX.PAD;
+
+  if(id==='wk-summary'){
+    const h=exHeader('The week in summary',sub,y); out+=h.svg; y=h.y+8;
+    const b=exStats([
+      { v:fmt(W.acres), label:'total acres', sub:`${pc(W.wow)} vs previous week`, ink:C.orangeD },
+      { v:fmt(W.acres/7), label:'acres per day', sub: W.bestDay?`best ${W.bestDay.dow} · ${fmt(W.bestDay.ac)} ac`:'' },
+      { v:W.machPeak!=null?fmt(W.machPeak):'—', label:'machines ran this week', sub:W.machAvg!=null?`highest in a day · avg ${fmt(W.machAvg)}`:'' },
+      { v:W.acPerMachine!=null?fmt(W.acPerMachine):'—', label:'acres per running machine', sub:'average on a day it ran' },
+    ],y); out+=b.svg; y=b.y+10;
+    const c=exStats([
+      { v:W.ly!=null?fmt(W.ly):'—', label:'same week last year', sub:W.ly!=null?`${W.acres>=W.ly?'+':'−'}${fmt(Math.abs(W.acres-W.ly))} ac`:'', ink:ink(W.yoy) },
+      { v:pc(W.yoy), label:'vs last season', ink:ink(W.yoy) },
+      { v:pc(W.yoy2), label:'vs two seasons ago', ink:ink(W.yoy2) },
+      { v:pc(W.wow), label:'vs previous week', ink:ink(W.wow) },
+    ],y); out+=c.svg; y=c.y;
+    return exWrap(out,y+EX.PAD);
+  }
+
+  if(id==='wk-season'){
+    const P=W.pos; if(P.pct0==null||P.pct1==null) return null;
+    const dPct=P.pct1-P.pct0, dMag=Math.abs(P.ac1)-Math.abs(P.ac0), ahead=P.pct1>=0, noun=ahead?'lead':'gap';
+    const h=exHeader('Where the week left the season',`${sub} · against the same days last season`,y); out+=h.svg; y=h.y+8;
+    const b=exStats([
+      { v:`${P.pct0>=0?'+':'−'}${Math.abs(P.pct0).toFixed(1)}%`, label:`${P.pct0>=0?'lead':'gap'} · week start` },
+      { v:`${P.pct1>=0?'+':'−'}${Math.abs(P.pct1).toFixed(1)}%`, label:`${noun} · week end`, sub:`${dPct>=0?'+':''}${dPct.toFixed(1)} pp`, ink:dPct>=0?C.act:C.brk },
+      { v:fmt(Math.abs(P.ac0)), label:`acres ${P.ac0>=0?'behind':'ahead'} · start` },
+      { v:fmt(Math.abs(P.ac1)), label:`acres ${P.ac1>=0?'behind':'ahead'} · end`, sub:`${noun} ${dMag>=0?'+':'−'}${fmt(Math.abs(dMag))} ac`, ink:(P.ac1-P.ac0)<=0?C.act:C.brk },
+    ],y); out+=b.svg; y=b.y+6;
+    return exWrap(out,y+EX.PAD);
+  }
+
+  if(id==='wk-states'){
+    const h=exHeader('States',`${sub} · ranked by acres in the week`,y); out+=h.svg; y=h.y;
+    const rows=W.states.map(r=>({ name:r.name, ac:fmt(r.ac), share:W.total?(r.ac/W.total*100).toFixed(0)+'%':'—',
+      wow:pc(r.wow), wow_ink:ink(r.wow), yoy:pc(r.yoy), yoy_ink:ink(r.yoy), mach:r.mach!=null?fmt(r.mach):'—' }));
+    rows.push({ name:'All states', ac:fmt(W.total), share:'100%', wow:'', yoy:'', mach:'', _total:true });
+    const t=exTable([
+      {label:'State',key:'name'},{label:'Acres',key:'ac',mono:true,align:'right'},
+      {label:'Share',key:'share',mono:true,align:'right'},{label:'WoW',key:'wow',mono:true,align:'right',weight:700},
+      {label:'vs LY',key:'yoy',mono:true,align:'right',weight:700},{label:'Machines/day',key:'mach',mono:true,align:'right'},
+    ],rows,y); out+=t.svg; y=t.y;
+    return exWrap(out,y+EX.PAD);
+  }
+
+  if(id==='wk-products'){
+    const TP=D.TP; if(!TP||TP.wrongWeek||TP.empty||!TP.total) return null;
+    const h=exHeader('Products this week',`${sub} · ${fmt(TP.products.length)} products · ${fmt(TP.total)} ac`,y); out+=h.svg; y=h.y;
+    const rows=TP.products.slice(0,14).map(p=>({ name:p.disp, co:p.company, ac:fmt(p.ac), share:(p.ac/TP.total*100).toFixed(0)+'%',
+      co_ink:p.company==='UPL'?C.orangeD:C.greenD }));
+    rows.push({ name:'All products', co:'', ac:fmt(TP.total), share:'100%', _total:true });
+    const t=exTable([
+      {label:'Product',key:'name'},{label:'Company',key:'co',weight:700},
+      {label:'Acres',key:'ac',mono:true,align:'right'},{label:'Share',key:'share',mono:true,align:'right'},
+    ],rows,y); out+=t.svg; y=t.y;
+    return exWrap(out,y+EX.PAD);
+  }
+
+  if(id==='wk-segments'){
+    const SG=D.SG; if(!SG||SG.wrongWeek||SG.empty) return null;
+    const h=exHeader('Product segments by state',`${sub} · share of each state’s product acres`,y); out+=h.svg; y=h.y;
+    const L=exLegend([{label:'Herbicide',color:C.green},{label:'Insecticide',color:C.orange},{label:'Fungicide',color:C.open},{label:'Other',color:'#B6B1A8'}],y+8);
+    out+=L.svg; y=L.y+10;
+    const mk=r=>({ name:r.name,
+      prod:(r.top||[]).slice(0,3).map(p=>`${p.disp} ${fmt(p.ac)}`).join(' · '),
+      crop:(r.topCrop||[]).slice(0,3).map(p=>`${p.disp} ${fmt(p.ac)}`).join(' · '),
+      ac:fmt(r.base), h:(r.Herbicide/r.base*100).toFixed(0)+'%', i:(r.Insecticide/r.base*100).toFixed(0)+'%',
+      f:(r.Fungicide/r.base*100).toFixed(0)+'%', o:(r.Other/r.base*100).toFixed(0)+'%', _sub:true });
+    const rows=SG.rows.map(mk); const tr=mk(SG.tot); tr._total=true; rows.push(tr);
+    const t=exTable([
+      {label:'State · top products',key:'name',sub:'prod'},
+      {label:'Acres',key:'ac',mono:true,align:'right'},
+      {label:'Herb',key:'h',mono:true,align:'right'},{label:'Ins',key:'i',mono:true,align:'right'},
+      {label:'Fung',key:'f',mono:true,align:'right'},{label:'Other',key:'o',mono:true,align:'right'},
+    ],rows,y); out+=t.svg; y=t.y+26;
+    out+=exText(EX.PAD,y,'Top crops · '+SG.rows.map(r=>`${r.name}: ${(r.topCrop||[]).slice(0,2).map(c=>c.disp).join(', ')}`).slice(0,4).join('   ·   '),{size:EX.fSubCell,fill:EX.ink3});
+    return exWrap(out,y+EX.PAD);
+  }
+
+  if(id==='wk-daily' || id==='wk-trend'){
+    const isDaily=id==='wk-daily';
+    const built=isDaily?buildWeekBarsSVG(W,false,true):buildProdTrendSVG(D.T,false,true);
+    if(!built||(!isDaily&&!built.has)) return null;
+    const title=isDaily?'The week day by day':`Focus product trend${D.T&&D.T.label?' · '+D.T.label:''}`;
+    // The trend is NOT the week — it spans the whole day-level feed — so it states its own range, not the week's.
+    const tr=(D.T&&D.T.series&&D.T.series.length)
+      ? `${insWeekLabel(new Date(D.T.series[0].d+'T00:00:00'))} – ${insWeekLabel(new Date(D.T.series[D.T.series.length-1].d+'T00:00:00'))}` : '';
+    const subT=isDaily?`${sub} · against the same seven days last season`
+                     :`${tr} · ${scopeName} · daily scanned acres, 7-day average in bold`;
+    const h=exHeader(title,subT,y); out+=h.svg; y=h.y+4;
+    const legend=isDaily
+      ? [{label:`This week · ${fmt(W.acres)} ac`,color:INS_CUR.color},{label:`Same week last season · ${W.ly!=null?fmt(W.ly):'—'} ac`,color:INS_PREV.color}]
+      : [{label:`${D.T.label} · ${fmt(D.T.total)} ac`,color:C.orangeD}];
+    const L=exLegend(legend,y+10); out+=L.svg; y=L.y+6;
+    // Height must follow the chart's OWN aspect. A guessed ratio makes preserveAspectRatio letterbox it, which
+    // is exactly the empty band a slide should not have.
+    const cw=EX.W-EX.PAD*2, ch=Math.round(cw*built.vbH/built.vbW);
+    out+=`<svg x="${EX.PAD}" y="${y}" width="${cw}" height="${ch}" viewBox="0 0 ${built.vbW} ${built.vbH}" preserveAspectRatio="xMidYMid meet">${built.inner}</svg>`;
+    y+=ch;
+    return exWrap(out,y+EX.PAD);
+  }
+  return null;
+}
 function downloadCard(id){
-  const host=document.getElementById(id); if(!host){ console.warn('card export: no node', id); return; }
-  const node=host.firstElementChild||host;
-  const r=node.getBoundingClientRect();
-  const W=Math.max(320,Math.ceil(r.width)), pad=20, headH=host.dataset.title?52:0;
-  const H=Math.ceil(r.height)+pad*2+headH;
-  let body;
-  try{ body=new XMLSerializer().serializeToString(node); }
-  catch(e){ console.error('card export: serialise failed', e); return; }
-  const title=host.dataset.title||'', sub=host.dataset.sub||'';
-  const xml=`<svg xmlns="http://www.w3.org/2000/svg" width="${W+pad*2}" height="${H}" viewBox="0 0 ${W+pad*2} ${H}">`+
-    `<rect x="0" y="0" width="${W+pad*2}" height="${H}" fill="#FFFFFF"/>`+
-    (title?`<text x="${pad}" y="28" font-size="16" font-family="'Noto Sans',system-ui,sans-serif" font-weight="700" fill="#1B1A17">${E(title)}</text>`+
-           `<text x="${pad}" y="45" font-size="11.5" font-family="'Noto Sans',system-ui,sans-serif" fill="#9C988F">${E(sub)}</text>`:'')+
-    `<foreignObject x="${pad}" y="${headH+pad}" width="${W}" height="${Math.ceil(r.height)}">`+
-      `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${W}px;font-family:'Noto Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased">${body}</div>`+
-    `</foreignObject></svg>`;
-  const img=new Image(), scale=2;
+  const host=document.getElementById(id);
+  const xml=buildWeekExport(id);
+  if(!xml){ console.warn('card export: nothing to render for', id); return; }
+  const m=/width="(\d+)" height="(\d+)"/.exec(xml), W=m?+m[1]:EX.W, H=m?+m[2]:900;
+  const img=new Image(), scale=2;                       // 2× so it stays crisp when scaled up on a slide
   img.onload=()=>{
-    const cv=document.createElement('canvas'); cv.width=Math.round((W+pad*2)*scale); cv.height=Math.round(H*scale);
+    const cv=document.createElement('canvas'); cv.width=W*scale; cv.height=H*scale;
     const ctx=cv.getContext('2d'); ctx.fillStyle='#FFFFFF'; ctx.fillRect(0,0,cv.width,cv.height);
     ctx.drawImage(img,0,0,cv.width,cv.height);
     cv.toBlob(blob=>{ if(!blob){ console.error('card export: toBlob failed'); return; }
-      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-      a.download=`MP-Ops_${(host.dataset.file||id).replace(/[^A-Za-z0-9._-]+/g,'-')}.png`;
-      document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500);
+      const a2=document.createElement('a'); a2.href=URL.createObjectURL(blob);
+      a2.download=`MP-Ops_${((host&&host.dataset.file)||id).replace(/[^A-Za-z0-9._-]+/g,'-')}.png`;
+      document.body.appendChild(a2); a2.click(); setTimeout(()=>{ URL.revokeObjectURL(a2.href); a2.remove(); },1500);
     },'image/png');
   };
   img.onerror=e=>console.error('card export: rasterise failed for', id, e);
@@ -2634,59 +2826,64 @@ function insProdTrend(A){
     label: sel.map(k=>meta[k].disp).join(' + '),
     companies: sel.map(k=>meta[k].company) };
 }
-function buildProdTrendSVG(T,mob){
-  const s=T&&T.series; if(!s || s.length<2) return { has:false, svg:'' };
+function buildProdTrendSVG(T,mob,exp){
+  const s=T&&T.series; if(!s || s.length<2) return { has:false, svg:'', inner:'' };
   let max=1; s.forEach(p=>{ max=Math.max(max,p.v,p.avg); });
-  const Wd=mob?400:960, H=mob?230:260, mL=mob?46:62, mR=14, mT=14, mB=38;
+  // `exp` = deck rendering: the same geometry with type and strokes scaled up, because a 9.5px axis label that
+  // reads fine on a monitor disappears on a projector.
+  const F=exp?1.85:1, SW=exp?2:1;
+  const Wd=mob?400:960, H=mob?230:260, mL=mob?46:(exp?96:62), mR=exp?24:14, mT=14, mB=exp?58:38;
   const x0=mL,x1=Wd-mR,y0=mT,y1=H-mB;
   const step=niceNum(max/4), nMax=Math.max(step,Math.ceil(max/step)*step);
   const X=i=>x0+i/(s.length-1)*(x1-x0), Y=v=>y1-(v/nMax)*(y1-y0);
   let grid=''; for(let t=0;t<=nMax+1e-6;t+=step){ const y=Y(t);
-    grid+=`<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="#EFEDE7"/><text x="${x0-9}" y="${(y+3.6).toFixed(1)}" text-anchor="end" font-size="10.5" fill="#9C988F" font-family="'IBM Plex Mono'">${snakeFmtK(t)}</text>`; }
-  const every=Math.max(1,Math.ceil(s.length/(mob?5:12)));
+    grid+=`<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="#EFEDE7" stroke-width="${SW}"/><text x="${x0-9*(exp?1.6:1)}" y="${(y+3.6*F).toFixed(1)}" text-anchor="end" font-size="${(10.5*F).toFixed(1)}" font-weight="${exp?600:400}" fill="${exp?'#6E6A62':'#9C988F'}" font-family="'IBM Plex Mono'">${snakeFmtK(t)}</text>`; }
+  const every=Math.max(1,Math.ceil(s.length/(mob?5:(exp?9:12))));
   let lab=''; s.forEach((p,i)=>{ if(i%every===0||i===s.length-1){
     const dd=new Date(p.d+'T00:00:00');
-    lab+=`<text x="${X(i).toFixed(1)}" y="${y1+15}" text-anchor="middle" font-size="9.5" fill="#9C988F" font-family="'Noto Sans'">${dd.getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dd.getMonth()]}</text>`; } });
+    lab+=`<text x="${X(i).toFixed(1)}" y="${(y1+15*F).toFixed(1)}" text-anchor="middle" font-size="${(9.5*F).toFixed(1)}" font-weight="${exp?600:400}" fill="${exp?'#6E6A62':'#9C988F'}" font-family="'Noto Sans'">${dd.getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dd.getMonth()]}</text>`; } });
   const path=(key,w,op)=>s.map((p,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(p[key]).toFixed(1)}`).join(' ');
   const area=`${s.map((p,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(p.avg).toFixed(1)}`).join(' ')} L${X(s.length-1).toFixed(1)} ${y1} L${X(0).toFixed(1)} ${y1} Z`;
-  return { has:true, svg:`<svg viewBox="0 0 ${Wd} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">
-    ${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC"/>
+  const inner=`${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC" stroke-width="${SW}"/>
     <path d="${area}" fill="${C.softO}" opacity=".7"/>
-    <path d="${path('v')}" fill="none" stroke="${C.orange}" stroke-width="1" opacity=".45" stroke-linejoin="round"/>
-    <path d="${path('avg')}" fill="none" stroke="${C.orangeD}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
-  </svg>` };
+    <path d="${path('v')}" fill="none" stroke="${C.orange}" stroke-width="${1*SW}" opacity=".45" stroke-linejoin="round"/>
+    <path d="${path('avg')}" fill="none" stroke="${C.orangeD}" stroke-width="${2.6*SW}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  return { has:true, inner, vbW:Wd, vbH:H,
+    svg:`<svg viewBox="0 0 ${Wd} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${inner}</svg>` };
 }
 
 /* The week's shape, this year against the same seven fiscal days last year. Bars, because the question is
    "which days did we work" — a per-day comparison, not a curve. */
-function buildWeekBarsSVG(W,mob){
+function buildWeekBarsSVG(W,mob,exp){
   const days=W.days; let max=1;
   days.forEach(d=>{ max=Math.max(max, d.ac||0, d.ly||0); });
-  const Wd=mob?400:960, H=mob?240:260, mL=mob?48:64, mR=20, mT=18, mB=50;
+  const F=exp?1.9:1, SW=exp?2:1;
+  const Wd=mob?400:960, H=mob?240:260, mL=mob?48:(exp?98:64), mR=exp?30:20, mT=18, mB=exp?78:50;
   const x0=mL,x1=Wd-mR,y0=mT,y1=H-mB;
   const step=niceNum(max/4), nMax=Math.max(step,Math.ceil(max/step)*step);
   const X=i=>x0+(days.length>1 ? i/(days.length-1)*(x1-x0) : (x1-x0)/2);
   const Y=v=>y1-(v/nMax)*(y1-y0);
   let grid=''; for(let t=0;t<=nMax+1e-6;t+=step){ const y=Y(t);
-    grid+=`<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="#EFEDE7"/><text x="${x0-9}" y="${(y+3.6).toFixed(1)}" text-anchor="end" font-size="10.5" fill="#9C988F" font-family="'IBM Plex Mono'">${snakeFmtK(t)}</text>`; }
+    grid+=`<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="#EFEDE7" stroke-width="${SW}"/><text x="${x0-9*(exp?1.6:1)}" y="${(y+3.6*F).toFixed(1)}" text-anchor="end" font-size="${(10.5*F).toFixed(1)}" font-weight="${exp?600:400}" fill="${exp?'#6E6A62':'#9C988F'}" font-family="'IBM Plex Mono'">${snakeFmtK(t)}</text>`; }
   // One line per season over the same seven days. Lines rather than paired bars: the week's SHAPE — where it
   // climbed, where it broke — is what the review talks about, and two bars per day fragments exactly that.
   const line=(key,color,width,dash)=>{
     const pts=days.map((d,i)=>({i,v:d[key]})).filter(p=>p.v!=null);
     if(pts.length<2) return '';
     const d=pts.map((p,k)=>`${k?'L':'M'}${X(p.i).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(' ');
-    return `<path d="${d}" fill="none" stroke="${color}" stroke-width="${width}" stroke-linejoin="round" stroke-linecap="round"${dash?` stroke-dasharray="${dash}"`:''}/>`
-      + pts.map(p=>`<circle cx="${X(p.i).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="${width>2?3.6:2.8}" fill="#fff" stroke="${color}" stroke-width="${width>2?2.4:1.8}"/>`).join('');
+    return `<path d="${d}" fill="none" stroke="${color}" stroke-width="${width*SW}" stroke-linejoin="round" stroke-linecap="round"${dash?` stroke-dasharray="${dash*(exp?2:1)} ${4*(exp?2:1)}"`:''}/>`
+      + pts.map(p=>`<circle cx="${X(p.i).toFixed(1)}" cy="${Y(p.v).toFixed(1)}" r="${(width>2?3.6:2.8)*(exp?1.7:1)}" fill="#fff" stroke="${color}" stroke-width="${(width>2?2.4:1.8)*SW}"/>`).join('');
   };
   const area=(()=>{ const pts=days.map((d,i)=>({i,v:d.ac})).filter(p=>p.v!=null);
     if(pts.length<2) return '';
     return `<path d="${pts.map((p,k)=>`${k?'L':'M'}${X(p.i).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(' ')} L${X(pts[pts.length-1].i).toFixed(1)} ${y1} L${X(pts[0].i).toFixed(1)} ${y1} Z" fill="${C.softO}" opacity=".55"/>`; })();
   let lab='';
   days.forEach((d,i)=>{
-    lab+=`<text x="${X(i).toFixed(1)}" y="${y1+19}" text-anchor="middle" font-size="12" font-weight="600" fill="#46433d" font-family="'Noto Sans'">${d.dow}</text>`;
-    lab+=`<text x="${X(i).toFixed(1)}" y="${y1+34}" text-anchor="middle" font-size="10" fill="#B6B1A8" font-family="'IBM Plex Mono'">${d.mc!=null?fmt(d.mc)+' mc':''}</text>`;
+    lab+=`<text x="${X(i).toFixed(1)}" y="${(y1+19*F).toFixed(1)}" text-anchor="middle" font-size="${(12*F).toFixed(1)}" font-weight="700" fill="${exp?'#14120F':'#46433d'}" font-family="'Noto Sans'">${d.dow}</text>`;
+    lab+=`<text x="${X(i).toFixed(1)}" y="${(y1+34*F).toFixed(1)}" text-anchor="middle" font-size="${(10*F).toFixed(1)}" font-weight="${exp?600:400}" fill="${exp?'#7C776E':'#B6B1A8'}" font-family="'IBM Plex Mono'">${d.mc!=null?fmt(d.mc)+' mc':''}</text>`;
   });
-  return { svg:`<svg viewBox="0 0 ${Wd} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC"/>${area}${line('ly',INS_PREV.color,1.8,'5 4')}${line('ac',INS_CUR.color,2.8,'')}</svg>` };
+  const inner=`${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC" stroke-width="${SW}"/>${area}${line('ly',INS_PREV.color,1.8,5)}${line('ac',INS_CUR.color,2.8,0)}`;
+  return { inner, vbW:Wd, vbH:H, svg:`<svg viewBox="0 0 ${Wd} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${inner}</svg>` };
 }
 
 /* ===================== Yesterday mode =====================
