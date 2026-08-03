@@ -2518,6 +2518,108 @@ function insAgg(){
      · STATELESS NOVELTY — nothing is remembered between visits (there is nowhere to remember it). Instead,
        "new" is derived from the data: transitions and milestone streaks score full, a condition that has merely
        been true for a while is damped to 45%. A 15-day streak is old news; a 14-day one is a milestone. */
+/* ===================== scope depth — one number that widens the page as you cascade =====================
+   The budget was a constant, and a constant is wrong at both ends. At All India the candidate pool is every
+   cluster in seven states, so a cap of six is throwing away real findings; filtered to one officer the pool is
+   a handful of machines and the cap never binds at all. So the cap does nearly all its work at the top and none
+   at the bottom — which is exactly backwards from how the page is read. A leader opening All India wants the
+   few things that matter; somebody who has drilled into one officer is diagnosing and wants everything there is.
+
+   DEPTH drives three things at once, which is why it is one number and not three settings:
+     · how many rows show,
+     · what the denominator is (the peer set a unit is judged against),
+     · which detectors are even eligible.
+
+   The unit being judged changes with depth too. At 0–2 it is a cluster or an area manager, compared with peers.
+   At 3 there is no peer left — an officer holds about one cluster — so the officer's own fleet becomes the unit
+   and is judged against its state. Row count then grows because more DETECTORS fire on the same unit, not
+   because more entities appear, which is what keeps the deepest view readable. */
+const INS_DEPTH = [
+  { key:'nation', show:3,  pool:8,  perUnit:1, perKind:2, perState:2,  det:['zero','mtd'] },
+  { key:'state',  show:4,  pool:10, perUnit:1, perKind:3, perState:99, det:['zero','mtd','idlecap'] },
+  { key:'am',     show:8,  pool:16, perUnit:2, perKind:3, perState:99, det:['zero','mtd','idlecap','noop','brk','permc','conc'] },
+  { key:'co',     show:12, pool:20, perUnit:9, perKind:9, perState:99, det:['zero','mtd','idlecap','noop','brk','permc','conc'] },
+];
+const insDepth = A => state.insCo ? 3 : state.insAm ? 2 : (A && A.gst ? 1 : 0);
+
+/* Unit statistics — computed once per group, then read by every detector. Keeping this separate from the tests
+   is what allows the same detector set to run over a cluster, an area manager or one officer's whole fleet. */
+function insUnitStats(rows,subKey){
+  const n=rows.length||1, num=v=>v||0;
+  const active=rows.filter(m=>num(m.achieved)>0);
+  const sub={}; if(subKey) rows.forEach(m=>{ const k=String(m[subKey]||'').trim(); if(k) sub[k]=(sub[k]||0)+num(m.achieved); });
+  const subVals=Object.values(sub), subTot=subVals.reduce((a,b)=>a+b,0);
+  return {
+    n:rows.length, rows,
+    never:rows.filter(m=>!(num(m.achieved)>0)).length,
+    ran:rows.filter(m=>num(m.acresY)>0).length,
+    idleCap:rows.filter(m=>!(num(m.acresY)>0) && num(m.achieved)>0),
+    noOp:rows.filter(m=>!m.opMapped).length,
+    brk:rows.filter(m=>!!m.breakdown).length,
+    activeN:active.length,
+    mtdStall:active.filter(m=>!(num(m.mtd)>0)).length,
+    acres:rows.reduce((a,m)=>a+num(m.achieved),0),
+    get neverF(){ return this.never/n; }, get ranF(){ return this.ran/n; },
+    get noOpF(){ return this.noOp/n; },  get brkF(){ return this.brk/n; },
+    get idleCapF(){ return this.idleCap.length/n; },
+    get mtdStallF(){ return this.activeN? this.mtdStall/this.activeN : 0; },
+    get acPerMc(){ return this.acres/n; },
+    subCount:subVals.length, topShare: subTot? Math.max(0,...subVals)/subTot : 0,
+    topName: subVals.length? Object.keys(sub).sort((a,b)=>sub[b]-sub[a])[0] : '',
+  };
+}
+
+/* Each detector: does it fire on this unit against this peer set, and what does the row say. Every one names its
+   own WINDOW in the copy — the card now mixes a daily fact, a monthly one and a season one, and a reader who
+   cannot tell which is which will read them all as "today". */
+const INS_DET = {
+  zero:   { w:86, test:(u,p)=>u.neverF>=Math.max(0.35,p.neverF*1.4) && u.never>=4,
+            row:(u,p,name,pn)=>[`${name} has ${u.never} machines that have never sprayed`,
+              `${Math.round(u.neverF*100)}% of the ${u.n} machines all season, against ${Math.round(p.neverF*100)}% across ${pn}.`, u.neverF] },
+  mtd:    { w:84, test:(u,p)=>u.activeN>=5 && u.mtdStall>=4 && u.mtdStallF>=Math.max(0.6,p.mtdStallF*1.25),
+            row:(u,p,name,pn)=>[`${name} has ${u.mtdStall} machines that have gone quiet this month`,
+              `${Math.round(u.mtdStallF*100)}% of the ${u.activeN} that have sprayed at some point logged nothing at all this month, against ${Math.round(p.mtdStallF*100)}% across ${pn}.`, u.mtdStallF] },
+  idlecap:{ w:80, test:u=>u.idleCap.length>=5 && u.idleCapF>=0.5,
+            row:(u,p,name)=>[`${name} had ${u.idleCap.length} machines with a season record do nothing`,
+              `${Math.round(u.idleCapF*100)}% of the ${u.n} machines yesterday. Between them they have covered ${fmt(u.idleCap.reduce((a,m)=>a+(m.achieved||0),0))} acres this season.`, u.idleCapF] },
+  noop:   { w:78, test:(u,p)=>u.noOp>=3 && u.noOpF>=0.2 && u.noOpF>=p.noOpF*1.4,
+            row:(u,p,name,pn)=>[`${name} has ${u.noOp} machines with nobody assigned to drive them`,
+              `${Math.round(u.noOpF*100)}% of the ${u.n} machines have no operator on the sheet, against ${Math.round(p.noOpF*100)}% across ${pn}.`, u.noOpF] },
+  brk:    { w:74, test:(u,p)=>u.brk>=3 && u.brkF>=0.15 && u.brkF>=p.brkF*1.5,
+            row:(u,p,name,pn)=>[`${name} has ${u.brk} machines flagged as broken down`,
+              `${Math.round(u.brkF*100)}% of the ${u.n} machines, against ${Math.round(p.brkF*100)}% across ${pn}.`, u.brkF] },
+  permc:  { w:72, test:(u,p)=>u.n>=6 && p.acPerMc>0 && u.acPerMc<=p.acPerMc*0.55,
+            row:(u,p,name,pn)=>[`${name}'s machines have covered about half what their peers have`,
+              `${fmt(u.acPerMc)} acres per machine this season, against ${fmt(p.acPerMc)} across ${pn}.`, Math.min(1,u.acPerMc/(p.acPerMc||1))] },
+  conc:   { w:70, test:u=>u.subCount>=3 && u.topShare>=0.6,
+            row:(u,p,name)=>[`${Math.round(u.topShare*100)}% of ${name}'s acres come from one place`,
+              `${u.topName} alone accounts for that, out of ${u.subCount} in total — the rest have produced the remainder between them.`, u.topShare] },
+};
+
+/* Group rows, then run the eligible detectors over each group against one peer set. The peer set is a PARAMETER,
+   which is the whole point: the same code judges a cluster against its state at the top of the page and against
+   its own area manager's other clusters once you have cascaded into that manager. */
+const insGroupBy = (rows,key) => { const g={}; rows.forEach(m=>{ const k=String(m[key]||'').trim(); if(k) (g[k]=g[k]||[]).push(m); }); return g; };
+const insCoOwner = rs => { const co=domStr(rs.map(m=>m.co)); return co ? { role:'Cluster officer', name:co, phone:domStr(rs.filter(m=>m.co===co).map(m=>m.coMob)) } : null; };
+const insAmOwner = (rs,name) => ({ role:'Area manager', name, phone:domStr(rs.map(m=>m.amNum)) });
+function insPeerScan({ units, peer, peerName, det, floor, ownerOf, drill, tag, subKey, prefix }){
+  const out=[];
+  for(const name in units){
+    const rs=units[name];
+    if(rs.length<floor || insJunkTerr(name)) continue;
+    const u=insUnitStats(rs,subKey), ramp=0.5+0.5*Math.min(1,rs.length/30);
+    for(const id of det){
+      const D=INS_DET[id]; if(!D) continue;
+      let fired=false; try{ fired=D.test(u,peer); }catch(_){ fired=false; }
+      if(!fired) continue;
+      const [title,detail,frac]=D.row(u,peer,name+(tag||''),peerName);
+      out.push({ group:'peer', scope:prefix+':'+name, st:drill, drill, id, tone:'bad',
+                 score:D.w*ramp, title, detail, frac, owner: ownerOf?ownerOf(rs,name):null });
+    }
+  }
+  return out;
+}
+
 const INS_SIG = { MACH_BASE:20, MACH_DELTA:15, ACRES_DAY:150, MILES:[3,7,14,21,30,45,60],
                   // Two groups, two budgets. Splitting them is what let the visible count go 5 → 10: the peer rows
                   // are a list you work down and the trend rows are a list you read, and interleaving them made
@@ -2657,55 +2759,16 @@ function insSignals(A){
      but connectivity is a different subject from field performance, and mixing "this machine did not report to
      the network" into a strip about how much ground is being covered made the card answer two questions at once.
      Removed by request — do not reintroduce it as a detector without that call being revisited. */
+  const depth=insDepth(A), B=INS_DEPTH[depth];
   const byState={};
   (A.dep||[]).forEach(m=>{ if(m.st) (byState[m.st]=byState[m.st]||[]).push(m); });
-  const grp=(rows,key)=>{ const g={}; rows.forEach(m=>{ const k=String(m[key]||'').trim(); if(k) (g[k]=g[k]||[]).push(m); }); return g; };
-  const pct = x => Math.round(x*100)+'%';
   for(const stc in byState){
     const srows=byState[stc], sName=STATE_NAMES[stc]||stc, tag=A.gst?'':` (${sName})`;
-    const sNever=srows.filter(m=>!((m.achieved||0)>0)).length/srows.length;
-    const sRan=srows.filter(m=>(m.acresY||0)>0).length/srows.length;
-    // Size ramp: clusters are smaller units than territories were, so the knee sits at 30 machines not 40.
-    const ramp=(n,knee)=>0.5+0.5*Math.min(1,n/knee);
-    // frac = the row's own share, carried so the row can draw a meter. Every peer finding is "n of N machines",
-    // so the meter restates nothing — it gives the sentence a size you can see without reading the numbers.
-    const peer=(scope,id,weight,title,detail,owner,frac)=>out.push({ group:'peer', scope, st:stc, drill:stc, id, tone:'bad', score:weight, title, detail, owner, frac });
-
-    const CL=grp(srows,'cluster');
-    for(const cname in CL){
-      const rs=CL[cname]; if(rs.length<INS_SIG.CLUSTER_MIN || insJunkTerr(cname)) continue;
-      const co=domStr(rs.map(m=>m.co)), coMob=domStr(rs.filter(m=>m.co===co).map(m=>m.coMob));
-      const owner = co ? { role:'Cluster officer', name:co, phone:coMob } : null;
-      const scope='C:'+stc+':'+cname, clAc=rs.reduce((a,m)=>a+(m.achieved||0),0);
-
-      // #14 · never sprayed — the chronic one. A season total, so it cannot be explained away by a quiet day.
-      const never=rs.filter(m=>!((m.achieved||0)>0)).length;
-      if(never/rs.length>=0.6 && never>=5)
-        peer(scope,'zero', 86*ramp(rs.length,30),
-          `${cname}${tag} has ${never} machines that have never sprayed`,
-          `${pct(never/rs.length)} of its ${rs.length} machines, against ${pct(sNever)} across ${sName}. The rest of the cluster has covered ${fmt(clAc)} acres this season.`, owner, never/rs.length);
-
-      // #15 · idle despite a season record — capable machines standing still. Anchored on the SEASON record
-      // (has sprayed before), with yesterday supplying only the "and did not run" half.
-      const idleCap=rs.filter(m=>!((m.acresY||0)>0) && (m.achieved||0)>0);
-      if(idleCap.length>=5 && idleCap.length/rs.length>=0.5)
-        peer(scope,'idlecap', 82*ramp(rs.length,30),
-          `${cname}${tag} had ${idleCap.length} machines with a season record do nothing`,
-          `${pct(idleCap.length/rs.length)} of its ${rs.length} machines. Between them they have covered ${fmt(idleCap.reduce((a,m)=>a+(m.achieved||0),0))} acres this season.`, owner, idleCap.length/rs.length);
-    }
-
-    const AM=grp(srows,'am');
-    for(const a in AM){                                 // #13 · AM chronic underperformance
-      const rs=AM[a]; if(rs.length<INS_SIG.AM_MIN || insJunkTerr(a)) continue;
-      const never=rs.filter(m=>!((m.achieved||0)>0)).length, neverF=never/rs.length;
-      const ran=rs.filter(m=>(m.acresY||0)>0).length/rs.length;
-      if(neverF>=sNever*1.5 && neverF>=0.2 && ran<sRan)
-        out.push({ group:'peer', scope:'A:'+stc+':'+a, st:stc, drill:stc, id:'am', tone:'bad',
-          score: 80*(0.5+0.5*Math.min(1,rs.length/60)),
-          title:`${a}${tag} has ${never} machines that have never sprayed`,
-          detail:`${pct(neverF)} of ${rs.length} machines, against ${pct(sNever)} across ${sName}. ${pct(ran)} of them worked yesterday, against ${pct(sRan)} statewide.`,
-          owner:{ role:'Area manager', name:a, phone:domStr(rs.map(m=>m.amNum)) }, frac:neverF });
-    }
+    const P=insUnitStats(srows,'cluster');
+    out.push(...insPeerScan({ units:insGroupBy(srows,'cluster'), peer:P, peerName:sName, det:B.det,
+      floor:INS_SIG.CLUSTER_MIN, ownerOf:insCoOwner, drill:stc, tag, subKey:'mc', prefix:'C:'+stc }));
+    out.push(...insPeerScan({ units:insGroupBy(srows,'am'), peer:P, peerName:sName, det:B.det,
+      floor:INS_SIG.AM_MIN, ownerOf:insAmOwner, drill:stc, tag, subKey:'cluster', prefix:'A:'+stc }));
   }
 
   /* ---- two groups, two budgets --------------------------------------------------------------------------
@@ -2728,10 +2791,59 @@ function insSignals(A){
   };
   out.sort((a,b)=>b.score-a.score);
   const single = scopes.length<=1;                        // a state-locked login has one scope; don't starve it
-  const peer = pick(out.filter(s=>s.group==='peer'), { perScope:1, perKind:4, perState: single?99:3, max:INS_SIG.PEER_MAX });
-  return { alert, peer,
-    peerTop: pick(peer, { perScope:1, perKind:3, perState: single?99:2, max:INS_SIG.PEER_SHOW }),
+  const peer = pick(out.filter(s=>s.group==='peer'), { perScope:B.perUnit, perKind:B.perKind+1, perState:B.perState, max:B.pool });
+  return { alert, peer, depth,
+    peerTop: pick(peer, { perScope:B.perUnit, perKind:B.perKind, perState:Math.max(1,B.perState-1), max:B.show }),
     trend:   pick(out.filter(s=>s.group==='trend'), { perScope: single?INS_SIG.TREND_MAX:1, perKind:2, max:INS_SIG.TREND_MAX }) };
+}
+
+/* ===================== the same scan, re-based, for Yesterday mode =====================
+   Yesterday had no detector engine at all — insSignals only ever ran in the Season branch — which is why
+   cascading into an area manager dropped you out of the detector layer entirely and left ran-yesterday as the
+   only thing on screen. This runs the SAME detectors over the SAME machinery, with the peer set and the
+   eligible set both taken from the current depth. */
+function insDaySignals(A){
+  const depth=insDepth(A), B=INS_DEPTH[depth], all=A.dep||[];
+  if(!all.length) return { rows:[], top:[], depth };
+  const fAm=String(state.insAm||'').trim(), fCo=String(state.insCo||'').trim();
+  let out=[];
+  if(depth>=2){
+    // Inside one manager the meaningful denominator is that manager's OWN clusters, not the state average —
+    // "worse than Madhya Pradesh" tells you nothing you can act on once you have already picked a manager.
+    const scope=all.filter(m=>String(m.am||'').trim()===fAm);
+    const peer=insUnitStats(scope,'cluster'), peerName=`the rest of ${fAm}'s area`;
+    if(depth===2){
+      out=insPeerScan({ units:insGroupBy(scope,'cluster'), peer, peerName, det:B.det, floor:INS_SIG.CLUSTER_MIN,
+        ownerOf:insCoOwner, drill:(scope[0]||{}).st, subKey:'mc', prefix:'C' });
+    } else {
+      // One officer holds about one cluster, so there is no peer group left below them. The officer's own fleet
+      // becomes the unit and is judged against its state — the row count then grows because more DETECTORS fire
+      // on the same unit, not because more entities appear, which is what keeps the deepest view readable.
+      const co=all.filter(m=>String(m.co||'').trim()===fCo);
+      const st=(co[0]||{}).st, srows=all.filter(m=>m.st===st);
+      out=insPeerScan({ units:{[fCo]:co}, peer:insUnitStats(srows,'cluster'), peerName:STATE_NAMES[st]||st,
+        det:B.det, floor:1, ownerOf:insCoOwner, drill:st, subKey:'mc', prefix:'O' });
+    }
+  } else {
+    const byState={}; all.forEach(m=>{ if(m.st) (byState[m.st]=byState[m.st]||[]).push(m); });
+    for(const stc in byState){
+      const srows=byState[stc], sName=STATE_NAMES[stc]||stc, tag=A.gst?'':` (${sName})`;
+      const P=insUnitStats(srows,'cluster');
+      out.push(...insPeerScan({ units:insGroupBy(srows,'cluster'), peer:P, peerName:sName, det:B.det,
+        floor:INS_SIG.CLUSTER_MIN, ownerOf:insCoOwner, drill:stc, tag, subKey:'mc', prefix:'C:'+stc }));
+      out.push(...insPeerScan({ units:insGroupBy(srows,'am'), peer:P, peerName:sName, det:B.det,
+        floor:INS_SIG.AM_MIN, ownerOf:insAmOwner, drill:stc, tag, subKey:'cluster', prefix:'A:'+stc }));
+    }
+  }
+  out.sort((a,b)=>b.score-a.score);
+  const cap=(rows,{perScope,perKind,perState,max})=>{ const u={},k={},s={},top=[];
+    for(const r of rows){
+      if((u[r.scope]||0)>=perScope || (k[r.id]||0)>=perKind || (perState&&(s[r.st]||0)>=perState)) continue;
+      u[r.scope]=(u[r.scope]||0)+1; k[r.id]=(k[r.id]||0)+1; s[r.st]=(s[r.st]||0)+1; top.push(r);
+      if(top.length>=max) break; }
+    return top; };
+  const rows=cap(out,{ perScope:B.perUnit, perKind:B.perKind+1, perState:B.perState, max:B.pool });
+  return { rows, depth, top:cap(rows,{ perScope:B.perUnit, perKind:B.perKind, perState:Math.max(1,B.perState-1), max:B.show }) };
 }
 
 /* ===================== Week mode — the Monday review =====================
@@ -3162,6 +3274,23 @@ function insightsBodyHTML(mob){
   const toneMark = t => `<span title="${t==='good'?'improving':t==='bad'?'needs attention':'watch'}" style="width:15px;height:15px;border-radius:5px;background:${t==='good'?C.softG:t==='bad'?C.softR:C.softA};color:${toneInk(t)};font-size:8px;line-height:15px;text-align:center;margin-top:2px;flex-shrink:0;font-weight:700">${t==='good'?'▲':t==='bad'?'▼':'●'}</span>`;
   const meter = (frac,tone) => frac==null ? '' : `<span style="display:block;height:4px;border-radius:3px;background:#F2F0EB;margin-top:7px;max-width:340px;overflow:hidden">
       <span style="display:block;height:100%;width:${Math.max(2,Math.min(100,frac*100)).toFixed(1)}%;background:${toneInk(tone)};border-radius:3px;opacity:.85"></span></span>`;
+  /* An AM row already leads with the manager's name, so repeating it under the row reads as a stutter. When the
+     title already contains the owner, the line carries the role and the number only. */
+  const ownerLine = (o,title) => {
+    if(!o||!o.name) return '';
+    const dupe = title && title.indexOf(o.name)>=0;
+    return `<div style="font-size:11px;color:#9C988F;margin-top:5px;display:flex;flex-wrap:wrap;gap:4px 8px">
+      <span>${E(o.role)}${dupe?'':` <strong style="color:#6E6A62;font-weight:600">${E(o.name)}</strong>`}</span>
+      ${o.phone?`<span style="font-family:'IBM Plex Mono'">${E(o.phone)}</span>`:''}</div>`;
+  };
+  const sigRow = (x,i) => `<div class="insRow" ${x.drill?`data-act="insdrill" data-key="${E(x.drill)}"`:''} style="display:flex;gap:11px;padding:${mob?'12px 15px':'13px 16px'};border-top:${i?'1px solid #F4F2EE':'none'};${x.drill?'cursor:pointer':''}">
+      ${toneMark(x.tone)}
+      <div style="min-width:0;flex:1">
+        <div style="font-size:12.5px;font-weight:700;line-height:1.35">${E(x.title)}</div>
+        <div style="font-size:11.5px;color:#6E6A62;margin-top:3px;line-height:1.5">${E(x.detail)}</div>
+        ${meter(x.frac,x.tone)}
+        ${ownerLine(x.owner,x.title)}
+      </div></div>`;
   const barRow = (label,val,tot,colour,sub) => { const w=tot?Math.max(1.5,val/tot*100):0;
     return `<div style="padding:8px 0">
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
@@ -3471,6 +3600,21 @@ function insightsBodyHTML(mob){
       ${D.filtered?`<div style="padding:10px 16px;border-top:1px solid #EFEDE7;font-size:11px;color:#9C988F;line-height:1.55">Two figures are missing from this row while the page is narrowed to a person: the comparison against a normal day and the acres traced to a product both come from tabs that only go down to state, so neither exists for one manager or officer. Every number still shown is counted from these machines' own rows.</div>`:''}`,
       runPct>=40?C.act:runPct>=20?C.idle:C.brk);
 
+    /* ---- what stands out about this scope · the detector card, budgeted by depth ----
+       The heading deliberately does NOT say "yesterday". These rows mix a daily fact, a monthly one and a season
+       one, and each names its own window in its own sentence; a card titled "yesterday" sitting over a row about
+       this month would invite the reader to take the month figure for a day figure, which is the single error
+       this page's copy rules exist to prevent. */
+    const DS=insDaySignals(A);
+    const dsOpen=!!(state.insMore&&state.insMore.day);
+    const dsVis=dsOpen?DS.rows:DS.top, dsRest=DS.rows.length-dsVis.length;
+    const dsWho = DS.depth===3 ? `${E(state.insCo)}'s machines, against the rest of the state`
+                : DS.depth===2 ? `${E(state.insAm)}'s clusters, against each other`
+                : 'Clusters and area managers, each against the rest of its own state';
+    const signals = dsVis.length ? card(`${cHead('What stands out here', `${dsWho} · every row names the period it covers`)}
+        ${dsVis.map(sigRow).join('')}
+        ${dsRest>0||dsOpen?`<div class="insMore" data-act="insmore" data-key="day" style="padding:10px 16px;border-top:1px solid #F4F2EE;text-align:center;cursor:pointer;font-size:11.5px;font-weight:600;color:#6E6A62">${dsOpen?'▴ Show fewer':`▾ Show ${dsRest} more`}</div>`:''}`, C.brk) : '';
+
     /* ---- why the idle fleet didn't run: the account, not a judgement ---- */
     /* Stacked bar, to spec: 24px, segments separated by a 2px SURFACE gap rather than a border (a stroke would
        add ink that isn't data), rounded outer ends, and an in-segment percentage only where the text actually
@@ -3495,14 +3639,6 @@ function insightsBodyHTML(mob){
       </div>`);
 
     /* ---- unexplained idle by cluster and by AM: ranked by machines, a count, never a modelled gap ---- */
-    // An AM row is titled with the manager's own name; don't print it twice (see the same rule in sigRow).
-    const ownerLine=(o,title)=>{
-      if(!o||!o.name) return '';
-      const dupe = title && title.indexOf(o.name)>=0;
-      return `<div style="font-size:11px;color:#9C988F;margin-top:5px;display:flex;flex-wrap:wrap;gap:4px 8px">
-        <span>${E(o.role)}${dupe?'':` <strong style="color:#6E6A62;font-weight:600">${E(o.name)}</strong>`}</span>
-        ${o.phone?`<span style="font-family:'IBM Plex Mono'">${E(o.phone)}</span>`:''}</div>`;
-    };
     /* Rain is the only thing that changes a row's colour here, and it is an ANNOTATION — so it gets its own
        glyph and wording rather than being left as an unexplained amber dot. */
     const idleRow=(r,i,unit)=>`<div class="insRow" data-act="insdrill" data-key="${E(r.st)}" style="display:flex;gap:11px;padding:13px 16px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
@@ -3544,7 +3680,7 @@ function insightsBodyHTML(mob){
         <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">How to read this page</div>
         <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">Every number here is <strong style="color:#46433d">counted straight off a column</strong> in the machine sheet. Nobody is given an acre target for the day, because what a cluster does on one day need not match its share of the season. ${D.filtered?`Narrowing to an area manager or an officer only narrows <strong style="color:#46433d">which rows are counted</strong> — every figure stays as exact as it was for the whole country. The two figures that came from other tabs are withheld instead of being estimated, because those tabs stop at state.`:`The single comparison on the page is against a normal day, which measures this scope against <strong style="color:#46433d">its own last fortnight</strong>.`} Rain is shown where it might explain a quiet day; it never changes an order. And all of it is one day, where the Season view is the whole year to date.</div></div>`;
     return `<div style="display:flex;flex-direction:column;gap:14px">
-      ${header}${band}${why}${clusters}${amCard}${where}${note}
+      ${header}${band}${signals}${why}${clusters}${amCard}${where}${note}
       ${mob?`<div style="text-align:center;padding:2px 0 4px">${src}</div>`:''}</div>`;
   }
 
@@ -3592,23 +3728,6 @@ function insightsBodyHTML(mob){
   /* Two groups, each with its own visible budget and its own expand toggle. The peer rows name a cluster or an
      area manager and carry the person accountable for them; the trend rows are state-level movement against last
      season. Keeping them apart is what allows ten visible rows to read faster than the old five did. */
-  /* An AM row already leads with the manager's name, so repeating it under the row reads as a stutter. When the
-     title already contains the owner, the line carries the role and the number only. */
-  const ownerLine=(o,title)=>{
-    if(!o||!o.name) return '';
-    const dupe = title && title.indexOf(o.name)>=0;
-    return `<div style="font-size:11px;color:#9C988F;margin-top:5px;display:flex;flex-wrap:wrap;gap:4px 8px">
-      <span>${E(o.role)}${dupe?'':` <strong style="color:#6E6A62;font-weight:600">${E(o.name)}</strong>`}</span>
-      ${o.phone?`<span style="font-family:'IBM Plex Mono'">${E(o.phone)}</span>`:''}</div>`;
-  };
-  const sigRow=(x,i)=>`<div class="insRow" ${x.drill?`data-act="insdrill" data-key="${E(x.drill)}"`:''} style="display:flex;gap:11px;padding:${mob?'12px 15px':'13px 16px'};border-top:${i?'1px solid #F4F2EE':'none'};${x.drill?'cursor:pointer':''}">
-      ${toneMark(x.tone)}
-      <div style="min-width:0;flex:1">
-        <div style="font-size:12.5px;font-weight:700;line-height:1.35">${E(x.title)}</div>
-        <div style="font-size:11.5px;color:#6E6A62;margin-top:3px;line-height:1.5">${E(x.detail)}</div>
-        ${meter(x.frac,x.tone)}
-        ${ownerLine(x.owner,x.title)}
-      </div></div>`;
   const sigGroup=(key,label,note,rows,show,collapsed)=>{
     if(!rows.length) return '';
     const open=!!(state.insMore&&state.insMore[key]), vis=open?rows:(collapsed||rows.slice(0,show)), rest=rows.length-vis.length;

@@ -170,6 +170,28 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   swing and pure noise), **magnitude weighting** by share of national acres, and **stateless novelty** — nothing
   is remembered between visits, so "new" is derived from the data itself (transitions and milestone-length
   streaks score full; a condition that has merely been true a while is damped to 45%).
+- **The budget is driven by SCOPE DEPTH, and widens as you cascade** (`insDepth` → `INS_DEPTH[0..3]`: All India /
+  one state / one area manager / one cluster officer). A constant budget was wrong at both ends: at All India the
+  candidate pool is every cluster in seven states, so a cap of six discarded real findings, while filtered to one
+  officer the pool is a handful of machines and the cap never bound at all — it did all its work at the top and
+  none at the bottom, which is backwards from how the page is read. A leader opening All India wants the few
+  things that matter; somebody who has drilled into one officer is diagnosing and wants everything.
+  Depth drives **three** things from one number, which is why it is one number and not three settings: how many
+  rows show, what the denominator is, and which detectors are eligible. Measured live: 3 rows at All India,
+  4 at one state, up to 8 at an area manager, up to 12 at an officer.
+- **The peer set is a PARAMETER, not a constant** (`insPeerScan({units, peer, peerName, det, …})`). At depth 0–1 a
+  cluster is judged against its state; at depth 2 against **the rest of that area manager's own clusters**, because
+  "worse than Madhya Pradesh" tells you nothing actionable once you have already picked the manager. At depth 3
+  there is no peer left — an officer holds roughly one cluster — so the officer's own fleet becomes the unit and is
+  judged against its state. Row count then grows because more DETECTORS fire on the same unit, not because more
+  entities appear, which is what keeps the deepest view readable.
+- **Seven detectors, and only two of them are daily** (`INS_DET`): never-sprayed (season), gone-quiet-this-month
+  (month), idle-with-a-season-record (yesterday), nobody-assigned-to-drive (state), breakdowns-concentrated
+  (state), acres-per-machine-vs-peers (season), output-concentrated-in-one-sub-unit (season). **Every row names its
+  own window in its own sentence**, and the card is titled "What stands out here" rather than anything with
+  "yesterday" in it — a daily title over a monthly row invites the reader to take a month figure for a day figure.
+  Sheet1 carries exactly ONE trustworthy daily column (`acresY`), so a card that only asked about yesterday could
+  never say more than ran/didn't-run; the useful signals are month- and season-grain.
 - **The per-state cap is applied TWICE at different strengths, and it is the cap that matters.** Every cluster is
   its own scope, so a per-*scope* cap does nothing to stop one state filling the card — measured live, it let
   Madhya Pradesh take 4 of 6 rows. The pool allows **three** rows per state (a state genuinely can have three
@@ -301,6 +323,9 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   2026-08-03 on 1,193 deployed rows: **124 flagged, 83 of them idle, 41 of them worked.** That is much closer to
   a present-state field, and the `broken` bucket is now materially populated (91 at national scope) rather than
   empty. Do not assert either reading without checking the live sheet first.
+- **Yesterday runs the detector engine too** (`insDaySignals`), which it previously did not — `insSignals` only
+  ever ran in the Season branch, so cascading into an area manager dropped the reader out of the detector layer
+  entirely and left ran-yesterday as the only thing on screen. Both modes now call the same scan.
 - **Yesterday carries AM and cluster-officer filters; the other two modes cannot.** Sheet1 is the only tab with
   either dimension — the cumulative tab is state-grain and the product tab has no people in it — so Season and
   Week could not honour a selection even in principle. Leaving the mode CLEARS `insAm`/`insCo` rather than
