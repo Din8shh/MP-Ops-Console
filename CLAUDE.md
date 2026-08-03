@@ -78,7 +78,7 @@ designing anything on a column — several look usable and are not:
 
 | Field | Fill | Usable? |
 |---|---|---|
-| `pinged` | 874/1,193 deployed | **Yes** — and discriminating: 226/874 pinged machines sprayed, vs 17/319 dark ones. Drives connected-but-idle and the dark bucket |
+| `pinged` | 874/1,193 deployed | Populated and discriminating (226/874 pinged machines sprayed, vs 17/319 dark), but **deliberately not used by Insights** — see the ping note under Insights |
 | `co`/`coMob`, `am`/`amNum` | ~100% | **Yes** — the reason peer detectors are cluster/AM grain |
 | BM / TM / FO / retailer | 85–92% | Yes, unused by Insights so far |
 | `mtd` | 343 of 938 season-active | Yes, but thin early in a month |
@@ -148,8 +148,8 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   visible count go 5 → 10 without the card getting harder to read: the peer rows are a list you work down and the
   trend rows are a list you read, and interleaving them made both slower to scan than either alone.
   **Family B → "Clusters and area managers"** (Sheet1, across PEERS, no history needed) — never-sprayed clusters,
-  **connected-but-idle**, **dark fleet**, and AM chronic underperformance, each compared against *its own state's*
-  peers. 6 visible, pool of 14. **Family A → "States, against last season"** (snake, across TIME) — inflection,
+  idle-despite-a-season-record, and AM chronic underperformance, each compared against *its own state's* peers.
+  6 visible, pool of 14. **Family A → "States, against last season"** (snake, across TIME) — inflection,
   streak, crossover/projection vs last season's full year, peak day, fleet week-over-week, productivity per
   working machine, stall. 4 visible, pool of 10. Plus the **trust check**, rendered as a banner above both
   because it is about the page rather than the programme: a >10% divergence between snake's daily acres and
@@ -161,11 +161,11 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   sheet doesn't guarantee. The owner is **data, never an instruction** — the page names the person and the
   number and stops there; deciding to ring them is the reader's job. When a row's title already contains the
   owner's name (every AM row does), the line drops the name and shows role + number, or it stutters.
-- **The two ping detectors are the one place Family B may read yesterday directly.** Everything else there is
-  anchored on never-sprayed, a SEASON total, because Sheet1's daily fields are a single observation with nothing
-  to smooth them. A ping is exempt because it is not a performance measure: it records whether the machine
-  reported to the network at all, which is true or false regardless of how busy the day was. That distinction is
-  what makes **connected-but-idle** a new class of finding rather than a restatement of "didn't run".
+- **The machine sheet's ping columns are DELIBERATELY unused by Insights.** `pinged` is populated (874 of 1,193
+  deployed) and does discriminate, and an earlier build used it for two detectors and a fifth idle bucket. It was
+  removed by request: connectivity is a different subject from field performance, and mixing "this machine did
+  not report to the network" into a page about how much ground is being covered made it answer two questions at
+  once. Do not reintroduce it without that call being revisited.
 - Three guards stop the strip becoming horoscope: absolute **floors** (a state going 2→6 machines is a 150%
   swing and pure noise), **magnitude weighting** by share of national acres, and **stateless novelty** — nothing
   is remembered between visits, so "new" is derived from the data itself (transitions and milestone-length
@@ -266,11 +266,10 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   assumption as a precise number — the combination that earns "says who?". Every figure on the page is now a
   **count from a column**: "24 of Hanumangarh's 43 machines have an operator, have sprayed this season, and did
   not run" is unarguable in a way that "195 ac short" never was.
-- **`insDayAgg` decomposes idleness into mutually exclusive, observed buckets** that sum exactly to the idle
-  count: flagged breakdown → no operator mapped → never sprayed this season → **sent no signal (dark)** →
-  **unexplained**. First match wins. The dark bucket is what makes the last one mean something: "unexplained" now
-  reads *reported in, has a driver, has sprayed before, and still did nothing* — 510 machines carrying 73,226
-  season acres between them — instead of silently mixing in 119 machines nobody heard from either way.
+- **`insDayAgg` decomposes idleness into four mutually exclusive, observed buckets** that sum exactly to the idle
+  count: flagged breakdown → nobody assigned to drive it → never sprayed this season → **no reason on the sheet**.
+  First match wins. The last bucket is the interesting one — machines with a driver and a season record that
+  simply did not run — and the card states the acres they have already covered, so its size is legible.
 - **Yesterday's idle roll-ups are CLUSTER and AREA MANAGER, never territory** — same owner argument as the
   season strip. Rain is looked up on the cluster's dominant *territory*, because the weather feed is keyed by
   district and knows nothing about clusters. The "how the day was spread" card stays on territory on purpose:
@@ -285,6 +284,21 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   2026-08-03 on 1,193 deployed rows: **124 flagged, 83 of them idle, 41 of them worked.** That is much closer to
   a present-state field, and the `broken` bucket is now materially populated (91 at national scope) rather than
   empty. Do not assert either reading without checking the live sheet first.
+- **Yesterday carries AM and cluster-officer filters; the other two modes cannot.** Sheet1 is the only tab with
+  either dimension — the cumulative tab is state-grain and the product tab has no people in it — so Season and
+  Week could not honour a selection even in principle. Leaving the mode CLEARS `insAm`/`insCo` rather than
+  keeping a filter that is set but has no control and no effect. Both are page-local like `insSt`, the officer
+  list cascades off the chosen AM so the pair can never select nothing, and changing the AM drops the officer.
+- **Filtering below state WITHDRAWS the two figures that come from other tabs.** The 14-day norm (cumulative) and
+  product-attributed acres (product tab) both stop at state, so they are removed from the stat band the moment
+  an AM or officer is chosen, with one line saying why. A tile reading "−6% against a normal day" beside one
+  manager's counts is read as that manager's number however the sub-label is worded, and there is no norm for
+  one manager to read it as. Scaling the state's norm by the manager's share of the season would be exactly the
+  counterfactual this page removed once already. The "how the day was spread" card goes too — it asks whether the
+  work reached across the country, which means nothing for one person holding two territories, and it would
+  otherwise print "100% of the day came from just 3 territories" beside a total of two. Everything that remains
+  is a count over the narrowed rows, and therefore exactly as true as it was for the whole country.
+
 - **Two levels: All India and one state — never territory.** The snake tab has a full per-state series, so a state
   view carries the *same seven cards* at the same richness. Territory is where that collapses (no sub-state history,
   and the product tab has no territory column), which is exactly where the level stops.
