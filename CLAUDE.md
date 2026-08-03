@@ -196,6 +196,23 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   widens — it did in the week of 20 Jul (−19.3% → −16.9%, but 30,347 → 32,047 ac) — because the base grew faster
   than the shortfall. A slide saying only "we closed the gap" is the kind of half-true that gets caught in the
   room, so the card shows both and explains the divergence in words.
+- **Visual spec for the Insights rows and marks** — these are the data-viz house rules, not decoration, and each
+  one is doing a job:
+  · **Direction rides a GLYPH as well as a colour** (`toneMark`: ▲ improving / ▼ needs attention / ● watch, in a
+    soft-tinted 15px badge). A bare coloured dot is precisely the encoding a red-green reader cannot resolve, and
+    these rows turn on that distinction — a lead growing against a gap widening.
+  · **Every "n of N" row carries a 4px meter** (`meter`) in the row's own tone, track one step off the surface,
+    rounded end, no border. It restates nothing — it gives a sentence a size you can see before you read it.
+    A stroke around a mark would add ink that is not data; the fill and the gap do the separating.
+  · **The stacked idle bar separates its segments with a 2px SURFACE gap**, not a border, is capped at 24px, has
+    rounded outer ends, and prints an in-segment percentage only where the text actually fits (≥8% of the width).
+    A clipped "1…" is worse than no label, and the legend below carries every value regardless.
+  · **Cards are a hairline plus a 1px shadow**, with an optional 3px left accent (`card(inner, accent)`) where a
+    card's state should be legible before it is read — the hero takes green when ahead and red when behind, and
+    Yesterday's stat band takes its colour from the share of the fleet that worked. Weight added to a border is
+    ink competing with the data; the shadow separates a dozen stacked cards without it.
+  · **Text never wears the data colour.** Values and labels stay in the ink tokens; identity comes from the
+    coloured mark beside them.
 - **Copy rule for the whole Insights page: describe, never instruct.** The page is read by whoever opens it, not
   narrated to a presenter — so "the season so far", not "what to correct over the coming weeks"; "both measures
   moved", not "worth saying both ways in the review". Card headings are noun phrases naming what the card shows.

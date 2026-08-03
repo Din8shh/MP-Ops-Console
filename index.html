@@ -23,6 +23,12 @@
   a{text-decoration:none}
   #app{height:100vh;height:100dvh}
   .mono{font-family:'IBM Plex Mono',monospace}
+  /* Insights rows. The hover tint is the only affordance saying a row is clickable — the cursor alone is
+     invisible until you are already on it, and these lists are scanned before they are clicked. */
+  .insRow{transition:background .12s ease}
+  .insRow:hover{background:#FBFAF8}
+  .insRow[data-act]:hover{background:#F7F5F1}
+  .insMore:hover{background:#F4F2EE}
   /* Real phones: the mobile view drops its desktop preview bezel and runs full-bleed
      (see isPhone()/mobileHTML). Only viewport-level chrome is tuned here. */
   @media (max-width:820px){
@@ -2579,8 +2585,10 @@ function insSignals(A){
         `${fmt(cur)} acres so far against ${fmt(fyPrev)} for all of last season, with ${SNAKE_LEN-1-anchor} days of this one still to run.`, false);
       else if(roll7>0){
         const days=Math.ceil((fyPrev-cur)/roll7);
-        if(days<=60) add('project', days<=14?88:days<=30?78:66,'good',`${sc.name} is ${days} days from passing the whole of last season`,
-          `${fmt(fyPrev-cur)} acres to go, at the ${fmt(roll7)} a day it is averaging now — around ${snakeOffLabel(Math.min(SNAKE_LEN-1,anchor+days))}.`);
+        if(days<=60){ const c=out.length;
+          add('project', days<=14?88:days<=30?78:66,'good',`${sc.name} is ${days} days from passing the whole of last season`,
+            `${fmt(fyPrev-cur)} acres to go, at the ${fmt(roll7)} a day it is averaging now — around ${snakeOffLabel(Math.min(SNAKE_LEN-1,anchor+days))}.`);
+          if(out.length>c) out[out.length-1].frac = Math.min(1, cur/fyPrev); }
       }
     }
     // 4 · peak — the season's biggest single day, only while it is still fresh.
@@ -2659,7 +2667,9 @@ function insSignals(A){
     const sRan=srows.filter(m=>(m.acresY||0)>0).length/srows.length;
     // Size ramp: clusters are smaller units than territories were, so the knee sits at 30 machines not 40.
     const ramp=(n,knee)=>0.5+0.5*Math.min(1,n/knee);
-    const peer=(scope,id,weight,title,detail,owner)=>out.push({ group:'peer', scope, st:stc, drill:stc, id, tone:'bad', score:weight, title, detail, owner });
+    // frac = the row's own share, carried so the row can draw a meter. Every peer finding is "n of N machines",
+    // so the meter restates nothing — it gives the sentence a size you can see without reading the numbers.
+    const peer=(scope,id,weight,title,detail,owner,frac)=>out.push({ group:'peer', scope, st:stc, drill:stc, id, tone:'bad', score:weight, title, detail, owner, frac });
 
     const CL=grp(srows,'cluster');
     for(const cname in CL){
@@ -2673,7 +2683,7 @@ function insSignals(A){
       if(never/rs.length>=0.6 && never>=5)
         peer(scope,'zero', 86*ramp(rs.length,30),
           `${cname}${tag} has ${never} machines that have never sprayed`,
-          `${pct(never/rs.length)} of its ${rs.length} machines, against ${pct(sNever)} across ${sName}. The rest of the cluster has covered ${fmt(clAc)} acres this season.`, owner);
+          `${pct(never/rs.length)} of its ${rs.length} machines, against ${pct(sNever)} across ${sName}. The rest of the cluster has covered ${fmt(clAc)} acres this season.`, owner, never/rs.length);
 
       // #15 · idle despite a season record — capable machines standing still. Anchored on the SEASON record
       // (has sprayed before), with yesterday supplying only the "and did not run" half.
@@ -2681,7 +2691,7 @@ function insSignals(A){
       if(idleCap.length>=5 && idleCap.length/rs.length>=0.5)
         peer(scope,'idlecap', 82*ramp(rs.length,30),
           `${cname}${tag} had ${idleCap.length} machines with a season record do nothing`,
-          `${pct(idleCap.length/rs.length)} of its ${rs.length} machines. Between them they have covered ${fmt(idleCap.reduce((a,m)=>a+(m.achieved||0),0))} acres this season.`, owner);
+          `${pct(idleCap.length/rs.length)} of its ${rs.length} machines. Between them they have covered ${fmt(idleCap.reduce((a,m)=>a+(m.achieved||0),0))} acres this season.`, owner, idleCap.length/rs.length);
     }
 
     const AM=grp(srows,'am');
@@ -2694,7 +2704,7 @@ function insSignals(A){
           score: 80*(0.5+0.5*Math.min(1,rs.length/60)),
           title:`${a}${tag} has ${never} machines that have never sprayed`,
           detail:`${pct(neverF)} of ${rs.length} machines, against ${pct(sNever)} across ${sName}. ${pct(ran)} of them worked yesterday, against ${pct(sRan)} statewide.`,
-          owner:{ role:'Area manager', name:a, phone:domStr(rs.map(m=>m.amNum)) } });
+          owner:{ role:'Area manager', name:a, phone:domStr(rs.map(m=>m.amNum)) }, frac:neverF });
     }
   }
 
@@ -3130,7 +3140,10 @@ function insightsBodyHTML(mob){
   if(!PROD.loaded  && !PROD.loading  && !PROD.error ) setTimeout(loadProduct,0);
   const A=insAgg(), s=A.season, P=A.prod, f=A.fleet;
 
-  const card = inner => `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">${inner}</div>`;
+  /* A hairline plus a 1px shadow, not a heavier border: on a warm off-white page a dozen stacked cards read as
+     one undifferentiated sheet without some separation, and weight added to the border is ink competing with the
+     data. `accent` paints a 3px rule down the left where a card's own state should be legible before it is read. */
+  const card = (inner,accent) => `<div style="background:#fff;border:1px solid #E9E6DF;${accent?`border-left:3px solid ${accent};`:''}border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(27,26,23,.045)">${inner}</div>`;
   const cHead = (t,sub,right) => `<div style="padding:13px 16px;border-bottom:1px solid #EFEDE7;display:flex;align-items:flex-start;gap:12px">
       <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700">${t}</div>${sub?`<div style="font-size:11px;color:#9C988F;margin-top:2px">${sub}</div>`:''}</div>${right||''}</div>`;
   const waiting = (err,msg,act) => `<div style="padding:34px 18px;text-align:center;color:#9C988F;font-size:12.5px">${err?'⚠ ':''}${msg}${err?`<div style="margin-top:12px"><button data-act="${act}" style="padding:7px 15px;border:1px solid #E9E6DF;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Retry</button></div>`:''}</div>`;
@@ -3138,6 +3151,17 @@ function insightsBodyHTML(mob){
   const dpill = pct => pct==null?'' : pill(`${pct>=0?'▲':'▼'} ${Math.abs(pct).toFixed(1)}%`, pct>=0?C.softG:C.softR, pct>=0?C.greenD:C.brk);
   const mini = (v,l,ink) => `<div><div style="font-family:'IBM Plex Mono';font-size:16px;font-weight:700;color:${ink||C.ink}">${v}</div>
       <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:4px">${l}</div></div>`;
+  /* --- shared row furniture (declared here because Yesterday renders before the Season branch) ---
+     A bare coloured dot is the one status encoding a red-green reader cannot resolve, and these rows turn on
+     exactly that distinction — a lead growing against a gap widening. So direction rides a GLYPH as well as a
+     colour, and the glyph carries a title for the pointer.
+     The meter is the row's own share drawn at 4px: every peer row is already "n of N machines", so it restates
+     nothing — it gives the sentence a size you can see before you read it. Fill in the row's tone, track one
+     light step off the surface, rounded end, and no border (a stroke would add ink that isn't data). */
+  const toneInk = t => t==='good'?C.act : t==='bad'?C.brk : t==='warn'?C.openD : C.idle;
+  const toneMark = t => `<span title="${t==='good'?'improving':t==='bad'?'needs attention':'watch'}" style="width:15px;height:15px;border-radius:5px;background:${t==='good'?C.softG:t==='bad'?C.softR:C.softA};color:${toneInk(t)};font-size:8px;line-height:15px;text-align:center;margin-top:2px;flex-shrink:0;font-weight:700">${t==='good'?'▲':t==='bad'?'▼':'●'}</span>`;
+  const meter = (frac,tone) => frac==null ? '' : `<span style="display:block;height:4px;border-radius:3px;background:#F2F0EB;margin-top:7px;max-width:340px;overflow:hidden">
+      <span style="display:block;height:100%;width:${Math.max(2,Math.min(100,frac*100)).toFixed(1)}%;background:${toneInk(tone)};border-radius:3px;opacity:.85"></span></span>`;
   const barRow = (label,val,tot,colour,sub) => { const w=tot?Math.max(1.5,val/tot*100):0;
     return `<div style="padding:8px 0">
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
@@ -3425,29 +3449,39 @@ function insightsBodyHTML(mob){
     const dayPct = (D.dayAc!=null && D.norm) ? D.dayAc/D.norm*100-100 : null;
     const runPct = D.deployed ? D.ran/D.deployed*100 : 0;
     const wetC=r=>r.rain!=null && r.rain>=INS_DAY.WET_MM;
-    const dstat=(v,l,ink,sub)=>`<div style="flex:1 0 auto;min-width:${mob?'44%':'150px'};padding:13px 16px;border-right:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
+    // A tile whose sub-line is "x% of the fleet" gets that share drawn under it. The two tiles measuring a share
+    // of the same 1,318 machines then read against each other at a glance instead of by arithmetic.
+    const dstat=(v,l,ink,sub,frac)=>`<div style="flex:1 0 auto;min-width:${mob?'44%':'150px'};padding:13px 16px;border-right:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
         <div style="font-family:'IBM Plex Mono';font-size:${mob?'18px':'20px'};font-weight:700;color:${ink||C.ink}">${v}</div>
         <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">${l}</div>
-        ${sub?`<div style="font-size:10.5px;color:#B6B1A8;margin-top:3px">${sub}</div>`:''}</div>`;
+        ${sub?`<div style="font-size:10.5px;color:#B6B1A8;margin-top:3px">${sub}</div>`:''}
+        ${frac==null?'':`<span style="display:block;height:3px;border-radius:2px;background:#F2F0EB;margin-top:8px;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(1.5,Math.min(100,frac*100)).toFixed(1)}%;background:${ink||C.ink};border-radius:2px;opacity:.8"></span></span>`}</div>`;
     // Who the page is currently narrowed to, spelled out under the heading rather than left to the dropdowns.
     const who = [state.insCo?`cluster officer ${state.insCo}`:'', state.insAm?`area manager ${state.insAm}`:'']
                   .filter(Boolean).join(', under ');
     const band=card(`${cHead(`Yesterday · ${s?E(s.label):'—'}`,
         `From the machine sheet · ${A.gst?E(A.regionName):'all seven states'}${who?` · ${E(who)}`:''}`)}
       <div style="display:flex;flex-wrap:wrap;background:#FBFAF8">
-        ${dstat(fmt(D.ran),'machines worked', runPct>=40?C.act:runPct>=20?C.idle:C.brk, `${Math.round(runPct)}% of the ${fmt(D.deployed)} deployed`)}
+        ${dstat(fmt(D.ran),'machines worked', runPct>=40?C.act:runPct>=20?C.idle:C.brk, `${Math.round(runPct)}% of the ${fmt(D.deployed)} deployed`, D.deployed?D.ran/D.deployed:null)}
         ${dstat(fmt(D.acres),'acres sprayed',C.orangeD, D.ran?`${fmt(D.acres/D.ran)} acres each`:'')}
         ${D.filtered?'':dstat(dayPct==null?'—':`${dayPct>=0?'+':'−'}${Math.abs(Math.round(dayPct))}%`,'against a normal day', dayPct==null?C.ink:dayPct>=0?C.act:C.brk, D.norm?`a normal day is ${fmt(D.norm)} acres`:'')}
-        ${D.filtered?'':dstat(D.prodY==null?'—':fmt(D.prodY),'acres traced to a product', C.ink, D.prodY!=null&&D.acres?`${Math.round(D.prodY/D.acres*100)}% of the day`:'')}
-        ${dstat(fmt(D.idle),'machines idle', D.idle?C.brk:C.ink, D.deployed?`${Math.round(D.idle/D.deployed*100)}% of the deployed fleet`:'')}
+        ${D.filtered?'':dstat(D.prodY==null?'—':fmt(D.prodY),'acres traced to a product', C.ink, D.prodY!=null&&D.acres?`${Math.round(D.prodY/D.acres*100)}% of the day`:'', D.prodY!=null&&D.acres?D.prodY/D.acres:null)}
+        ${dstat(fmt(D.idle),'machines idle', D.idle?C.brk:C.ink, D.deployed?`${Math.round(D.idle/D.deployed*100)}% of the deployed fleet`:'', D.deployed?D.idle/D.deployed:null)}
       </div>
-      ${D.filtered?`<div style="padding:10px 16px;border-top:1px solid #EFEDE7;font-size:11px;color:#9C988F;line-height:1.55">Two figures are missing from this row while the page is narrowed to a person: the comparison against a normal day and the acres traced to a product both come from tabs that only go down to state, so neither exists for one manager or officer. Every number still shown is counted from these machines' own rows.</div>`:''}`);
+      ${D.filtered?`<div style="padding:10px 16px;border-top:1px solid #EFEDE7;font-size:11px;color:#9C988F;line-height:1.55">Two figures are missing from this row while the page is narrowed to a person: the comparison against a normal day and the acres traced to a product both come from tabs that only go down to state, so neither exists for one manager or officer. Every number still shown is counted from these machines' own rows.</div>`:''}`,
+      runPct>=40?C.act:runPct>=20?C.idle:C.brk);
 
     /* ---- why the idle fleet didn't run: the account, not a judgement ---- */
+    /* Stacked bar, to spec: 24px, segments separated by a 2px SURFACE gap rather than a border (a stroke would
+       add ink that isn't data), rounded outer ends, and an in-segment percentage only where the text actually
+       fits — a clipped "1…" is worse than no label, and the legend below carries every value anyway. */
     const bTot=D.buckets.reduce((a,x)=>a+x.n,0)||1;
-    const bar=`<div style="display:flex;height:26px;border-radius:8px;overflow:hidden;background:#F2F0EB;margin-bottom:14px">
-        ${D.buckets.map(x=>`<div title="${E(x.label)}" style="width:${x.n/bTot*100}%;background:${x.c}"></div>`).join('')}</div>`;
-    const legend=D.buckets.map(x=>`<div style="display:flex;align-items:baseline;gap:9px;padding:7px 0;border-top:1px solid #F4F2EE">
+    const segs=D.buckets.map((x,i)=>{ const w=x.n/bTot*100, first=i===0, last=i===D.buckets.length-1;
+      const r=`${first?'6px':'2px'} ${last?'6px':'2px'} ${last?'6px':'2px'} ${first?'6px':'2px'}`;
+      return `<div title="${E(x.label)} — ${fmt(x.n)} (${Math.round(w)}%)" style="width:${w}%;background:${x.c};border-radius:${r};display:flex;align-items:center;justify-content:center">
+          ${w>=8?`<span style="font-family:'IBM Plex Mono';font-size:10.5px;font-weight:700;color:#fff">${Math.round(w)}%</span>`:''}</div>`; }).join('');
+    const bar=`<div style="display:flex;gap:2px;height:24px;margin-bottom:15px">${segs}</div>`;
+    const legend=D.buckets.map(x=>`<div class="insRow" style="display:flex;align-items:baseline;gap:9px;padding:8px 0;border-top:1px solid #F4F2EE">
         <span style="width:10px;height:10px;border-radius:3px;background:${x.c};flex-shrink:0;align-self:center"></span>
         <span style="font-size:12.5px;font-weight:${x.key==='unexplained'?700:600};min-width:0">${x.label}</span>
         <span style="font-size:11px;color:#9C988F;flex:1;min-width:0">${x.hint}</span>
@@ -3469,11 +3503,14 @@ function insightsBodyHTML(mob){
         <span>${E(o.role)}${dupe?'':` <strong style="color:#6E6A62;font-weight:600">${E(o.name)}</strong>`}</span>
         ${o.phone?`<span style="font-family:'IBM Plex Mono'">${E(o.phone)}</span>`:''}</div>`;
     };
-    const idleRow=(r,i,unit)=>`<div data-act="insdrill" data-key="${E(r.st)}" style="display:flex;gap:11px;padding:12px 16px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
-        <span style="width:8px;height:8px;border-radius:50%;background:${wetC(r)?C.idle:C.brk};margin-top:5px;flex-shrink:0"></span>
+    /* Rain is the only thing that changes a row's colour here, and it is an ANNOTATION — so it gets its own
+       glyph and wording rather than being left as an unexplained amber dot. */
+    const idleRow=(r,i,unit)=>`<div class="insRow" data-act="insdrill" data-key="${E(r.st)}" style="display:flex;gap:11px;padding:13px 16px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
+        <span title="${wetC(r)?'rain may explain this':'needs attention'}" style="width:15px;height:15px;border-radius:5px;background:${wetC(r)?C.softB:C.softR};color:${wetC(r)?C.openD:C.brk};font-size:8px;line-height:15px;text-align:center;margin-top:2px;flex-shrink:0;font-weight:700">${wetC(r)?'☂':'▼'}</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:12.5px;font-weight:700;line-height:1.35">${E(r.name)}${A.gst?'':' · '+E(STATE_NAMES[r.st]||r.st)} — ${fmt(r.n)} of ${fmt(r.deployed)} machines stood still</div>
           <div style="font-size:11.5px;color:#6E6A62;margin-top:3px;line-height:1.5">These machines have covered ${fmt(r.cap)} acres this season${r.ranAcres>0?`. The rest of the ${unit} covered ${fmt(r.ranAcres)} acres yesterday`:`. The rest of the ${unit} covered nothing either`}.${wetC(r)?` <span style="color:${C.openD}">${r.rain} mm of rain fell, which may be the reason.</span>`:(r.rain!=null?` Only ${r.rain} mm of rain fell.`:'')}</div>
+          ${meter(r.deployed?r.n/r.deployed:null, wetC(r)?'warn':'bad')}
           ${ownerLine(r.owner, r.name)}
         </div></div>`;
     const cl=D.clusters.slice(0,INS_DAY.SLOTS);
@@ -3547,7 +3584,7 @@ function insightsBodyHTML(mob){
         ${mini(s.roll7!=null?fmt(s.roll7):'—','acres a day, past week',C.orangeD)}
         ${mini(fmt(s.machToday),'machines worked yesterday')}
         ${mini(fmt(f.deployed),'machines deployed')}
-      </div></div>`);
+      </div></div>`, behind?C.brk:C.act);   // the page's one verdict — readable from the rule before it is read
   }
 
   /* ---------- 1b · what changed (the one part of the page that recomposes daily) ---------- */
@@ -3564,21 +3601,28 @@ function insightsBodyHTML(mob){
       <span>${E(o.role)}${dupe?'':` <strong style="color:#6E6A62;font-weight:600">${E(o.name)}</strong>`}</span>
       ${o.phone?`<span style="font-family:'IBM Plex Mono'">${E(o.phone)}</span>`:''}</div>`;
   };
-  const sigRow=(x,i)=>`<div ${x.drill?`data-act="insdrill" data-key="${E(x.drill)}"`:''} style="display:flex;gap:11px;padding:${mob?'12px 15px':'12px 16px'};border-top:${i?'1px solid #F4F2EE':'none'};${x.drill?'cursor:pointer':''}">
-      <span style="width:8px;height:8px;border-radius:50%;background:${x.tone==='good'?C.act:x.tone==='bad'?C.brk:C.idle};margin-top:5px;flex-shrink:0"></span>
+  const sigRow=(x,i)=>`<div class="insRow" ${x.drill?`data-act="insdrill" data-key="${E(x.drill)}"`:''} style="display:flex;gap:11px;padding:${mob?'12px 15px':'13px 16px'};border-top:${i?'1px solid #F4F2EE':'none'};${x.drill?'cursor:pointer':''}">
+      ${toneMark(x.tone)}
       <div style="min-width:0;flex:1">
         <div style="font-size:12.5px;font-weight:700;line-height:1.35">${E(x.title)}</div>
         <div style="font-size:11.5px;color:#6E6A62;margin-top:3px;line-height:1.5">${E(x.detail)}</div>
+        ${meter(x.frac,x.tone)}
         ${ownerLine(x.owner,x.title)}
       </div></div>`;
   const sigGroup=(key,label,note,rows,show,collapsed)=>{
     if(!rows.length) return '';
     const open=!!(state.insMore&&state.insMore[key]), vis=open?rows:(collapsed||rows.slice(0,show)), rest=rows.length-vis.length;
-    return `<div style="padding:11px 16px 9px;border-top:1px solid #EFEDE7;background:#FBFAF8">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">${label}</div>
+    // The group header carries a 3px rule in the group's own colour — the two groups are read at different
+    // speeds, and a band of colour down the left is what lets the eye find the boundary without reading it.
+    const rule = key==='peer' ? C.brk : C.orangeD;
+    return `<div style="padding:11px 16px 9px;border-top:1px solid #EFEDE7;background:#FBFAF8;border-left:3px solid ${rule}">
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">${label}</span>
+          <span style="font-family:'IBM Plex Mono';font-size:10px;color:#C9C4BA">${rows.length}</span>
+        </div>
         <div style="font-size:11px;color:#B6B1A8;margin-top:3px">${note}</div></div>
       ${vis.map(sigRow).join('')}
-      ${rest>0||open?`<div data-act="insmore" data-key="${key}" style="padding:10px 16px;border-top:1px solid #F4F2EE;text-align:center;cursor:pointer;font-size:11.5px;font-weight:600;color:#6E6A62">${open?'Show fewer':`Show ${rest} more`}</div>`:''}`;
+      ${rest>0||open?`<div class="insMore" data-act="insmore" data-key="${key}" style="padding:10px 16px;border-top:1px solid #F4F2EE;text-align:center;cursor:pointer;font-size:11.5px;font-weight:600;color:#6E6A62;transition:background .12s ease">${open?'▴ Show fewer':`▾ Show ${rest} more`}</div>`:''}`;
   };
   const alertRow = sig.alert ? `<div style="display:flex;gap:11px;padding:13px 16px;background:#FDF3F1;border-bottom:1px solid #F4D8D3">
       <span style="width:8px;height:8px;border-radius:50%;background:${C.brk};margin-top:5px;flex-shrink:0"></span>
