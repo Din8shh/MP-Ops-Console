@@ -68,9 +68,25 @@ Other states derive plan from `ALL_ROWS` (deployed + pending, incl. Open) and us
 `planScope()` compute the per-org Plan; the **Plan KPI and the Pending Deployment view are
 admin-only**. Global filter dropdowns (territory/AM/CO/BM/TM) scope to the selected state.
 
-Object shape: `{ mc, org, deployed(1/0), territory, cluster, co, coMob, am, amNum, target,
-achieved, mtd, acresY, scanned:[{product,acres}], breakdown(1/0), opMapped(1/0), opName,
-opNum, lat, lon }`.
+Object shape: `{ mc, org, deployed(1/0), st, territory, cluster, co, coMob, am, amNum, target,
+achieved, mtd, acresY, acresT, iotAcresY, scanned:[{product,acres}], breakdown(1/0), opMapped(1/0),
+pinged(1/0), lastPing, daysSincePing, opName, opNum, bmName/bmMob, tmName/tmMob, foName/foMob,
+retailerName/retailerMob/retailerLoc, lat, lon }`.
+
+**Field availability, measured on the live sheet 2026-08-03 (1,518 rows / 1,193 deployed).** Check this before
+designing anything on a column — several look usable and are not:
+
+| Field | Fill | Usable? |
+|---|---|---|
+| `pinged` | 874/1,193 deployed | **Yes** — and discriminating: 226/874 pinged machines sprayed, vs 17/319 dark ones. Drives connected-but-idle and the dark bucket |
+| `co`/`coMob`, `am`/`amNum` | ~100% | **Yes** — the reason peer detectors are cluster/AM grain |
+| BM / TM / FO / retailer | 85–92% | Yes, unused by Insights so far |
+| `mtd` | 343 of 938 season-active | Yes, but thin early in a month |
+| `iotAcresY` | **0/1,518** | **No** — column is entirely empty. An IoT-vs-reported divergence detector would be the best signal on the sheet; ask for this to be populated |
+| `lastPing` / `daysSincePing` | 100% | **No** — the two columns are **swapped** (`daysSincePing` holds an Excel serial date, `lastPing` holds the day count) *and* stale: median last ping 76 days old, only 17 machines in the last day |
+| `target` | 100% | **No** — flat 1000 for every row, so any %-of-target measure is just `achieved` rescaled |
+| `acresT` (today) | 18/1,518 | **No** — the page runs on yesterday anyway |
+| `scanned` per machine | 149/1,518 | **No** — too sparse for per-machine product mix |
 
 ## Workbook tabs (one sheet, `CONFIG.sheetId`)
 Nine tabs; the app reads five. Mapped by inspection — do not re-derive this.
@@ -96,9 +112,9 @@ against the local file — bytes are the authority, not the API's status field. 
 the console. Work on a branch and fast-forward `main`; don't commit straight to it.
 
 ## Open items (none are code bugs)
-- **The breakdown flag does not mean "down today".** Measured live: 90 machines flagged, **all 90 also logged
-  acres**, and none of the 1,038 idle ones are flagged. So it records a reported/historical event. The main
-  dashboard's Breakdown KPI therefore does not support the reading "90 machines are down". Sheet-side question.
+- **The breakdown flag's meaning is unstable — re-measure it.** It once behaved like a historical marker (90
+  flagged, all 90 also logged acres); on 2026-08-03 it behaved much more like a present-state field (124 flagged,
+  83 of them idle). Whatever the main dashboard's Breakdown KPI is taken to mean, check the live sheet first.
 - **IRIS is missing from the day-level product tab** (it has only Amicus, Alito, Patela, Brucia, Canora), so the
   Iris ↔ Patela pair cannot be charted daily. The trend picker is generic — widen that export and it appears.
 - **`WKP_WEEK` is pinned to 25–31 Jul 2026**, because that tab is a manual one-off. When the recurring weekly
@@ -127,22 +143,39 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
 - **Gap trend beats gap size.** The five-week strip (`season.hist`) is the point of the page: it shows whether a
   shortfall is opening or closing, which a single "−13%" cannot.
 - **"What changed" (`insSignals`) is the one part that recomposes daily.** Everything else is a fixed spine —
-  same cards, same order, new numbers — because comparison needs consistency. This strip is detector-driven:
-  Two families run over every scope, emit scored candidates, and the top 5 render.
-  **Family A (snake, across TIME)** — inflection, streak, crossover/projection vs last season's full year, peak day,
-  fleet week-over-week, productivity per running machine, stall. **Family B (Sheet1, across PEERS — no history
-  needed)** — territory zero-output clusters and AM chronic underperformance, each compared against *its own
-  state's* peers rather than its own past. Plus the **trust check**: snake's daily acres vs Sheet1's yesterday
-  (1.3% apart today); a >10% divergence outranks everything, because it means the page itself is unreliable. It
-  only runs when the anchor IS yesterday — otherwise the two sides are measuring different days.
-  **Family B is anchored on never-sprayed, a SEASON total, never on "ran yesterday".** Sheet1's daily fields are a
-  single observation with no history to smooth them; utilisation only ever corroborates. An AM can post 0% on a
-  quiet day and still own the programme's top cluster officer, which is precisely the false positive this rule kills. Three guards stop it becoming
-  horoscope: absolute **floors** (a state going 2→6 machines is a 150% swing and pure noise), **magnitude
-  weighting** by share of national acres, and **stateless novelty** — nothing is remembered between visits, so
-  "new" is derived from the data itself (transitions and milestone-length streaks score full; a condition that
-  has merely been true a while is damped to 45%). Two diversity rules cap it at one signal per scope (when there
-  is more than one) and two per detector type, so a day when every state inflects doesn't produce four identical rows.
+  same cards, same order, new numbers — because comparison needs consistency. This strip is detector-driven, and
+  renders as **TWO labelled groups with separate budgets**, not one ranked list. Splitting them is what let the
+  visible count go 5 → 10 without the card getting harder to read: the peer rows are a list you work down and the
+  trend rows are a list you read, and interleaving them made both slower to scan than either alone.
+  **Family B → "Clusters and area managers"** (Sheet1, across PEERS, no history needed) — never-sprayed clusters,
+  **connected-but-idle**, **dark fleet**, and AM chronic underperformance, each compared against *its own state's*
+  peers. 6 visible, pool of 14. **Family A → "States, against last season"** (snake, across TIME) — inflection,
+  streak, crossover/projection vs last season's full year, peak day, fleet week-over-week, productivity per
+  working machine, stall. 4 visible, pool of 10. Plus the **trust check**, rendered as a banner above both
+  because it is about the page rather than the programme: a >10% divergence between snake's daily acres and
+  Sheet1's yesterday means every other number here is suspect. It only runs when the anchor IS yesterday.
+- **Peer grain is CLUSTER, not territory, and every peer row names its owner.** A territory has no owner column
+  on the sheet; a cluster does (`co`/`coMob`, and `am`/`amNum` for the AM rows — both 100% filled on live data).
+  A row nobody can be attributed to is a row nobody can act on. Cluster→officer is not 1:1 (a third of clusters
+  log more than one), so rows name the **dominant** officer via `domStr` rather than asserting a mapping the
+  sheet doesn't guarantee. The owner is **data, never an instruction** — the page names the person and the
+  number and stops there; deciding to ring them is the reader's job. When a row's title already contains the
+  owner's name (every AM row does), the line drops the name and shows role + number, or it stutters.
+- **The two ping detectors are the one place Family B may read yesterday directly.** Everything else there is
+  anchored on never-sprayed, a SEASON total, because Sheet1's daily fields are a single observation with nothing
+  to smooth them. A ping is exempt because it is not a performance measure: it records whether the machine
+  reported to the network at all, which is true or false regardless of how busy the day was. That distinction is
+  what makes **connected-but-idle** a new class of finding rather than a restatement of "didn't run".
+- Three guards stop the strip becoming horoscope: absolute **floors** (a state going 2→6 machines is a 150%
+  swing and pure noise), **magnitude weighting** by share of national acres, and **stateless novelty** — nothing
+  is remembered between visits, so "new" is derived from the data itself (transitions and milestone-length
+  streaks score full; a condition that has merely been true a while is damped to 45%).
+- **The per-state cap is applied TWICE at different strengths, and it is the cap that matters.** Every cluster is
+  its own scope, so a per-*scope* cap does nothing to stop one state filling the card — measured live, it let
+  Madhya Pradesh take 4 of 6 rows. The pool allows **three** rows per state (a state genuinely can have three
+  clusters in trouble, and hiding the third is the silent floor this page exists to avoid); the visible slice
+  allows **two**, so the card above the fold spreads across the country. `peerTop` is a subsequence of `peer` in
+  the same order, so expanding inserts rows between the ones already on screen instead of reshuffling them.
 - **Three MODES, one page (`state.insMode`).** *Season* — the trend, and what to correct over weeks. *Week* — one
   completed Sat–Fri week for the weekly review. *Yesterday* — what broke, and who to ring this morning. Same spine,
   same scope picker, three horizons. Season and Yesterday are not one list re-sorted: on live data the chronic
@@ -166,6 +199,17 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
 - **Copy rule for the whole Insights page: describe, never instruct.** The page is read by whoever opens it, not
   narrated to a presenter — so "the season so far", not "what to correct over the coming weeks"; "both measures
   moved", not "worth saying both ways in the review". Card headings are noun phrases naming what the card shows.
+  Naming the accountable person does **not** break this rule; telling the reader to call them would.
+- **Five more copy rules, added in the readability pass — the whole page was rewritten against them.**
+  · **One frame per row.** The title states the finding in words; the detail gives the evidence and the owner.
+    Neither restates the other in different units. The old rows failed this ("the gap stopped widening last week"
+    followed by the same fact as three percentages) and needed two readings each.
+  · **Every row carries a magnitude** — acres or machines. "Covering less ground" without a size is unreadable,
+    and the reader cannot tell a 200-acre problem from a 20,000-acre one.
+  · **No arrows-as-charts.** `−13.2% → −11.8% → −10.4%` is a chart written as text. Say it in a sentence.
+  · **No defensive footnotes.** "A season total, not a quiet day" answers an objection nobody has raised yet.
+  · **Plain words over house jargon** — "machines worked", not "util %"; "acres each", not "ac/run"; "no driver
+    assigned", not "no operator mapped". Every label should read the way the team says it aloud.
 - **Sign words flip with the sign.** A scope that is ahead is never described with "gap" or "acres behind":
   `POS.ac*` is (last season − this season), so a negative value means ahead, and the noun (`lead`/`gap`), the
   label (`acres ahead`/`acres behind`) and the verb (`grew`/`shrank` vs `narrowed`/`widened`) all switch on it.
@@ -223,18 +267,24 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   **count from a column**: "24 of Hanumangarh's 43 machines have an operator, have sprayed this season, and did
   not run" is unarguable in a way that "195 ac short" never was.
 - **`insDayAgg` decomposes idleness into mutually exclusive, observed buckets** that sum exactly to the idle
-  count: flagged breakdown → no operator mapped → never sprayed this season → **unexplained**. First match wins.
-  The breakdown bucket is kept first *even though it is empty in today's data* (see the flag caveat below) so the
-  account stays correct if that column is ever fixed, instead of silently misfiling those machines as unexplained.
+  count: flagged breakdown → no operator mapped → never sprayed this season → **sent no signal (dark)** →
+  **unexplained**. First match wins. The dark bucket is what makes the last one mean something: "unexplained" now
+  reads *reported in, has a driver, has sprayed before, and still did nothing* — 510 machines carrying 73,226
+  season acres between them — instead of silently mixing in 119 machines nobody heard from either way.
+- **Yesterday's idle roll-ups are CLUSTER and AREA MANAGER, never territory** — same owner argument as the
+  season strip. Rain is looked up on the cluster's dominant *territory*, because the weather feed is keyed by
+  district and knows nothing about clusters. The "how the day was spread" card stays on territory on purpose:
+  it is about how widely the day reached across the country, and territory is the geography people picture when
+  they ask that.
 - **The one surviving comparison is the 14-day norm**, and only because it is a different kind of claim: the same
   series against **its own recent past** (snake tab, real daily history), not a cross-sectional guess about how
   one territory ought to behave. Rain is an **annotation only** — never a scoring weight, since a count needs no
   re-weighting to stay true. Clusters rank by machine count, with the idle machines' season acres as magnitude.
-- **CAVEAT — the breakdown flag does not mean "down today".** Measured on live data: 90 machines are flagged and
-  **all 90 also logged acres yesterday**; not one of the 1,038 idle machines is flagged. A present-state field
-  cannot behave that way, so the column evidently records a reported/historical event. This also means the main
-  dashboard's Breakdown KPI does not support the reading "90 machines are down". Not fixed here — it is a
-  sheet-side question.
+- **CAVEAT — the breakdown flag's behaviour CHANGED, so re-measure before writing copy about it.** The earlier
+  reading (90 flagged, all 90 also logged acres, none of the idle ones flagged) no longer holds. Re-measured
+  2026-08-03 on 1,193 deployed rows: **124 flagged, 83 of them idle, 41 of them worked.** That is much closer to
+  a present-state field, and the `broken` bucket is now materially populated (91 at national scope) rather than
+  empty. Do not assert either reading without checking the live sheet first.
 - **Two levels: All India and one state — never territory.** The snake tab has a full per-state series, so a state
   view carries the *same seven cards* at the same richness. Territory is where that collapses (no sub-state history,
   and the product tab has no territory column), which is exactly where the level stops.

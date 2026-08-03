@@ -84,7 +84,8 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
   // insWeekBack = how many complete weeks back the Week view is looking; 0 = the week that just ended.
   // insPa / insPb = the two products combined into one line on the focus-product trend. UPL and SWAL sell
   // equivalents of the same product, so the family only reads correctly when the pair is summed.
-  insSt:'', insMode:'season', insWeekBack:0, insPa:'', insPb:'' };
+  // insMore = which "What changed" group has been expanded past its visible budget ({peer,trend} booleans).
+  insSt:'', insMode:'season', insWeekBack:0, insPa:'', insPb:'', insMore:{ peer:false, trend:false } };
 // state.sheet = which mobile overlay is up: null | 'filters' | 'more'. state.listLimit = rows shown
 // in the mobile machine list (Load more bumps it); reset whenever the filter set changes.
 const MLIST_PAGE = 60;
@@ -2509,14 +2510,28 @@ function insAgg(){
      · STATELESS NOVELTY — nothing is remembered between visits (there is nowhere to remember it). Instead,
        "new" is derived from the data: transitions and milestone streaks score full, a condition that has merely
        been true for a while is damped to 45%. A 15-day streak is old news; a 14-day one is a milestone. */
-const INS_SIG = { MACH_BASE:20, MACH_DELTA:15, ACRES_DAY:150, MILES:[3,7,14,21,30,45,60], SLOTS:5,
-                  TERR_MIN:6, AM_MIN:8 };   // peer-group floors: below these, a percentage is just noise
+const INS_SIG = { MACH_BASE:20, MACH_DELTA:15, ACRES_DAY:150, MILES:[3,7,14,21,30,45,60],
+                  // Two groups, two budgets. Splitting them is what let the visible count go 5 → 10: the peer rows
+                  // are a list you work down and the trend rows are a list you read, and interleaving them made
+                  // both slower to scan than either is alone. Each group expands to its full pool on click.
+                  PEER_SHOW:6, PEER_MAX:14, TREND_SHOW:4, TREND_MAX:10,
+                  CLUSTER_MIN:5, AM_MIN:8 };   // peer-group floors: below these, a percentage is just noise
+/* Copy rules for every string this function emits — the page was rewritten against these:
+     · ONE frame per row. The title states the finding in words; the detail gives the evidence and the owner.
+       Neither restates the other in different units, which is what made the old rows need two readings.
+     · EVERY row carries a magnitude — acres or machines. "Covering less ground" without a size is unreadable.
+     · NO arrows-as-charts. "−13.2% → −11.8% → −10.4%" is a chart written as text; say it in a sentence.
+     · The OWNER is data, never an instruction. Rows name the cluster officer or area manager and their number;
+       they never say to ring them. Deciding that is the reader's job, and a dashboard that issues orders gets
+       argued with instead of used.
+     · No defensive footnotes. "A season total, not a quiet day" answers an objection nobody has raised yet. */
 function insSignals(A){
-  if(!SNAKE.loaded || !A.season) return [];
+  const EMPTY={ alert:null, peer:[], trend:[] };
+  if(!SNAKE.loaded || !A.season) return EMPTY;
   const anchor=A.season.off, nat=A.season.cur||1, out=[];
   const scopes=[{ code:A.snCode, name:A.gst?A.regionName:'All India', national:true }];
   if(!A.gst) INS_STATES.filter(gateAllowsState).forEach(c=>scopes.push({ code:c, name:STATE_NAMES[c] }));
-  const pc = p => (p>=0?'+':'−')+Math.abs(p).toFixed(1)+'%';
+  const pcAbs = p => Math.abs(p)<10 ? Math.abs(p).toFixed(1)+'%' : Math.round(Math.abs(p))+'%';
   const med = a => { const s=a.slice().sort((x,y)=>x-y); return s[Math.floor(s.length/2)]; };
 
   for(const sc of scopes){
@@ -2525,9 +2540,13 @@ function insSignals(A){
     const cur=c26[anchor]; if(cur==null) continue;
     const share=sc.national?1:Math.min(1,cur/nat);
     // novel===false damps a standing condition; the magnitude term keeps a big scope ahead of a small one.
-    const add=(id,weight,tone,title,detail,novel)=>out.push({ scope:sc.code, drill: sc.national?null:sc.code, id, tone, title, detail,
+    const add=(id,weight,tone,title,detail,novel)=>out.push({ group:'trend', scope:sc.code, drill: sc.national?null:sc.code, id, tone, title, detail,
       score: weight*(0.45+0.55*share)*(novel===false?0.45:1) });
     const gp=o=>(c26[o]!=null&&c25[o])?c26[o]/c25[o]*100-100:null;
+    // The acre gap is what every trend row is sized by: a percentage on its own never says how much work it is.
+    const gapAc = c25[anchor]!=null ? c25[anchor]-cur : null;
+    const gapWord = gapAc!=null && gapAc<0 ? 'ahead of' : 'behind';
+    const gapPhrase = gapAc!=null ? `${fmt(Math.abs(gapAc))} acres ${gapWord} last season` : null;
 
     // 1 · inflection — the gap vs last season changed direction. The single most useful signal on the page:
     //     the spine shows the gap's SIZE, only this says whether it just turned.
@@ -2536,118 +2555,177 @@ function insSignals(A){
       const was=g7-g14, now=g0-g7, ahead=g0>=0;
       // "last week" is load-bearing: the hero reports the same quantity over four weeks and can legitimately say
       // the opposite. Both are true; only the stated window keeps them from reading as a contradiction.
-      if(was<-0.4 && now>0.4) add('inflect',80,'good',`${sc.name}: ${ahead?'the lead started growing again last week':'the gap stopped widening last week'}`,
-        `Against last season on the same days: ${pc(g14)} → ${pc(g7)} → ${pc(g0)}.`);
-      else if(was>0.4 && now<-0.4) add('inflect',80,'bad',`${sc.name}: ${ahead?'the lead started shrinking last week':'the gap started widening again last week'}`,
-        `Against last season on the same days: ${pc(g14)} → ${pc(g7)} → ${pc(g0)}.`);
+      if(was<-0.4 && now>0.4) add('inflect',80,'good',`${sc.name} stopped falling further behind last season`,
+        `${gapPhrase}. The shortfall grew for a fortnight, then held steady through last week.`);
+      else if(was>0.4 && now<-0.4) add('inflect',80,'bad',`${sc.name} started falling further behind again last week`,
+        `${gapPhrase}. The shortfall had been closing, then widened again over the past seven days.`);
     }
     // 2 · streak — consecutive days beating (or losing to) the same date a year ago.
     let up=0,dn=0;
     for(let o=anchor;o>anchor-90;o--){ const a=d26[o],b=d25[o]; if(a==null||b==null||!(a>b)) break; up++; }
     for(let o=anchor;o>anchor-90;o--){ const a=d26[o],b=d25[o]; if(a==null||b==null||!(a<b)) break; dn++; }
-    if(up>=3)      add('streak',74,'good',`${sc.name}: ${up} straight days ahead of last season`,
-      `Every day since ${snakeOffLabel(anchor-up+1)} out-worked the same date a year ago.`, INS_SIG.MILES.includes(up));
-    else if(dn>=3) add('streak',74,'bad',`${sc.name}: ${dn} straight days behind last season`,
-      `Every day since ${snakeOffLabel(anchor-dn+1)} fell short of the same date a year ago.`, INS_SIG.MILES.includes(dn));
+    const runAc=n=>{ let s=0; for(let o=anchor;o>anchor-n;o--) s+=Math.abs((d26[o]||0)-(d25[o]||0)); return s; };
+    if(up>=3)      add('streak',74,'good',`${sc.name} has beaten last season ${up} days running`,
+      `Every day since ${snakeOffLabel(anchor-up+1)} came in above the same date last year — ${fmt(runAc(up))} acres more across the run.`, INS_SIG.MILES.includes(up));
+    else if(dn>=3) add('streak',74,'bad',`${sc.name} has trailed last season ${dn} days running`,
+      `Every day since ${snakeOffLabel(anchor-dn+1)} came in below the same date last year — ${fmt(runAc(dn))} acres less across the run.`, INS_SIG.MILES.includes(dn));
     // 3 · crossover / projection against last season's FULL year.
     let fyPrev=0; for(let o=0;o<SNAKE_LEN;o++) if(c25[o]!=null && c25[o]>fyPrev) fyPrev=c25[o];
     const roll7=insRoll(d26,anchor,7);
     if(fyPrev>0){
-      if(cur>=fyPrev) add('crossed',95,'good',`${sc.name} has passed last season's entire year`,
-        `${fmt(cur)} ac against a full FY 25-26 of ${fmt(fyPrev)} ac, with ${SNAKE_LEN-1-anchor} days still to run.`, false);
+      if(cur>=fyPrev) add('crossed',95,'good',`${sc.name} has already passed the whole of last season`,
+        `${fmt(cur)} acres so far against ${fmt(fyPrev)} for all of last season, with ${SNAKE_LEN-1-anchor} days of this one still to run.`, false);
       else if(roll7>0){
         const days=Math.ceil((fyPrev-cur)/roll7);
-        if(days<=60) add('project', days<=14?88:days<=30?78:66,'good',`${sc.name} is ${days} days from last season's full-year total`,
-          `At the current ${fmt(roll7)} ac/day it clears ${fmt(fyPrev)} ac around ${snakeOffLabel(Math.min(SNAKE_LEN-1,anchor+days))}.`);
+        if(days<=60) add('project', days<=14?88:days<=30?78:66,'good',`${sc.name} is ${days} days from passing the whole of last season`,
+          `${fmt(fyPrev-cur)} acres to go, at the ${fmt(roll7)} a day it is averaging now — around ${snakeOffLabel(Math.min(SNAKE_LEN-1,anchor+days))}.`);
       }
     }
     // 4 · peak — the season's biggest single day, only while it is still fresh.
     let pk=-1,pv=0; for(let o=0;o<=anchor;o++){ const v=d26[o]; if(v!=null&&v>pv){ pv=v; pk=o; } }
-    if(pk>=0 && anchor-pk<=2 && pv>0) add('peak',72,'good',`${sc.name}: ${snakeOffLabel(pk)} was the season's biggest day`,
-      `${fmt(pv)} ac in a single day${mm[pk]?` from ${fmt(mm[pk])} machines`:''}.`, anchor===pk);
+    if(pk>=0 && anchor-pk<=2 && pv>0){
+      const norm14=insRoll(d26,anchor,14);
+      add('peak',72,'good',`${snakeOffLabel(pk)} was ${sc.name}'s biggest day of the season`,
+        `${fmt(pv)} acres in one day${mm[pk]?` from ${fmt(mm[pk])} machines`:''}${norm14?`, against a fortnightly average of ${fmt(norm14)} a day`:''}.`, anchor===pk);
+    }
     // 5 · fleet — machines running per day, week over week. Floors kill the 2→6 "150% surge".
+    //     Stated as a machine COUNT rather than a percentage: 40 fewer machines is a fact you can picture.
     const m7=insRoll(mm,anchor,7), m14=insRoll(mm,anchor-7,7);
     if(m7!=null && m14!=null && m14>=INS_SIG.MACH_BASE && Math.abs(m7-m14)>=INS_SIG.MACH_DELTA){
-      const p=m7/m14*100-100;
-      add('fleet',70,p>0?'good':'bad',`${sc.name}: ${Math.abs(p).toFixed(0)}% ${p>0?'more':'fewer'} machines running`,
-        `${fmt(m14)} → ${fmt(m7)} machines a day, week over week.`);
+      const up7=m7>m14;
+      add('fleet',70,up7?'good':'bad',`${sc.name} has ${fmt(Math.abs(m7-m14))} ${up7?'more':'fewer'} machines working each day`,
+        `${fmt(m14)} a day last week, ${fmt(m7)} this week.`);
     }
     // 6 · productivity — acres per RUNNING machine against its own 3-week baseline (not a fleet-size effect).
     const per=[]; for(let o=anchor-27;o<=anchor;o++) if(mm[o]>0 && d26[o]!=null) per.push(d26[o]/mm[o]);
     if(per.length>=14 && roll7>=INS_SIG.ACRES_DAY){
       const r=med(per.slice(-7)), b=med(per.slice(0,-7));
       if(b>0 && Math.abs(r/b*100-100)>=25){ const p=r/b*100-100;
-        add('prod',68,p>0?'good':'bad',`${sc.name}: each running machine is covering ${p>0?'more':'less'} ground`,
-          `${r.toFixed(1)} ac per running machine against a ${b.toFixed(1)} ac baseline (${pc(p)}).`);
+        add('prod',68,p>0?'good':'bad',`${sc.name}'s machines are covering ${p>0?'more':'less'} ground each day`,
+          `${r.toFixed(1)} acres per working machine, against ${b.toFixed(1)} over the three weeks before.`);
       }
     }
     // 7 · stall — consecutive days with nothing logged at all.
     let z=0; for(let o=anchor;o>anchor-21;o--){ const v=d26[o]; if(v==null||v>0) break; z++; }
-    if(z>=3) add('stall',82,'bad',`${sc.name} has logged nothing for ${z} days`,
-      `No acres recorded since ${snakeOffLabel(anchor-z)}.`, INS_SIG.MILES.includes(z));
+    if(z>=3){
+      const depN=(A.dep||[]).filter(m=>sc.national||m.st===sc.code).length;
+      add('stall',82,'bad',`${sc.name} has logged no acres for ${z} days`,
+        `Nothing recorded since ${snakeOffLabel(anchor-z)}${depN?`, with ${fmt(depN)} machines deployed there`:''}.`, INS_SIG.MILES.includes(z));
+    }
   }
   /* ---- #22 · trust check (snake ⋈ Sheet1) --------------------------------------------------------------
      Two independent pipelines report the same day's acres. When they agree (1.3% apart today) that is quiet
      assurance; when they diverge, every other number on this page is suspect, so it outranks everything.
      Only run when the season anchor IS yesterday — if the anchor stepped back to an earlier closed day the two
      sides are measuring different days and any "divergence" would be an artefact of the comparison, not the data. */
+  let alert=null;
   if(A.fleet && A.season.asOf==='through yesterday'){
     const snY=insDaily(A.snCode,INS_CUR.key)[anchor], shY=A.fleet.acresY;
     if(snY>0 && shY>0 && !A.scoped){                   // org-scoped machine rows can't match an all-company series
       const diff=Math.abs(shY-snY)/snY*100;
-      if(diff>10) out.push({ scope:'TRUST', drill:null, id:'trust', tone:'bad', score:1e6,
-        title:`The two acre feeds disagree by ${diff.toFixed(0)}%`,
-        detail:`The season sheet logged ${fmt(snY)} ac for ${snakeOffLabel(anchor)}; the machine sheet reports ${fmt(shY)} ac for yesterday. Treat every figure on this page with caution until that resolves.` });
+      if(diff>10) alert={ id:'trust', tone:'bad',
+        title:`The two acre feeds disagree by ${Math.round(diff)}%`,
+        detail:`The season sheet recorded ${fmt(snY)} acres for ${snakeOffLabel(anchor)}. The machine sheet reports ${fmt(shY)} for the same day. Until that is resolved, the numbers on this page cannot be relied on.` };
     }
   }
 
   /* ---- Family B · peer outliers over the machine sheet ---------------------------------------------------
-     No history required: these compare a territory or AM against ITS OWN STATE's peers rather than against its
-     own past. Both are anchored on never-sprayed — a SEASON total — because Sheet1's daily fields are a single
-     observation with nothing to smooth them. Yesterday's utilisation only ever corroborates; it never triggers.
-     (An AM can post 0% on a quiet day and still own the best cluster officer in the programme.) */
+     No history required: these compare a CLUSTER or an AM against ITS OWN STATE's peers rather than against its
+     own past.
+
+     Grain is cluster, not territory, for one concrete reason: a territory has no owner column, and a cluster
+     does. Every row here names the person accountable for it (`co`/`coMob`, `am`/`amNum`, 100% filled on live
+     data) because a row you cannot attribute is not something anyone can act on. Cluster→officer is not quite
+     1:1 — a third of clusters have logged more than one officer — so the row names the DOMINANT one via domStr
+     rather than asserting a mapping the sheet doesn't guarantee.
+
+     The two season detectors are anchored on never-sprayed — a SEASON total — because Sheet1's daily fields are
+     a single observation with nothing to smooth them. The two ping detectors are the exception and are allowed
+     to read yesterday directly, because a ping is not a performance measure: it is the machine reporting whether
+     it exists on the network, which is true or false regardless of how busy the day was. */
   const byState={};
   (A.dep||[]).forEach(m=>{ if(m.st) (byState[m.st]=byState[m.st]||[]).push(m); });
   const grp=(rows,key)=>{ const g={}; rows.forEach(m=>{ const k=String(m[key]||'').trim(); if(k) (g[k]=g[k]||[]).push(m); }); return g; };
+  const pct = x => Math.round(x*100)+'%';
   for(const stc in byState){
-    const srows=byState[stc], sName=STATE_NAMES[stc]||stc, tag=A.gst?'':' · '+sName;
+    const srows=byState[stc], sName=STATE_NAMES[stc]||stc, tag=A.gst?'':` (${sName})`;
     const sNever=srows.filter(m=>!((m.achieved||0)>0)).length/srows.length;
     const sRan=srows.filter(m=>(m.acresY||0)>0).length/srows.length;
-    const T=grp(srows,'territory');
-    for(const t in T){                                  // #14 · zero-output cluster
-      const rs=T[t]; if(rs.length<INS_SIG.TERR_MIN || insJunkTerr(t)) continue;
+    const sDark=srows.filter(m=>!m.pinged).length/srows.length;
+    // Size ramp: clusters are smaller units than territories were, so the knee sits at 30 machines not 40.
+    const ramp=(n,knee)=>0.5+0.5*Math.min(1,n/knee);
+    const peer=(scope,id,weight,title,detail,owner)=>out.push({ group:'peer', scope, st:stc, drill:stc, id, tone:'bad', score:weight, title, detail, owner });
+
+    const CL=grp(srows,'cluster');
+    for(const cname in CL){
+      const rs=CL[cname]; if(rs.length<INS_SIG.CLUSTER_MIN || insJunkTerr(cname)) continue;
+      const co=domStr(rs.map(m=>m.co)), coMob=domStr(rs.filter(m=>m.co===co).map(m=>m.coMob));
+      const owner = co ? { role:'Cluster officer', name:co, phone:coMob } : null;
+      const scope='C:'+stc+':'+cname, clAc=rs.reduce((a,m)=>a+(m.achieved||0),0);
+
+      // #14 · never sprayed — the chronic one. A season total, so it cannot be explained away by a quiet day.
       const never=rs.filter(m=>!((m.achieved||0)>0)).length;
       if(never/rs.length>=0.6 && never>=5)
-        out.push({ scope:'T:'+stc+':'+t, drill:stc, id:'zero', tone:'bad',
-          score: 86*(0.5+0.5*Math.min(1,rs.length/40)),
-          title:`${t}${tag}: ${never} of ${rs.length} machines have never sprayed`,
-          detail:`A season total, not a quiet day. The ${sName} average is ${(sNever*100).toFixed(0)}% never-sprayed.` });
+        peer(scope,'zero', 86*ramp(rs.length,30),
+          `${cname}${tag} has ${never} machines that have never sprayed`,
+          `${pct(never/rs.length)} of its ${rs.length} machines, against ${pct(sNever)} across ${sName}. The rest of the cluster has covered ${fmt(clAc)} acres this season.`, owner);
+
+      // #NEW · connected but idle — the machine reported in and still sprayed nothing. This is the one class the
+      // page could never distinguish before: it separates a machine that is off or unreachable from one that is
+      // powered, on the network, and simply not being used.
+      const onIdle=rs.filter(m=>m.pinged && !((m.acresY||0)>0) && (m.achieved||0)>0);
+      if(onIdle.length>=4 && onIdle.length/rs.length>=0.5)
+        peer(scope,'onidle', 84*ramp(rs.length,30),
+          `${cname}${tag} had ${onIdle.length} machines switched on that sprayed nothing`,
+          `They reported in yesterday, so they were powered and reachable. Between them they have covered ${fmt(onIdle.reduce((a,m)=>a+(m.achieved||0),0))} acres this season.`, owner);
+
+      // #NEW · dark — no ping at all. Deliberately weaker than the above: an absent signal is an absence of
+      // evidence, not evidence of absence, and the copy has to say so rather than imply the machines were idle.
+      const dark=rs.filter(m=>!m.pinged).length;
+      if(dark>=4 && dark/rs.length>=0.5 && dark/rs.length>=sDark*1.4)
+        peer(scope,'dark', 76*ramp(rs.length,30),
+          `${cname}${tag} has ${dark} machines that did not report in`,
+          `${dark} of ${rs.length} sent no signal yesterday, against ${pct(sDark)} across ${sName}. There is no record either way of whether they worked.`, owner);
     }
+
     const AM=grp(srows,'am');
     for(const a in AM){                                 // #13 · AM chronic underperformance
       const rs=AM[a]; if(rs.length<INS_SIG.AM_MIN || insJunkTerr(a)) continue;
-      const never=rs.filter(m=>!((m.achieved||0)>0)).length/rs.length;
+      const never=rs.filter(m=>!((m.achieved||0)>0)).length, neverF=never/rs.length;
       const ran=rs.filter(m=>(m.acresY||0)>0).length/rs.length;
-      if(never>=sNever*1.5 && never>=0.2 && ran<sRan)
-        out.push({ scope:'A:'+stc+':'+a, drill:stc, id:'am', tone:'bad',
+      if(neverF>=sNever*1.5 && neverF>=0.2 && ran<sRan)
+        out.push({ group:'peer', scope:'A:'+stc+':'+a, st:stc, drill:stc, id:'am', tone:'bad',
           score: 80*(0.5+0.5*Math.min(1,rs.length/60)),
-          title:`${a}${tag}: ${(never*100).toFixed(0)}% of ${rs.length} machines have never sprayed`,
-          detail:`Against a ${(sNever*100).toFixed(0)}% ${sName} average · ${(ran*100).toFixed(0)}% ran yesterday vs ${(sRan*100).toFixed(0)}% statewide.` });
+          title:`${a}${tag} has ${never} machines that have never sprayed`,
+          detail:`${pct(neverF)} of ${rs.length} machines, against ${pct(sNever)} across ${sName}. ${pct(ran)} of them worked yesterday, against ${pct(sRan)} statewide.`,
+          owner:{ role:'Area manager', name:a, phone:domStr(rs.map(m=>m.amNum)) } });
     }
   }
 
-  // Two diversity rules, both about readability rather than statistics: one signal per scope, so the strip spreads
-  // across the country instead of stacking on the loudest state; and at most two of any one detector, or a day
-  // when every state inflects at once produces four identically-worded rows and the strip reads as boilerplate.
+  /* ---- two groups, two budgets --------------------------------------------------------------------------
+     Diversity rules are about readability, not statistics. Every cluster is its own scope, so a per-SCOPE cap
+     does nothing to stop one state filling the card — the cap that matters here is per STATE, and it is applied
+     twice at different strengths:
+       · the POOL allows three rows per state, because a state genuinely can have three clusters in trouble and
+         hiding the third would be the silent floor this page is meant to avoid;
+       · the VISIBLE slice allows two, so the card above the fold spreads across the country.
+     peerTop is a subsequence of peer in the same order, so expanding the group inserts rows between the ones
+     already on screen rather than reshuffling them. */
+  const pick=(rows,{perScope,perKind,perState,max})=>{
+    const used={}, kind={}, st={}, top=[];
+    for(const s of rows){
+      if((used[s.scope]||0)>=perScope || (kind[s.id]||0)>=perKind || (perState&&(st[s.st]||0)>=perState)) continue;
+      used[s.scope]=(used[s.scope]||0)+1; kind[s.id]=(kind[s.id]||0)+1; st[s.st]=(st[s.st]||0)+1; top.push(s);
+      if(top.length>=max) break;
+    }
+    return top;
+  };
   out.sort((a,b)=>b.score-a.score);
-  const perScope = scopes.length>1 ? 1 : INS_SIG.SLOTS;   // a state-locked login has one scope; don't starve it
-  const used={}, kind={}, top=[];
-  for(const s of out){
-    if((used[s.scope]||0)>=perScope || (kind[s.id]||0)>=2) continue;
-    used[s.scope]=(used[s.scope]||0)+1; kind[s.id]=(kind[s.id]||0)+1; top.push(s);
-    if(top.length>=INS_SIG.SLOTS) break;
-  }
-  return top;
+  const single = scopes.length<=1;                        // a state-locked login has one scope; don't starve it
+  const peer = pick(out.filter(s=>s.group==='peer'), { perScope:1, perKind:4, perState: single?99:3, max:INS_SIG.PEER_MAX });
+  return { alert, peer,
+    peerTop: pick(peer, { perScope:1, perKind:3, perState: single?99:2, max:INS_SIG.PEER_SHOW }),
+    trend:   pick(out.filter(s=>s.group==='trend'), { perScope: single?INS_SIG.TREND_MAX:1, perKind:2, max:INS_SIG.TREND_MAX }) };
 }
 
 /* ===================== Week mode — the Monday review =====================
@@ -2912,7 +2990,7 @@ function buildWeekBarsSVG(W,mob,exp){
    CONFIDENCE. These still rest on a single day, where the season tab rests on cumulative totals. Rain is carried
    as an annotation from the Open-Meteo data the app already holds — never as a scoring weight, since a count does
    not need re-weighting to stay true. */
-const INS_DAY = { MIN_MC:4, WET_MM:5, SLOTS:7, CONC_TOP:3 };
+const INS_DAY = { MIN_MC:4, AM_MIN:8, WET_MM:5, SLOTS:7, AM_SLOTS:4, CONC_TOP:3 };
 function insDayAgg(A){
   const dep=A.dep||[];
   const ran=[], idle=[];
@@ -2925,42 +3003,65 @@ function insDayAgg(A){
      logged acres, so the flag evidently records a reported event rather than "down right now". Keeping the
      bucket means the account stays correct if that column's meaning is ever fixed, instead of silently
      misfiling those machines into "unexplained". */
-  const B={ broken:[], noOp:[], never:[], unexplained:[] };
+  const B={ broken:[], noOp:[], never:[], dark:[], unexplained:[] };
   idle.forEach(m=>{
     if(m.breakdown) B.broken.push(m);
     else if(!m.opMapped) B.noOp.push(m);
     else if(!((m.achieved||0)>0)) B.never.push(m);
-    else B.unexplained.push(m);                       // has an operator, has sprayed this season, simply sat out
+    else if(!m.pinged) B.dark.push(m);                // capable, but sent no signal — we do not know what it did
+    else B.unexplained.push(m);                       // reported in, has an operator, has sprayed before, sat out
   });
   D.buckets=[
-    { key:'broken', n:B.broken.length, label:'Flagged breakdown', hint:'machine reported down', c:C.open },
-    { key:'noOp',   n:B.noOp.length,   label:'No operator mapped', hint:'nobody assigned to run it', c:C.idle },
-    { key:'never',  n:B.never.length,  label:'Never sprayed this season', hint:'a season problem, not a yesterday one', c:C.ink3 },
-    { key:'unexplained', n:B.unexplained.length, label:'Unexplained', hint:'has an operator, has sprayed before, sat out', c:C.brk },
+    { key:'broken', n:B.broken.length, label:'Reported broken down', hint:'flagged in the breakdown column', c:C.open },
+    { key:'noOp',   n:B.noOp.length,   label:'Nobody assigned to drive it', hint:'no operator on the sheet', c:C.idle },
+    { key:'never',  n:B.never.length,  label:'Has never sprayed all season', hint:'a season-long problem, not a yesterday one', c:C.ink3 },
+    { key:'dark',   n:B.dark.length,   label:'Sent no signal yesterday', hint:'no ping, so there is no record either way', c:C.openD },
+    { key:'unexplained', n:B.unexplained.length, label:'On, and still did nothing', hint:'reported in, has a driver, has sprayed before', c:C.brk },
   ].filter(x=>x.n>0);
   D.unexplainedN = B.unexplained.length;
+  D.darkN = B.dark.length;
   D.unexplainedCapability = B.unexplained.reduce((a,m)=>a+(m.achieved||0),0);   // proven acres now sitting still
 
-  /* ---- unexplained idle, grouped by territory. Ranked by MACHINE COUNT — a fact — with the season acres those
-         machines have already produced as the magnitude, so a big idle fleet outranks a small one. ---- */
-  const G={};
-  B.unexplained.forEach(m=>{
-    const t=String(m.territory||'').trim(); if(insJunkTerr(t)) return;
-    const k=m.st+'|'+t, g=G[k]||(G[k]={ st:m.st, name:t, n:0, cap:0 });
-    g.n++; g.cap+=(m.achieved||0);
-  });
-  const size={}, activeT={};
-  dep.forEach(m=>{ const t=String(m.territory||'').trim(); if(insJunkTerr(t)) return;
-    const k=m.st+'|'+t; size[k]=(size[k]||0)+1; if((m.acresY||0)>0) activeT[k]=(activeT[k]||0)+(m.acresY||0); });
-  D.clusters=Object.keys(G).map(k=>{
-    const g=G[k]; let rain=null; try{ rain=rainAbs(g.name, WX_I_YDAY, g.st); }catch(_){}
-    return { ...g, deployed:size[k]||g.n, ranAcres:activeT[k]||0, rain };
+  /* ---- unexplained idle, grouped by CLUSTER and by AREA MANAGER. Ranked by MACHINE COUNT — a fact — with the
+         season acres those machines have already produced as the magnitude, so a big idle fleet outranks a small
+         one. Cluster rather than territory because the cluster is the smallest unit with a named owner on the
+         sheet, and a row nobody owns is a row nobody can act on. Rain is looked up on the cluster's dominant
+         TERRITORY, since the weather feed is keyed by district and knows nothing about clusters. ---- */
+  const roll=(list,key)=>{
+    const G={};
+    list.forEach(m=>{ const t=String(m[key]||'').trim(); if(insJunkTerr(t)) return;
+      const k=m.st+'|'+t, g=G[k]||(G[k]={ st:m.st, name:t, n:0, cap:0, rows:[] });
+      g.n++; g.cap+=(m.achieved||0); g.rows.push(m); });
+    return G;
+  };
+  const sizeOf=key=>{ const size={}, act={};
+    dep.forEach(m=>{ const t=String(m[key]||'').trim(); if(insJunkTerr(t)) return;
+      const k=m.st+'|'+t; size[k]=(size[k]||0)+1; if((m.acresY||0)>0) act[k]=(act[k]||0)+(m.acresY||0); });
+    return { size, act }; };
+
+  const clSz=sizeOf('cluster'), clG=roll(B.unexplained,'cluster');
+  D.clusters=Object.keys(clG).map(k=>{
+    const g=clG[k], terr=domStr(g.rows.map(m=>m.territory));
+    let rain=null; try{ rain=rainAbs(terr, WX_I_YDAY, g.st); }catch(_){}
+    const co=domStr(g.rows.map(m=>m.co));
+    return { st:g.st, name:g.name, n:g.n, cap:g.cap, terr, deployed:clSz.size[k]||g.n, ranAcres:clSz.act[k]||0, rain,
+             owner: co ? { role:'Cluster officer', name:co, phone:domStr(g.rows.filter(m=>m.co===co).map(m=>m.coMob)) } : null };
   }).filter(g=>g.deployed>=INS_DAY.MIN_MC && g.n>=3)
     .sort((a,b)=> b.n-a.n || b.cap-a.cap);
 
-  /* ---- where the work happened: participation and concentration, both pure observation ---- */
-  const keys=Object.keys(size);
-  D.terrTotal=keys.length; D.terrActive=Object.keys(activeT).length;
+  const amSz=sizeOf('am'), amG=roll(B.unexplained,'am');
+  D.ams=Object.keys(amG).map(k=>{
+    const g=amG[k];
+    return { st:g.st, name:g.name, n:g.n, cap:g.cap, deployed:amSz.size[k]||g.n, ranAcres:amSz.act[k]||0, rain:null,
+             owner:{ role:'Area manager', name:g.name, phone:domStr(g.rows.map(m=>m.amNum)) } };
+  }).filter(g=>g.deployed>=INS_DAY.AM_MIN && g.n>=4)
+    .sort((a,b)=> b.n-a.n || b.cap-a.cap);
+
+  /* ---- where the work happened: participation and concentration, both pure observation.
+         Still measured on TERRITORY, deliberately: this is about how widely the day was spread across the
+         country, and territory is the coarser geography people picture when they ask that. ---- */
+  const tSz=sizeOf('territory'), activeT=tSz.act;
+  D.terrTotal=Object.keys(tSz.size).length; D.terrActive=Object.keys(activeT).length;
   const acresSorted=ran.map(m=>m.acresY||0).sort((a,b)=>b-a);
   let half=0, nHalf=0;
   for(const v of acresSorted){ if(half>=D.acres/2) break; half+=v; nHalf++; }
@@ -3106,13 +3207,13 @@ function insightsBodyHTML(mob){
         <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Week of ${E(insWeekLabel(W.d0))} – ${E(insWeekLabel(W.d1))} · ${E(A.gst?A.regionName:'all India')}</div>
         <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
           <div style="font-family:'IBM Plex Mono';font-size:${mob?'36px':'48px'};font-weight:700;line-height:1;letter-spacing:-.02em">${fmt(W.acres)}<span style="font-size:${mob?'15px':'18px'};color:#B6B1A8;font-weight:500"> ac</span></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:6px">${pill2(W.wow,' vs prev week')}${pill2(W.yoy,' vs same week ’25-26')}${pill2(W.yoy2,' vs ’24-25')}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:6px">${pill2(W.wow,' on the week before')}${pill2(W.yoy,' on the same week last season')}${pill2(W.yoy2,' on two seasons ago')}</div>
         </div></div>
       <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-top:1px solid #EFEDE7">
-        ${big(fmt(W.acres/7),'acres per day', W.bestDay?`best ${W.bestDay.dow} · ${fmt(W.bestDay.ac)} ac`:'7-day average',C.orangeD)}
-        ${big(W.machPeak!=null?fmt(W.machPeak):'—','machines ran this week', W.machAvg!=null?`highest in a day · avg ${fmt(W.machAvg)}`:'highest in a day')}
-        ${big(W.acPerMachine!=null?fmt(W.acPerMachine):'—','acres per running machine','average on a day it ran')}
-        ${big(W.ly!=null?fmt(W.ly):'—','same week last year', W.ly!=null?`${W.acres>=W.ly?'+':'−'}${fmt(Math.abs(W.acres-W.ly))} ac`:'')}
+        ${big(fmt(W.acres/7),'acres a day', W.bestDay?`${W.bestDay.dow} was the best, at ${fmt(W.bestDay.ac)}`:'averaged over the seven days',C.orangeD)}
+        ${big(W.machPeak!=null?fmt(W.machPeak):'—','machines on the busiest day', W.machAvg!=null?`${fmt(W.machAvg)} on an average day`:'')}
+        ${big(W.acPerMachine!=null?fmt(W.acPerMachine):'—','acres each','what one machine covered on a day it worked')}
+        ${big(W.ly!=null?fmt(W.ly):'—','the same week last year', W.ly!=null?`${fmt(Math.abs(W.acres-W.ly))} acres ${W.acres>=W.ly?'more':'less'} this time`:'')}
       </div>`);
 
     /* Season position — always in BOTH units, because they can disagree. */
@@ -3128,24 +3229,24 @@ function insightsBodyHTML(mob){
       const pctWord = dPct>=0?better():worse(), acWord = dAc<=0?better():worse();
       const agree = (dPct>=0)===(dAc<=0);
       const line = agree
-        ? `The season ${noun} ${pctWord} on both measures this week — by ${Math.abs(dPct).toFixed(1)} points and ${fmt(Math.abs(dAc))} acres.`
-        : `In percentage terms the ${noun} ${pctWord} by ${Math.abs(dPct).toFixed(1)} points, while in acres it ${acWord} by ${fmt(Math.abs(dAc))}. The base moved faster than the difference, so the ratio and the absolute distance went opposite ways.`;
+        ? `Both ways of measuring agree: over the week the season ${noun} ${pctWord}, by ${Math.abs(dPct).toFixed(1)} percentage points and by ${fmt(Math.abs(dAc))} acres.`
+        : `The two measures disagree this week. As a percentage the ${noun} ${pctWord} by ${Math.abs(dPct).toFixed(1)} points, but counted in acres it ${acWord} by ${fmt(Math.abs(dAc))}. Both are true: this season grew faster than the difference between the two seasons did, so the ratio improved while the raw distance did not.`;
       const acLabel = v => v>=0 ? 'acres behind' : 'acres ahead';
       // The cells show MAGNITUDES, so the delta beneath them must be the change in that magnitude — otherwise a
       // growing lead would read as a negative number sitting under a rising figure.
       const dMag = Math.abs(POS.ac1) - Math.abs(POS.ac0);
-      posCard=card(`${cHead('Where the week left the season','Cumulative position against last season, measured the day before the week began and on its final day')}
+      posCard=card(`${cHead('Where the week left the season','How this season stood against last season on the day before the week began, and again on its last day')}
         <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-bottom:1px solid #EFEDE7">
-          ${big(`${POS.pct0>=0?'+':'−'}${Math.abs(POS.pct0).toFixed(1)}%`,`${POS.pct0>=0?'lead':'gap'} · week start`)}
-          ${big(`${POS.pct1>=0?'+':'−'}${Math.abs(POS.pct1).toFixed(1)}%`,`${noun} · week end`, `${dPct>=0?'+':''}${dPct.toFixed(1)} pp`, dPct>=0?C.act:C.brk)}
-          ${big(fmt(Math.abs(POS.ac0)),`${acLabel(POS.ac0)} · start`)}
-          ${big(fmt(Math.abs(POS.ac1)),`${acLabel(POS.ac1)} · end`, `${noun} ${dMag>=0?'+':'−'}${fmt(Math.abs(dMag))} ac`, dAc<=0?C.act:C.brk)}
+          ${big(`${POS.pct0>=0?'+':'−'}${Math.abs(POS.pct0).toFixed(1)}%`,`${POS.pct0>=0?'lead':'gap'} before the week`)}
+          ${big(`${POS.pct1>=0?'+':'−'}${Math.abs(POS.pct1).toFixed(1)}%`,`${noun} after it`, `${Math.abs(dPct).toFixed(1)} points ${dPct>=0?'better':'worse'}`, dPct>=0?C.act:C.brk)}
+          ${big(fmt(Math.abs(POS.ac0)),`${acLabel(POS.ac0)} before the week`)}
+          ${big(fmt(Math.abs(POS.ac1)),`${acLabel(POS.ac1)} after it`, `${fmt(Math.abs(dMag))} acres ${dMag>=0?'wider':'closer'}`, dAc<=0?C.act:C.brk)}
         </div>
         <div style="padding:13px 16px;font-size:${mob?'12.5px':'13.5px'};color:#46433d;line-height:1.6">${line}</div>`);
     }
 
     const bars=buildWeekBarsSVG(W,mob);
-    const shape=card(`${cHead('The week day by day','This season against the same seven fiscal days last season · machine count under each day')}
+    const shape=card(`${cHead('The week day by day','Each day against the same day of last season · the number under each day is how many machines worked')}
       <div style="display:flex;gap:18px;flex-wrap:wrap;padding:12px 16px 2px">
         <div style="display:flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border-radius:3px;background:${INS_CUR.color}"></span><span style="font-size:12px;font-weight:600">This week</span><span style="font-family:'IBM Plex Mono';font-size:12px;color:#6E6A62">${fmt(W.acres)}</span></div>
         <div style="display:flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border-radius:3px;background:${INS_PREV.color};opacity:.45"></span><span style="font-size:12px;font-weight:600">Same week ’25-26</span><span style="font-family:'IBM Plex Mono';font-size:12px;color:#6E6A62">${W.ly!=null?fmt(W.ly):'—'}</span></div>
@@ -3153,16 +3254,16 @@ function insightsBodyHTML(mob){
       <div style="padding:2px ${mob?'2px':'8px'} 12px">${bars.svg}</div>`);
 
     const gcols=mob?null:'1.5fr .9fr .8fr .7fr .7fr .8fr';
-    const states = W.states.length>1 ? card(`${cHead(`States · week of ${E(insWeekLabel(W.d0))}`,'Ranked by acres in the week · a row scopes the page to that state')}
+    const states = W.states.length>1 ? card(`${cHead(`States, week of ${E(insWeekLabel(W.d0))}`,'Most acres in the week first · click a row to narrow the page to that state')}
       ${mob ? W.states.map((r,i)=>`<div data-act="insdrill" data-key="${r.code}" style="padding:12px 15px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
           <div style="display:flex;align-items:baseline;gap:8px">
             <span style="flex:1;font-size:13px;font-weight:700">${E(r.name)}</span>
             <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${fmt(r.ac)}</span>
             ${wVs(r.yoy)}</div>
-          <div style="font-size:11px;color:#9C988F;margin-top:4px">${W.total?(r.ac/W.total*100).toFixed(0):0}% of the week · WoW ${r.wow==null?'—':(r.wow>=0?'+':'−')+Math.abs(r.wow).toFixed(0)+'%'} · ${r.mach!=null?fmt(r.mach)+' machines/day':'—'}</div>
+          <div style="font-size:11px;color:#9C988F;margin-top:4px">${W.total?(r.ac/W.total*100).toFixed(0):0}% of the week · ${r.wow==null?'—':(r.wow>=0?'+':'−')+Math.abs(Math.round(r.wow))+'% on the week before'} · ${r.mach!=null?fmt(r.mach)+' machines a day':'—'}</div>
         </div>`).join('')
       : `<div style="display:grid;grid-template-columns:${gcols};gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7;background:#FBFAF8">
-          ${['State','Acres','Share','WoW','vs LY','Machines/day'].map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">${h}</span>`).join('')}</div>
+          ${['State','Acres','Share of week','vs prev week','vs last year','Machines a day'].map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">${h}</span>`).join('')}</div>
         ${W.states.map((r,i)=>`<div data-act="insdrill" data-key="${r.code}" style="display:grid;grid-template-columns:${gcols};gap:10px;align-items:center;padding:12px 16px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
           <span style="font-size:13px;font-weight:600">${E(r.name)}</span>
           <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${fmt(r.ac)}</span>
@@ -3177,11 +3278,11 @@ function insightsBodyHTML(mob){
     const chip = c => `<span style="display:inline-block;padding:1px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:.03em;background:${c==='UPL'?C.softO:C.softG};color:${c==='UPL'?C.orangeD:C.greenD}">${c}</span>`;
     let prodWk='';
     if(!WKP.loaded){
-      prodWk=card(`${cHead('Products this week','Weekly product sheet')}${waiting(WKP.error, WKP.error?'Could not load the weekly product sheet.':'Loading the weekly product sheet…','wkpretry')}`);
+      prodWk=card(`${cHead('What was sprayed this week','From the weekly product sheet')}${waiting(WKP.error, WKP.error?'Could not load the weekly product sheet.':'Loading the weekly product sheet…','wkpretry')}`);
     } else if(TP && TP.wrongWeek){
-      prodWk=card(`${cHead('Products this week','Weekly product sheet')}${waiting(false,`Per-product detail is only available for ${E(insWeekLabel(new Date(WKP_WEEK.start+'T00:00:00')))} – ${E(insWeekLabel(new Date(WKP_WEEK.end+'T00:00:00')))}, the one week the sheet covers.`,'wkpretry')}`);
+      prodWk=card(`${cHead('What was sprayed this week','From the weekly product sheet')}${waiting(false,`Per-product detail is only available for ${E(insWeekLabel(new Date(WKP_WEEK.start+'T00:00:00')))} – ${E(insWeekLabel(new Date(WKP_WEEK.end+'T00:00:00')))}, the one week the sheet covers.`,'wkpretry')}`);
     } else if(!TP || TP.empty || !TP.total){
-      prodWk=card(`${cHead('Products this week','Weekly product sheet')}${waiting(false,'No product acres recorded for this scope.','wkpretry')}`);
+      prodWk=card(`${cHead('What was sprayed this week','From the weekly product sheet')}${waiting(false,'No product acres recorded for this scope.','wkpretry')}`);
     } else {
       const share = W.acres ? TP.total/W.acres*100 : null;
       const pMax = TP.products.length ? TP.products[0].ac : 1;
@@ -3215,11 +3316,11 @@ function insightsBodyHTML(mob){
     const SEG_C={ Herbicide:C.green, Insecticide:C.orange, Fungicide:C.open, Other:'#B6B1A8' };
     let segCard='';
     if(!WKP.loaded || !PROD.loaded){
-      segCard=card(`${cHead('Product segments by state','Weekly product sheet × portfolio')}${waiting(WKP.error||PROD.error, (WKP.error||PROD.error)?'Could not load the product sheets.':'Loading product segments…','wkpretry')}`);
+      segCard=card(`${cHead('Kinds of product, by state','The weekly product sheet, grouped into what each brand treats')}${waiting(WKP.error||PROD.error, (WKP.error||PROD.error)?'Could not load the product sheets.':'Loading product segments…','wkpretry')}`);
     } else if(SG && SG.wrongWeek){
       segCard='';                                            // the week card already explains the coverage
     } else if(!SG || SG.empty){
-      segCard=card(`${cHead('Product segments by state','Weekly product sheet × portfolio')}${waiting(false,'No segment-classified product acres for this scope.','wkpretry')}`);
+      segCard=card(`${cHead('Kinds of product, by state','The weekly product sheet, grouped into what each brand treats')}${waiting(false,'No segment-classified product acres for this scope.','wkpretry')}`);
     } else {
       const SEGL=INS_SEGS.concat('Other');
       const bar=r=>`<span style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#F2F0EB">${SEGL.map(k=>r[k]>0?`<span style="width:${r[k]/r.base*100}%;background:${SEG_C[k]}"></span>`:'').join('')}</span>`;
@@ -3249,9 +3350,9 @@ function insightsBodyHTML(mob){
     const T=insProdTrend(A);
     let prodTrend='';
     if(!TX.loaded){
-      prodTrend=card(`${cHead('Focus product trend','Day-level product tab')}${waiting(TX.error, TX.error?'Could not load the day-level product tab.':'Loading day-level products…','txretry')}`);
+      prodTrend=card(`${cHead('How two products are moving','Day-level product tab')}${waiting(TX.error, TX.error?'Could not load the day-level product tab.':'Loading day-level products…','txretry')}`);
     } else if(!T || !T.options.length){
-      prodTrend=card(`${cHead('Focus product trend','Day-level product tab')}${waiting(false,'No day-level product rows for this scope.','txretry')}`);
+      prodTrend=card(`${cHead('How two products are moving','Day-level product tab')}${waiting(false,'No day-level product rows for this scope.','txretry')}`);
     } else {
       const chart=buildProdTrendSVG(T,mob);
       const opts=(cur,withNone)=>optionsHTML(
@@ -3265,7 +3366,7 @@ function insightsBodyHTML(mob){
           <div style="position:relative"><select id="insPbSel" style="${sel}">${opts(T.b||'none',true)}</select>${I.caret}</div>
         </div>`;
       const dir = T.trend==null ? null : T.trend>=0;
-      prodTrend=card(`${cHead(`Focus product trend · ${E(A.gst?A.regionName:'all India')}`,
+      prodTrend=card(`${cHead(`How two products are moving in ${E(A.gst?A.regionName:'all India')}`,
           `Daily scanned acres for the selected products added together · thin line is each day, thick line is the 7-day average`)}
         ${picker}
         <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-top:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
@@ -3278,8 +3379,8 @@ function insightsBodyHTML(mob){
     }
 
     const note=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;padding:13px 16px">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Scope of this view</div>
-        <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">Everything here is <strong style="color:#46433d">state level</strong>, from the cumulative tab — the only source with daily history. What a territory or an AM did <em>during</em> a past week is not recoverable: the machine sheet is overwritten each day, so it can only show where they stand today, which is what the Season and Yesterday views show. Per-territory weekly detail would need a weekly snapshot of the sheet's cumulative column, which does not exist yet. Year-over-year is measured on the same seven fiscal days; because any week contains all seven weekdays, weekday rhythm cancels out of the comparison.</div></div>`;
+        <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Why this page stops at state level</div>
+        <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">Everything here is <strong style="color:#46433d">state level</strong>, because the cumulative tab is the only place the sheet keeps a record day by day. What a cluster or an area manager did <em>during</em> a week that has already passed cannot be recovered — the machine sheet is written over every morning, so it can only ever show where people stand today, which is what the Season and Yesterday views are for. Getting weekly detail below state level would mean saving a copy of the sheet's running total once a week, which nobody does yet. Comparing with last year is sound even though the dates fall on different weekdays: any seven-day stretch contains each weekday once, so the difference evens out.</div></div>`;
     return `<div style="display:flex;flex-direction:column;gap:14px">
       ${header}${wHead}${dlWrap('wk-summary','The week in summary',hero)}${dlWrap('wk-season','Where the week left the season',posCard)}${dlWrap('wk-daily','The week day by day',shape)}${dlWrap('wk-states','States',states)}${dlWrap('wk-products','Products this week',prodWk)}${dlWrap('wk-segments','Product segments by state',segCard)}${dlWrap('wk-trend','Focus product trend',prodTrend)}${note}
       ${mob?`<div style="text-align:center;padding:2px 0 4px">${src}</div>`:''}</div>`;
@@ -3299,13 +3400,13 @@ function insightsBodyHTML(mob){
         <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">${l}</div>
         ${sub?`<div style="font-size:10.5px;color:#B6B1A8;margin-top:3px">${sub}</div>`:''}</div>`;
     const band=card(`${cHead(`Yesterday · ${s?E(s.label):'—'}`,
-        `Machine sheet · ${A.gst?E(A.regionName):'all seven states'}${D.norm?` · the day against its own 14-day norm`:''}`)}
+        `From the machine sheet · ${A.gst?E(A.regionName):'all seven states'}`)}
       <div style="display:flex;flex-wrap:wrap;background:#FBFAF8">
-        ${dstat(fmt(D.ran),'machines ran', runPct>=40?C.act:runPct>=20?C.idle:C.brk, runPct.toFixed(0)+'% of '+fmt(D.deployed)+' deployed')}
-        ${dstat(fmt(D.acres),'acres sprayed',C.orangeD, D.ran?fmt(D.acres/D.ran)+' ac per running machine':'')}
-        ${dstat(dayPct==null?'—':`${dayPct>=0?'+':'−'}${Math.abs(dayPct).toFixed(0)}%`,'vs 14-day norm', dayPct==null?C.ink:dayPct>=0?C.act:C.brk, D.norm?`norm ${fmt(D.norm)} ac/day`:'')}
-        ${dstat(D.prodY==null?'—':fmt(D.prodY),'product-attributed', C.ink, D.prodY!=null&&D.acres?`${(D.prodY/D.acres*100).toFixed(0)}% of the day's acres`:'')}
-        ${dstat(fmt(D.idle),'machines idle', D.idle?C.brk:C.ink, D.deployed?`${(D.idle/D.deployed*100).toFixed(0)}% of the deployed fleet`:'')}
+        ${dstat(fmt(D.ran),'machines worked', runPct>=40?C.act:runPct>=20?C.idle:C.brk, `${Math.round(runPct)}% of the ${fmt(D.deployed)} deployed`)}
+        ${dstat(fmt(D.acres),'acres sprayed',C.orangeD, D.ran?`${fmt(D.acres/D.ran)} acres each`:'')}
+        ${dstat(dayPct==null?'—':`${dayPct>=0?'+':'−'}${Math.abs(Math.round(dayPct))}%`,'against a normal day', dayPct==null?C.ink:dayPct>=0?C.act:C.brk, D.norm?`a normal day is ${fmt(D.norm)} acres`:'')}
+        ${dstat(D.prodY==null?'—':fmt(D.prodY),'acres traced to a product', C.ink, D.prodY!=null&&D.acres?`${Math.round(D.prodY/D.acres*100)}% of the day`:'')}
+        ${dstat(fmt(D.idle),'machines idle', D.idle?C.brk:C.ink, D.deployed?`${Math.round(D.idle/D.deployed*100)}% of the deployed fleet`:'')}
       </div>`);
 
     /* ---- why the idle fleet didn't run: the account, not a judgement ---- */
@@ -3319,40 +3420,55 @@ function insightsBodyHTML(mob){
         <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700">${fmt(x.n)}</span>
         <span style="font-family:'IBM Plex Mono';font-size:11px;color:#B6B1A8;width:38px;text-align:right">${(x.n/bTot*100).toFixed(0)}%</span>
       </div>`).join('');
-    const why=card(`${cHead(`Why ${fmt(D.idle)} machines didn’t run`,
-        'Every bucket is a column in the machine sheet · mutually exclusive · they sum to the idle count')}
+    const why=card(`${cHead(`Why ${fmt(D.idle)} machines did not work`,
+        'Each machine is counted once, under the first reason that applies · the five add up to the idle total')}
       <div style="padding:14px 16px 12px">${bar}${legend}
-        ${D.unexplainedN?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid #EFEDE7;font-size:11.5px;color:#6E6A62;line-height:1.6">The unexplained group has already sprayed <strong style="color:#46433d">${fmt(D.unexplainedCapability)} acres</strong> this season between them — proven capability that stood still yesterday.</div>`:''}
+        ${D.unexplainedN?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid #EFEDE7;font-size:11.5px;color:#6E6A62;line-height:1.6">The ${fmt(D.unexplainedN)} machines in the last group have covered <strong style="color:#46433d">${fmt(D.unexplainedCapability)} acres</strong> between them this season. They are working machines with drivers, and yesterday they stood still.</div>`:''}
       </div>`);
 
-    /* ---- unexplained idle by territory: ranked by machines, a count, never a modelled gap ---- */
+    /* ---- unexplained idle by cluster and by AM: ranked by machines, a count, never a modelled gap ---- */
+    // An AM row is titled with the manager's own name; don't print it twice (see the same rule in sigRow).
+    const ownerLine=(o,title)=>{
+      if(!o||!o.name) return '';
+      const dupe = title && title.indexOf(o.name)>=0;
+      return `<div style="font-size:11px;color:#9C988F;margin-top:5px;display:flex;flex-wrap:wrap;gap:4px 8px">
+        <span>${E(o.role)}${dupe?'':` <strong style="color:#6E6A62;font-weight:600">${E(o.name)}</strong>`}</span>
+        ${o.phone?`<span style="font-family:'IBM Plex Mono'">${E(o.phone)}</span>`:''}</div>`;
+    };
+    const idleRow=(r,i,unit)=>`<div data-act="insdrill" data-key="${E(r.st)}" style="display:flex;gap:11px;padding:12px 16px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
+        <span style="width:8px;height:8px;border-radius:50%;background:${wetC(r)?C.idle:C.brk};margin-top:5px;flex-shrink:0"></span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12.5px;font-weight:700;line-height:1.35">${E(r.name)}${A.gst?'':' · '+E(STATE_NAMES[r.st]||r.st)} — ${fmt(r.n)} of ${fmt(r.deployed)} machines stood still</div>
+          <div style="font-size:11.5px;color:#6E6A62;margin-top:3px;line-height:1.5">These machines have covered ${fmt(r.cap)} acres this season${r.ranAcres>0?`. The rest of the ${unit} covered ${fmt(r.ranAcres)} acres yesterday`:`. The rest of the ${unit} covered nothing either`}.${wetC(r)?` <span style="color:${C.openD}">${r.rain} mm of rain fell, which may be the reason.</span>`:(r.rain!=null?` Only ${r.rain} mm of rain fell.`:'')}</div>
+          ${ownerLine(r.owner, r.name)}
+        </div></div>`;
     const cl=D.clusters.slice(0,INS_DAY.SLOTS);
-    const clusters = cl.length ? card(`${cHead('Where the unexplained idle machines are',
-        'Machines with an operator and a season record that did not run · ranked by count · rain shown where it may explain the day')}
-      ${cl.map((r,i)=>`<div data-act="insdrill" data-key="${E(r.st)}" style="display:flex;gap:11px;padding:12px 16px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
-          <span style="width:8px;height:8px;border-radius:50%;background:${wetC(r)?C.idle:C.brk};margin-top:5px;flex-shrink:0"></span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12.5px;font-weight:700;line-height:1.35">${E(r.name)}${A.gst?'':' · '+E(STATE_NAMES[r.st]||r.st)} — ${fmt(r.n)} of ${fmt(r.deployed)} machines idle</div>
-            <div style="font-size:11.5px;color:#6E6A62;margin-top:3px;line-height:1.5">Between them they have sprayed ${fmt(r.cap)} ac this season${r.ranAcres>0?`; the rest of the territory logged ${fmt(r.ranAcres)} ac yesterday`:'; the territory logged nothing at all yesterday'}.${wetC(r)?` <span style="color:${C.openD}">${r.rain} mm of rain — likely weather.</span>`:(r.rain!=null?` Dry (${r.rain} mm).`:'')}</div>
-          </div></div>`).join('')}`)
-      : card(`${cHead('Where the unexplained idle machines are','')}${waiting(false,'No territory has three or more unexplained idle machines.','insrefresh')}`);
+    const clusters = cl.length ? card(`${cHead('Which clusters they sit in',
+        'Machines with a driver and a season record that reported in and still did nothing · most machines first')}
+      ${cl.map((r,i)=>idleRow(r,i,'cluster')).join('')}`)
+      : card(`${cHead('Which clusters they sit in','')}${waiting(false,'No cluster has three or more machines in this group.','insrefresh')}`);
+
+    const amRows=D.ams.slice(0,INS_DAY.AM_SLOTS);
+    const amCard = amRows.length ? card(`${cHead('Which area managers they report to',
+        'The same machines rolled up one level · most machines first')}
+      ${amRows.map((r,i)=>idleRow(r,i,'area')).join('')}`) : '';
 
     /* ---- where the work happened: participation + concentration, pure observation ---- */
     const wstat=(v,l)=>`<div style="flex:1 0 auto;min-width:${mob?'44%':'190px'};padding:13px 16px;border-right:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
         <div style="font-family:'IBM Plex Mono';font-size:${mob?'18px':'20px'};font-weight:700">${v}</div>
         <div style="font-size:11px;color:#9C988F;margin-top:5px;line-height:1.45">${l}</div></div>`;
-    const where=card(`${cHead('Where the work happened','How many territories took part, and how concentrated the day’s output was')}
+    const where=card(`${cHead('How the day was spread','Whether the acres came from across the country or from a few places')}
       <div style="display:flex;flex-wrap:wrap;background:#FBFAF8">
-        ${wstat(`${fmt(D.terrActive)} / ${fmt(D.terrTotal)}`,'territories logged any acres at all')}
-        ${wstat(`${D.topShare.toFixed(0)}%`,`of the day came from the top ${INS_DAY.CONC_TOP} territories${D.topNames.length?` — ${D.topNames.map(E).join(', ')}`:''}`)}
-        ${wstat(fmt(D.machinesForHalf),`machines produced half the day’s acres, of ${fmt(D.ran)} that ran`)}
+        ${wstat(`${fmt(D.terrActive)} of ${fmt(D.terrTotal)}`,'territories covered any acres at all')}
+        ${wstat(`${Math.round(D.topShare)}%`,`of the day came from just ${INS_DAY.CONC_TOP} territories${D.topNames.length?` — ${D.topNames.map(E).join(', ')}`:''}`)}
+        ${wstat(fmt(D.machinesForHalf),`machines covered half the day’s acres, out of the ${fmt(D.ran)} that worked`)}
       </div>`);
 
     const note=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;padding:13px 16px">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">What these figures are</div>
-        <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">Every figure on this page is a <strong style="color:#46433d">count from a column</strong>. No acre target is imputed to any territory, because a territory's share of one day need not match its share of a season. The only comparison here is the 14-day norm, which measures this scope against <strong style="color:#46433d">its own recent past</strong>. Rain is shown where it may explain a quiet day and is not used in any ranking. All of it describes a single day, where the season view describes cumulative totals.</div></div>`;
+        <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">How to read this page</div>
+        <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">Every number here is <strong style="color:#46433d">counted straight off a column</strong> in the machine sheet. Nobody is given an acre target for the day, because what a cluster does on one day need not match its share of the season. The single comparison on the page is against a normal day, which measures this scope against <strong style="color:#46433d">its own last fortnight</strong>. Rain is shown where it might explain a quiet day; it never changes an order. And all of it is one day, where the Season view is the whole year to date.</div></div>`;
     return `<div style="display:flex;flex-direction:column;gap:14px">
-      ${header}${band}${why}${clusters}${where}${note}
+      ${header}${band}${why}${clusters}${amCard}${where}${note}
       ${mob?`<div style="text-align:center;padding:2px 0 4px">${src}</div>`:''}</div>`;
   }
 
@@ -3366,10 +3482,10 @@ function insightsBodyHTML(mob){
     // and a four-week widening can sit on top of a one-week recovery. Naming both windows is the difference
     // between two views of one trend and two cards that appear to contradict each other.
     const turnWord = s.trendTurn==null ? '' : behind ? (s.trendTurn>0?'narrowed':'widened') : (s.trendTurn>0?'grown':'shrunk');
-    const verdict = s.vsPrev==null ? 'No comparable day in last season to measure against.'
-      : `<strong style="font-weight:700">${fmt(Math.abs(s.gapAc))} acres ${behind?'behind':'ahead of'} last season</strong> on the same day.`
-        + (s.momentum!=null ? ` The last 7 days ran ${s.momentum>=0?'+':'−'}${Math.abs(s.momentum).toFixed(0)}% against the same week a year ago` : '')
-        + (turnWord ? `, and across four weeks the ${behind?'gap':'lead'} has ${turnWord}.` : s.momentum!=null?'.':'');
+    const verdict = s.vsPrev==null ? 'Last season has no matching day to measure this against.'
+      : `<strong style="font-weight:700">${fmt(Math.abs(s.gapAc))} acres ${behind?'behind':'ahead of'} last season</strong> on the same day of the year.`
+        + (s.momentum!=null ? ` Over the past week the fleet covered ${Math.abs(Math.round(s.momentum))}% ${s.momentum>=0?'more':'less'} ground than in the same week last year` : '')
+        + (turnWord ? `, and the ${behind?'gap':'lead'} has ${turnWord} over the past four weeks.` : s.momentum!=null?'.':'');
     const scopeNote = A.scoped
       ? `<div style="font-size:10.5px;color:#B6B1A8;margin-top:9px">Machine and product figures below are ${E(A.og)}-only. The season curve has no company split in the source and covers every machine.</div>` : '';
     hero=card(`<div style="padding:${mob?'16px':'18px 20px'}">
@@ -3387,24 +3503,55 @@ function insightsBodyHTML(mob){
       <div style="font-size:${mob?'12.5px':'13.5px'};color:#46433d;margin-top:12px;line-height:1.55">${verdict}</div>
       ${scopeNote}
       <div style="display:flex;gap:${mob?'18px':'34px'};flex-wrap:wrap;margin-top:14px;padding-top:13px;border-top:1px solid #F2F0EB">
-        ${mini(s.prev!=null?fmt(s.prev):'—','’25-26 same day')}
-        ${mini(s.prev2!=null?fmt(s.prev2):'—','’24-25 same day')}
-        ${mini(s.roll7!=null?fmt(s.roll7):'—','ac/day · last 7',C.orangeD)}
-        ${mini(fmt(s.machToday),'machines ran')}
+        ${mini(s.prev!=null?fmt(s.prev):'—','last season, same day')}
+        ${mini(s.prev2!=null?fmt(s.prev2):'—','two seasons ago, same day')}
+        ${mini(s.roll7!=null?fmt(s.roll7):'—','acres a day, past week',C.orangeD)}
+        ${mini(fmt(s.machToday),'machines worked yesterday')}
         ${mini(fmt(f.deployed),'machines deployed')}
       </div></div>`);
   }
 
   /* ---------- 1b · what changed (the one part of the page that recomposes daily) ---------- */
   const sig=insSignals(A);
-  const sigCard = sig.length ? card(`${cHead('What changed',
-      'Detected from the season history · ranked by size and how unusual they are · the list changes as the data does')}
-    ${sig.map((x,i)=>`<div ${x.drill?`data-act="insdrill" data-key="${E(x.drill)}"`:''} style="display:flex;gap:11px;padding:${mob?'12px 15px':'12px 16px'};border-top:${i?'1px solid #F4F2EE':'none'};${x.drill?'cursor:pointer':''}">
-        <span style="width:8px;height:8px;border-radius:50%;background:${x.tone==='good'?C.act:x.tone==='bad'?C.brk:C.idle};margin-top:5px;flex-shrink:0"></span>
-        <div style="min-width:0">
-          <div style="font-size:12.5px;font-weight:700;line-height:1.35">${E(x.title)}</div>
-          <div style="font-size:11.5px;color:#6E6A62;margin-top:3px;line-height:1.5">${E(x.detail)}</div>
-        </div></div>`).join('')}`) : '';
+  /* Two groups, each with its own visible budget and its own expand toggle. The peer rows name a cluster or an
+     area manager and carry the person accountable for them; the trend rows are state-level movement against last
+     season. Keeping them apart is what allows ten visible rows to read faster than the old five did. */
+  /* An AM row already leads with the manager's name, so repeating it under the row reads as a stutter. When the
+     title already contains the owner, the line carries the role and the number only. */
+  const ownerLine=(o,title)=>{
+    if(!o||!o.name) return '';
+    const dupe = title && title.indexOf(o.name)>=0;
+    return `<div style="font-size:11px;color:#9C988F;margin-top:5px;display:flex;flex-wrap:wrap;gap:4px 8px">
+      <span>${E(o.role)}${dupe?'':` <strong style="color:#6E6A62;font-weight:600">${E(o.name)}</strong>`}</span>
+      ${o.phone?`<span style="font-family:'IBM Plex Mono'">${E(o.phone)}</span>`:''}</div>`;
+  };
+  const sigRow=(x,i)=>`<div ${x.drill?`data-act="insdrill" data-key="${E(x.drill)}"`:''} style="display:flex;gap:11px;padding:${mob?'12px 15px':'12px 16px'};border-top:${i?'1px solid #F4F2EE':'none'};${x.drill?'cursor:pointer':''}">
+      <span style="width:8px;height:8px;border-radius:50%;background:${x.tone==='good'?C.act:x.tone==='bad'?C.brk:C.idle};margin-top:5px;flex-shrink:0"></span>
+      <div style="min-width:0;flex:1">
+        <div style="font-size:12.5px;font-weight:700;line-height:1.35">${E(x.title)}</div>
+        <div style="font-size:11.5px;color:#6E6A62;margin-top:3px;line-height:1.5">${E(x.detail)}</div>
+        ${ownerLine(x.owner,x.title)}
+      </div></div>`;
+  const sigGroup=(key,label,note,rows,show,collapsed)=>{
+    if(!rows.length) return '';
+    const open=!!(state.insMore&&state.insMore[key]), vis=open?rows:(collapsed||rows.slice(0,show)), rest=rows.length-vis.length;
+    return `<div style="padding:11px 16px 9px;border-top:1px solid #EFEDE7;background:#FBFAF8">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">${label}</div>
+        <div style="font-size:11px;color:#B6B1A8;margin-top:3px">${note}</div></div>
+      ${vis.map(sigRow).join('')}
+      ${rest>0||open?`<div data-act="insmore" data-key="${key}" style="padding:10px 16px;border-top:1px solid #F4F2EE;text-align:center;cursor:pointer;font-size:11.5px;font-weight:600;color:#6E6A62">${open?'Show fewer':`Show ${rest} more`}</div>`:''}`;
+  };
+  const alertRow = sig.alert ? `<div style="display:flex;gap:11px;padding:13px 16px;background:#FDF3F1;border-bottom:1px solid #F4D8D3">
+      <span style="width:8px;height:8px;border-radius:50%;background:${C.brk};margin-top:5px;flex-shrink:0"></span>
+      <div style="min-width:0">
+        <div style="font-size:12.5px;font-weight:700;line-height:1.35">${E(sig.alert.title)}</div>
+        <div style="font-size:11.5px;color:#6E6A62;margin-top:3px;line-height:1.5">${E(sig.alert.detail)}</div>
+      </div></div>` : '';
+  const sigCard = (sig.alert||sig.peer.length||sig.trend.length) ? card(`${cHead('What changed',
+      'Read off the sheet each morning · the rows change as the data does')}
+    ${alertRow}
+    ${sigGroup('peer','Clusters and area managers','Measured against the other clusters in the same state',sig.peer,INS_SIG.PEER_SHOW,sig.peerTop)}
+    ${sigGroup('trend','States, against last season','Measured against the same days of last season',sig.trend,INS_SIG.TREND_SHOW)}`) : '';
 
   /* ---------- 2 · trajectory (reuses the snake engine + its hover wiring) ---------- */
   let traj;
@@ -3421,13 +3568,13 @@ function insightsBodyHTML(mob){
           <div style="font-size:10px;color:#9C988F">${E(snakeOffLabel(h.off))}</div>
           <div style="font-family:'IBM Plex Mono';font-size:${mob?'12px':'13.5px'};font-weight:700;margin-top:3px;color:${h.pct>=0?C.greenD:C.brk}">${h.pct>=0?'+':'−'}${Math.abs(h.pct).toFixed(1)}%</div>
         </div>`).join('')}</div>` : '';
-    traj=card(`${cHead('Season trajectory · '+E(A.regionName),'Cumulative acres on the fiscal calendar · 1 Apr → '+E(s.label))}
+    traj=card(`${cHead('The season so far in '+E(A.regionName),'Acres added up day by day since 1 April, against the two seasons before it')}
       <div style="display:flex;gap:${mob?'12px':'22px'};flex-wrap:wrap;padding:11px 16px 4px">${legend}</div>
       <div id="snakeHost" style="position:relative;padding:2px ${mob?'2px':'8px'} 10px">
         ${chart.hasData?chart.svg:waiting(false,'No cumulative data yet.','snakeretry')}
         <div id="snakeTip" style="position:absolute;display:none;pointer-events:none;background:#fff;border:1px solid #E9E6DF;border-radius:9px;box-shadow:0 6px 20px rgba(0,0,0,.10);padding:8px 10px;min-width:132px;z-index:5"></div>
       </div>
-      ${gapStrip?`<div style="padding:0 16px 4px;font-size:10px;font-weight:600;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">Gap vs last season · past five weeks</div>${gapStrip}`:''}`);
+      ${gapStrip?`<div style="padding:0 16px 4px;font-size:10px;font-weight:600;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">How the gap has moved, week by week</div>${gapStrip}`:''}`);
   }
 
   /* ---------- 3 · momentum ---------- */
@@ -3438,13 +3585,13 @@ function insightsBodyHTML(mob){
         <div style="display:flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border-radius:3px;background:${INS_CUR.color}"></span><span style="font-size:11.5px;font-weight:600">This season</span><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${s.roll7!=null?fmt(s.roll7):'—'}/day</span></div>
         <div style="display:flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border-radius:3px;background:${INS_PREV.color};opacity:.5"></span><span style="font-size:11.5px;font-weight:600">Last season</span><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${s.roll7Prev!=null?fmt(s.roll7Prev):'—'}/day</span></div>
         ${s.momentum!=null?dpill(s.momentum):''}</div>`;
-    mom=card(`${cHead('Daily acres · this season vs last','Same fiscal days, side by side · trailing '+(mob?14:21)+' days')}
+    mom=card(`${cHead('Each day, this season against last','The same days of both seasons side by side, over the past '+(mob?14:21)+' days')}
       <div style="padding:11px 16px 2px">${legend}</div>
       <div style="padding:2px ${mob?'2px':'8px'} 8px">${bars.has?bars.svg:waiting(false,'No day-wise data yet.','snakeretry')}</div>
       ${spark.has?`<div style="border-top:1px solid #EFEDE7;padding:12px 16px 14px">
         <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:7px">
-          <span style="font-size:11.5px;font-weight:700">Machines running per day</span>
-          <span style="font-size:10.5px;color:#9C988F">last 60 days · now ${fmt(s.machToday)} · peak ${fmt(s.machPeak)}</span></div>
+          <span style="font-size:11.5px;font-weight:700">Machines working each day</span>
+          <span style="font-size:10.5px;color:#9C988F">past 60 days · ${fmt(s.machToday)} now, ${fmt(s.machPeak)} at the busiest</span></div>
         ${spark.svg}</div>`:''}`);
   }
 
@@ -3454,14 +3601,14 @@ function insightsBodyHTML(mob){
       <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">${l}</div>
       ${sub?`<div style="font-size:10.5px;color:#B6B1A8;margin-top:3px">${sub}</div>`:''}</div>`;
   const runInk = f.runPct>=40?C.act : f.runPct>=20?C.idle : C.brk;
-  const fleet=card(`${cHead('Fleet yesterday','Machine sheet · '+fmt(f.deployed)+' deployed of '+fmt(f.total)+' on the books')}
+  const fleet=card(`${cHead('The fleet yesterday','From the machine sheet · '+fmt(f.deployed)+' of the '+fmt(f.total)+' machines on the books are deployed')}
     <div style="display:flex;flex-wrap:wrap;background:#FBFAF8">
-      ${stat(fmt(f.ran),'ran yesterday',runInk, f.runPct.toFixed(0)+'% of deployed')}
-      ${stat(fmt(f.acresY),'acres yesterday',C.orangeD, f.ran?fmt(f.acresY/f.ran)+' ac per running machine':'')}
-      ${stat(fmt(f.breakdown),'in breakdown',f.breakdown?C.brk:C.ink, f.bdPct.toFixed(0)+'% of deployed')}
-      ${stat(fmt(f.neverRan),'never sprayed',f.neverRan?C.idle:C.ink,'zero acres all season')}
-      ${stat(fmt(f.noOp),'no operator mapped',f.noOp?C.idle:C.ink,'deployed machines')}
-      ${stat(fmt(f.kharif),'kharif acres',C.ink,'programme count · Sheet1')}
+      ${stat(fmt(f.ran),'machines worked',runInk, Math.round(f.runPct)+'% of those deployed')}
+      ${stat(fmt(f.acresY),'acres covered',C.orangeD, f.ran?fmt(f.acresY/f.ran)+' acres each':'')}
+      ${stat(fmt(f.breakdown),'flagged broken down',f.breakdown?C.brk:C.ink, Math.round(f.bdPct)+'% of those deployed')}
+      ${stat(fmt(f.neverRan),'never sprayed',f.neverRan?C.idle:C.ink,'not one acre since April')}
+      ${stat(fmt(f.noOp),'no driver assigned',f.noOp?C.idle:C.ink,'nobody named on the sheet')}
+      ${stat(fmt(f.kharif),'kharif acres',C.ink,'the season total on the machine sheet')}
     </div>`);
 
   /* ---------- 5 · product mix ---------- */
@@ -3482,8 +3629,8 @@ function insightsBodyHTML(mob){
         <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:4px">${title}</div>
         ${list.slice(0,n).map(x=>barRow(E(x.key||x.disp), x.ytd, list[0].ytd, colour)).join('') || `<div style="font-size:11.5px;color:#B6B1A8;padding:8px 0">—</div>`}</div>`;
     const brandList=P.brands.map(b=>({key:b.disp, ytd:b.ytd, company:b.company}));
-    prodCard=card(`${cHead('Product mix · season to date',
-        `Product data tab · ${fmt(P.ytd)} ac carry a named brand${P.coverage!=null?` — ${P.coverage.toFixed(0)}% of the season's acres`:''} · ${fmt(P.nBrands)} brands · ${fmt(P.nCrops)} crops`)}
+    prodCard=card(`${cHead('What has been sprayed this season',
+        `${fmt(P.ytd)} acres can be traced to a named brand${P.coverage!=null?`, which is ${Math.round(P.coverage)}% of the season`:''} · ${fmt(P.nBrands)} brands across ${fmt(P.nCrops)} crops`)}
       ${split}
       <div style="display:flex;flex-wrap:wrap;border-top:${A.scoped?'none':'1px solid #EFEDE7'}">
         ${col('By crop',P.crops,C.orange,6)}
@@ -3503,19 +3650,19 @@ function insightsBodyHTML(mob){
      season and branded-acres columns simply do not exist here — see A.terrs. */
   if(A.gst && A.terrs){
     const T=A.terrs;
-    const foot = A.terrHidden ? `<div style="padding:9px 16px 12px;font-size:10.5px;color:#B6B1A8">${A.terrHidden} territor${A.terrHidden===1?'y':'ies'} below ${INS_TERR_MIN} deployed machines not shown — too small for a rate to carry meaning.</div>` : '';
-    const head=cHead(`Territories · ${E(A.regionName)}`,
-      `Machine sheet only — the season and product tabs carry no territory grain, so there is no vs-LY column`);
+    const foot = A.terrHidden ? `<div style="padding:9px 16px 12px;font-size:10.5px;color:#B6B1A8">${A.terrHidden} territor${A.terrHidden===1?'y':'ies'} with fewer than ${INS_TERR_MIN} machines are left out — too few for a percentage to mean anything.</div>` : '';
+    const head=cHead(`Territories in ${E(A.regionName)}`,
+      `From the machine sheet only · neither the season nor the product tab breaks down below state, so there is nothing here to compare against last year`);
     league = !T.length ? card(`${head}${waiting(false,'No territory has enough deployed machines to rank.','insrefresh')}`)
       : mob ? card(`${head}${T.map((t,i)=>`<div style="padding:12px 15px;border-top:${i?'1px solid #F4F2EE':'none'}">
           <div style="display:flex;align-items:baseline;gap:8px">
             <span style="flex:1;font-size:13px;font-weight:700">${E(t.name)}</span>
             <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${fmt(t.acresY)}<span style="font-size:10px;color:#B6B1A8"> ac</span></span></div>
-          <div style="font-size:11px;color:#9C988F;margin-top:4px">${fmt(t.deployed)} deployed · ${fmt(t.ran)} ran (${t.runPct.toFixed(0)}%) · <span style="color:${t.neverPct>=50?C.brk:'#9C988F'}">${fmt(t.never)} never sprayed</span> · ${fmt(t.breakdown)} down</div>
+          <div style="font-size:11px;color:#9C988F;margin-top:4px">${fmt(t.deployed)} deployed · ${fmt(t.ran)} worked (${Math.round(t.runPct)}%) · <span style="color:${t.neverPct>=50?C.brk:'#9C988F'}">${fmt(t.never)} never sprayed</span> · ${fmt(t.breakdown)} broken</div>
         </div>`).join('')}${foot}`)
       : card(`${head}
         <div style="display:grid;grid-template-columns:1.5fr .8fr .9fr 1fr .7fr .9fr;gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7;background:#FBFAF8">
-          ${['Territory','Deployed','Ran y’day','Never sprayed','Down','Acres y’day'].map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">${h}</span>`).join('')}</div>
+          ${['Territory','Deployed','Worked','Never sprayed','Broken','Acres'].map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">${h}</span>`).join('')}</div>
         ${T.map((t,i)=>`<div style="display:grid;grid-template-columns:1.5fr .8fr .9fr 1fr .7fr .9fr;gap:10px;align-items:center;padding:11px 16px;border-top:${i?'1px solid #F4F2EE':'none'}">
           <span style="font-size:12.5px;font-weight:600">${E(t.name)}</span>
           <span style="font-family:'IBM Plex Mono';font-size:12.5px">${fmt(t.deployed)}</span>
@@ -3528,22 +3675,22 @@ function insightsBodyHTML(mob){
   // A login locked to one state would get a one-row table restating the hero — drop it rather than pad the page.
   else if(L.length<2){ league=''; }
   else if(mob){
-    league=card(`${cHead('States','Ranked by season-to-date acres')}
+    league=card(`${cHead('States','Biggest season so far first · tap a row to narrow the page to that state')}
       ${L.map((r,i)=>`<div data-act="insdrill" data-key="${r.code}" style="padding:12px 15px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
         <div style="display:flex;align-items:baseline;gap:8px">
           <span style="flex:1;font-size:13px;font-weight:700">${E(r.name)}</span>
           <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${r.cur!=null?fmt(r.cur):'—'}</span>
           ${vsCell(r.vs)}</div>
-        <div style="font-size:11px;color:#9C988F;margin-top:4px">${fmt(r.deployed)} deployed · util <span style="color:${utilInk(r.util)};font-weight:600">${n1(r.util,'%')}</span> · ${n1(r.acRun)} ac/run · ${fmt(r.breakdown)} down${r.prodYtd!=null?` · ${fmt(r.prodYtd)} ac branded`:''}</div>
+        <div style="font-size:11px;color:#9C988F;margin-top:4px">${fmt(r.deployed)} deployed · <span style="color:${utilInk(r.util)};font-weight:600">${n1(r.util,'%')}</span> worked · ${n1(r.acRun)} acres each · ${fmt(r.breakdown)} broken${r.prodYtd!=null?` · ${fmt(r.prodYtd)} acres traced to a brand`:''}</div>
       </div>`).join('')}`);
   } else {
     // Util % and Ac/run ARE the gap decomposition — a state's shortfall is fleet × utilisation × productivity, and
     // showing all three beside vs-LY is what turns "Gujarat is −70%" into "Gujarat's fleet is idle, not missing".
     const gridCols='1.35fr .8fr .7fr .7fr .9fr .6fr .8fr';
     const th=t=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">${t}</span>`;
-    league=card(`${cHead('States','Every tab joined · ranked by season-to-date acres · a row scopes the page to that state')}
+    league=card(`${cHead('States','All three tabs joined · biggest season so far first · click a row to narrow the whole page to that state')}
       <div style="display:grid;grid-template-columns:${gridCols};gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7;background:#FBFAF8">
-        ${th('State')}${th('Deployed')}${th('Util %')}${th('Ac/run')}${th('Season ac')}${th('vs LY')}${th('Branded')}</div>
+        ${th('State')}${th('Deployed')}${th('Worked %')}${th('Acres each')}${th('Season acres')}${th('vs last yr')}${th('Named brand')}</div>
       ${L.map((r,i)=>`<div data-act="insdrill" data-key="${r.code}" style="display:grid;grid-template-columns:${gridCols};gap:10px;align-items:center;padding:11px 16px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
         <span style="font-size:12.5px;font-weight:600">${E(r.name)}</span>
         <span style="font-family:'IBM Plex Mono';font-size:12.5px">${fmt(r.deployed)}<span style="color:#C9C4BA">/${fmt(r.machines)}</span></span>
@@ -3558,11 +3705,12 @@ function insightsBodyHTML(mob){
 
   /* ---------- 7 · why the three totals differ ---------- */
   const foot=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;padding:13px 16px">
-      <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Three acre totals, three questions</div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Why this page shows three different acre totals</div>
       <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">
-        <strong style="color:#46433d">${s?fmt(s.cur):'—'} ac season-to-date</strong> is every acre since 1 April across all crops (cumulative tab) — the only figure comparable year-over-year, so it is the headline.
-        <strong style="color:#46433d">${fmt(f.kharif)} ac Kharif</strong> is the programme's own count from the machine sheet, a subset of it.
-        <strong style="color:#46433d">${P?fmt(P.ytd):'—'} ac</strong> carry a named brand (product tab)${P&&P.coverage!=null?` — ${P.coverage.toFixed(0)}% of the season`:''}; the rest was sprayed without a product recorded.
+        They come from three tabs that count different things, and none of them is wrong.
+        <strong style="color:#46433d">${s?fmt(s.cur):'—'} acres</strong> is everything sprayed since 1 April, across every crop. It is the only total that can be set against last year, which is why it leads the page.
+        <strong style="color:#46433d">${fmt(f.kharif)} acres</strong> is the kharif figure the machine sheet keeps, a part of that larger number.
+        <strong style="color:#46433d">${P?fmt(P.ytd):'—'} acres</strong> can be traced to a named brand${P&&P.coverage!=null?`, about ${Math.round(P.coverage)}% of the season`:''}. The rest was sprayed with nothing recorded about the product.
       </div></div>`;
 
   return `<div style="display:flex;flex-direction:column;gap:14px">
@@ -4606,6 +4754,7 @@ app.addEventListener('click', e=>{
     // Drill a league row into that state's own Insights. Deliberately page-local: it re-scopes THIS page only and
     // leaves state.st (and therefore every other view's filter bar) exactly where the user left it.
     case 'insdrill': { const w=el.dataset.key; if(gateAllowsState(w)) setState({insSt:w}); break; }
+    case 'insmore': { const k=el.dataset.key; setState({ insMore:{ ...state.insMore, [k]: !(state.insMore&&state.insMore[k]) } }); break; }
     case 'insclear': setState({insSt:''}); break;
     case 'insmode': { const m=el.dataset.m; setState({insMode: ['yday','week'].includes(m)?m:'season'}); track('insights_mode',{mode:m}); break; }
     // Step the Week view back/forward. `back` counts COMPLETE weeks behind the current one, so it never goes
