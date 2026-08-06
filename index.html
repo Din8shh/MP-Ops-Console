@@ -2170,7 +2170,9 @@ function exWrap(inner,H){
 // Pull every aggregate the exports need, recomputed so an image can never disagree with the page.
 function exWeekData(){
   const A=insAgg(); const W=insWeekAgg(A, state.insWeekBack|0);
-  return { A, W, TP:insWeekProducts(A,W), SG:insWeekSegments(A,W), T:insProdTrend(A) };
+  // The trend needs the week passed in, exactly as the page does, or the exported chart would carry no band.
+  const win = W ? { from:insISO(W.d0), to:insISO(W.d1), name:`${insWeekLabel(W.d0)} – ${insWeekLabel(W.d1)}` } : null;
+  return { A, W, TP:insWeekProducts(A,W), SG:insWeekSegments(A,W), T:insProdTrend(A,win) };
 }
 function buildWeekExport(id){
   const D=exWeekData(), A=D.A, W=D.W; if(!W) return null;
@@ -2262,15 +2264,17 @@ function buildWeekExport(id){
     const built=isDaily?buildWeekBarsSVG(W,false,true):buildProdTrendSVG(D.T,false,true);
     if(!built||(!isDaily&&!built.has)) return null;
     const title=isDaily?'The week day by day':`Focus product trend${D.T&&D.T.label?' · '+D.T.label:''}`;
-    // The trend is NOT the week — it spans the whole day-level feed — so it states its own range, not the week's.
-    const tr=(D.T&&D.T.series&&D.T.series.length)
-      ? `${insWeekLabel(new Date(D.T.series[0].d+'T00:00:00'))} – ${insWeekLabel(new Date(D.T.series[D.T.series.length-1].d+'T00:00:00'))}` : '';
+    // The trend spans the whole day-level feed with the week SHADED on it, so it states both: the range it draws
+    // and the week that band marks. A slide showing ten weeks and naming one of them is the whole point.
+    const T=D.T, tr=(T&&T.feedLabel)||'';
     const subT=isDaily?`${sub} · against the same seven days last season`
-                     :`${tr} · ${scopeName} · daily scanned acres, 7-day average in bold`;
+                     :`${tr} · ${scopeName} · daily scanned acres, 7-day average in bold${T&&T.win?` · shaded band is ${T.win.name||T.winLabel}`:''}`;
     const h=exHeader(title,subT,y); out+=h.svg; y=h.y+4;
+    // The export legend carries the same three keys as the page, so the image is readable on its own.
     const legend=isDaily
       ? [{label:`This week · ${fmt(W.acres)} ac`,color:INS_CUR.color},{label:`Same week last season · ${W.ly!=null?fmt(W.ly):'—'} ac`,color:INS_PREV.color}]
-      : [{label:`${D.T.label} · ${fmt(D.T.total)} ac`,color:C.orangeD}];
+      : [{label:'7-day average',color:C.orangeD},{label:'each day on its own',color:'#C9BFB2'}]
+          .concat(T&&T.win?[{label:`${T.win.name||T.winLabel} · ${fmt(T.winTotal)} ac`,color:C.softO}]:[]);
     const L=exLegend(legend,y+10); out+=L.svg; y=L.y+6;
     // Height must follow the chart's OWN aspect. A guessed ratio makes preserveAspectRatio letterbox it, which
     // is exactly the empty band a slide should not have.
@@ -2286,7 +2290,9 @@ function buildWeekExport(id){
 function exMonthData(){
   const A=insAgg(); const M=insMonthAgg(A, state.insMonthBack|0);
   if(!M) return { A, M:null };
-  return { A, M, MP:insMonthProducts(A,M), MG:insMonthSegments(A,M), T:insProdTrend(A, insMonthISO(M)) };
+  // `name` matters: it is what labels the shaded band, so without it the exported chart shades an unnamed stretch.
+  return { A, M, MP:insMonthProducts(A,M), MG:insMonthSegments(A,M),
+    T:insProdTrend(A, { ...insMonthISO(M), name:M.title }) };
 }
 function buildMonthExport(id){
   const D=exMonthData(), A=D.A, M=D.M; if(!M) return null;
@@ -2416,14 +2422,15 @@ function buildMonthExport(id){
     const built=isDaily?buildMonthDailySVG(M,false,true):buildProdTrendSVG(D.T,false,true);
     if(!built||(!isDaily&&!built.has)) return null;
     const title=isDaily?`${M.name} day by day`:`Focus product trend${D.T&&D.T.label?' · '+D.T.label:''}`;
-    // The trend names the dates it drew whenever the feed reached less than the month — same rule as the page.
-    const trSpan=(D.T&&D.T.clipped)?`${D.T.rangeLabel} (the days of ${M.name} the day-level tab holds) · ${scopeName}`:sub;
+    // Same rule as Week: the trend states the range it draws AND names the band the month occupies within it.
+    const T=D.T, tr=(T&&T.feedLabel)||'';
     const subT=isDaily?`${sub} · against the same dates last season`
-                     :`${trSpan} · daily scanned acres, 7-day average in bold`;
+                     :`${tr} · ${scopeName} · daily scanned acres, 7-day average in bold${T&&T.win?` · shaded band is ${T.win.name||T.winLabel}`:''}`;
     const h=exHeader(title,subT,y); out+=h.svg; y=h.y+4;
     const legend=isDaily
       ? [{label:`This ${M.short} · ${fmt(M.acres)} ac`,color:INS_CUR.color},{label:`${M.short} last season · ${M.ly!=null?fmt(M.ly):'—'} ac`,color:INS_PREV.color}]
-      : [{label:`${D.T.label} · ${fmt(D.T.total)} ac`,color:C.orangeD}];
+      : [{label:'7-day average',color:C.orangeD},{label:'each day on its own',color:'#C9BFB2'}]
+          .concat(T&&T.win?[{label:`${T.win.name||T.winLabel} · ${fmt(T.winTotal)} ac`,color:C.softO}]:[]);
     const L=exLegend(legend,y+10); out+=L.svg; y=L.y+6;
     const cw=EX.W-EX.PAD*2, ch=Math.round(cw*built.vbH/built.vbW);
     out+=`<svg x="${EX.PAD}" y="${y}" width="${cw}" height="${ch}" viewBox="0 0 ${built.vbW} ${built.vbH}" preserveAspectRatio="xMidYMid meet">${built.inner}</svg>`;
@@ -3154,11 +3161,13 @@ function insWeekSegments(A,W){
    Daily product acres are extremely spiky, so a raw daily line cannot be read for direction; the chart carries a
    7-day rolling mean on top of it and the headline compares the last 7 days with the 7 before.
 
-   `win` (optional, `{from,to}` as ISO dates) clips the series to one period — Month mode passes the month so the
-   chart shows that month rather than the whole feed. The PICKER's options stay unclipped: the brand list must not
-   change shape as you step between months, or the selection would silently drop out from under the reader. When a
-   window is given the direction figure compares the window with the SAME-LENGTH stretch before it, which for a
-   month is the previous month; without one it stays the last 7 days against the 7 before. */
+   `win` (optional, `{from,to}` as ISO dates + a `name`) MARKS a period on the chart — it does not clip it. Both
+   Week and Month pass their own period. The line always draws the whole feed, because the question this card
+   answers is direction, and a week clipped to seven points has no direction to read; the period is instead
+   shaded, labelled, and measured in the stat band against the same-length stretch before it. An earlier build
+   clipped Month to its month, which scoped the chart correctly and destroyed the only thing it was for.
+   The PICKER's options are never windowed either: the brand list must not change shape as you step between
+   periods, or the selection would silently drop out from under the reader. */
 function insProdTrend(A,win){
   if(!TX.loaded) return null;
   const scope=r=>(!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
@@ -3172,35 +3181,46 @@ function insProdTrend(A,win){
   const a=ok(state.insPa)||defA;
   const b=state.insPb==='none' ? null : (ok(state.insPb)||(defB!==a?defB:null));
   const sel=[a,b].filter(Boolean);
-  const rows=win ? all.filter(r=>r.d>=win.from && r.d<=win.to) : all;
-  const dates=rows.map(r=>r.d).sort();
+  const dates=all.map(r=>r.d).sort();
   if(!dates.length) return { options, a, b, sel, empty:true, label: sel.map(k=>meta[k].disp).join(' + ') };
-  const per={}; rows.forEach(r=>{ if(sel.indexOf(r.brandKey)>=0) per[r.d]=(per[r.d]||0)+r.acres; });
-  /* Walk every calendar day in range so a day with no sale reads as 0, not as a gap in the line — but only
-     across the days the FEED actually reaches. The day-level tab holds a rolling window of recent dates, so
-     drawing a whole month would print three flat weeks of zeroes where the truth is "no record", and a chart
-     that says nothing was sprayed is a different claim from one that says nothing is known. The span is the
-     window intersected with the feed's own coverage, and the card names the dates. */
-  const from = win ? (dates[0]>win.from?dates[0]:win.from) : dates[0];
-  const to   = win ? (dates[dates.length-1]<win.to?dates[dates.length-1]:win.to) : dates[dates.length-1];
+  const per={}; all.forEach(r=>{ if(sel.indexOf(r.brandKey)>=0) per[r.d]=(per[r.d]||0)+r.acres; });
+  // Walk every calendar day the feed spans so a day with no sale reads as 0, not as a gap in the line.
+  const from=dates[0], to=dates[dates.length-1];
   const series=[], cur=new Date(from+'T00:00:00'), end=new Date(to+'T00:00:00');
   while(cur<=end){ const iso=insISO(cur); series.push({ d:iso, v:per[iso]||0 }); cur.setDate(cur.getDate()+1); }
   series.forEach((p,i)=>{ let s=0,n=0; for(let j=Math.max(0,i-6);j<=i;j++){ s+=series[j].v; n++; } p.avg=s/n; });
   const total=series.reduce((s,p)=>s+p.v,0);
   const out={ options, a, b, sel, series, total, from, to,
+    feedLabel:`${insWeekLabel(new Date(from+'T00:00:00'))} – ${insWeekLabel(new Date(to+'T00:00:00'))}`,
     label: sel.map(k=>meta[k].disp).join(' + '),
     companies: sel.map(k=>meta[k].company) };
   if(win){
-    out.clipped = from>win.from || to<win.to;                    // the feed did not reach the whole window
-    out.rangeLabel=`${insWeekLabel(new Date(from+'T00:00:00'))} – ${insWeekLabel(new Date(to+'T00:00:00'))}`;
-    // The same number of days immediately before the drawn series — a like-for-like stretch, not a fixed month,
-    // so it stays comparable when the feed only covers part of the window.
-    const n=series.length, pEnd=new Date(from+'T00:00:00'); pEnd.setDate(pEnd.getDate()-1);
-    const pStart=new Date(pEnd); pStart.setDate(pEnd.getDate()-(n-1));
-    const pa=insISO(pStart), pb=insISO(pEnd);
-    out.prior=all.filter(r=>sel.indexOf(r.brandKey)>=0 && r.d>=pa && r.d<=pb).reduce((s,r)=>s+r.acres,0);
-    out.priorLabel=`${insWeekLabel(pStart)} – ${insWeekLabel(pEnd)}`;
-    out.trend = out.prior ? total/out.prior*100-100 : null;
+    // Clamp the marked band to the feed, so a period the feed does not reach cannot shade empty axis.
+    const wf = win.from>from ? win.from : from, wt = win.to<to ? win.to : to;
+    if(wf<=wt){
+      out.win={ from:wf, to:wt, name:win.name||'' };
+      out.winLabel=`${insWeekLabel(new Date(wf+'T00:00:00'))} – ${insWeekLabel(new Date(wt+'T00:00:00'))}`;
+      // The band is short of the requested period when the feed starts late or ends early — say so rather than
+      // letting a part-period total sit under the period's name.
+      out.winPartial = wf>win.from || wt<win.to;
+      const inWin=p=>p.d>=wf && p.d<=wt;
+      out.winTotal=series.filter(inWin).reduce((s,p)=>s+p.v,0);
+      out.winDays =series.filter(inWin).length;
+      /* The same number of days immediately BEFORE the band. Reported only when the feed actually reaches back
+         far enough — a "previous month" computed over the four days the feed happens to hold is not a previous
+         month, and a direction built on it would be invented rather than measured. */
+      const pEnd=new Date(wf+'T00:00:00'); pEnd.setDate(pEnd.getDate()-1);
+      const pStart=new Date(pEnd); pStart.setDate(pEnd.getDate()-(out.winDays-1));
+      const pa=insISO(pStart), pb=insISO(pEnd);
+      if(pa>=from){
+        out.prior=series.filter(p=>p.d>=pa&&p.d<=pb).reduce((s,p)=>s+p.v,0);
+        out.priorLabel=`${insWeekLabel(pStart)} – ${insWeekLabel(pEnd)}`;
+        out.trend = out.prior ? out.winTotal/out.prior*100-100 : null;
+      } else {
+        out.prior=null; out.trend=null;
+        out.priorShort=`the feed starts ${insWeekLabel(new Date(from+'T00:00:00'))}`;
+      }
+    }
   } else {
     out.last7=series.slice(-7).reduce((s,p)=>s+p.v,0);
     out.prior7=series.slice(-14,-7).reduce((s,p)=>s+p.v,0);
@@ -3208,28 +3228,59 @@ function insProdTrend(A,win){
   }
   return out;
 }
+/* The daily line, with the reviewed period SHADED rather than cut out of it.
+
+   Three deliberate changes from the first build, all of them about legibility:
+   · **The area fill is gone.** It sat under the 7-DAY AVERAGE, so the shaded mass represented no real quantity —
+     it read as volume while being the integral of a smoothing. The only fill on the chart is now the period band,
+     which means a fill on this chart always means "the period", never "the data".
+   · **The period is a band with its name on it.** In Week mode the chart spans the whole feed, so without this
+     the reader had no way to find the week being reviewed — the card sat inside a weekly review showing ten weeks
+     and marking none of them.
+   · **The two lines are separated by weight AND tone**, not by opacity alone in one hue. */
 function buildProdTrendSVG(T,mob,exp){
   const s=T&&T.series; if(!s || s.length<2) return { has:false, svg:'', inner:'' };
   let max=1; s.forEach(p=>{ max=Math.max(max,p.v,p.avg); });
   // `exp` = deck rendering: the same geometry with type and strokes scaled up, because a 9.5px axis label that
   // reads fine on a monitor disappears on a projector.
   const F=exp?1.85:1, SW=exp?2:1;
-  const Wd=mob?400:960, H=mob?230:260, mL=mob?46:(exp?96:62), mR=exp?24:14, mT=14, mB=exp?58:38;
+  const Wd=mob?400:960, H=mob?250:280, mL=mob?46:(exp?96:62), mR=exp?24:14, mT=exp?30:24, mB=exp?58:38;
   const x0=mL,x1=Wd-mR,y0=mT,y1=H-mB;
   const step=niceNum(max/4), nMax=Math.max(step,Math.ceil(max/step)*step);
   const X=i=>x0+i/(s.length-1)*(x1-x0), Y=v=>y1-(v/nMax)*(y1-y0);
   let grid=''; for(let t=0;t<=nMax+1e-6;t+=step){ const y=Y(t);
     grid+=`<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="#EFEDE7" stroke-width="${SW}"/><text x="${x0-9*(exp?1.6:1)}" y="${(y+3.6*F).toFixed(1)}" text-anchor="end" font-size="${(10.5*F).toFixed(1)}" font-weight="${exp?600:400}" fill="${exp?'#6E6A62':'#9C988F'}" font-family="'IBM Plex Mono'">${snakeFmtK(t)}</text>`; }
+  /* The reviewed period. Drawn FIRST so every line sits on top of it, and widened by half a day-step at each end
+     so it covers whole days rather than stopping on the centre of the first and last points. */
+  let band='';
+  if(T.win){
+    let i0=-1,i1=-1;
+    s.forEach((p,i)=>{ if(p.d>=T.win.from && p.d<=T.win.to){ if(i0<0) i0=i; i1=i; } });
+    if(i0>=0){
+      const half=(x1-x0)/(s.length-1)/2;
+      const bx0=Math.max(x0,X(i0)-half), bx1=Math.min(x1,X(i1)+half), bw=Math.max(1,bx1-bx0);
+      const nm=T.win.name||T.winLabel||'';
+      band=`<rect x="${bx0.toFixed(1)}" y="${y0}" width="${bw.toFixed(1)}" height="${(y1-y0).toFixed(1)}" fill="${C.orange}" opacity="${exp?'.10':'.08'}"/>
+        <line x1="${bx0.toFixed(1)}" y1="${y0}" x2="${bx0.toFixed(1)}" y2="${y1}" stroke="${C.orange}" stroke-width="${SW}" opacity=".5"/>
+        <line x1="${bx1.toFixed(1)}" y1="${y0}" x2="${bx1.toFixed(1)}" y2="${y1}" stroke="${C.orange}" stroke-width="${SW}" opacity=".5"/>`;
+      // The band's name rides above the plot, centred on the band but nudged so it can never run off either edge.
+      if(nm){
+        const w=exW(nm,11*F,false), cx=Math.min(x1-w/2-2, Math.max(x0+w/2+2, (bx0+bx1)/2));
+        band+=`<text x="${cx.toFixed(1)}" y="${(y0-7*F).toFixed(1)}" text-anchor="middle" font-size="${(11*F).toFixed(1)}" font-weight="700" fill="${C.orangeD}" font-family="'Noto Sans'">${E(nm)}</text>`;
+      }
+    }
+  }
   const every=Math.max(1,Math.ceil(s.length/(mob?5:(exp?9:12))));
-  let lab=''; s.forEach((p,i)=>{ if(i%every===0||i===s.length-1){
+  // The final date is always worth labelling, but only when it is far enough from the previous tick to not
+  // collide with it — otherwise the axis ends in overprinted text ("4 A6gAug"), which is worse than no label.
+  const lastI=s.length-1, showLast=(lastI%every)*2>=every;
+  let lab=''; s.forEach((p,i)=>{ if(i%every===0 ? true : (i===lastI && showLast)){
     const dd=new Date(p.d+'T00:00:00');
     lab+=`<text x="${X(i).toFixed(1)}" y="${(y1+15*F).toFixed(1)}" text-anchor="middle" font-size="${(9.5*F).toFixed(1)}" font-weight="${exp?600:400}" fill="${exp?'#6E6A62':'#9C988F'}" font-family="'Noto Sans'">${dd.getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dd.getMonth()]}</text>`; } });
-  const path=(key,w,op)=>s.map((p,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(p[key]).toFixed(1)}`).join(' ');
-  const area=`${s.map((p,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(p.avg).toFixed(1)}`).join(' ')} L${X(s.length-1).toFixed(1)} ${y1} L${X(0).toFixed(1)} ${y1} Z`;
-  const inner=`${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC" stroke-width="${SW}"/>
-    <path d="${area}" fill="${C.softO}" opacity=".7"/>
-    <path d="${path('v')}" fill="none" stroke="${C.orange}" stroke-width="${1*SW}" opacity=".45" stroke-linejoin="round"/>
-    <path d="${path('avg')}" fill="none" stroke="${C.orangeD}" stroke-width="${2.6*SW}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const path=key=>s.map((p,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(p[key]).toFixed(1)}`).join(' ');
+  const inner=`${band}${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC" stroke-width="${SW}"/>
+    <path d="${path('v')}" fill="none" stroke="#C9BFB2" stroke-width="${1.1*SW}" stroke-linejoin="round"/>
+    <path d="${path('avg')}" fill="none" stroke="${C.orangeD}" stroke-width="${2.8*SW}" stroke-linejoin="round" stroke-linecap="round"/>`;
   return { has:true, inner, vbW:Wd, vbH:H,
     svg:`<svg viewBox="0 0 ${Wd} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${inner}</svg>` };
 }
@@ -3470,9 +3521,11 @@ function buildMonthDailySVG(M,mob,exp){
     if(pts.length<2) return '';
     return `<path d="${pts.map((p,k)=>`${k?'L':'M'}${X(p.i).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(' ')} L${X(pts[pts.length-1].i).toFixed(1)} ${y1} L${X(pts[0].i).toFixed(1)} ${y1} Z" fill="${C.softO}" opacity=".55"/>`; })();
   const every=mob?5:(exp?4:3);
+  // Same collision guard as the product trend: label the last day only when it clears the previous tick.
+  const lastI=days.length-1, showLast=(lastI%every)*2>=every;
   let lab='';
   days.forEach((d,i)=>{
-    if(i%every!==0 && i!==days.length-1) return;
+    if(i%every!==0 && !(i===lastI && showLast)) return;
     lab+=`<text x="${X(i).toFixed(1)}" y="${(y1+19*F).toFixed(1)}" text-anchor="middle" font-size="${(11*F).toFixed(1)}" font-weight="${exp?700:600}" fill="${exp?'#14120F':'#46433d'}" font-family="'IBM Plex Mono'">${d.dom}</text>`;
   });
   lab+=`<text x="${((x0+x1)/2).toFixed(1)}" y="${(y1+34*F).toFixed(1)}" text-anchor="middle" font-size="${(10*F).toFixed(1)}" font-weight="${exp?600:400}" fill="${exp?'#7C776E':'#B6B1A8'}" font-family="'Noto Sans'">day of ${M.name}</text>`;
@@ -3718,6 +3771,59 @@ function insightsBodyHTML(mob){
         ${sub?`<span style="font-size:10.5px;color:#B6B1A8">${sub}</span>`:''}
         <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600">${fmt(val)}</span></div>
       <span style="display:block;height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${w}%;background:${colour};border-radius:4px"></span></span></div>`; };
+
+  /* ---------- the focus-product trend, shared by Week and Month ----------
+     ONE builder with two callers, so the two reviews cannot drift apart. They did: Week drew the whole feed with
+     nothing marking the week it was reviewing, while Month clipped to its month and lost the trend entirely.
+     Both now draw the same chart — full daily history, the reviewed period shaded — and read their own period out
+     of the stat band. `big` is passed in because each mode declares its own copy of that tile. */
+  const prodTrendCard = (T, periodName, scopeName, big) => {
+    const bare = msg => card(`${cHead('How two products are moving','Day-level product tab')}${waiting(TX.error, msg, 'txretry')}`);
+    if(!TX.loaded) return bare(TX.error?'Could not load the day-level product tab.':'Loading day-level products…');
+    if(!T || !T.options.length || T.empty) return bare('No day-level product rows for this scope.');
+    const chart=buildProdTrendSVG(T,mob);
+    const opts=(cur,withNone)=>optionsHTML(
+      (withNone?[{v:'none',t:'— none —'}]:[]).concat(T.options.map(o=>({v:o.key,t:`${o.disp} (${o.company})`}))),
+      String(cur||(withNone?'none':'')));
+    const selCss2="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none;max-width:190px";
+    const picker=`<div style="display:flex;align-items:center;gap:${mob?'8px':'12px'};flex-wrap:wrap;padding:12px 16px 4px">
+        <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Combine</span>
+        <div style="position:relative"><select id="insPaSel" style="${selCss2}">${opts(T.a,false)}</select>${I.caret}</div>
+        <span style="font-size:13px;color:#9C988F;font-weight:600">+</span>
+        <div style="position:relative"><select id="insPbSel" style="${selCss2}">${opts(T.b||'none',true)}</select>${I.caret}</div>
+      </div>`;
+    /* A real legend. Thin-versus-thick was previously explained only in a sentence above the chart, which is a
+       key printed as prose — the reader had to hold it in memory while looking somewhere else. */
+    const key=(swatch,text)=>`<span style="display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:#6E6A62">${swatch}<span>${text}</span></span>`;
+    const legend=`<div style="display:flex;gap:16px;flex-wrap:wrap;padding:8px 16px 2px">
+        ${key(`<span style="width:18px;height:3px;border-radius:2px;background:${C.orangeD}"></span>`,'7-day average')}
+        ${key(`<span style="width:18px;height:2px;background:#C9BFB2"></span>`,'each day on its own')}
+        ${T.win?key(`<span style="width:15px;height:11px;border-radius:3px;background:${C.orange};opacity:.28"></span>`,E(T.win.name||T.winLabel)):''}
+      </div>`;
+    const dir = T.trend==null ? null : T.trend>=0;
+    const w=T.win;
+    /* The stat band reports the PERIOD UNDER REVIEW, not the tail of the feed. In Week mode it used to read
+       "last 7 days" meaning the last seven days on the sheet — in a review of a week three weeks back, that is a
+       figure about a different week sitting on the page as if it were this one. */
+    const periodTile = w
+      ? big(fmt(T.winTotal), `acres in ${E(periodName)}`, `${E(T.winLabel)}${T.winPartial?' · the part the feed covers':''}`, C.orangeD)
+      : big(fmt(T.total), 'acres in the period', `${T.series.length} days`, C.orangeD);
+    const priorTile = w
+      ? (T.prior==null
+          ? big('—', `the ${T.winDays} days before`, T.priorShort||'', C.ink3)
+          : big(fmt(T.prior), `the ${T.winDays} days before`, T.priorLabel||''))
+      : big(fmt(T.last7), 'last 7 days', T.prior7?`against ${fmt(T.prior7)} the 7 before`:'');
+    return card(`${cHead(`How two products are moving in ${E(scopeName)}`,
+        `Daily scanned acres for the two selected products added together${w?`, across ${E(T.feedLabel)} — the shaded band is ${E(periodName)}`:` · ${E(T.feedLabel)}`}`)}
+      ${picker}${legend}
+      <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-top:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7;margin-top:8px">
+        ${big(E(T.label||'—'),'combined series', T.sel.length>1?'two products shown as one line':'one product')}
+        ${periodTile}
+        ${priorTile}
+        ${big(T.trend==null?'—':`${dir?'▲':'▼'} ${Math.abs(T.trend).toFixed(0)}%`,'direction', T.trend==null?'not enough history':(dir?'rising':'falling'), T.trend==null?C.ink3:dir?C.act:C.brk)}
+      </div>
+      <div style="padding:6px ${mob?'2px':'8px'} 12px">${chart.has?chart.svg:waiting(false,'Not enough days to draw a trend.','txretry')}</div>`);
+  };
 
   /* ---------- header ---------- */
   const src = `<span style="font-size:10.5px;color:#9C988F">Machines ${lastUpdated||'—'} · season ${SNAKE.at||'—'} · products ${PROD.at||'—'}
@@ -3985,43 +4091,11 @@ function insightsBodyHTML(mob){
         ${MG.rows.length>1?row(MG.tot,0,true):''}`);
     }
 
-    /* ---- focus-product trend, clipped to this month ---- */
-    const MT=insProdTrend(A, insMonthISO(M));
-    let prodTrendMo='';
-    if(!TX.loaded){
-      prodTrendMo=card(`${cHead('How two products are moving','Day-level product tab')}${waiting(TX.error, TX.error?'Could not load the day-level product tab.':'Loading day-level products…','txretry')}`);
-    } else if(!MT || !MT.options.length){
-      prodTrendMo=card(`${cHead('How two products are moving','Day-level product tab')}${waiting(false,'No day-level product rows for this scope.','txretry')}`);
-    } else if(MT.empty){
-      const rg=insTxRange();
-      prodTrendMo=card(`${cHead('How two products are moving','Day-level product tab')}${waiting(false,`No day-level product rows in ${E(M.title)}.${rg?` That tab currently holds ${E(rg)} only.`:''}`,'txretry')}`);
-    } else {
-      const chart=buildProdTrendSVG(MT,mob);
-      const opts=(cur,withNone)=>optionsHTML(
-        (withNone?[{v:'none',t:'— none —'}]:[]).concat(MT.options.map(o=>({v:o.key,t:`${o.disp} (${o.company})`}))),
-        String(cur||(withNone?'none':'')));
-      const sel="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none;max-width:190px";
-      const picker=`<div style="display:flex;align-items:center;gap:${mob?'8px':'12px'};flex-wrap:wrap;padding:12px 16px">
-          <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Combine</span>
-          <div style="position:relative"><select id="insPaSel" style="${sel}">${opts(MT.a,false)}</select>${I.caret}</div>
-          <span style="font-size:13px;color:#9C988F;font-weight:600">+</span>
-          <div style="position:relative"><select id="insPbSel" style="${sel}">${opts(MT.b||'none',true)}</select>${I.caret}</div>
-        </div>`;
-      const dir = MT.trend==null ? null : MT.trend>=0;
-      // The chart is named by the dates it DREW, not by the month, whenever the feed covered less than the month.
-      // A chart captioned "July" that holds eight days is the misread this whole card exists to avoid.
-      const span = MT.clipped ? `${MT.rangeLabel} — the days of ${E(M.name)} the day-level tab holds` : `across ${E(M.name)}`;
-      prodTrendMo=card(`${cHead(`How two products are moving in ${E(A.gst?A.regionName:'all India')}`,
-          `Daily scanned acres for the selected products added together, ${span} · thin line is each day, thick line is the 7-day average`)}
-        ${picker}
-        <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-top:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
-          ${big(E(MT.label||'—'),'combined series', MT.sel.length>1?'two products shown as one line':'one product')}
-          ${big(fmt(MT.total),'acres in the period', `${MT.series.length} days · ${E(MT.rangeLabel||'')}`, C.orangeD)}
-          ${big(MT.prior?fmt(MT.prior):'—',`the ${MT.series.length} days before`, MT.priorLabel||'')}
-          ${big(MT.trend==null?'—':`${dir?'▲':'▼'} ${Math.abs(MT.trend).toFixed(0)}%`,'direction', MT.trend==null?'':(dir?'rising':'falling'), MT.trend==null?C.ink:dir?C.act:C.brk)}
-        </div>
-        <div style="padding:6px ${mob?'2px':'8px'} 12px">${chart.has?chart.svg:waiting(false,'Not enough days to draw a trend.','txretry')}</div>`);
-    }
+    /* ---- focus-product trend: the whole feed, with THIS MONTH shaded ----
+       An earlier build clipped the series to the month, which scoped it correctly and destroyed the only thing
+       the card is for — you cannot read a direction off a window with no run-up to it. */
+    const MT=insProdTrend(A, { ...insMonthISO(M), name:M.title });
+    const prodTrendMo=prodTrendCard(MT, M.name, A.gst?A.regionName:'all India', big);
 
     const mNote=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;padding:13px 16px">
         <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">What this page covers, and what it cannot</div>
@@ -4208,37 +4282,12 @@ function insightsBodyHTML(mob){
         ${SG.rows.length>1?row(SG.tot,0,true):''}`);
     }
 
-    /* ---- focus-product daily trend, with the UPL/SWAL equivalents combined into one line ---- */
-    const T=insProdTrend(A);
-    let prodTrend='';
-    if(!TX.loaded){
-      prodTrend=card(`${cHead('How two products are moving','Day-level product tab')}${waiting(TX.error, TX.error?'Could not load the day-level product tab.':'Loading day-level products…','txretry')}`);
-    } else if(!T || !T.options.length){
-      prodTrend=card(`${cHead('How two products are moving','Day-level product tab')}${waiting(false,'No day-level product rows for this scope.','txretry')}`);
-    } else {
-      const chart=buildProdTrendSVG(T,mob);
-      const opts=(cur,withNone)=>optionsHTML(
-        (withNone?[{v:'none',t:'— none —'}]:[]).concat(T.options.map(o=>({v:o.key,t:`${o.disp} (${o.company})`}))),
-        String(cur||(withNone?'none':'')));
-      const sel="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none;max-width:190px";
-      const picker=`<div style="display:flex;align-items:center;gap:${mob?'8px':'12px'};flex-wrap:wrap;padding:12px 16px">
-          <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Combine</span>
-          <div style="position:relative"><select id="insPaSel" style="${sel}">${opts(T.a,false)}</select>${I.caret}</div>
-          <span style="font-size:13px;color:#9C988F;font-weight:600">+</span>
-          <div style="position:relative"><select id="insPbSel" style="${sel}">${opts(T.b||'none',true)}</select>${I.caret}</div>
-        </div>`;
-      const dir = T.trend==null ? null : T.trend>=0;
-      prodTrend=card(`${cHead(`How two products are moving in ${E(A.gst?A.regionName:'all India')}`,
-          `Daily scanned acres for the selected products added together · thin line is each day, thick line is the 7-day average`)}
-        ${picker}
-        <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-top:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
-          ${big(E(T.label||'—'),'combined series', T.sel.length>1?'two products shown as one line':'one product')}
-          ${big(fmt(T.total),'acres in the period', `${T.series.length} days`, C.orangeD)}
-          ${big(fmt(T.last7),'last 7 days', T.prior7?`against ${fmt(T.prior7)} the 7 before`:'')}
-          ${big(T.trend==null?'—':`${dir?'▲':'▼'} ${Math.abs(T.trend).toFixed(0)}%`,'direction', T.trend==null?'':(dir?'rising':'falling'), T.trend==null?C.ink:dir?C.act:C.brk)}
-        </div>
-        <div style="padding:6px ${mob?'2px':'8px'} 12px">${chart.has?chart.svg:waiting(false,'Not enough days to draw a trend.','txretry')}</div>`);
-    }
+    /* ---- focus-product daily trend, with the UPL/SWAL equivalents combined into one line ----
+       The chart spans the whole day-level feed, with THIS WEEK shaded on it. It previously drew the same ten weeks
+       with nothing marking the week under review, and reported "last 7 days" meaning the last seven on the sheet —
+       so a review of a week three weeks back carried a headline figure about a different week. */
+    const T=insProdTrend(A, { from:insISO(W.d0), to:insISO(W.d1), name:`${insWeekLabel(W.d0)} – ${insWeekLabel(W.d1)}` });
+    const prodTrend=prodTrendCard(T, 'this week', A.gst?A.regionName:'all India', big);
 
     const note=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;padding:13px 16px">
         <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Why this page stops at state level</div>

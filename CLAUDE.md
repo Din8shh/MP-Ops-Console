@@ -333,15 +333,38 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   the definitive recurring sheet arrives.
   The week-day-by-day chart is a LINE chart, not paired bars: the week's shape — where it climbed, where it
   broke, where it crossed last season — is what the review discusses, and two bars per day fragments exactly that.
-  *Focus product trend* ← `TX` (gid 718502150), the day-level tab: five focus brands since 1 June, the only
-  product source with a date and therefore the only one that can show daily movement.
-- **The trend COMBINES two products into one line, by design.** UPL and SWAL each sell an equivalent of the same
-  product (Iris ↔ Patela), so "is this family growing across India?" is only answerable when the pair is summed —
-  two separate lines answer a different, weaker question. Both slots (`state.insPa` / `insPb`) are user-chosen and
-  either may be cleared. Daily product acres are very spiky, so the chart draws a 7-day rolling mean over the raw
-  daily line and the direction figure compares the last 7 days with the 7 before.
-  **Caveat: IRIS is not in the day-level tab** (it has only Amicus, Alito, Patela, Brucia, Canora), so the
-  Iris ↔ Patela pair cannot be charted until that feed is widened.
+  *Focus product trend* ← `TX` (gid 718502150), the day-level tab: eight focus brands since 1 June, the only
+  product source with a date and therefore the only one that can show daily movement. Shared with Month — see the
+  `prodTrendCard` note.
+- **The trend COMBINES two products into one line, by design, and this was RE-CONFIRMED 2026-08-06.** UPL and SWAL
+  each sell an equivalent of the same product (Iris ↔ Patela), so "is this family growing across India?" is only
+  answerable when the pair is summed — two separate lines answer a different, weaker question. Both slots
+  (`state.insPa` / `insPb`) are user-chosen and either may be cleared. Daily product acres are very spiky, so the
+  chart draws a 7-day rolling mean over the raw daily line. (IRIS is now in the day-level tab, so the Iris ↔ Patela
+  pair charts — see the open item.)
+- **The trend card is ONE builder (`prodTrendCard`) shared by Week and Month, and the chart MARKS the period rather
+  than clipping to it.** Both facts are load-bearing:
+  · Two separate copies had already drifted into opposite bugs. Week drew the whole feed with **nothing marking the
+    week under review** — a weekly review showing ten weeks and naming none — and its stat band read "last 7 days"
+    meaning the last seven days *on the sheet*, so a review of a week three weeks back carried a headline figure
+    about a different week. Month had the mirror-image fault: it clipped the series to its month, which scoped the
+    chart correctly and **destroyed the only thing the card is for**, since a direction cannot be read off a window
+    with no run-up to it.
+  · So the line always spans the whole feed, the period is a **shaded, named band** (`T.win`), and the stat band
+    reports that period against the same-length stretch immediately before it. `insProdTrend(A, win)` takes
+    `{from,to,name}`; the band is clamped to the feed (`winPartial` when the feed is short of it), and the prior
+    stretch is reported **only when the feed reaches back far enough** — a "previous month" computed over the four
+    days the feed happens to hold is not a previous month, so it reads "—" with the reason instead.
+  · The picker's options are never windowed: the brand list must not change shape as you step between periods, or
+    the selection would drop out from under the reader.
+- **What was removed from that chart, and why it must not come back.** The shaded area sat under the **7-day
+  average**, so the filled mass was the integral of a smoothing — it read as volume while representing no real
+  quantity. It is gone, and the only fill on the chart is now the period band, so a fill here always means "the
+  period" and never "the data". The two lines are also separated by weight *and* tone (grey daily, orange average)
+  rather than by opacity in one hue, and the key is a real legend instead of a sentence above the chart — a key
+  printed as prose makes the reader hold it in memory while looking somewhere else.
+- **Both line charts label the last date only when it clears the previous tick** (`showLast`). Forcing it produced
+  overprinted axis text (`4 A6gAug`) on the exports, which is worse than dropping the label.
 - **Yesterday imputes NO expected value to anybody — it is an account, not a grade.** An earlier build scored each
   territory against "expected acres = the state's acres yesterday × the territory's share of the season". That was
   removed and must not come back: it assumes a territory's share of one day matches its share of a whole season,
