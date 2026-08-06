@@ -85,15 +85,18 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
   // nothing this page does can move the machine filter bar or any other view. The gate's state LOCK still
   // overrides it (see insAgg) — a state-restricted login can never widen its scope through this control.
   // insMode = which question the page is answering. 'season' → the trend, and what to correct over weeks.
-  // 'week' → the weekly review: a deep dive on one completed Sat–Fri week. 'yday' → what deviated yesterday and needs
-  // a call this morning. Three modes of ONE page: same spine, same scope, different horizon and different action.
+  // 'month' → the monthly review: one completed calendar month, 1st to the last. 'week' → the weekly review: a deep
+  // dive on one completed Sat–Fri week. 'yday' → what deviated yesterday and needs a call this morning. Four modes
+  // of ONE page: same spine, same scope, different horizon and different action.
   // insWeekBack = how many complete weeks back the Week view is looking; 0 = the week that just ended.
+  // insMonthBack = the same for Month; 0 = the month that just ended. Never steps before 1 April — a month earlier
+  // than that belongs to the previous season's column, and reading it off the current one would silently show zero.
   // insPa / insPb = the two products combined into one line on the focus-product trend. UPL and SWAL sell
   // equivalents of the same product, so the family only reads correctly when the pair is summed.
   // insMore = which "What changed" group has been expanded past its visible budget ({peer,trend} booleans).
   // insAm / insCo = the Yesterday page's own area-manager and cluster-officer filters (page-local, cleared when
   // the mode leaves 'yday' because no other tab carries either dimension).
-  insSt:'', insMode:'season', insWeekBack:0, insPa:'', insPb:'', insAm:'', insCo:'', insMore:{ peer:false, trend:false } };
+  insSt:'', insMode:'season', insWeekBack:0, insMonthBack:0, insPa:'', insPb:'', insAm:'', insCo:'', insMore:{ peer:false, trend:false } };
 // state.sheet = which mobile overlay is up: null | 'filters' | 'more'. state.listLimit = rows shown
 // in the mobile machine list (Load more bumps it); reset whenever the filter set changes.
 const MLIST_PAGE = 60;
@@ -2278,9 +2281,160 @@ function buildWeekExport(id){
   }
   return null;
 }
+/* The monthly review's cards, redrawn for a slide on exactly the same terms as the weekly ones: recomputed from
+   the aggregates rather than serialised from the DOM, so an exported image can never disagree with the page. */
+function exMonthData(){
+  const A=insAgg(); const M=insMonthAgg(A, state.insMonthBack|0);
+  if(!M) return { A, M:null };
+  return { A, M, MP:insMonthProducts(A,M), MG:insMonthSegments(A,M), T:insProdTrend(A, insMonthISO(M)) };
+}
+function buildMonthExport(id){
+  const D=exMonthData(), A=D.A, M=D.M; if(!M) return null;
+  const scopeName=A.gst?A.regionName:'All India';
+  const sub=`${M.title} · ${scopeName}`;
+  const pc=v=>v==null?'—':`${v>=0?'+':'−'}${Math.abs(v).toFixed(0)}%`;
+  const ink=v=>v==null?EX.ink:(v>=0?C.greenD:C.brk);
+  let out='', y=EX.PAD;
+
+  if(id==='mo-summary'){
+    const h=exHeader('The month in summary',sub,y); out+=h.svg; y=h.y+8;
+    const b=exStats([
+      { v:fmt(M.acres), label:'total acres', sub:`${pc(M.mom)} vs ${M.prevName||'the month before'}`, ink:C.orangeD },
+      { v:fmt(M.dayAvg), label:'acres per day', sub: M.bestDay?`best ${M.bestDay.dom} ${M.short} · ${fmt(M.bestDay.ac)} ac`:`over ${M.len} days` },
+      { v:M.machPeak!=null?fmt(M.machPeak):'—', label:'machines on the busiest day', sub:M.machAvg!=null?`avg ${fmt(M.machAvg)} a day`:'' },
+      { v:M.acPerMachine!=null?fmt(M.acPerMachine):'—', label:'acres per running machine', sub:'average on a day it ran' },
+    ],y); out+=b.svg; y=b.y+10;
+    const c=exStats([
+      { v:M.ly!=null?fmt(M.ly):'—', label:`${M.short} last season`, sub:M.ly!=null?`${M.acres>=M.ly?'+':'−'}${fmt(Math.abs(M.acres-M.ly))} ac`:'', ink:ink(M.yoy) },
+      { v:pc(M.yoy), label:'vs last season', ink:ink(M.yoy) },
+      { v:pc(M.yoy2), label:'vs two seasons ago', ink:ink(M.yoy2) },
+      { v:pc(M.mom), label:`vs ${M.prevName||'previous month'}`, ink:ink(M.mom) },
+    ],y); out+=c.svg; y=c.y;
+    return exWrap(out,y+EX.PAD);
+  }
+
+  if(id==='mo-season'){
+    const P=M.pos; if(P.pct0==null||P.pct1==null) return null;
+    const dPct=P.pct1-P.pct0, dMag=Math.abs(P.ac1)-Math.abs(P.ac0), ahead=P.pct1>=0, noun=ahead?'lead':'gap';
+    const h=exHeader('Where the month left the season',`${sub} · against the same dates last season`,y); out+=h.svg; y=h.y+8;
+    const b=exStats([
+      { v:`${P.pct0>=0?'+':'−'}${Math.abs(P.pct0).toFixed(1)}%`, label:`${P.pct0>=0?'lead':'gap'} · month start` },
+      { v:`${P.pct1>=0?'+':'−'}${Math.abs(P.pct1).toFixed(1)}%`, label:`${noun} · month end`, sub:`${dPct>=0?'+':''}${dPct.toFixed(1)} pp`, ink:dPct>=0?C.act:C.brk },
+      { v:fmt(Math.abs(P.ac0)), label:`acres ${P.ac0>=0?'behind':'ahead'} · start` },
+      { v:fmt(Math.abs(P.ac1)), label:`acres ${P.ac1>=0?'behind':'ahead'} · end`, sub:`${noun} ${dMag>=0?'+':'−'}${fmt(Math.abs(dMag))} ac`, ink:(P.ac1-P.ac0)<=0?C.act:C.brk },
+    ],y); out+=b.svg; y=b.y+6;
+    return exWrap(out,y+EX.PAD);
+  }
+
+  if(id==='mo-states'){
+    const h=exHeader('States',`${sub} · ranked by acres in the month`,y); out+=h.svg; y=h.y;
+    const rows=M.states.map(r=>({ name:r.name, ac:fmt(r.ac), share:M.total?(r.ac/M.total*100).toFixed(0)+'%':'—',
+      mom:pc(r.mom), mom_ink:ink(r.mom), yoy:pc(r.yoy), yoy_ink:ink(r.yoy), mach:r.mach!=null?fmt(r.mach):'—' }));
+    rows.push({ name:'All states', ac:fmt(M.total), share:'100%', mom:'', yoy:'', mach:'', _total:true });
+    const t=exTable([
+      {label:'State',key:'name'},{label:'Acres',key:'ac',mono:true,align:'right'},
+      {label:'Share',key:'share',mono:true,align:'right'},
+      {label:`vs ${M.prevName||'prev month'}`,key:'mom',mono:true,align:'right',weight:700},
+      {label:'vs LY',key:'yoy',mono:true,align:'right',weight:700},{label:'Machines/day',key:'mach',mono:true,align:'right'},
+    ],rows,y); out+=t.svg; y=t.y;
+    return exWrap(out,y+EX.PAD);
+  }
+
+  if(id==='mo-blocks'){
+    const h=exHeader('How the month built up',`${sub} · blocks of dates from the 1st, against the same dates last season`,y); out+=h.svg; y=h.y+4;
+    const L=exLegend([{label:`This season · ${fmt(M.acres)} ac`,color:INS_CUR.color},{label:`Last season · ${M.ly!=null?fmt(M.ly):'—'} ac`,color:INS_PREV.color}],y+10);
+    out+=L.svg; y=L.y+6;
+    const built=buildMonthBlocksSVG(M,false,true);
+    const cw=EX.W-EX.PAD*2, ch=Math.round(cw*built.vbH/built.vbW);
+    out+=`<svg x="${EX.PAD}" y="${y}" width="${cw}" height="${ch}" viewBox="0 0 ${built.vbW} ${built.vbH}" preserveAspectRatio="xMidYMid meet">${built.inner}</svg>`;
+    y+=ch+10;
+    const rows=M.blocks.map(b=>({ name:b.label+(b.part?` (${b.days} days)`:''), ac:b.ac!=null?fmt(b.ac):'—',
+      ly:b.ly!=null?fmt(b.ly):'—', vs:(b.ac!=null&&b.ly)?pc(b.ac/b.ly*100-100):'—',
+      vs_ink:(b.ac!=null&&b.ly)?ink(b.ac/b.ly*100-100):EX.ink, mach:b.mach!=null?fmt(b.mach):'—' }));
+    const t=exTable([
+      {label:'Dates',key:'name'},{label:'Acres',key:'ac',mono:true,align:'right'},
+      {label:'Last season',key:'ly',mono:true,align:'right'},{label:'vs LY',key:'vs',mono:true,align:'right',weight:700},
+      {label:'Machines/day',key:'mach',mono:true,align:'right'},
+    ],rows,y); out+=t.svg; y=t.y;
+    return exWrap(out,y+EX.PAD);
+  }
+
+  if(id==='mo-products'){
+    const MP=D.MP; if(!MP||MP.empty||!MP.total) return null;
+    /* The caveats travel with the image, and matter MORE here: a slide is read apart from the page, which is
+       exactly where a narrow tab gets taken for the whole product mix over the whole month. Both narrownesses
+       (few brands, and only the days the feed holds) go in the subtitle, and the share is taken against the
+       same denominator the page uses. */
+    const partial=MP.nDays<MP.span, denom=partial?MP.fleetOnDays:M.acres;
+    const share=denom?`${(MP.total/denom*100).toFixed(0)}% of the ${fmt(denom)} ac sprayed`:'';
+    const days=partial
+      ? `${MP.nDays} of ${MP.span} days (${insWeekLabel(new Date(MP.first+'T00:00:00'))} – ${insWeekLabel(new Date(MP.last+'T00:00:00'))})`
+      : `${fmt(MP.products.length)} brands`;
+    const h=exHeader('Products this month',
+      `${sub} · ${days} · ${share} — day-level brands only, not the full product mix`,y); out+=h.svg; y=h.y;
+    const hasMom=MP.prevTotal>0;
+    // Same negligible-base rule as the page: below the floor show the base, not a four-digit percentage.
+    const momOf=p=>p.mom==null?'—':(p.prev<p.ac*0.05?`from ${fmt(p.prev)}`:pc(p.mom));
+    const rows=MP.products.slice(0,16).map(p=>({ name:p.disp, co:p.company, ac:fmt(p.ac),
+      share:(p.ac/MP.total*100).toFixed(0)+'%', mom:momOf(p), mom_ink:(p.mom!=null&&p.prev>=p.ac*0.05)?ink(p.mom):EX.ink3,
+      co_ink:p.company==='UPL'?C.orangeD:C.greenD }));
+    rows.push({ name:'All brands shown', co:'', ac:fmt(MP.total), share:'100%',
+      mom:hasMom?pc(MP.total/MP.prevTotal*100-100):'', _total:true });
+    const cols=[
+      {label:'Brand',key:'name'},{label:'Company',key:'co',weight:700},
+      {label:'Acres',key:'ac',mono:true,align:'right'},{label:'Share',key:'share',mono:true,align:'right'},
+    ];
+    // Dropped rather than printed empty, for the same reason as on the page.
+    if(hasMom) cols.push({label:`vs ${MP.prevName||'prev month'}`,key:'mom',mono:true,align:'right',weight:700});
+    const t=exTable(cols,rows,y); out+=t.svg; y=t.y;
+    return exWrap(out,y+EX.PAD);
+  }
+
+  if(id==='mo-segments'){
+    const MG=D.MG; if(!MG||MG.empty) return null;
+    const MPs=D.MP, cov=(MPs&&!MPs.empty&&MPs.nDays<MPs.span)?` · the ${MPs.nDays} days of ${M.name} the day-level tab covers`:'';
+    const h=exHeader('Product segments by state',`${sub} · share of each state’s day-level product acres${cov}`,y); out+=h.svg; y=h.y;
+    const L=exLegend([{label:'Herbicide',color:C.green},{label:'Insecticide',color:C.orange},{label:'Fungicide',color:C.open},{label:'Other',color:'#B6B1A8'}],y+8);
+    out+=L.svg; y=L.y+10;
+    const mk=r=>({ name:r.name,
+      prod:(r.top||[]).length?'Products  '+(r.top).slice(0,3).map(p=>`${p.disp} ${fmt(p.ac)}`).join(' · '):'',
+      crop:(r.topCrop||[]).length?'Crops       '+(r.topCrop).slice(0,3).map(p=>`${p.disp} ${fmt(p.ac)}`).join(' · '):'',
+      ac:fmt(r.base), h:(r.Herbicide/r.base*100).toFixed(0)+'%', i:(r.Insecticide/r.base*100).toFixed(0)+'%',
+      f:(r.Fungicide/r.base*100).toFixed(0)+'%', o:(r.Other/r.base*100).toFixed(0)+'%', _sub:true });
+    const rows=MG.rows.map(mk); const tr=mk(MG.tot); tr._total=true; rows.push(tr);
+    const t=exTable([
+      {label:'State · top brands and crops',key:'name',sub:'prod',sub2:'crop'},
+      {label:'Acres',key:'ac',mono:true,align:'right'},
+      {label:'Herb',key:'h',mono:true,align:'right'},{label:'Ins',key:'i',mono:true,align:'right'},
+      {label:'Fung',key:'f',mono:true,align:'right'},{label:'Other',key:'o',mono:true,align:'right'},
+    ],rows,y); out+=t.svg; y=t.y;
+    return exWrap(out,y+EX.PAD);
+  }
+
+  if(id==='mo-daily' || id==='mo-trend'){
+    const isDaily=id==='mo-daily';
+    const built=isDaily?buildMonthDailySVG(M,false,true):buildProdTrendSVG(D.T,false,true);
+    if(!built||(!isDaily&&!built.has)) return null;
+    const title=isDaily?`${M.name} day by day`:`Focus product trend${D.T&&D.T.label?' · '+D.T.label:''}`;
+    // The trend names the dates it drew whenever the feed reached less than the month — same rule as the page.
+    const trSpan=(D.T&&D.T.clipped)?`${D.T.rangeLabel} (the days of ${M.name} the day-level tab holds) · ${scopeName}`:sub;
+    const subT=isDaily?`${sub} · against the same dates last season`
+                     :`${trSpan} · daily scanned acres, 7-day average in bold`;
+    const h=exHeader(title,subT,y); out+=h.svg; y=h.y+4;
+    const legend=isDaily
+      ? [{label:`This ${M.short} · ${fmt(M.acres)} ac`,color:INS_CUR.color},{label:`${M.short} last season · ${M.ly!=null?fmt(M.ly):'—'} ac`,color:INS_PREV.color}]
+      : [{label:`${D.T.label} · ${fmt(D.T.total)} ac`,color:C.orangeD}];
+    const L=exLegend(legend,y+10); out+=L.svg; y=L.y+6;
+    const cw=EX.W-EX.PAD*2, ch=Math.round(cw*built.vbH/built.vbW);
+    out+=`<svg x="${EX.PAD}" y="${y}" width="${cw}" height="${ch}" viewBox="0 0 ${built.vbW} ${built.vbH}" preserveAspectRatio="xMidYMid meet">${built.inner}</svg>`;
+    y+=ch;
+    return exWrap(out,y+EX.PAD);
+  }
+  return null;
+}
 function downloadCard(id){
   const host=document.getElementById(id);
-  const xml=buildWeekExport(id);
+  const xml=id.indexOf('mo-')===0 ? buildMonthExport(id) : buildWeekExport(id);
   if(!xml){ console.warn('card export: nothing to render for', id); return; }
   const m=/width="(\d+)" height="(\d+)"/.exec(xml), W=m?+m[1]:EX.W, H=m?+m[2]:900;
   const img=new Image(), scale=2;                       // 2× so it stays crisp when scaled up on a slide
@@ -2998,12 +3152,18 @@ function insWeekSegments(A,W){
    much less useful question. Both slots are user-chosen and either may be cleared.
 
    Daily product acres are extremely spiky, so a raw daily line cannot be read for direction; the chart carries a
-   7-day rolling mean on top of it and the headline compares the last 7 days with the 7 before. */
-function insProdTrend(A){
+   7-day rolling mean on top of it and the headline compares the last 7 days with the 7 before.
+
+   `win` (optional, `{from,to}` as ISO dates) clips the series to one period — Month mode passes the month so the
+   chart shows that month rather than the whole feed. The PICKER's options stay unclipped: the brand list must not
+   change shape as you step between months, or the selection would silently drop out from under the reader. When a
+   window is given the direction figure compares the window with the SAME-LENGTH stretch before it, which for a
+   month is the previous month; without one it stays the last 7 days against the 7 before. */
+function insProdTrend(A,win){
   if(!TX.loaded) return null;
   const scope=r=>(!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
-  const rows=TX.rows.filter(scope);
-  const meta={}; rows.forEach(r=>{ const m=meta[r.brandKey]||(meta[r.brandKey]={ disp:r.brand, company:r.company, ac:0 }); m.ac+=r.acres; });
+  const all=TX.rows.filter(scope);
+  const meta={}; all.forEach(r=>{ const m=meta[r.brandKey]||(meta[r.brandKey]={ disp:r.brand, company:r.company, ac:0 }); m.ac+=r.acres; });
   const options=Object.keys(meta).map(k=>({ key:k, ...meta[k] })).sort((x,y)=>y.ac-x.ac);
   if(!options.length) return { options:[] };
   const defA=(options.find(o=>o.company==='UPL')||options[0]).key;
@@ -3012,18 +3172,41 @@ function insProdTrend(A){
   const a=ok(state.insPa)||defA;
   const b=state.insPb==='none' ? null : (ok(state.insPb)||(defB!==a?defB:null));
   const sel=[a,b].filter(Boolean);
+  const rows=win ? all.filter(r=>r.d>=win.from && r.d<=win.to) : all;
   const dates=rows.map(r=>r.d).sort();
-  if(!dates.length) return { options };
+  if(!dates.length) return { options, a, b, sel, empty:true, label: sel.map(k=>meta[k].disp).join(' + ') };
   const per={}; rows.forEach(r=>{ if(sel.indexOf(r.brandKey)>=0) per[r.d]=(per[r.d]||0)+r.acres; });
-  // Walk every calendar day in range so a day with no sale reads as 0, not as a gap in the line.
-  const series=[], cur=new Date(dates[0]+'T00:00:00'), end=new Date(dates[dates.length-1]+'T00:00:00');
+  /* Walk every calendar day in range so a day with no sale reads as 0, not as a gap in the line — but only
+     across the days the FEED actually reaches. The day-level tab holds a rolling window of recent dates, so
+     drawing a whole month would print three flat weeks of zeroes where the truth is "no record", and a chart
+     that says nothing was sprayed is a different claim from one that says nothing is known. The span is the
+     window intersected with the feed's own coverage, and the card names the dates. */
+  const from = win ? (dates[0]>win.from?dates[0]:win.from) : dates[0];
+  const to   = win ? (dates[dates.length-1]<win.to?dates[dates.length-1]:win.to) : dates[dates.length-1];
+  const series=[], cur=new Date(from+'T00:00:00'), end=new Date(to+'T00:00:00');
   while(cur<=end){ const iso=insISO(cur); series.push({ d:iso, v:per[iso]||0 }); cur.setDate(cur.getDate()+1); }
   series.forEach((p,i)=>{ let s=0,n=0; for(let j=Math.max(0,i-6);j<=i;j++){ s+=series[j].v; n++; } p.avg=s/n; });
-  const last7=series.slice(-7).reduce((s,p)=>s+p.v,0), prior7=series.slice(-14,-7).reduce((s,p)=>s+p.v,0);
-  return { options, a, b, sel, series, total:series.reduce((s,p)=>s+p.v,0), last7, prior7,
-    trend: prior7 ? last7/prior7*100-100 : null,
+  const total=series.reduce((s,p)=>s+p.v,0);
+  const out={ options, a, b, sel, series, total, from, to,
     label: sel.map(k=>meta[k].disp).join(' + '),
     companies: sel.map(k=>meta[k].company) };
+  if(win){
+    out.clipped = from>win.from || to<win.to;                    // the feed did not reach the whole window
+    out.rangeLabel=`${insWeekLabel(new Date(from+'T00:00:00'))} – ${insWeekLabel(new Date(to+'T00:00:00'))}`;
+    // The same number of days immediately before the drawn series — a like-for-like stretch, not a fixed month,
+    // so it stays comparable when the feed only covers part of the window.
+    const n=series.length, pEnd=new Date(from+'T00:00:00'); pEnd.setDate(pEnd.getDate()-1);
+    const pStart=new Date(pEnd); pStart.setDate(pEnd.getDate()-(n-1));
+    const pa=insISO(pStart), pb=insISO(pEnd);
+    out.prior=all.filter(r=>sel.indexOf(r.brandKey)>=0 && r.d>=pa && r.d<=pb).reduce((s,r)=>s+r.acres,0);
+    out.priorLabel=`${insWeekLabel(pStart)} – ${insWeekLabel(pEnd)}`;
+    out.trend = out.prior ? total/out.prior*100-100 : null;
+  } else {
+    out.last7=series.slice(-7).reduce((s,p)=>s+p.v,0);
+    out.prior7=series.slice(-14,-7).reduce((s,p)=>s+p.v,0);
+    out.trend = out.prior7 ? out.last7/out.prior7*100-100 : null;
+  }
+  return out;
 }
 function buildProdTrendSVG(T,mob,exp){
   const s=T&&T.series; if(!s || s.length<2) return { has:false, svg:'', inner:'' };
@@ -3082,6 +3265,243 @@ function buildWeekBarsSVG(W,mob,exp){
     lab+=`<text x="${X(i).toFixed(1)}" y="${(y1+34*F).toFixed(1)}" text-anchor="middle" font-size="${(10*F).toFixed(1)}" font-weight="${exp?600:400}" fill="${exp?'#7C776E':'#B6B1A8'}" font-family="'IBM Plex Mono'">${d.mc!=null?fmt(d.mc)+' mc':''}</text>`;
   });
   const inner=`${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC" stroke-width="${SW}"/>${area}${line('ly',INS_PREV.color,1.8,5)}${line('ac',INS_CUR.color,2.8,0)}`;
+  return { inner, vbW:Wd, vbH:H, svg:`<svg viewBox="0 0 ${Wd} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${inner}</svg>` };
+}
+
+/* ===================== Month mode — the monthly review =====================
+   Same spine as the weekly review, one horizon up: ONE COMPLETE CALENDAR MONTH, the 1st to the 30th/31st.
+
+   Why complete months only. The sheet writes the running day as the day runs, and a part-month compared against a
+   whole month a year ago invents a shortfall that closes itself on the 1st. The month that just ended is therefore
+   the newest one on offer; today's own month never appears. (The Season mode is where "where do we stand right
+   now" is answered, and it is anchored to yesterday for exactly the same reason.)
+
+   Why it never steps before 1 April. A calendar month, unlike a Sat–Fri week, can never STRADDLE the fiscal year
+   boundary — so no month is ever skipped. But a month earlier than April belongs to the PREVIOUS season's column,
+   and reading March off the current season's column would quietly return zero rather than an error. The stepper
+   stops at the season's first month and says so.
+
+   SCOPE LIMIT, same as the week and stated on the page: everything here is state-grain, because the cumulative tab
+   is the only source that keeps a record day by day. What a territory or an area manager did *during* a month that
+   has already passed is not recoverable — the machine sheet is overwritten every morning. */
+const INS_MON      = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const INS_MON_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+// The April the current fiscal year began in — the floor the month stepper stops at.
+function insFyStartYear(){ const n=new Date(); return (n.getMonth()+1)>=4 ? n.getFullYear() : n.getFullYear()-1; }
+/* back = 0 is the month that just ended. Month length comes from SNAKE_MDAYS rather than the calendar, so the
+   window always matches the fiscal axis exactly (that axis is 365 days and carries no leap day; February is 28
+   there in every year). Returns null before the season's first month. */
+function insMonthWindow(back){
+  const now=new Date();
+  const d0=new Date(now.getFullYear(), now.getMonth()-1-(back||0), 1);   // JS rolls the year for a negative month
+  const y=d0.getFullYear(), m=d0.getMonth()+1, fy=insFyStartYear();
+  if(y<fy || (y===fy && m<4)) return null;                              // earlier than this season's April
+  const len=SNAKE_MDAYS[m], from=snakeOff(m,1);
+  if(from==null) return null;
+  return { d0, d1:new Date(y,m-1,len), y, m, len, from, to:from+len-1, back:back||0,
+    name:INS_MON_FULL[m-1], short:INS_MON[m-1], title:`${INS_MON_FULL[m-1]} ${y}` };
+}
+const insMonthISO = M => ({ from:insISO(M.d0), to:insISO(M.d1) });
+/* What the day-level tab actually holds right now, in words. Measured live it was a ROLLING window of recent
+   days (24 Jul – 6 Aug on 2026-08-06), not the season-long history an earlier note assumed — so an empty month
+   must report the feed's real range rather than a hard-coded start date that quietly goes stale. */
+function insTxRange(){
+  if(!TX.loaded || !TX.rows.length) return '';
+  let lo=null, hi=null;
+  for(const r of TX.rows){ if(lo==null||r.d<lo) lo=r.d; if(hi==null||r.d>hi) hi=r.d; }
+  return lo ? `${insWeekLabel(new Date(lo+'T00:00:00'))} – ${insWeekLabel(new Date(hi+'T00:00:00'))}` : '';
+}
+/* insWeekSum is a generic "sum this fiscal-offset range" — the name predates Month mode and is not week-specific. */
+function insMonthAgg(A,back){
+  const w=insMonthWindow(back); if(!w) return null;
+  const code=A.snCode, M={ ...w };
+  const pw=insMonthWindow(w.back+1);                       // null in April: the season has no month before it
+  M.prevWin=pw; M.prevName=pw?pw.name:'';
+  M.acres=insWeekSum(code,INS_CUR.key,w.from,w.to);
+  M.prev = pw ? insWeekSum(code,INS_CUR.key,pw.from,pw.to) : null;
+  M.ly   =insWeekSum(code,INS_PREV.key,w.from,w.to);
+  M.ly2  =insWeekSum(code,INS_PREV2.key,w.from,w.to);
+  M.mom  = (M.acres!=null&&M.prev)? M.acres/M.prev*100-100 : null;
+  M.yoy  = (M.acres!=null&&M.ly)?   M.acres/M.ly*100-100   : null;
+  M.yoy2 = (M.acres!=null&&M.ly2)?  M.acres/M.ly2*100-100  : null;
+  M.hasData = M.acres!=null && M.acres>0;
+
+  const d=insDaily(code,INS_CUR.key), dp=insDaily(code,INS_PREV.key), mc=insMach(code);
+  M.days=[];
+  for(let i=0;i<w.len;i++){ const o=w.from+i, dt=new Date(w.y,w.m-1,i+1);
+    M.days.push({ off:o, dom:i+1, dow:INS_DOW[dt.getDay()], ac:d[o], ly:dp[o], mc:mc[o] }); }
+  const mm=M.days.map(x=>x.mc).filter(x=>x!=null);
+  M.machAvg = mm.length? mm.reduce((a,b)=>a+b,0)/mm.length : null;
+  M.machPeak= mm.length? Math.max.apply(null,mm) : null;
+  // The month's output is (machines that ran) × (ground each covered), so both are carried and the headline
+  // decomposes rather than just being stated. Same construction as the week.
+  M.machDays = mm.length? mm.reduce((a,b)=>a+b,0) : null;
+  M.acPerMachine = (M.machDays && M.acres!=null) ? M.acres/M.machDays : null;
+  M.dayAvg = M.acres!=null ? M.acres/w.len : null;
+  const worked=M.days.filter(x=>x.ac!=null&&x.ac>0);
+  M.daysWorked=worked.length;
+  const best=worked.slice().sort((a,b)=>b.ac-a.ac)[0];
+  M.bestDay=best||null;
+
+  /* How the month built up, in BLOCKS OF DAYS FROM THE 1st — 1–7, 8–14, 15–21, 22–28, then the tail.
+     Deliberately not the programme's Sat–Fri week: those do not tile a calendar month, so the first and last
+     would be part-weeks wearing a week's name, and Week mode already owns that definition. A fixed block of
+     dates also compares cleanly year over year — it is the same dates on both sides. The tail block is shorter
+     than the rest and is labelled with its own day count so its shorter bar is not read as a collapse. */
+  M.blocks=[];
+  for(let s=0;s<w.len;s+=7){
+    const e=Math.min(w.len-1,s+6); let ac=null, ly=null; const ms=[];
+    for(let i=s;i<=e;i++){ const x=M.days[i];
+      if(x.ac!=null) ac=(ac||0)+x.ac;
+      if(x.ly!=null) ly=(ly||0)+x.ly;
+      if(x.mc!=null) ms.push(x.mc); }
+    M.blocks.push({ label:`${s+1}–${e+1}`, days:e-s+1, part:(e-s+1)<7, ac, ly,
+      mach: ms.length? ms.reduce((a,b)=>a+b,0)/ms.length : null });
+  }
+
+  /* Season position across the month, in BOTH units — the percentage gap can narrow while the acre gap widens,
+     because the base grows faster than the shortfall does. Null in April: there is no day before the season. */
+  const c26=snakeDenseFor(code,INS_CUR.key), c25=snakeDenseFor(code,INS_PREV.key);
+  const pct=o=>(o>=0&&c26[o]!=null&&c25[o])?c26[o]/c25[o]*100-100:null;
+  const acg=o=>(o>=0&&c26[o]!=null&&c25[o]!=null)?c25[o]-c26[o]:null;
+  M.pos={ pct0:pct(w.from-1), pct1:pct(w.to), ac0:acg(w.from-1), ac1:acg(w.to), cum:c26[w.to] };
+
+  M.states=(A.gst?[A.gst]:INS_STATES.filter(gateAllowsState)).map(c=>{
+    const ac=insWeekSum(c,INS_CUR.key,w.from,w.to);
+    const pv=pw ? insWeekSum(c,INS_CUR.key,pw.from,pw.to) : null;
+    const l =insWeekSum(c,INS_PREV.key,w.from,w.to);
+    const m2=insMach(c), ms=[]; for(let o=w.from;o<=w.to;o++) if(m2[o]!=null) ms.push(m2[o]);
+    return { code:c, name:STATE_NAMES[c]||c, ac:ac||0, ly:l,
+      mom:(ac!=null&&pv)?ac/pv*100-100:null, yoy:(ac!=null&&l)?ac/l*100-100:null,
+      mach: ms.length? ms.reduce((a,b)=>a+b,0)/ms.length : null };
+  }).filter(x=>x.ac>0||x.ly>0).sort((a,b)=>b.ac-a.ac);
+  M.total=M.states.reduce((a,x)=>a+x.ac,0);
+  return M;
+}
+
+/* ===== products for the month =====
+   The day-level tab is the ONLY product source that can answer a month: the summary tab carries YTD and yesterday
+   with no dates, and the weekly tab is one hand-built week. So this card is built from it — and says plainly that
+   it covers the brands with day-level records rather than the whole product mix, because that tab is narrow (a
+   handful of focus brands, and a single-digit share of the fleet's acres). Overstating it would put a table headed
+   "products this month" on screen that reads as the mix when it is not.
+   Every product carries its previous month beside it, so a brand's direction is visible and not just its size. */
+function insMonthProducts(A,M){
+  if(!TX.loaded || !M) return null;
+  const scope=r=>r.st!=='OT' && (!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
+  const w=insMonthISO(M);
+  const rows=TX.rows.filter(r=>scope(r) && r.d>=w.from && r.d<=w.to);
+  if(!rows.length) return { empty:true };
+  const pw=M.prevWin, pr = pw ? (()=>{ const p=insMonthISO(pw); return TX.rows.filter(r=>scope(r)&&r.d>=p.from&&r.d<=p.to); })() : [];
+  const prevBy={}; pr.forEach(r=>{ prevBy[r.brandKey]=(prevBy[r.brandKey]||0)+r.acres; });
+  const roll=key=>{ const m={}; rows.forEach(r=>{ const k=key(r); m[k]=(m[k]||0)+r.acres; }); return m; };
+  const meta={}; rows.forEach(r=>{ meta[r.brandKey]=meta[r.brandKey]||{ disp:r.brand, company:r.company }; });
+  const pm=roll(r=>r.brandKey), cm=roll(r=>r.crop), rm=roll(r=>r.st);
+  const listOf=(m,f)=>Object.keys(m).map(k=>f(k,m[k])).filter(x=>x.ac>0).sort((x,y)=>y.ac-x.ac);
+  const dates=[...new Set(rows.map(r=>r.d))].sort();
+  /* COVERAGE. Measured on 2026-08-06 the day-level tab held a rolling ~two-week window (24 Jul – 6 Aug), not a
+     season-long history — so for most months it sees some of the days, and for older ones none at all. That makes
+     the naive share ("product acres ÷ the month's fleet acres") a partial numerator over a whole denominator,
+     which understates coverage by however much of the month the feed missed. So the fleet's acres ON THE DAYS THE
+     FEED ACTUALLY COVERS are carried too, and the card divides by that instead whenever the month is not complete. */
+  const domSet=new Set(dates.map(d=>+d.slice(8,10)));
+  const fleetOnDays=M.days.reduce((s,d)=>s+((domSet.has(d.dom)&&d.ac!=null)?d.ac:0),0);
+  return {
+    total: rows.reduce((s,r)=>s+r.acres,0),
+    prevTotal: pr.reduce((s,r)=>s+r.acres,0),
+    prevName: M.prevName,
+    upl:   rows.reduce((s,r)=>s+(r.company==='UPL'?r.acres:0),0),
+    swal:  rows.reduce((s,r)=>s+(r.company==='SWAL'?r.acres:0),0),
+    nDays: dates.length, first: dates[0], last: dates[dates.length-1], span: M.len, fleetOnDays,
+    products: listOf(pm,(k,v)=>{ const p=prevBy[k]; return { key:k, ...meta[k], ac:v, prev:p==null?null:p,
+      mom: p ? v/p*100-100 : null }; }),
+    crops:    listOf(cm,(k,v)=>({ key:k, ac:v })),
+    regions:  listOf(rm,(k,v)=>({ st:k, name: STATE_NAMES[k]||k, ac:v })) };
+}
+/* Segments for the month. Unlike the weekly card this needs NO join: the day-level tab carries its own portfolio
+   column, already normalised by prodPortfolio. Herbicide / Insecticide / Fungicide are named and everything else
+   — bio solution, soil & seed health, unclassified — falls into Other, so nothing is dropped and this card's
+   total equals the products table's. Keep it that way: two totals disagreeing on one screen needs a footnote. */
+function insMonthSegments(A,M){
+  if(!TX.loaded || !M) return null;
+  const scope=r=>r.st!=='OT' && (!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
+  const w=insMonthISO(M), by={};
+  TX.rows.filter(r=>scope(r) && r.d>=w.from && r.d<=w.to).forEach(r=>{
+    const e=by[r.st]||(by[r.st]={ st:r.st, name:STATE_NAMES[r.st]||r.st, base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0, prod:{}, crop:{} });
+    const k = INS_SEGS.indexOf(r.portfolio)>=0 ? r.portfolio : 'Other';
+    e[k]+=r.acres; e.base+=r.acres;
+    const p=e.prod[r.brandKey]||(e.prod[r.brandKey]={ disp:r.brand, ac:0 }); p.ac+=r.acres;
+    const c=e.crop[r.crop]||(e.crop[r.crop]={ disp:r.crop, ac:0 }); c.ac+=r.acres;
+  });
+  const topOf=o=>Object.keys(o).map(k=>o[k]).sort((a,b)=>b.ac-a.ac).slice(0,3);
+  const rows=Object.keys(by).map(k=>by[k]).filter(x=>x.base>0).sort((a,b)=>b.base-a.base)
+    .map(r=>({ ...r, top: topOf(r.prod), topCrop: topOf(r.crop) }));
+  if(!rows.length) return { empty:true };
+  const tot={ st:'', name:'All shown', base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0, prod:{}, crop:{} };
+  rows.forEach(r=>{ tot.base+=r.base; INS_SEGS.concat('Other').forEach(k=>{ tot[k]+=r[k]; });
+    Object.keys(r.prod).forEach(k=>{ const p=tot.prod[k]||(tot.prod[k]={ disp:r.prod[k].disp, ac:0 }); p.ac+=r.prod[k].ac; });
+    Object.keys(r.crop).forEach(k=>{ const c=tot.crop[k]||(tot.crop[k]={ disp:r.crop[k].disp, ac:0 }); c.ac+=r.crop[k].ac; }); });
+  tot.top=topOf(tot.prod); tot.topCrop=topOf(tot.crop);
+  return { rows, tot };
+}
+
+/* The month day by day, this season against the same fiscal days last season. A LINE, not bars: over ~30 points
+   the question is the month's ARC — where it climbed, where it broke, where it crossed last season — and thirty
+   pairs of bars fragments exactly that. Point markers are dropped (they merge into a rope at this density) and
+   only every few dates is labelled, so the axis stays readable on a projector. */
+function buildMonthDailySVG(M,mob,exp){
+  const days=M.days; let max=1;
+  days.forEach(d=>{ max=Math.max(max, d.ac||0, d.ly||0); });
+  const F=exp?1.9:1, SW=exp?2:1;
+  const Wd=mob?400:960, H=mob?240:270, mL=mob?48:(exp?98:64), mR=exp?30:20, mT=18, mB=exp?66:44;
+  const x0=mL,x1=Wd-mR,y0=mT,y1=H-mB;
+  const step=niceNum(max/4), nMax=Math.max(step,Math.ceil(max/step)*step);
+  const X=i=>x0+(days.length>1 ? i/(days.length-1)*(x1-x0) : (x1-x0)/2);
+  const Y=v=>y1-(v/nMax)*(y1-y0);
+  let grid=''; for(let t=0;t<=nMax+1e-6;t+=step){ const y=Y(t);
+    grid+=`<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="#EFEDE7" stroke-width="${SW}"/><text x="${x0-9*(exp?1.6:1)}" y="${(y+3.6*F).toFixed(1)}" text-anchor="end" font-size="${(10.5*F).toFixed(1)}" font-weight="${exp?600:400}" fill="${exp?'#6E6A62':'#9C988F'}" font-family="'IBM Plex Mono'">${snakeFmtK(t)}</text>`; }
+  const line=(key,color,width,dash)=>{
+    const pts=days.map((d,i)=>({i,v:d[key]})).filter(p=>p.v!=null);
+    if(pts.length<2) return '';
+    const dd=pts.map((p,k)=>`${k?'L':'M'}${X(p.i).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(' ');
+    return `<path d="${dd}" fill="none" stroke="${color}" stroke-width="${width*SW}" stroke-linejoin="round" stroke-linecap="round"${dash?` stroke-dasharray="${dash*(exp?2:1)} ${4*(exp?2:1)}"`:''}/>`;
+  };
+  const area=(()=>{ const pts=days.map((d,i)=>({i,v:d.ac})).filter(p=>p.v!=null);
+    if(pts.length<2) return '';
+    return `<path d="${pts.map((p,k)=>`${k?'L':'M'}${X(p.i).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(' ')} L${X(pts[pts.length-1].i).toFixed(1)} ${y1} L${X(pts[0].i).toFixed(1)} ${y1} Z" fill="${C.softO}" opacity=".55"/>`; })();
+  const every=mob?5:(exp?4:3);
+  let lab='';
+  days.forEach((d,i)=>{
+    if(i%every!==0 && i!==days.length-1) return;
+    lab+=`<text x="${X(i).toFixed(1)}" y="${(y1+19*F).toFixed(1)}" text-anchor="middle" font-size="${(11*F).toFixed(1)}" font-weight="${exp?700:600}" fill="${exp?'#14120F':'#46433d'}" font-family="'IBM Plex Mono'">${d.dom}</text>`;
+  });
+  lab+=`<text x="${((x0+x1)/2).toFixed(1)}" y="${(y1+34*F).toFixed(1)}" text-anchor="middle" font-size="${(10*F).toFixed(1)}" font-weight="${exp?600:400}" fill="${exp?'#7C776E':'#B6B1A8'}" font-family="'Noto Sans'">day of ${M.name}</text>`;
+  const inner=`${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC" stroke-width="${SW}"/>${area}${line('ly',INS_PREV.color,1.8,5)}${line('ac',INS_CUR.color,2.8,0)}`;
+  return { inner, vbW:Wd, vbH:H, svg:`<svg viewBox="0 0 ${Wd} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${inner}</svg>` };
+}
+/* How the month built up — paired bars, one pair per block of dates. Bars here and a line above on purpose: four
+   or five blocks is a comparison ("which stretch did we work"), not a shape, and a five-point line asks the reader
+   to read a trend into too little. */
+function buildMonthBlocksSVG(M,mob,exp){
+  const bs=M.blocks; let max=1;
+  bs.forEach(b=>{ max=Math.max(max, b.ac||0, b.ly||0); });
+  const F=exp?1.9:1, SW=exp?2:1;
+  const Wd=mob?400:960, H=mob?230:250, mL=mob?48:(exp?98:64), mR=exp?30:20, mT=16, mB=exp?76:50;
+  const x0=mL,x1=Wd-mR,y0=mT,y1=H-mB;
+  const step=niceNum(max/4), nMax=Math.max(step,Math.ceil(max/step)*step);
+  const Y=v=>y1-(v/nMax)*(y1-y0);
+  const slot=(x1-x0)/bs.length, half=Math.min(34*(exp?1.5:1),(slot-14)/2);
+  let grid=''; for(let t=0;t<=nMax+1e-6;t+=step){ const y=Y(t);
+    grid+=`<line x1="${x0}" y1="${y.toFixed(1)}" x2="${x1}" y2="${y.toFixed(1)}" stroke="#EFEDE7" stroke-width="${SW}"/><text x="${x0-9*(exp?1.6:1)}" y="${(y+3.6*F).toFixed(1)}" text-anchor="end" font-size="${(10.5*F).toFixed(1)}" font-weight="${exp?600:400}" fill="${exp?'#6E6A62':'#9C988F'}" font-family="'IBM Plex Mono'">${snakeFmtK(t)}</text>`; }
+  let bars='', lab='';
+  bs.forEach((b,i)=>{
+    const cx=x0+slot*(i+0.5);
+    if(b.ly!=null&&b.ly>0) bars+=`<rect x="${(cx-half).toFixed(1)}" y="${Y(b.ly).toFixed(1)}" width="${half.toFixed(1)}" height="${Math.max(0,y1-Y(b.ly)).toFixed(1)}" fill="${INS_PREV.color}" opacity=".5" rx="2"/>`;
+    if(b.ac!=null&&b.ac>0) bars+=`<rect x="${cx.toFixed(1)}" y="${Y(b.ac).toFixed(1)}" width="${half.toFixed(1)}" height="${Math.max(0,y1-Y(b.ac)).toFixed(1)}" fill="${INS_CUR.color}" rx="2"/>`;
+    lab+=`<text x="${cx.toFixed(1)}" y="${(y1+19*F).toFixed(1)}" text-anchor="middle" font-size="${(12*F).toFixed(1)}" font-weight="700" fill="${exp?'#14120F':'#46433d'}" font-family="'Noto Sans'">${b.label}</text>`;
+    lab+=`<text x="${cx.toFixed(1)}" y="${(y1+34*F).toFixed(1)}" text-anchor="middle" font-size="${(10*F).toFixed(1)}" font-weight="${exp?600:400}" fill="${exp?'#7C776E':'#B6B1A8'}" font-family="'IBM Plex Mono'">${b.part?b.days+' days':(b.mach!=null?fmt(b.mach)+' mc':'')}</text>`;
+  });
+  const inner=`${grid}${lab}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D9D5CC" stroke-width="${SW}"/>${bars}`;
   return { inner, vbW:Wd, vbH:H, svg:`<svg viewBox="0 0 ${Wd} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">${inner}</svg>` };
 }
 
@@ -3311,7 +3731,7 @@ function insightsBodyHTML(mob){
       <div style="position:relative"><select id="insStateSel" style="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none">${
         optionsHTML([{v:'',t:'All India'},...INS_STATES.filter(gateAllowsState).map(c=>({v:c,t:STATE_NAMES[c]}))], A.gst)
       }</select>${I.caret}</div></div>` : '';
-  const mode = ['yday','week'].includes(state.insMode) ? state.insMode : 'season';
+  const mode = ['yday','week','month'].includes(state.insMode) ? state.insMode : 'season';
   /* Area-manager and cluster-officer filters — YESTERDAY ONLY, and page-local like insSt.
      They exist here and nowhere else on this page because Sheet1 is the only tab carrying either dimension: the
      cumulative tab is state-grain and the product tab has no people in it at all, so Season and Week could not
@@ -3336,13 +3756,14 @@ function insightsBodyHTML(mob){
               + one('insCoSel','Officer',[{v:'',t:coPick||amPick?'All':'All'},...cos.map(c=>({v:c,t:c}))],coPick);
   }
   const modeToggle = `<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
-      ${[['season','Season'],['week','Week'],['yday','Yesterday']].map(([k,t])=>`<button data-act="insmode" data-m="${k}" style="${css(seg(mode===k))}">${t}</button>`).join('')}</div>`;
+      ${[['season','Season'],['month','Month'],['week','Week'],['yday','Yesterday']].map(([k,t])=>`<button data-act="insmode" data-m="${k}" style="${css(seg(mode===k))}">${t}</button>`).join('')}</div>`;
   const scopeName = A.gst?E(A.regionName):'Seven states';
   // Copy rule for this whole page: describe what the figure IS, never tell the reader what to do with it. The
   // page is read by whoever opens it, not narrated to a presenter — so "both measures moved" and not "worth
   // saying both ways", "yesterday in detail" and not "leads to check this morning".
   const subtitle = mode==='yday' ? `${scopeName} · yesterday in detail`
     : mode==='week' ? `${scopeName} · one completed week, ${INS_WEEK_PHRASE}`
+    : mode==='month' ? `${scopeName} · one completed calendar month, the 1st to the last`
     : `${scopeName} · the season so far`;
   // flex-basis, not flex:1 — with the mode toggle, the scope picker and the freshness line all competing for the
   // row, a purely greedy title collapses to two cramped lines before the row ever wraps.
@@ -3351,6 +3772,264 @@ function insightsBodyHTML(mob){
         <div style="font-size:${mob?'15px':'16.5px'};font-weight:700;letter-spacing:-.01em">Programme insights</div>
         <div style="font-size:11.5px;color:#9C988F;margin-top:2px">${subtitle}${A.scoped?` · ${E(A.og)} only`:''}</div>
       </div>${modeToggle}${stSel}${peopleSel}${mob?'':`<div style="flex:0 1 auto">${src}</div>`}</div>`;
+
+  /* ================= Month mode · the monthly review =================
+     The weekly review's spine one horizon up. Same reading conditions — read off a projector, not scanned at a
+     desk — so the same rules apply: fewer and larger numbers, one idea per card, every card exportable. */
+  if(mode==='month'){
+    if(!TX.loaded && !TX.loading && !TX.error) setTimeout(loadTx,0);       // day-level products: the only monthly source
+    const back=state.insMonthBack|0;
+    const M=insMonthAgg(A, back);
+    const canBack=!!insMonthWindow(back+1);           // false once the stepper reaches the season's first month
+    const mLabel=M?M.title:'—';
+    const stepper=`<div style="display:flex;align-items:center;gap:8px">
+        <button data-act="insmonth" data-d="-1" ${canBack?'':'disabled'} title="${canBack?'Earlier month':'April is the first month of this season'}" style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:${canBack?'#fff':'#F6F5F2'};color:${canBack?'#46433d':'#C9C4BA'};font-size:15px;cursor:${canBack?'pointer':'default'};line-height:1">‹</button>
+        <span style="font-size:12.5px;font-weight:600;min-width:${mob?'118px':'128px'};text-align:center">${E(mLabel)}</span>
+        <button data-act="insmonth" data-d="1" ${back<=0?'disabled':''} title="Later month" style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:${back<=0?'#F6F5F2':'#fff'};color:${back<=0?'#C9C4BA':'#46433d'};font-size:15px;cursor:${back<=0?'default':'pointer'};line-height:1">›</button>
+      </div>`;
+    const mHead=`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:-2px">${stepper}
+        <span style="font-size:11px;color:#B6B1A8">${back===0?'the month that just ended':`${back} month${back===1?'':'s'} earlier`}${M?` · ${M.len} days`:''}${canBack?'':' · the season starts in April'}</span></div>`;
+    if(!M || !SNAKE.loaded || !M.hasData){
+      return `<div style="display:flex;flex-direction:column;gap:14px">${header}${mHead}
+        ${card(waiting(SNAKE.error, SNAKE.error?'Could not load the cumulative tab.':(SNAKE.loaded?'No acres were logged in this month.':'Loading the season history…'),'snakeretry'))}
+        </div>`;
+    }
+    const moSub=`${M.title} · ${A.gst?A.regionName:'all India'}`;
+    const dlWrap=(id,title,inner)=> inner ? `<div style="position:relative">
+        <div id="${id}" data-title="${E(title)}" data-sub="${E(moSub)}" data-file="${id}_${M.y}-${String(M.m).padStart(2,'0')}">${inner}</div>
+        <button data-act="dlcard" data-id="${id}" title="Download this as a PNG for your deck"
+          style="position:absolute;top:11px;right:12px;display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;font-family:'Noto Sans';font-size:11px;font-weight:600;cursor:pointer;z-index:2">${DL_ICON}PNG</button>
+      </div>` : '';
+    const big=(v,l,sub,ink)=>`<div style="flex:1 0 auto;min-width:${mob?'46%':'168px'};padding:${mob?'14px 16px':'16px 20px'};border-right:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
+        <div style="font-family:'IBM Plex Mono';font-size:${mob?'21px':'26px'};font-weight:700;color:${ink||C.ink};line-height:1">${v}</div>
+        <div style="font-size:10.5px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:7px">${l}</div>
+        ${sub?`<div style="font-size:11px;color:#B6B1A8;margin-top:3px">${sub}</div>`:''}</div>`;
+    const pill2=(p,lab)=>p==null?'':`<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:${p>=0?C.softG:C.softR};color:${p>=0?C.greenD:C.brk};font-size:${mob?'12px':'13px'};font-weight:700;white-space:nowrap">${p>=0?'▲':'▼'} ${Math.abs(p).toFixed(0)}%<span style="color:#9C988F;font-weight:500">${lab}</span></span>`;
+    const mVs=v=>v==null?`<span style="color:#C9C4BA">—</span>`:`<span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700;color:${v>=0?C.greenD:C.brk}">${v>=0?'+':'−'}${Math.abs(v).toFixed(0)}%</span>`;
+
+    const hero=card(`<div style="padding:${mob?'16px':'20px'}">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">${E(M.title)} · ${E(A.gst?A.regionName:'all India')}</div>
+        <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+          <div style="font-family:'IBM Plex Mono';font-size:${mob?'36px':'48px'};font-weight:700;line-height:1;letter-spacing:-.02em">${fmt(M.acres)}<span style="font-size:${mob?'15px':'18px'};color:#B6B1A8;font-weight:500"> ac</span></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;padding-bottom:6px">${pill2(M.mom,M.prevName?` on ${E(M.prevName)}`:' on the month before')}${pill2(M.yoy,` on ${E(M.short)} last season`)}${pill2(M.yoy2,' on two seasons ago')}</div>
+        </div></div>
+      <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-top:1px solid #EFEDE7">
+        ${big(fmt(M.dayAvg),'acres a day', M.bestDay?`${M.bestDay.dom} ${E(M.short)} was the best, at ${fmt(M.bestDay.ac)}`:`averaged over the ${M.len} days`,C.orangeD)}
+        ${big(M.machPeak!=null?fmt(M.machPeak):'—','machines on the busiest day', M.machAvg!=null?`${fmt(M.machAvg)} on an average day`:'')}
+        ${big(M.acPerMachine!=null?fmt(M.acPerMachine):'—','acres each','what one machine covered on a day it worked')}
+        ${big(M.ly!=null?fmt(M.ly):'—',`${E(M.short)} last season`, M.ly!=null?`${fmt(Math.abs(M.acres-M.ly))} acres ${M.acres>=M.ly?'more':'less'} this time`:'')}
+      </div>`);
+
+    /* Season position across the month — both units, same reason as the week: they can disagree. Absent in
+       April, where there is no day before the month to measure from. */
+    const POS=M.pos;
+    let posCard='';
+    if(POS.pct0!=null && POS.pct1!=null && POS.ac0!=null && POS.ac1!=null){
+      const dPct=POS.pct1-POS.pct0, dAc=POS.ac1-POS.ac0;
+      const aheadEnd = POS.pct1>=0, noun = aheadEnd?'lead':'gap';
+      const better = () => aheadEnd ? 'grew' : 'narrowed';
+      const worse  = () => aheadEnd ? 'shrank' : 'widened';
+      const pctWord = dPct>=0?better():worse(), acWord = dAc<=0?better():worse();
+      const agree = (dPct>=0)===(dAc<=0);
+      const line = agree
+        ? `Both ways of measuring agree: over ${E(M.name)} the season ${noun} ${pctWord}, by ${Math.abs(dPct).toFixed(1)} percentage points and by ${fmt(Math.abs(dAc))} acres.`
+        : `The two measures disagree this month. As a percentage the ${noun} ${pctWord} by ${Math.abs(dPct).toFixed(1)} points, but counted in acres it ${acWord} by ${fmt(Math.abs(dAc))}. Both are true: this season grew faster than the difference between the two seasons did, so the ratio improved while the raw distance did not.`;
+      const acLabel = v => v>=0 ? 'acres behind' : 'acres ahead';
+      const dMag = Math.abs(POS.ac1) - Math.abs(POS.ac0);
+      // The day before the month began is the LAST day of the previous month, and that is not the 31st of every
+      // month — take the length off the previous window rather than assuming one.
+      const startedOn = M.prevWin ? `${M.prevWin.len} ${E(M.prevWin.short)}` : 'the day before it';
+      posCard=card(`${cHead('Where the month left the season',`How this season stood against last season on ${startedOn}, and again on ${M.len} ${E(M.short)}`)}
+        <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-bottom:1px solid #EFEDE7">
+          ${big(`${POS.pct0>=0?'+':'−'}${Math.abs(POS.pct0).toFixed(1)}%`,`${POS.pct0>=0?'lead':'gap'} before the month`)}
+          ${big(`${POS.pct1>=0?'+':'−'}${Math.abs(POS.pct1).toFixed(1)}%`,`${noun} after it`, `${Math.abs(dPct).toFixed(1)} points ${dPct>=0?'better':'worse'}`, dPct>=0?C.act:C.brk)}
+          ${big(fmt(Math.abs(POS.ac0)),`${acLabel(POS.ac0)} before the month`)}
+          ${big(fmt(Math.abs(POS.ac1)),`${acLabel(POS.ac1)} after it`, `${fmt(Math.abs(dMag))} acres ${dMag>=0?'wider':'closer'}`, dAc<=0?C.act:C.brk)}
+        </div>
+        <div style="padding:13px 16px;font-size:${mob?'12.5px':'13.5px'};color:#46433d;line-height:1.6">${line}</div>`);
+    }
+
+    const dchart=buildMonthDailySVG(M,mob);
+    const shape=card(`${cHead(`${E(M.name)} day by day`,'Each day against the same date last season')}
+      <div style="display:flex;gap:18px;flex-wrap:wrap;padding:12px 16px 2px">
+        <div style="display:flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border-radius:3px;background:${INS_CUR.color}"></span><span style="font-size:12px;font-weight:600">This ${E(M.short)}</span><span style="font-family:'IBM Plex Mono';font-size:12px;color:#6E6A62">${fmt(M.acres)}</span></div>
+        <div style="display:flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border-radius:3px;background:${INS_PREV.color};opacity:.45"></span><span style="font-size:12px;font-weight:600">${E(M.short)} ’25-26</span><span style="font-family:'IBM Plex Mono';font-size:12px;color:#6E6A62">${M.ly!=null?fmt(M.ly):'—'}</span></div>
+      </div>
+      <div style="padding:2px ${mob?'2px':'8px'} 12px">${dchart.svg}</div>`);
+
+    const bchart=buildMonthBlocksSVG(M,mob);
+    const blockRow=b=>`<span style="font-size:11.5px;color:#6E6A62"><strong style="color:#46433d">${b.label}</strong> <span style="font-family:'IBM Plex Mono'">${b.ac!=null?fmt(b.ac):'—'}</span>${b.ly?` <span style="color:${(b.ac||0)>=b.ly?C.greenD:C.brk};font-weight:600">${(b.ac||0)>=b.ly?'+':'−'}${Math.abs(((b.ac||0)/b.ly*100-100)).toFixed(0)}%</span>`:''}</span>`;
+    const blocks=card(`${cHead('How the month built up','Blocks of dates from the 1st, this season against the same dates last season · the number under each block is how many machines worked on an average day, or its length where the block is short')}
+      <div style="display:flex;gap:18px;flex-wrap:wrap;padding:12px 16px 2px">
+        <div style="display:flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border-radius:3px;background:${INS_CUR.color}"></span><span style="font-size:12px;font-weight:600">This season</span></div>
+        <div style="display:flex;align-items:center;gap:7px"><span style="width:11px;height:11px;border-radius:3px;background:${INS_PREV.color};opacity:.5"></span><span style="font-size:12px;font-weight:600">Last season</span></div>
+      </div>
+      <div style="padding:2px ${mob?'2px':'8px'} 6px">${bchart.svg}</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;padding:10px 16px 13px;border-top:1px solid #EFEDE7">${M.blocks.map(blockRow).join('')}</div>`);
+
+    const gcols=mob?null:'1.5fr .9fr .8fr .8fr .7fr .8fr';
+    const momHead=M.prevName?`vs ${M.prevName}`:'vs prev month';
+    const states = M.states.length>1 ? card(`${cHead(`States, ${E(M.title)}`,'Most acres in the month first · click a row to narrow the page to that state')}
+      ${mob ? M.states.map((r,i)=>`<div data-act="insdrill" data-key="${r.code}" style="padding:12px 15px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="flex:1;font-size:13px;font-weight:700">${E(r.name)}</span>
+            <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${fmt(r.ac)}</span>
+            ${mVs(r.yoy)}</div>
+          <div style="font-size:11px;color:#9C988F;margin-top:4px">${M.total?(r.ac/M.total*100).toFixed(0):0}% of the month · ${r.mom==null?'—':(r.mom>=0?'+':'−')+Math.abs(Math.round(r.mom))+'% on '+E(M.prevName||'the month before')} · ${r.mach!=null?fmt(r.mach)+' machines a day':'—'}</div>
+        </div>`).join('')
+      : `<div style="display:grid;grid-template-columns:${gcols};gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7;background:#FBFAF8">
+          ${['State','Acres','Share of month',momHead,'vs last year','Machines a day'].map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">${E(h)}</span>`).join('')}</div>
+        ${M.states.map((r,i)=>`<div data-act="insdrill" data-key="${r.code}" style="display:grid;grid-template-columns:${gcols};gap:10px;align-items:center;padding:12px 16px;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
+          <span style="font-size:13px;font-weight:600">${E(r.name)}</span>
+          <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${fmt(r.ac)}</span>
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px;color:#6E6A62">${M.total?(r.ac/M.total*100).toFixed(0):0}%</span>
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;color:${r.mom==null?C.ink3:r.mom>=0?C.greenD:C.brk}">${r.mom==null?'—':(r.mom>=0?'+':'−')+Math.abs(r.mom).toFixed(0)+'%'}</span>
+          ${mVs(r.yoy)}
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px">${r.mach!=null?fmt(r.mach):'—'}</span>
+        </div>`).join('')}`}`) : '';
+
+    /* ---- products for the month (day-level tab — the only source with dates) ---- */
+    const MP=insMonthProducts(A,M);
+    const chip = c => `<span style="display:inline-block;padding:1px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:.03em;background:${c==='UPL'?C.softO:C.softG};color:${c==='UPL'?C.orangeD:C.greenD}">${c}</span>`;
+    // Said once, plainly, and repeated on the export: this tab is narrow in BOTH directions — few brands, and
+    // (measured live) a rolling window of recent days rather than a history. A table headed "products" reads as
+    // the whole mix, over the whole month, unless the card says otherwise.
+    const narrowNote = (partial,hasMom,MP,M) => `<div style="padding:11px 16px;border-top:1px solid #EFEDE7;font-size:11px;color:#9C988F;line-height:1.6">The day-level tab is the only product source that records a date, so it is the only one that can be read by month — but it carries just the brands listed above, not the whole product mix.${partial?` It also holds only recent days: ${MP.nDays} of ${E(M.name)}’s ${MP.span} are in it, so these acres are that stretch of the month rather than all of it.`:''}${hasMom?'':` ${E(MP.prevName||'The previous month')} has no day-level records at all, so there is nothing to compare each brand against.`}</div>`;
+    let prodMo='';
+    if(!TX.loaded){
+      prodMo=card(`${cHead('What was sprayed this month','Day-level product tab')}${waiting(TX.error, TX.error?'Could not load the day-level product tab.':'Loading day-level products…','txretry')}`);
+    } else if(!MP || MP.empty || !MP.total){
+      const rg=insTxRange();
+      prodMo=card(`${cHead('What was sprayed this month','Day-level product tab')}${waiting(false,`No day-level product rows for ${E(M.title)} in this scope.${rg?` That tab currently holds ${E(rg)} only.`:''}`,'txretry')}`);
+    } else {
+      /* Two independent narrownesses, and the card has to be straight about both. It covers only the brands the
+         day-level tab carries (a handful), and only the DAYS that tab holds — measured live it was a rolling
+         fortnight, so a whole past month is mostly or entirely outside it. Where the days are partial the share
+         is taken against the fleet's acres ON THOSE DAYS, because a partial numerator over a whole month's
+         denominator is not a coverage figure, it is an understatement dressed as one. */
+      const partial = MP.nDays < MP.span;
+      const denom = partial ? MP.fleetOnDays : M.acres;
+      const share = denom ? MP.total/denom*100 : null;
+      const dayRange = MP.first ? `${insWeekLabel(new Date(MP.first+'T00:00:00'))} – ${insWeekLabel(new Date(MP.last+'T00:00:00'))}` : '';
+      const coverLine = partial
+        ? `${MP.nDays} of ${E(M.name)}’s ${MP.span} days have day-level records (${dayRange})${share!=null?` · ${fmt(MP.total)} ac, ${share.toFixed(0)}% of the ${fmt(denom)} ac the fleet sprayed on those days`:''}`
+        : `${fmt(MP.products.length)} brands with day-level records${share!=null?` · ${fmt(MP.total)} ac, ${share.toFixed(0)}% of the ${fmt(M.acres)} ac the fleet sprayed`:''}`;
+      // A column of nothing but dashes says "no change" at a glance. Where the previous month has no records at
+      // all, the column is dropped and a line says why — an absent column reads as a missing dimension, which is
+      // what this is, while a blank one reads as missing data.
+      const hasMom = MP.prevTotal>0;
+      const gcolsP = mob ? (hasMom?'1fr 66px 56px':'1fr 66px')
+                         : (hasMom?'minmax(150px,280px) minmax(0,1fr) 84px 58px 70px':'minmax(150px,300px) minmax(0,1fr) 84px 58px');
+      const pMax = MP.products.length ? MP.products[0].ac : 1;
+      const top = MP.products.slice(0,14);
+      /* A brand off a negligible base yields a true but unreadable number — 20 ac → 5,553 ac prints "+27,663%".
+         Below a floor the cell shows the BASE instead, which is the same "every row carries a magnitude" rule the
+         detector strip follows, and the same reason those detectors have absolute floors. */
+      const momCell = x => x.mom==null ? `<span style="color:#C9C4BA">—</span>`
+        : x.prev < x.ac*0.05 ? `<span style="color:#9C988F">from ${fmt(x.prev)}</span>`
+        : `<span style="color:${x.mom>=0?C.greenD:C.brk};font-weight:700">${x.mom>=0?'+':'−'}${Math.abs(x.mom).toFixed(0)}%</span>`;
+      const pRow = (x,i) => `<div style="display:grid;grid-template-columns:${gcolsP};gap:10px;align-items:center;padding:9px 16px;border-top:${i?'1px solid #F4F2EE':'none'}">
+          <div style="display:flex;align-items:center;gap:7px;min-width:0"><span style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(x.disp)}</span>${chip(x.company)}</div>
+          ${mob?'':`<span style="display:block;height:8px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(1,x.ac/pMax*100)}%;background:${x.company==='UPL'?C.orange:C.green};border-radius:4px"></span></span>`}
+          <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700;text-align:right">${fmt(x.ac)}</span>
+          ${mob?'':`<span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#9C988F;text-align:right">${(x.ac/MP.total*100).toFixed(0)}%</span>`}
+          ${hasMom?`<span style="font-family:'IBM Plex Mono';font-size:11.5px;text-align:right">${momCell(x)}</span>`:''}
+        </div>`;
+      const regStrip = (!A.gst && MP.regions.length>1) ? `<div style="padding:11px 16px;border-top:1px solid #EFEDE7;display:flex;gap:14px;flex-wrap:wrap">
+          ${MP.regions.slice(0,5).map(r=>`<span style="font-size:11.5px;color:#6E6A62"><strong style="color:#46433d">${E(r.name)}</strong> ${fmt(r.ac)} ac<span style="color:#B6B1A8"> · ${(r.ac/MP.total*100).toFixed(0)}%</span></span>`).join('')}</div>` : '';
+      const hdr = mob ? (hasMom?['Product','Acres',momHead]:['Product','Acres'])
+                      : (hasMom?['Product','','Acres','Share',momHead]:['Product','','Acres','Share']);
+      prodMo=card(`${cHead(`Products this month · ${E(A.gst?A.regionName:'all India')}`, coverLine)}
+        <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-bottom:1px solid #EFEDE7">
+          ${big(fmt(MP.total),'product acres', hasMom?`${MP.total>=MP.prevTotal?'+':'−'}${Math.abs(MP.total/MP.prevTotal*100-100).toFixed(0)}% on ${E(MP.prevName)}`:`${fmt(MP.products.length)} brands, ${fmt(MP.crops.length)} crops`, C.orangeD)}
+          ${big(fmt(MP.upl),'UPL', MP.total?`${(MP.upl/MP.total*100).toFixed(0)}% of product acres`:'', C.orangeD)}
+          ${big(fmt(MP.swal),'SWAL', MP.total?`${(MP.swal/MP.total*100).toFixed(0)}% of product acres`:'', C.greenD)}
+          ${big(MP.crops.length?E(MP.crops[0].key):'—','top crop', MP.crops.length?`${fmt(MP.crops[0].ac)} ac`:'')}
+        </div>
+        <div style="display:grid;grid-template-columns:${gcolsP};gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7">
+          ${hdr.map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;${h===''||h==='Product'?'':'text-align:right'}">${E(h)}</span>`).join('')}</div>
+        ${top.map(pRow).join('')}
+        ${MP.products.length>top.length?`<div style="padding:9px 16px;border-top:1px solid #F4F2EE;font-size:11px;color:#B6B1A8">${fmt(MP.products.length-top.length)} further brands account for ${fmt(MP.total-top.reduce((s,x)=>s+x.ac,0))} ac.</div>`:''}
+        ${MP.crops.length>1?`<div style="padding:11px 16px;border-top:1px solid #EFEDE7;font-size:11.5px;color:#6E6A62">By crop · ${MP.crops.slice(0,5).map(c=>`${E(c.key)} <span style="font-family:'IBM Plex Mono';color:#46433d">${fmt(c.ac)}</span>`).join(' · ')}</div>`:''}
+        ${regStrip}${narrowNote(partial, hasMom, MP, M)}`);
+    }
+
+    /* ---- product segments by state, straight off the day-level tab's own portfolio column ---- */
+    const MG=insMonthSegments(A,M);
+    const SEG_C={ Herbicide:C.green, Insecticide:C.orange, Fungicide:C.open, Other:'#B6B1A8' };
+    let segMo='';
+    if(TX.loaded && MG && !MG.empty){
+      const SEGL=INS_SEGS.concat('Other');
+      const bar=r=>`<span style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#F2F0EB">${SEGL.map(k=>r[k]>0?`<span style="width:${r[k]/r.base*100}%;background:${SEG_C[k]}"></span>`:'').join('')}</span>`;
+      const gc=mob?'1fr 54px 54px 54px':'minmax(0,2.5fr) 132px 76px 58px 58px 58px 54px';
+      const hdr=(mob?['State · top products and crops','Herb','Ins','Fung']:['State · top products and crops','','Acres','Herb','Ins','Fung','Other']);
+      const subLine=(tag,list)=>(list&&list.length)?`<div style="font-size:10.5px;color:#9C988F;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="display:inline-block;min-width:${mob?'46px':'52px'};color:#C1BCB2">${tag}</span>${list.map(p=>`${E(p.disp)} <span style="font-family:'IBM Plex Mono';color:#6E6A62">${fmt(p.ac)}</span>`).join(' · ')}</div>`:'';
+      const topLine=r=>subLine('Products',r.top)+subLine('Crops',r.topCrop);
+      const row=(r,i,isTot)=>`<div style="display:grid;grid-template-columns:${gc};gap:10px;align-items:center;padding:${isTot?'11px':'10px'} 16px;border-top:1px solid ${isTot?'#E9E6DF':'#F4F2EE'};${isTot?'background:#FBFAF8':''}">
+          <div style="min-width:0"><span style="font-size:12.5px;font-weight:${isTot?700:600}">${E(r.name)}</span>${topLine(r)}</div>
+          ${mob?'':`<div>${bar(r)}</div>`}
+          ${mob?'':`<span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:${isTot?700:600};text-align:right">${fmt(r.base)}</span>`}
+          ${SEGL.map(k=>(mob&&k==='Other')?'':`<span style="font-family:'IBM Plex Mono';font-size:12.5px;text-align:right;color:${r[k]>0?C.ink:'#C9C4BA'};font-weight:${isTot?700:400}">${r.base?(r[k]/r.base*100).toFixed(0)+'%':'—'}</span>`).join('')}
+        </div>`;
+      const legend=`<div style="display:flex;gap:14px;flex-wrap:wrap;padding:11px 16px 4px">${SEGL.map(k=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#6E6A62"><span style="width:10px;height:10px;border-radius:3px;background:${SEG_C[k]}"></span>${k}</span>`).join('')}</div>`;
+      // Shares within this card are a share of ITSELF and so stay true whatever the feed covers — but the reader
+      // still needs to know which days they describe, or "July" on the heading claims more than the tab holds.
+      const segCover = (MP && !MP.empty && MP.nDays<MP.span)
+        ? ` · the ${MP.nDays} days of ${E(M.name)} the day-level tab covers` : '';
+      segMo=card(`${cHead(`Product segments by state · ${E(M.title)}`,
+          `Share of each state’s day-level product acres by segment, with its largest brands and crops${segCover}`)}
+        ${legend}
+        <div style="display:grid;grid-template-columns:${gc};gap:10px;padding:8px 16px 10px;border-bottom:1px solid #EFEDE7">
+          ${hdr.map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;${['Acres','Herb','Ins','Fung','Other'].includes(h)?'text-align:right':''}">${h}</span>`).join('')}</div>
+        ${MG.rows.map((r,i)=>row(r,i,false)).join('')}
+        ${MG.rows.length>1?row(MG.tot,0,true):''}`);
+    }
+
+    /* ---- focus-product trend, clipped to this month ---- */
+    const MT=insProdTrend(A, insMonthISO(M));
+    let prodTrendMo='';
+    if(!TX.loaded){
+      prodTrendMo=card(`${cHead('How two products are moving','Day-level product tab')}${waiting(TX.error, TX.error?'Could not load the day-level product tab.':'Loading day-level products…','txretry')}`);
+    } else if(!MT || !MT.options.length){
+      prodTrendMo=card(`${cHead('How two products are moving','Day-level product tab')}${waiting(false,'No day-level product rows for this scope.','txretry')}`);
+    } else if(MT.empty){
+      const rg=insTxRange();
+      prodTrendMo=card(`${cHead('How two products are moving','Day-level product tab')}${waiting(false,`No day-level product rows in ${E(M.title)}.${rg?` That tab currently holds ${E(rg)} only.`:''}`,'txretry')}`);
+    } else {
+      const chart=buildProdTrendSVG(MT,mob);
+      const opts=(cur,withNone)=>optionsHTML(
+        (withNone?[{v:'none',t:'— none —'}]:[]).concat(MT.options.map(o=>({v:o.key,t:`${o.disp} (${o.company})`}))),
+        String(cur||(withNone?'none':'')));
+      const sel="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none;max-width:190px";
+      const picker=`<div style="display:flex;align-items:center;gap:${mob?'8px':'12px'};flex-wrap:wrap;padding:12px 16px">
+          <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Combine</span>
+          <div style="position:relative"><select id="insPaSel" style="${sel}">${opts(MT.a,false)}</select>${I.caret}</div>
+          <span style="font-size:13px;color:#9C988F;font-weight:600">+</span>
+          <div style="position:relative"><select id="insPbSel" style="${sel}">${opts(MT.b||'none',true)}</select>${I.caret}</div>
+        </div>`;
+      const dir = MT.trend==null ? null : MT.trend>=0;
+      // The chart is named by the dates it DREW, not by the month, whenever the feed covered less than the month.
+      // A chart captioned "July" that holds eight days is the misread this whole card exists to avoid.
+      const span = MT.clipped ? `${MT.rangeLabel} — the days of ${E(M.name)} the day-level tab holds` : `across ${E(M.name)}`;
+      prodTrendMo=card(`${cHead(`How two products are moving in ${E(A.gst?A.regionName:'all India')}`,
+          `Daily scanned acres for the selected products added together, ${span} · thin line is each day, thick line is the 7-day average`)}
+        ${picker}
+        <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-top:1px solid #EFEDE7;border-bottom:1px solid #EFEDE7">
+          ${big(E(MT.label||'—'),'combined series', MT.sel.length>1?'two products shown as one line':'one product')}
+          ${big(fmt(MT.total),'acres in the period', `${MT.series.length} days · ${E(MT.rangeLabel||'')}`, C.orangeD)}
+          ${big(MT.prior?fmt(MT.prior):'—',`the ${MT.series.length} days before`, MT.priorLabel||'')}
+          ${big(MT.trend==null?'—':`${dir?'▲':'▼'} ${Math.abs(MT.trend).toFixed(0)}%`,'direction', MT.trend==null?'':(dir?'rising':'falling'), MT.trend==null?C.ink:dir?C.act:C.brk)}
+        </div>
+        <div style="padding:6px ${mob?'2px':'8px'} 12px">${chart.has?chart.svg:waiting(false,'Not enough days to draw a trend.','txretry')}</div>`);
+    }
+
+    const mNote=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;padding:13px 16px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">What this page covers, and what it cannot</div>
+        <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">Only <strong style="color:#46433d">completed months</strong> appear — a part-month set against a whole month a year ago shows a shortfall that closes itself on the 1st, so the month that just ended is the newest one here. The stepper stops at <strong style="color:#46433d">April</strong>, where this season begins; earlier months belong to last season's column. Everything is <strong style="color:#46433d">state level</strong>, because the cumulative tab is the only place the sheet keeps a record day by day — what a cluster or an area manager did <em>during</em> a month that has passed cannot be recovered, since the machine sheet is written over every morning. Getting monthly detail below state level would mean saving a copy of the sheet's running total each month, which nobody does yet.</div></div>`;
+    return `<div style="display:flex;flex-direction:column;gap:14px">
+      ${header}${mHead}${dlWrap('mo-summary','The month in summary',hero)}${dlWrap('mo-season','Where the month left the season',posCard)}${dlWrap('mo-daily',`${M.name} day by day`,shape)}${dlWrap('mo-blocks','How the month built up',blocks)}${dlWrap('mo-states','States',states)}${dlWrap('mo-products','Products this month',prodMo)}${dlWrap('mo-segments','Product segments by state',segMo)}${dlWrap('mo-trend','Focus product trend',prodTrendMo)}${mNote}
+      ${mob?`<div style="text-align:center;padding:2px 0 4px">${src}</div>`:''}</div>`;
+  }
 
   /* ================= Week mode · the Monday review =================
      Tuned to be read off a projector rather than scanned at a desk: fewer, larger numbers and one idea per card. */
@@ -4961,13 +5640,17 @@ app.addEventListener('click', e=>{
     case 'insdrill': { const w=el.dataset.key; if(gateAllowsState(w)) setState({insSt:w}); break; }
     case 'insmore': { const k=el.dataset.key; setState({ insMore:{ ...state.insMore, [k]: !(state.insMore&&state.insMore[k]) } }); break; }
     case 'insclear': setState({insSt:''}); break;
-    // Leaving Yesterday clears the people filters: Season and Week are state-grain and cannot honour them, so
-    // carrying a selection across would leave a filter that is set but has no effect and no visible control.
-    case 'insmode': { const m=el.dataset.m, v=['yday','week'].includes(m)?m:'season';
+    // Leaving Yesterday clears the people filters: Season, Month and Week are state-grain and cannot honour them,
+    // so carrying a selection across would leave a filter that is set but has no effect and no visible control.
+    case 'insmode': { const m=el.dataset.m, v=['yday','week','month'].includes(m)?m:'season';
       setState(v==='yday'?{insMode:v}:{insMode:v, insAm:'', insCo:''}); track('insights_mode',{mode:m}); break; }
     // Step the Week view back/forward. `back` counts COMPLETE weeks behind the current one, so it never goes
     // below 0 (there is no future complete week) and is capped at a fiscal year of history.
     case 'insweek': setState(s=>({ insWeekBack: Math.max(0, Math.min(52, (s.insWeekBack|0) - (+el.dataset.d||0))) })); break;
+    // The same for Month, but the floor is the SEASON rather than a fixed count: insMonthWindow returns null
+    // before 1 April, so a step that would land there is simply not taken (the button is disabled too).
+    case 'insmonth': setState(s=>{ const n=Math.max(0,(s.insMonthBack|0)-(+el.dataset.d||0));
+      return insMonthWindow(n) ? { insMonthBack:n } : {}; }); break;
   }
 });
 // machine table row <-> pin cross-highlight

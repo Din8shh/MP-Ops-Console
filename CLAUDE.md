@@ -96,7 +96,7 @@ Nine tabs; the app reads five. Mapped by inspection — do not re-derive this.
 | `0` | Machine master (`Sheet1`) | 1 row/machine | **No** — overwritten daily | everything |
 | `603091795` | Cumulative "snake" | fiscal-day × state × 3 FY | **Yes**, 3 seasons | Cumulative view, Insights |
 | `1039187695` | Product data (summary) | region × crop × brand | No (YTD + yesterday only) | Products view, Insights, segment join |
-| `718502150` | Product day-level (`TX`) | **date** × region × crop × brand | Yes, from 1 Jun | Week → focus-product trend |
+| `718502150` | Product day-level (`TX`) | **date** × region × crop × brand | Yes, from 1 Jun, no gaps | Week + Month → products, segments, focus-product trend |
 | `1973671649` | Weekly product sheet (`WKP`) | region × crop × product, ONE week | n/a — the tab IS the week | Week → products + segments |
 | `1199323704` | Richer machine feed (per-machine branded acres, lat/lon, ping) | 1 row/machine | No | **not wired** |
 | `1433754421` | Org roster (AM/CI/BM/TM/FO/retailer) | 1 row/machine | No | not wired |
@@ -115,12 +115,23 @@ the console. Work on a branch and fast-forward `main`; don't commit straight to 
 - **The breakdown flag's meaning is unstable — re-measure it.** It once behaved like a historical marker (90
   flagged, all 90 also logged acres); on 2026-08-03 it behaved much more like a present-state field (124 flagged,
   83 of them idle). Whatever the main dashboard's Breakdown KPI is taken to mean, check the live sheet first.
-- **IRIS is missing from the day-level product tab** (it has only Amicus, Alito, Patela, Brucia, Canora), so the
-  Iris ↔ Patela pair cannot be charted daily. The trend picker is generic — widen that export and it appears.
+- **IRIS is now IN the day-level product tab — this open item is CLOSED.** Re-measured 2026-08-06 on the full
+  export (5,662 rows, **1 Jun – 6 Aug, every calendar day present**): **8 brands** — Centurion, Patela, Iris,
+  Canora Ez, Brucia, Canora, Amicus, Alito. So the Iris ↔ Patela pair the focus-product trend was built to combine
+  now charts, and the old "it has only Amicus, Alito, Patela, Brucia, Canora" note is dead.
+  Two live caveats remain on that tab: its `portfolio` column is **only `Herbicide` or blank** (4,716 / 946), so
+  the segment cards are Herbicide-vs-Other in practice rather than a four-way split; and it carries **AP and
+  Andaman** rows, which the `st!=='OT'` filter drops.
+- **Beware a TRUNCATED gviz export — it looks exactly like a narrow feed.** During the Month build one fetch of
+  this tab returned 2,108 of its 5,662 rows, which read as "the tab only holds 24–31 Jul" and produced a
+  confident, wrong conclusion about the feed being a rolling fortnight. The app handled it correctly (see the
+  partial-coverage rule under Month), but **verify a surprising range against a second fetch and a real CSV parse
+  before writing it down** — a naive `split(',')` over this export also mis-parses and will confirm the error.
 - **`WKP_WEEK` is pinned to 25–31 Jul 2026**, because that tab is a manual one-off. When the recurring weekly
   sheet lands, change `WKP_WEEK` + `WKP_GID` and nothing else.
-- **A weekly snapshot of Sheet1's cumulative column** (machine + `Kharif achieved`, appended each week) would
-  unlock territory/AM-level weekly history, which is the single biggest gap. ~15 lines of Apps Script.
+- **A periodic snapshot of Sheet1's cumulative column** (machine + `Kharif achieved`, appended each week) would
+  unlock territory/AM-level weekly **and monthly** history, which is the single biggest gap — it is the one thing
+  standing between Month/Week mode and sub-state detail. ~15 lines of Apps Script.
 - **Open-Meteo quota is fragile** — heavy reloading triggers HTTP 429 and the app silently falls back to
   *simulated* rain while still showing a green "Live" badge. See the weather note.
 
@@ -198,9 +209,10 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   clusters in trouble, and hiding the third is the silent floor this page exists to avoid); the visible slice
   allows **two**, so the card above the fold spreads across the country. `peerTop` is a subsequence of `peer` in
   the same order, so expanding inserts rows between the ones already on screen instead of reshuffling them.
-- **Three MODES, one page (`state.insMode`).** *Season* — the trend, and what to correct over weeks. *Week* — one
-  completed Sat–Fri week for the weekly review. *Yesterday* — what broke, and who to ring this morning. Same spine,
-  same scope picker, three horizons. Season and Yesterday are not one list re-sorted: on live data the chronic
+- **Four MODES, one page (`state.insMode`).** *Season* — the trend, and what to correct over weeks. *Month* — one
+  completed calendar month for the monthly review. *Week* — one completed Sat–Fri week for the weekly review.
+  *Yesterday* — what broke, and who to ring this morning. Same spine,
+  same scope picker, four horizons. Season and Yesterday are not one list re-sorted: on live data the chronic
   territories and the acute ones overlap by **zero** (Harda has 6,359 season acres and did nothing yesterday — a
   call; Morbi has never sprayed — a season problem). Yesterday is **detector-led with no leaderboards on purpose**
   — the separate `recap` view is the descriptive roster, and duplicating it would put two competing Yesterday
@@ -214,6 +226,37 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   week straddling 31 March is skipped, not clipped. Year-over-year on the same fiscal offsets is sound even though
   an offset falls on a different weekday each year — any 7-day window holds all seven weekdays exactly once, so
   weekday rhythm cancels out of the sum.
+- **Month mode is Week's spine one horizon up, and COMPLETE MONTHS ONLY.** The month that just ended is the newest
+  on offer; the running month never appears, for the same reason the page anchors to yesterday — a part-month
+  against a whole month a year ago invents a shortfall that closes itself on the 1st. Unlike a Sat–Fri week a
+  calendar month can never *straddle* 31 March, so no month is ever skipped; but a month earlier than April
+  belongs to the **previous season's column**, and reading it off the current one would return zero rather than
+  an error. So `insMonthWindow` returns null before 1 April, the ‹ button disables there, and the line says
+  "the season starts in April". Cards: summary, where-the-month-left-the-season, day by day, how-the-month-built-up,
+  states, products, segments, focus-product trend — every one exportable to PNG (`mo-*` ids → `buildMonthExport`).
+  State-grain only, same as Week and for the same reason.
+- **The month's shape is TWO charts, and they answer different questions.** *Day by day* is a line over ~30 points
+  — the month's arc, where it climbed and where it crossed last season — drawn without point markers, which merge
+  into a rope at that density. *How the month built up* is paired bars over **blocks of dates from the 1st**
+  (1–7, 8–14, 15–21, 22–28, then the tail). Deliberately NOT the programme's Sat–Fri week: those do not tile a
+  calendar month, so the ends would be part-weeks wearing a week's name, and Week mode already owns that word.
+  Fixed date blocks also compare cleanly year over year — the same dates on both sides — and the short tail block
+  is labelled with its own day count so a shorter bar is not read as a collapse.
+- **Month's product cards ADAPT to how much of the month the feed covers, and say which.** With a complete month
+  (the normal case — the day-level tab runs daily from 1 Jun) the card reads as you'd expect: brands, share of the
+  fleet's acres, vs the previous month. When the feed covers only part of the month it switches: the share is taken
+  against the fleet's acres **on the covered days** (`MP.fleetOnDays`), never the whole month — a partial numerator
+  over a whole-month denominator is not a coverage figure but an understatement dressed as one, and on a truncated
+  July fetch that was the difference between a true 19% and a false 9%. In that mode the heading names the covered
+  days, the trend chart is **clipped to them** rather than drawing flat weeks of zeroes (no-record and
+  sprayed-nothing are different claims), and the vs-previous-month column is **dropped, not blanked**, where the
+  previous month has no records at all — a column of dashes reads as "no change". This path is not decoration: a
+  gviz export CAN come back short (see the open item), and it is what keeps a half-fetched tab from quietly
+  understating coverage. Every caveat travels onto the PNG, because a slide is read apart from the page.
+- **A brand with a negligible base shows its base, not a percentage.** Month prints each brand against the previous
+  month, and a brand going 20 → 5,553 ac yields "+27,663%", which is true and unreadable. Where the previous month
+  is under 5% of this month's figure the cell shows `from 20 ac` instead — the same "every row carries a magnitude"
+  rule the detector strip follows, and the same reason the detectors have absolute floors.
 - **Week mode reports the season gap in BOTH units, always.** The percentage gap can narrow while the acre gap
   widens — it did in the week of 20 Jul (−19.3% → −16.9%, but 30,347 → 32,047 ac) — because the base grew faster
   than the shortfall. A slide saying only "we closed the gap" is the kind of half-true that gets caught in the
@@ -269,7 +312,8 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   name — which also fixes the dead space that a wide label column with short content used to leave before the
   bars. Where a label column can't be filled (the products table), the BAR takes the slack instead:
   `minmax(150px,300px) minmax(0,1fr)` rather than a greedy `fr` on the name.
-- **Every Week-mode card exports to PNG, REDRAWN for a slide** (`buildWeekExport` → `downloadCard`). The export
+- **Every Week- and Month-mode card exports to PNG, REDRAWN for a slide** (`buildWeekExport` / `buildMonthExport`
+  → `downloadCard`, which dispatches on the `mo-` id prefix). The export
   does NOT serialise the DOM. A slide is not a dashboard: on screen the cards are deliberately quiet — hairline
   rules, small grey labels, columns sized for a filter bar — which washes out on a projector. So each card is
   redrawn as a standalone SVG **from the same aggregates**, with heavier type, stronger contrast, and every
