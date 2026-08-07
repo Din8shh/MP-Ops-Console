@@ -97,7 +97,7 @@ Nine tabs; the app reads five. Mapped by inspection — do not re-derive this.
 | `603091795` | Cumulative "snake" | fiscal-day × state × 3 FY | **Yes**, 3 seasons | Cumulative view, Insights |
 | `1039187695` | Product data (summary) | region × crop × brand | No (YTD + yesterday only) | Products view, Insights, segment join |
 | `718502150` | Product day-level (`TX`) | **date** × region × crop × brand | Yes, from 1 Jun, no gaps | Week + Month → products, segments, focus-product trend |
-| `1973671649` | Weekly product sheet (`WKP`) | region × crop × product, ONE week | n/a — the tab IS the week | Week → products + segments |
+| `1973671649` | Pasted product detail (`WKP`), tab named **"July 1-31"** | region × crop × product, ONE period | n/a — the tab IS the period | **Month** → products + segments (Week when the paste is a week) |
 | `1199323704` | Richer machine feed (per-machine branded acres, lat/lon, ping) | 1 row/machine | No | **not wired** |
 | `1433754421` | Org roster (AM/CI/BM/TM/FO/retailer) | 1 row/machine | No | not wired |
 | `266726831` | The Athena SQL behind the machine feed | — | — | reference only |
@@ -127,8 +127,11 @@ the console. Work on a branch and fast-forward `main`; don't commit straight to 
   confident, wrong conclusion about the feed being a rolling fortnight. The app handled it correctly (see the
   partial-coverage rule under Month), but **verify a surprising range against a second fetch and a real CSV parse
   before writing it down** — a naive `split(',')` over this export also mis-parses and will confirm the error.
-- **`WKP_WEEK` is pinned to 25–31 Jul 2026**, because that tab is a manual one-off. When the recurring weekly
-  sheet lands, change `WKP_WEEK` + `WKP_GID` and nothing else.
+- **`WKP_PERIOD` is pinned to 1–31 Jul 2026**, because that tab is a manual paste holding one period at a time.
+  It was a week (25–31 Jul) until 2026-08-07, when the user replaced the contents with the whole of July for the
+  monthly review; the gid did not change, and the tab was renamed "July 1-31". Whichever review selects exactly
+  that window reads it — Month now, Week if a week is pasted back. When the recurring sheet lands, change
+  `WKP_PERIOD` + `WKP_GID` and nothing else.
 - **A periodic snapshot of Sheet1's cumulative column** (machine + `Kharif achieved`, appended each week) would
   unlock territory/AM-level weekly **and monthly** history, which is the single biggest gap — it is the one thing
   standing between Month/Week mode and sub-state detail. ~15 lines of Apps Script.
@@ -242,6 +245,16 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   calendar month, so the ends would be part-weeks wearing a week's name, and Week mode already owns that word.
   Fixed date blocks also compare cleanly year over year — the same dates on both sides — and the short tail block
   is labelled with its own day count so a shorter bar is not read as a collapse.
+- **Month's product cards read the PASTED tab where it is the selected month, and the day-level tab otherwise.**
+  `insMonthProducts` / `insMonthSegments` both branch on `wkpIsPeriod(M.d0,M.d1)` and carry the choice through to
+  the render and the PNG as `MP.src` (`'wkp'` | `'tx'`). Where the paste applies it is not a close call — for July
+  2026 that is **115 products / 56,109 ac / 57% of the month's fleet acres against the day-level tab's 8 focus
+  brands** — but it buys that reach by having no dates and no month beside it, so on that path the
+  **vs-previous-month column is dropped** (same rule as below: absent reads as a missing dimension, blank reads as
+  missing data) and the card says the tab holds one pasted period. Segments on that path have no portfolio column
+  of their own, so they are **joined from the summary tab** exactly as Week's were; whatever that tab has never
+  heard of lands in Other, which on the July paste is real weight rather than a rounding — `IRIS` alone is 5,370 ac
+  of it — so the card names the join on its face. Everything below still governs the day-level path.
 - **Month's product cards ADAPT to how much of the month the feed covers, and say which.** With a complete month
   (the normal case — the day-level tab runs daily from 1 Jun) the card reads as you'd expect: brands, share of the
   fleet's acres, vs the previous month. When the feed covers only part of the month it switches: the share is taken
@@ -326,11 +339,14 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   the SAME sub-lines as the screen (`exTable` takes `sub` and `sub2`; the segments export shows Products AND
   Crops per state, not a truncated footnote).
 - **Week mode carries TWO product cards, from two different sources.**
-  *Products this week* ← `WKP` (gid 1973671649), a **hand-built tab covering ONE named week** (`WKP_WEEK`,
-  25–31 Jul 2026). It has no date column — the tab IS the week — so it renders only when the selected week
-  matches and otherwise says which week it covers, rather than relabelling those numbers as another week's.
-  It is the real product mix: 101 products, ~62% of that week's fleet acres. Replace `WKP_WEEK` and the gid when
-  the definitive recurring sheet arrives.
+  *Products this week* ← `WKP` (gid 1973671649), a **hand-built tab covering ONE named period** (`WKP_PERIOD`).
+  It has no date column — the tab IS the period — so it renders only when the selected week matches it exactly,
+  and otherwise says what the tab covers rather than relabelling those numbers as this week's.
+  **Since 2026-08-07 the paste is a MONTH (1–31 Jul), so no week matches and this card is a message pointing at
+  the Month review.** That is the designed behaviour of a one-period tab, not a fault: `wkpIsPeriod(d0,d1)` is
+  the single gate, `wkpProducts` / `wkpSegments` are the shared aggregations, and Week's cards come back the day
+  a week is pasted back in. When a card is only a message it gets **no PNG button** — an export of it would warn
+  to the console instead of producing an image.
   The week-day-by-day chart is a LINE chart, not paired bars: the week's shape — where it climbed, where it
   broke, where it crossed last season — is what the review discusses, and two bars per day fragments exactly that.
   *Focus product trend* ← `TX` (gid 718502150), the day-level tab: eight focus brands since 1 June, the only

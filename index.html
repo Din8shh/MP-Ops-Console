@@ -695,21 +695,25 @@ async function loadTx(){
   finally{ TX.loading=false; render(); }
 }
 
-/* ===================== weekly product detail (manual tab) =====================
-   A hand-built tab covering ONE named week, added because neither product source could give a full weekly
-   product picture: the summary tab has no dates, and the day-level tab carries only five focus brands. This one
-   has 101 products and ~62% of the fleet's acres for its week — the real product mix.
+/* ================= product detail for ONE PASTED PERIOD (manual tab) =================
+   A hand-built tab covering ONE named period, added because neither product source could give a full product
+   picture: the summary tab has no dates, and the day-level tab carries only eight focus brands. This one is the
+   real mix — every product the programme scanned in its period, ~57% of the fleet's acres.
 
-   It has no date column: the tab IS the week. So it is pinned to WKP_WEEK and shown only when the selected week
-   matches; stepping to any other week says so rather than silently mislabelling this week's numbers as that
-   week's. Replace WKP_WEEK (and the gid) when the definitive recurring sheet arrives. */
-const WKP_GID  = '1973671649';
-const WKP_WEEK = { start:'2026-07-25', end:'2026-07-31' };            // the week this manual tab covers
+   It has no date column: the tab IS the period. So it is pinned to WKP_PERIOD, and whichever review selects
+   exactly that window reads it — Week when the paste is a week, MONTH when it is a month. Any other window says
+   so rather than silently relabelling this period's numbers as another's.
+
+   On 2026-08-07 the weekly paste was REPLACED by 1–31 July 2026 for the monthly review, so Month now claims the
+   tab and Week reports where the detail went. It is one tab holding one period at a time: when the recurring
+   sheet lands, change WKP_PERIOD (and the gid) and nothing else. */
+const WKP_GID    = '1973671649';
+const WKP_PERIOD = { start:'2026-07-01', end:'2026-07-31' };          // the period this manual tab covers
 const WKP_COL  = { region:0, crop:1, product:2, company:3, acres:4 };
 const WKP = { loading:false, loaded:false, error:false, at:'', rows:[] };
 function wkpUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${WKP_GID}&t=${Date.now()}`; }
 function wkpBuild(rows){
-  if(!rows.length) throw new Error('weekly product: no rows');
+  if(!rows.length) throw new Error('product-detail tab: no rows');
   const K=WKP_COL, out=[];
   for(const r of rows.slice(1)){
     if(!r || r.length<=K.acres) continue;
@@ -728,7 +732,7 @@ async function loadWkp(){
     const res=await fetch(wkpUrl()); if(!res.ok) throw new Error('HTTP '+res.status);
     wkpBuild(parseCSV(await res.text()));
     WKP.loaded=true; WKP.at=nowIST();
-  }catch(e){ WKP.error=true; console.error('weekly product load failed:', e); }
+  }catch(e){ WKP.error=true; console.error('product-detail tab load failed:', e); }
   finally{ WKP.loading=false; render(); }
 }
 
@@ -2227,7 +2231,7 @@ function buildWeekExport(id){
   }
 
   if(id==='wk-products'){
-    const TP=D.TP; if(!TP||TP.wrongWeek||TP.empty||!TP.total) return null;
+    const TP=D.TP; if(!TP||TP.wrongPeriod||TP.empty||!TP.total) return null;
     const h=exHeader('Products this week',`${sub} · ${fmt(TP.products.length)} products · ${fmt(TP.total)} ac`,y); out+=h.svg; y=h.y;
     const rows=TP.products.slice(0,14).map(p=>({ name:p.disp, co:p.company, ac:fmt(p.ac), share:(p.ac/TP.total*100).toFixed(0)+'%',
       co_ink:p.company==='UPL'?C.orangeD:C.greenD }));
@@ -2240,7 +2244,7 @@ function buildWeekExport(id){
   }
 
   if(id==='wk-segments'){
-    const SG=D.SG; if(!SG||SG.wrongWeek||SG.empty) return null;
+    const SG=D.SG; if(!SG||SG.wrongPeriod||SG.empty) return null;
     const h=exHeader('Product segments by state',`${sub} · share of each state’s product acres`,y); out+=h.svg; y=h.y;
     const L=exLegend([{label:'Herbicide',color:C.green},{label:'Insecticide',color:C.orange},{label:'Fungicide',color:C.open},{label:'Other',color:'#B6B1A8'}],y+8);
     out+=L.svg; y=L.y+10;
@@ -2371,23 +2375,29 @@ function buildMonthExport(id){
        exactly where a narrow tab gets taken for the whole product mix over the whole month. Both narrownesses
        (few brands, and only the days the feed holds) go in the subtitle, and the share is taken against the
        same denominator the page uses. */
-    const partial=MP.nDays<MP.span, denom=partial?MP.fleetOnDays:M.acres;
+    const isW=MP.src==='wkp';
+    const partial=!isW && MP.nDays<MP.span, denom=partial?MP.fleetOnDays:M.acres;
     const share=denom?`${(MP.total/denom*100).toFixed(0)}% of the ${fmt(denom)} ac sprayed`:'';
-    const days=partial
+    const days=isW ? `${fmt(MP.products.length)} products, ${fmt(MP.crops.length)} crops`
+      : partial
       ? `${MP.nDays} of ${MP.span} days (${insWeekLabel(new Date(MP.first+'T00:00:00'))} – ${insWeekLabel(new Date(MP.last+'T00:00:00'))})`
       : `${fmt(MP.products.length)} brands`;
+    // exHeader draws the subtitle as ONE unwrapped line, so this has to stay short enough to clear the canvas —
+    // naming the pasted range here overran it, and the month is already in `sub`.
+    const caveat=isW ? '— the whole month’s product mix'
+                     : '— day-level brands only, not the full product mix';
     const h=exHeader('Products this month',
-      `${sub} · ${days} · ${share} — day-level brands only, not the full product mix`,y); out+=h.svg; y=h.y;
+      `${sub} · ${days} · ${share} ${caveat}`,y); out+=h.svg; y=h.y;
     const hasMom=MP.prevTotal>0;
     // Same negligible-base rule as the page: below the floor show the base, not a four-digit percentage.
     const momOf=p=>p.mom==null?'—':(p.prev<p.ac*0.05?`from ${fmt(p.prev)}`:pc(p.mom));
     const rows=MP.products.slice(0,16).map(p=>({ name:p.disp, co:p.company, ac:fmt(p.ac),
       share:(p.ac/MP.total*100).toFixed(0)+'%', mom:momOf(p), mom_ink:(p.mom!=null&&p.prev>=p.ac*0.05)?ink(p.mom):EX.ink3,
       co_ink:p.company==='UPL'?C.orangeD:C.greenD }));
-    rows.push({ name:'All brands shown', co:'', ac:fmt(MP.total), share:'100%',
+    rows.push({ name:isW?'All products shown':'All brands shown', co:'', ac:fmt(MP.total), share:'100%',
       mom:hasMom?pc(MP.total/MP.prevTotal*100-100):'', _total:true });
     const cols=[
-      {label:'Brand',key:'name'},{label:'Company',key:'co',weight:700},
+      {label:isW?'Product':'Brand',key:'name'},{label:'Company',key:'co',weight:700},
       {label:'Acres',key:'ac',mono:true,align:'right'},{label:'Share',key:'share',mono:true,align:'right'},
     ];
     // Dropped rather than printed empty, for the same reason as on the page.
@@ -2398,8 +2408,12 @@ function buildMonthExport(id){
 
   if(id==='mo-segments'){
     const MG=D.MG; if(!MG||MG.empty) return null;
-    const MPs=D.MP, cov=(MPs&&!MPs.empty&&MPs.nDays<MPs.span)?` · the ${MPs.nDays} days of ${M.name} the day-level tab covers`:'';
-    const h=exHeader('Product segments by state',`${sub} · share of each state’s day-level product acres${cov}`,y); out+=h.svg; y=h.y;
+    const MPs=D.MP, segW=!!(MPs&&MPs.src==='wkp');
+    const cov=(MPs&&!MPs.empty&&!segW&&MPs.nDays<MPs.span)?` · the ${MPs.nDays} days of ${M.name} the day-level tab covers`:'';
+    const segSub=segW                                        // one unwrapped line — keep it inside the canvas
+      ? `${sub} · share of each state’s product acres · segments from the summary tab, unmatched in Other`
+      : `${sub} · share of each state’s day-level product acres${cov}`;
+    const h=exHeader('Product segments by state',segSub,y); out+=h.svg; y=h.y;
     const L=exLegend([{label:'Herbicide',color:C.green},{label:'Insecticide',color:C.orange},{label:'Fungicide',color:C.open},{label:'Other',color:'#B6B1A8'}],y+8);
     out+=L.svg; y=L.y+10;
     const mk=r=>({ name:r.name,
@@ -2409,7 +2423,7 @@ function buildMonthExport(id){
       f:(r.Fungicide/r.base*100).toFixed(0)+'%', o:(r.Other/r.base*100).toFixed(0)+'%', _sub:true });
     const rows=MG.rows.map(mk); const tr=mk(MG.tot); tr._total=true; rows.push(tr);
     const t=exTable([
-      {label:'State · top brands and crops',key:'name',sub:'prod',sub2:'crop'},
+      {label:segW?'State · top products and crops':'State · top brands and crops',key:'name',sub:'prod',sub2:'crop'},
       {label:'Acres',key:'ac',mono:true,align:'right'},
       {label:'Herb',key:'h',mono:true,align:'right'},{label:'Ins',key:'i',mono:true,align:'right'},
       {label:'Fung',key:'f',mono:true,align:'right'},{label:'Other',key:'o',mono:true,align:'right'},
@@ -3090,13 +3104,16 @@ function insWeekAgg(A,back){
   W.total=W.states.reduce((a,x)=>a+x.ac,0);
   return W;
 }
-/* Tracked products for the week, from the day-level tab — the only product source with a date. Scope-aware, and
-   always paired with the previous week so a brand's direction is visible rather than just its size. */
 const insISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-function insWeekProducts(A,W){
-  if(!WKP.loaded || !W) return null;
-  // The manual tab has no dates — it IS one named week. Anything else must say so rather than relabel it.
-  if(insISO(W.d0)!==WKP_WEEK.start || insISO(W.d1)!==WKP_WEEK.end) return { wrongWeek:true };
+/* The manual product-detail tab has no dates — it IS one named period (WKP_PERIOD). Whichever review selects
+   exactly that window may read it; every other window must say so rather than relabel these numbers as its own.
+   Pure period test: it says nothing about whether the tab has loaded, which the callers check separately. */
+const wkpIsPeriod = (d0,d1) => insISO(d0)===WKP_PERIOD.start && insISO(d1)===WKP_PERIOD.end;
+const wkpRangeLabel = () => `${insWeekLabel(new Date(WKP_PERIOD.start+'T00:00:00'))} – ${insWeekLabel(new Date(WKP_PERIOD.end+'T00:00:00'))}`;
+
+/* The product mix for whatever period the manual tab holds. Scope-aware, and shared by Week and Month — the
+   aggregation is the same in both; only the window that may claim it differs. */
+function wkpProducts(A){
   // Seven dashboard states only — matching the segments table, so the two cards report the same total.
   const scope=r=>r.st!=='OT' && (!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
   const rows=WKP.rows.filter(scope);
@@ -3113,19 +3130,24 @@ function insWeekProducts(A,W){
     crops:    listOf(cm,(k,v)=>({ key:k, ac:v })),
     regions:  listOf(rm,(k,v)=>({ st:k, name: k==='OT'?'Other':(STATE_NAMES[k]||k), ac:v })) };
 }
+/* Products for the week. The tab currently holds a MONTH, so this reports where the detail went rather than
+   showing a month's acres under a week's heading. */
+function insWeekProducts(A,W){
+  if(!WKP.loaded || !W) return null;
+  if(!wkpIsPeriod(W.d0,W.d1)) return { wrongPeriod:true };
+  return wkpProducts(A);
+}
 
 /* ===== product segments by state =====
-   The weekly product sheet has no portfolio column, so the segment is joined on from the SUMMARY tab's
-   brand → portfolio map. That join covers ~99% of the week's product acres; whatever misses is reported rather
-   than quietly folded into a bucket.
+   The product-detail tab has no portfolio column, so the segment is joined on from the SUMMARY tab's
+   brand → portfolio map. Whatever the summary tab does not carry lands in Other rather than being dropped, so
+   this card's base always equals the products table's total.
 
    Soil & Seed Health and Unclassified are excluded from the base entirely (they are not spray segments in the
    sense this table is asking about), so the four shares sum to 100% of what remains. Everything that is neither
    herbicide, insecticide nor fungicide — in practice Bio Solution — lands in Other. */
 const INS_SEGS = ['Herbicide','Insecticide','Fungicide'];
-function insWeekSegments(A,W){
-  if(!WKP.loaded || !PROD.loaded || !W) return null;
-  if(insISO(W.d0)!==WKP_WEEK.start || insISO(W.d1)!==WKP_WEEK.end) return { wrongWeek:true };
+function wkpSegments(A){
   const map={}; PROD.rows.forEach(r=>{ if(!map[r.brandKey]) map[r.brandKey]=r.portfolio; });
   const scope=r=>(!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
   const by={};
@@ -3151,6 +3173,11 @@ function insWeekSegments(A,W){
     Object.keys(r.crop).forEach(k=>{ const c=tot.crop[k]||(tot.crop[k]={ disp:r.crop[k].disp, ac:0 }); c.ac+=r.crop[k].ac; }); });
   tot.top=topOf(tot.prod); tot.topCrop=topOf(tot.crop);
   return { rows, tot };
+}
+function insWeekSegments(A,W){
+  if(!WKP.loaded || !PROD.loaded || !W) return null;
+  if(!wkpIsPeriod(W.d0,W.d1)) return { wrongPeriod:true };
+  return wkpSegments(A);
 }
 
 /* ===== focus-product daily trend =====
@@ -3431,14 +3458,32 @@ function insMonthAgg(A,back){
 }
 
 /* ===== products for the month =====
-   The day-level tab is the ONLY product source that can answer a month: the summary tab carries YTD and yesterday
-   with no dates, and the weekly tab is one hand-built week. So this card is built from it — and says plainly that
-   it covers the brands with day-level records rather than the whole product mix, because that tab is narrow (a
-   handful of focus brands, and a single-digit share of the fleet's acres). Overstating it would put a table headed
-   "products this month" on screen that reads as the mix when it is not.
-   Every product carries its previous month beside it, so a brand's direction is visible and not just its size. */
+   TWO possible sources, and the better one wins:
+
+   · The manual product-detail tab, WHERE IT IS THIS MONTH (WKP_PERIOD — currently 1–31 July 2026). It is the full
+     product mix for the month, ~115 products against the day-level tab's eight, so where it applies it is not a
+     close call. It carries no dates and no earlier month, so there is nothing to set each product against — the
+     vs-previous-month column is DROPPED on that path rather than printed as a column of dashes.
+   · Otherwise the day-level tab, which is the only *dated* product source and therefore the only one that can
+     answer any other month — but it is narrow in both directions (a handful of focus brands, and only the days it
+     holds), so that path says so on the card's face and divides by the fleet's acres on the covered days.
+
+   A card headed "products this month" reads as THE MIX over THE MONTH, so whichever source is in use has to be
+   named and its limits stated; `src` carries that through to the render and the PNG export. */
 function insMonthProducts(A,M){
-  if(!TX.loaded || !M) return null;
+  if(!M) return null;
+  if(wkpIsPeriod(M.d0,M.d1)){
+    if(!WKP.loaded) return null;
+    const P=wkpProducts(A);
+    if(!P || P.empty) return P;
+    // Shaped to the same contract the day-level path returns, so the render and the export need no second branch
+    // for anything but the wording: the whole month is covered (nDays===span ⇒ not partial) and there is no
+    // previous month to compare against (prevTotal 0 ⇒ the vs-column drops).
+    return { ...P, src:'wkp', nDays:M.len, span:M.len, first:insISO(M.d0), last:insISO(M.d1),
+      fleetOnDays:M.acres, prevTotal:0, prevName:M.prevName,
+      products:P.products.map(x=>({ ...x, prev:null, mom:null })) };
+  }
+  if(!TX.loaded) return null;
   const scope=r=>r.st!=='OT' && (!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
   const w=insMonthISO(M);
   const rows=TX.rows.filter(r=>scope(r) && r.d>=w.from && r.d<=w.to);
@@ -3458,6 +3503,7 @@ function insMonthProducts(A,M){
   const domSet=new Set(dates.map(d=>+d.slice(8,10)));
   const fleetOnDays=M.days.reduce((s,d)=>s+((domSet.has(d.dom)&&d.ac!=null)?d.ac:0),0);
   return {
+    src:'tx',
     total: rows.reduce((s,r)=>s+r.acres,0),
     prevTotal: pr.reduce((s,r)=>s+r.acres,0),
     prevName: M.prevName,
@@ -3469,12 +3515,16 @@ function insMonthProducts(A,M){
     crops:    listOf(cm,(k,v)=>({ key:k, ac:v })),
     regions:  listOf(rm,(k,v)=>({ st:k, name: STATE_NAMES[k]||k, ac:v })) };
 }
-/* Segments for the month. Unlike the weekly card this needs NO join: the day-level tab carries its own portfolio
-   column, already normalised by prodPortfolio. Herbicide / Insecticide / Fungicide are named and everything else
-   — bio solution, soil & seed health, unclassified — falls into Other, so nothing is dropped and this card's
-   total equals the products table's. Keep it that way: two totals disagreeing on one screen needs a footnote. */
+/* Segments for the month, off whichever source the products card used — the two must agree, or the screen shows
+   two totals with no footnote to explain them. Where the manual tab IS the month, segments are joined on from the
+   summary tab's brand → portfolio map (the manual tab has no portfolio column); otherwise the day-level tab's own
+   portfolio column is used, already normalised by prodPortfolio. Either way, Herbicide / Insecticide / Fungicide
+   are named and EVERYTHING else — bio solution, soil & seed health, unclassified, or a brand the summary tab has
+   never heard of — falls into Other. Nothing is dropped from the base. Keep it that way. */
 function insMonthSegments(A,M){
-  if(!TX.loaded || !M) return null;
+  if(!M) return null;
+  if(wkpIsPeriod(M.d0,M.d1)) return (WKP.loaded && PROD.loaded) ? wkpSegments(A) : null;
+  if(!TX.loaded) return null;
   const scope=r=>r.st!=='OT' && (!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
   const w=insMonthISO(M), by={};
   TX.rows.filter(r=>scope(r) && r.d>=w.from && r.d<=w.to).forEach(r=>{
@@ -3883,9 +3933,17 @@ function insightsBodyHTML(mob){
      The weekly review's spine one horizon up. Same reading conditions — read off a projector, not scanned at a
      desk — so the same rules apply: fewer and larger numbers, one idea per card, every card exportable. */
   if(mode==='month'){
-    if(!TX.loaded && !TX.loading && !TX.error) setTimeout(loadTx,0);       // day-level products: the only monthly source
+    if(!TX.loaded && !TX.loading && !TX.error) setTimeout(loadTx,0);       // day-level products, for the focus trend
     const back=state.insMonthBack|0;
     const M=insMonthAgg(A, back);
+    // Where the manual product-detail tab IS this month it is the products source, so fetch it and the summary
+    // tab its segments are joined from. Gated on the month actually matching: every other month reads the
+    // day-level tab and these two fetches would buy nothing.
+    const moWkp = !!M && wkpIsPeriod(M.d0,M.d1);
+    if(moWkp){
+      if(!WKP.loaded  && !WKP.loading  && !WKP.error ) setTimeout(loadWkp,0);
+      if(!PROD.loaded && !PROD.loading && !PROD.error) setTimeout(loadProduct,0);   // brand → portfolio, for segments
+    }
     const canBack=!!insMonthWindow(back+1);           // false once the stepper reaches the season's first month
     const mLabel=M?M.title:'—';
     const stepper=`<div style="display:flex;align-items:center;gap:8px">
@@ -3994,19 +4052,27 @@ function insightsBodyHTML(mob){
           <span style="font-family:'IBM Plex Mono';font-size:12.5px">${r.mach!=null?fmt(r.mach):'—'}</span>
         </div>`).join('')}`}`) : '';
 
-    /* ---- products for the month (day-level tab — the only source with dates) ---- */
+    /* ---- products for the month (the pasted period tab where it is this month, else the day-level tab) ---- */
     const MP=insMonthProducts(A,M);
     const chip = c => `<span style="display:inline-block;padding:1px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:.03em;background:${c==='UPL'?C.softO:C.softG};color:${c==='UPL'?C.orangeD:C.greenD}">${c}</span>`;
-    // Said once, plainly, and repeated on the export: this tab is narrow in BOTH directions — few brands, and
-    // (measured live) a rolling window of recent days rather than a history. A table headed "products" reads as
-    // the whole mix, over the whole month, unless the card says otherwise.
-    const narrowNote = (partial,hasMom,MP,M) => `<div style="padding:11px 16px;border-top:1px solid #EFEDE7;font-size:11px;color:#9C988F;line-height:1.6">The day-level tab is the only product source that records a date, so it is the only one that can be read by month — but it carries just the brands listed above, not the whole product mix.${partial?` It also holds only recent days: ${MP.nDays} of ${E(M.name)}’s ${MP.span} are in it, so these acres are that stretch of the month rather than all of it.`:''}${hasMom?'':` ${E(MP.prevName||'The previous month')} has no day-level records at all, so there is nothing to compare each brand against.`}</div>`;
+    // Said once, plainly, and repeated on the export. Each source has a different limit and the card names the one
+    // that applies: the pasted tab is the whole mix but has no month beside it to compare against; the day-level
+    // tab is narrow in BOTH directions — few brands, and only the days it holds.
+    const narrowNote = (partial,hasMom,MP,M) => `<div style="padding:11px 16px;border-top:1px solid #EFEDE7;font-size:11px;color:#9C988F;line-height:1.6">${
+      MP.src==='wkp'
+        ? `These are the whole month’s product acres, pasted into the workbook as a single tab for ${E(wkpRangeLabel())} — the full mix, not a selection of brands. That tab carries no dates and holds only this one period, so each product is shown at its size for the month with no earlier month to set it against.`
+        : `The day-level tab is the only product source that records a date, so it is the only one that can be read by month — but it carries just the brands listed above, not the whole product mix.${partial?` It also holds only recent days: ${MP.nDays} of ${E(M.name)}’s ${MP.span} are in it, so these acres are that stretch of the month rather than all of it.`:''}${hasMom?'':` ${E(MP.prevName||'The previous month')} has no day-level records at all, so there is nothing to compare each brand against.`}`}</div>`;
+    const pSrcName = moWkp ? `Product detail for ${E(wkpRangeLabel())}` : 'Day-level product tab';
+    const pRetry   = moWkp ? 'wkpretry' : 'txretry';
+    // Same rule as Week: a card that is only a message has nothing to redraw, so it gets no PNG button.
+    const prodMoDL = !!(MP && !MP.empty && MP.total);
     let prodMo='';
-    if(!TX.loaded){
-      prodMo=card(`${cHead('What was sprayed this month','Day-level product tab')}${waiting(TX.error, TX.error?'Could not load the day-level product tab.':'Loading day-level products…','txretry')}`);
+    if(moWkp ? !WKP.loaded : !TX.loaded){
+      const err = moWkp ? WKP.error : TX.error;
+      prodMo=card(`${cHead('What was sprayed this month',pSrcName)}${waiting(err, err?`Could not load the ${moWkp?'product-detail tab':'day-level product tab'}.`:`Loading ${moWkp?'the month’s product detail':'day-level products'}…`,pRetry)}`);
     } else if(!MP || MP.empty || !MP.total){
-      const rg=insTxRange();
-      prodMo=card(`${cHead('What was sprayed this month','Day-level product tab')}${waiting(false,`No day-level product rows for ${E(M.title)} in this scope.${rg?` That tab currently holds ${E(rg)} only.`:''}`,'txretry')}`);
+      const rg=moWkp?'':insTxRange();
+      prodMo=card(`${cHead('What was sprayed this month',pSrcName)}${waiting(false,`No product rows for ${E(M.title)} in this scope.${rg?` The day-level tab currently holds ${E(rg)} only.`:''}`,pRetry)}`);
     } else {
       /* Two independent narrownesses, and the card has to be straight about both. It covers only the brands the
          day-level tab carries (a handful), and only the DAYS that tab holds — measured live it was a rolling
@@ -4017,7 +4083,11 @@ function insightsBodyHTML(mob){
       const denom = partial ? MP.fleetOnDays : M.acres;
       const share = denom ? MP.total/denom*100 : null;
       const dayRange = MP.first ? `${insWeekLabel(new Date(MP.first+'T00:00:00'))} – ${insWeekLabel(new Date(MP.last+'T00:00:00'))}` : '';
-      const coverLine = partial
+      // "brands" is what the day-level tab holds — a chosen few. The pasted tab holds the mix, so it says products.
+      const pWord = MP.src==='wkp' ? 'products' : 'brands';
+      const coverLine = MP.src==='wkp'
+        ? `${fmt(MP.products.length)} products across ${fmt(MP.crops.length)} crops${share!=null?` · ${fmt(MP.total)} ac, ${share.toFixed(0)}% of the ${fmt(M.acres)} ac the fleet sprayed in ${E(M.name)}`:''}`
+        : partial
         ? `${MP.nDays} of ${E(M.name)}’s ${MP.span} days have day-level records (${dayRange})${share!=null?` · ${fmt(MP.total)} ac, ${share.toFixed(0)}% of the ${fmt(denom)} ac the fleet sprayed on those days`:''}`
         : `${fmt(MP.products.length)} brands with day-level records${share!=null?` · ${fmt(MP.total)} ac, ${share.toFixed(0)}% of the ${fmt(M.acres)} ac the fleet sprayed`:''}`;
       // A column of nothing but dashes says "no change" at a glance. Where the previous month has no records at
@@ -4047,7 +4117,7 @@ function insightsBodyHTML(mob){
                       : (hasMom?['Product','','Acres','Share',momHead]:['Product','','Acres','Share']);
       prodMo=card(`${cHead(`Products this month · ${E(A.gst?A.regionName:'all India')}`, coverLine)}
         <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-bottom:1px solid #EFEDE7">
-          ${big(fmt(MP.total),'product acres', hasMom?`${MP.total>=MP.prevTotal?'+':'−'}${Math.abs(MP.total/MP.prevTotal*100-100).toFixed(0)}% on ${E(MP.prevName)}`:`${fmt(MP.products.length)} brands, ${fmt(MP.crops.length)} crops`, C.orangeD)}
+          ${big(fmt(MP.total),'product acres', hasMom?`${MP.total>=MP.prevTotal?'+':'−'}${Math.abs(MP.total/MP.prevTotal*100-100).toFixed(0)}% on ${E(MP.prevName)}`:`${fmt(MP.products.length)} ${pWord}, ${fmt(MP.crops.length)} crops`, C.orangeD)}
           ${big(fmt(MP.upl),'UPL', MP.total?`${(MP.upl/MP.total*100).toFixed(0)}% of product acres`:'', C.orangeD)}
           ${big(fmt(MP.swal),'SWAL', MP.total?`${(MP.swal/MP.total*100).toFixed(0)}% of product acres`:'', C.greenD)}
           ${big(MP.crops.length?E(MP.crops[0].key):'—','top crop', MP.crops.length?`${fmt(MP.crops[0].ac)} ac`:'')}
@@ -4055,16 +4125,16 @@ function insightsBodyHTML(mob){
         <div style="display:grid;grid-template-columns:${gcolsP};gap:10px;padding:10px 16px;border-bottom:1px solid #EFEDE7">
           ${hdr.map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;${h===''||h==='Product'?'':'text-align:right'}">${E(h)}</span>`).join('')}</div>
         ${top.map(pRow).join('')}
-        ${MP.products.length>top.length?`<div style="padding:9px 16px;border-top:1px solid #F4F2EE;font-size:11px;color:#B6B1A8">${fmt(MP.products.length-top.length)} further brands account for ${fmt(MP.total-top.reduce((s,x)=>s+x.ac,0))} ac.</div>`:''}
+        ${MP.products.length>top.length?`<div style="padding:9px 16px;border-top:1px solid #F4F2EE;font-size:11px;color:#B6B1A8">${fmt(MP.products.length-top.length)} further ${pWord} account for ${fmt(MP.total-top.reduce((s,x)=>s+x.ac,0))} ac.</div>`:''}
         ${MP.crops.length>1?`<div style="padding:11px 16px;border-top:1px solid #EFEDE7;font-size:11.5px;color:#6E6A62">By crop · ${MP.crops.slice(0,5).map(c=>`${E(c.key)} <span style="font-family:'IBM Plex Mono';color:#46433d">${fmt(c.ac)}</span>`).join(' · ')}</div>`:''}
         ${regStrip}${narrowNote(partial, hasMom, MP, M)}`);
     }
 
-    /* ---- product segments by state, straight off the day-level tab's own portfolio column ---- */
+    /* ---- product segments by state, from whichever source the products card above used ---- */
     const MG=insMonthSegments(A,M);
     const SEG_C={ Herbicide:C.green, Insecticide:C.orange, Fungicide:C.open, Other:'#B6B1A8' };
     let segMo='';
-    if(TX.loaded && MG && !MG.empty){
+    if(MG && !MG.empty){
       const SEGL=INS_SEGS.concat('Other');
       const bar=r=>`<span style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#F2F0EB">${SEGL.map(k=>r[k]>0?`<span style="width:${r[k]/r.base*100}%;background:${SEG_C[k]}"></span>`:'').join('')}</span>`;
       const gc=mob?'1fr 54px 54px 54px':'minmax(0,2.5fr) 132px 76px 58px 58px 58px 54px';
@@ -4080,10 +4150,15 @@ function insightsBodyHTML(mob){
       const legend=`<div style="display:flex;gap:14px;flex-wrap:wrap;padding:11px 16px 4px">${SEGL.map(k=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#6E6A62"><span style="width:10px;height:10px;border-radius:3px;background:${SEG_C[k]}"></span>${k}</span>`).join('')}</div>`;
       // Shares within this card are a share of ITSELF and so stay true whatever the feed covers — but the reader
       // still needs to know which days they describe, or "July" on the heading claims more than the tab holds.
-      const segCover = (MP && !MP.empty && MP.nDays<MP.span)
+      const segCover = (MP && !MP.empty && MP.src!=='wkp' && MP.nDays<MP.span)
         ? ` · the ${MP.nDays} days of ${E(M.name)} the day-level tab covers` : '';
-      segMo=card(`${cHead(`Product segments by state · ${E(M.title)}`,
-          `Share of each state’s day-level product acres by segment, with its largest brands and crops${segCover}`)}
+      // The pasted tab has no portfolio column of its own, so the segment is joined on from the product summary
+      // tab. Saying so matters: a product that tab has never heard of sits in Other, and on this month's paste
+      // that is a real share of the base rather than a rounding.
+      const segSub = MP && MP.src==='wkp'
+        ? `Share of each state’s product acres by segment, with its largest products and crops · segments joined from the product summary tab, and whatever it does not carry sits in Other`
+        : `Share of each state’s day-level product acres by segment, with its largest brands and crops${segCover}`;
+      segMo=card(`${cHead(`Product segments by state · ${E(M.title)}`, segSub)}
         ${legend}
         <div style="display:grid;grid-template-columns:${gc};gap:10px;padding:8px 16px 10px;border-bottom:1px solid #EFEDE7">
           ${hdr.map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;${['Acres','Herb','Ins','Fung','Other'].includes(h)?'text-align:right':''}">${h}</span>`).join('')}</div>
@@ -4101,7 +4176,7 @@ function insightsBodyHTML(mob){
         <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">What this page covers, and what it cannot</div>
         <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">Only <strong style="color:#46433d">completed months</strong> appear — a part-month set against a whole month a year ago shows a shortfall that closes itself on the 1st, so the month that just ended is the newest one here. The stepper stops at <strong style="color:#46433d">April</strong>, where this season begins; earlier months belong to last season's column. Everything is <strong style="color:#46433d">state level</strong>, because the cumulative tab is the only place the sheet keeps a record day by day — what a cluster or an area manager did <em>during</em> a month that has passed cannot be recovered, since the machine sheet is written over every morning. Getting monthly detail below state level would mean saving a copy of the sheet's running total each month, which nobody does yet.</div></div>`;
     return `<div style="display:flex;flex-direction:column;gap:14px">
-      ${header}${mHead}${dlWrap('mo-summary','The month in summary',hero)}${dlWrap('mo-season','Where the month left the season',posCard)}${dlWrap('mo-daily',`${M.name} day by day`,shape)}${dlWrap('mo-blocks','How the month built up',blocks)}${dlWrap('mo-states','States',states)}${dlWrap('mo-products','Products this month',prodMo)}${dlWrap('mo-segments','Product segments by state',segMo)}${dlWrap('mo-trend','Focus product trend',prodTrendMo)}${mNote}
+      ${header}${mHead}${dlWrap('mo-summary','The month in summary',hero)}${dlWrap('mo-season','Where the month left the season',posCard)}${dlWrap('mo-daily',`${M.name} day by day`,shape)}${dlWrap('mo-blocks','How the month built up',blocks)}${dlWrap('mo-states','States',states)}${prodMoDL?dlWrap('mo-products','Products this month',prodMo):prodMo}${dlWrap('mo-segments','Product segments by state',segMo)}${dlWrap('mo-trend','Focus product trend',prodTrendMo)}${mNote}
       ${mob?`<div style="text-align:center;padding:2px 0 4px">${src}</div>`:''}</div>`;
   }
 
@@ -4209,16 +4284,21 @@ function insightsBodyHTML(mob){
           <span style="font-family:'IBM Plex Mono';font-size:12.5px">${r.mach!=null?fmt(r.mach):'—'}</span>
         </div>`).join('')}`}`) : '';
 
-    /* ---- tracked products for the week (day-level tab) ---- */
+    /* ---- products for the week, from the pasted product-detail tab ---- */
     const TP=insWeekProducts(A,W);
+    // A card that is only a message has nothing to redraw, and its export would warn to the console instead of
+    // producing an image — so the PNG button is withheld rather than offered and then failing.
+    const prodWkDL = !!(TP && !TP.wrongPeriod && !TP.empty && TP.total);
     const chip = c => `<span style="display:inline-block;padding:1px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:.03em;background:${c==='UPL'?C.softO:C.softG};color:${c==='UPL'?C.orangeD:C.greenD}">${c}</span>`;
     let prodWk='';
     if(!WKP.loaded){
-      prodWk=card(`${cHead('What was sprayed this week','From the weekly product sheet')}${waiting(WKP.error, WKP.error?'Could not load the weekly product sheet.':'Loading the weekly product sheet…','wkpretry')}`);
-    } else if(TP && TP.wrongWeek){
-      prodWk=card(`${cHead('What was sprayed this week','From the weekly product sheet')}${waiting(false,`Per-product detail is only available for ${E(insWeekLabel(new Date(WKP_WEEK.start+'T00:00:00')))} – ${E(insWeekLabel(new Date(WKP_WEEK.end+'T00:00:00')))}, the one week the sheet covers.`,'wkpretry')}`);
+      prodWk=card(`${cHead('What was sprayed this week','From the product-detail tab')}${waiting(WKP.error, WKP.error?'Could not load the product-detail tab.':'Loading the product-detail tab…','wkpretry')}`);
+    } else if(TP && TP.wrongPeriod){
+      // One tab, one pasted period, no dates of its own — so it cannot be cut into weeks, and a week that is not
+      // that period says where the detail is rather than showing another period's acres under this week's name.
+      prodWk=card(`${cHead('What was sprayed this week','From the product-detail tab')}${waiting(false,`Per-product detail currently covers ${E(wkpRangeLabel())} — a whole month, on the Month review. The tab holds one pasted period at a time and carries no dates, so it cannot be split back into weeks.`,'wkpretry')}`);
     } else if(!TP || TP.empty || !TP.total){
-      prodWk=card(`${cHead('What was sprayed this week','From the weekly product sheet')}${waiting(false,'No product acres recorded for this scope.','wkpretry')}`);
+      prodWk=card(`${cHead('What was sprayed this week','From the product-detail tab')}${waiting(false,'No product acres recorded for this scope.','wkpretry')}`);
     } else {
       const share = W.acres ? TP.total/W.acres*100 : null;
       const pMax = TP.products.length ? TP.products[0].ac : 1;
@@ -4249,14 +4329,15 @@ function insightsBodyHTML(mob){
 
     /* ---- product segments by state ---- */
     const SG=insWeekSegments(A,W);
+    const segWkDL = !!(SG && !SG.wrongPeriod && !SG.empty);
     const SEG_C={ Herbicide:C.green, Insecticide:C.orange, Fungicide:C.open, Other:'#B6B1A8' };
     let segCard='';
     if(!WKP.loaded || !PROD.loaded){
-      segCard=card(`${cHead('Kinds of product, by state','The weekly product sheet, grouped into what each brand treats')}${waiting(WKP.error||PROD.error, (WKP.error||PROD.error)?'Could not load the product sheets.':'Loading product segments…','wkpretry')}`);
-    } else if(SG && SG.wrongWeek){
+      segCard=card(`${cHead('Kinds of product, by state','The product-detail tab, grouped into what each brand treats')}${waiting(WKP.error||PROD.error, (WKP.error||PROD.error)?'Could not load the product sheets.':'Loading product segments…','wkpretry')}`);
+    } else if(SG && SG.wrongPeriod){
       segCard='';                                            // the week card already explains the coverage
     } else if(!SG || SG.empty){
-      segCard=card(`${cHead('Kinds of product, by state','The weekly product sheet, grouped into what each brand treats')}${waiting(false,'No segment-classified product acres for this scope.','wkpretry')}`);
+      segCard=card(`${cHead('Kinds of product, by state','The product-detail tab, grouped into what each brand treats')}${waiting(false,'No segment-classified product acres for this scope.','wkpretry')}`);
     } else {
       const SEGL=INS_SEGS.concat('Other');
       const bar=r=>`<span style="display:flex;height:9px;border-radius:5px;overflow:hidden;background:#F2F0EB">${SEGL.map(k=>r[k]>0?`<span style="width:${r[k]/r.base*100}%;background:${SEG_C[k]}"></span>`:'').join('')}</span>`;
@@ -4293,7 +4374,7 @@ function insightsBodyHTML(mob){
         <div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;margin-bottom:7px">Why this page stops at state level</div>
         <div style="font-size:11.5px;color:#6E6A62;line-height:1.65">Everything here is <strong style="color:#46433d">state level</strong>, because the cumulative tab is the only place the sheet keeps a record day by day. What a cluster or an area manager did <em>during</em> a week that has already passed cannot be recovered — the machine sheet is written over every morning, so it can only ever show where people stand today, which is what the Season and Yesterday views are for. Getting weekly detail below state level would mean saving a copy of the sheet's running total once a week, which nobody does yet. Comparing with last year is sound even though the dates fall on different weekdays: any seven-day stretch contains each weekday once, so the difference evens out.</div></div>`;
     return `<div style="display:flex;flex-direction:column;gap:14px">
-      ${header}${wHead}${dlWrap('wk-summary','The week in summary',hero)}${dlWrap('wk-season','Where the week left the season',posCard)}${dlWrap('wk-daily','The week day by day',shape)}${dlWrap('wk-states','States',states)}${dlWrap('wk-products','Products this week',prodWk)}${dlWrap('wk-segments','Product segments by state',segCard)}${dlWrap('wk-trend','Focus product trend',prodTrend)}${note}
+      ${header}${wHead}${dlWrap('wk-summary','The week in summary',hero)}${dlWrap('wk-season','Where the week left the season',posCard)}${dlWrap('wk-daily','The week day by day',shape)}${dlWrap('wk-states','States',states)}${prodWkDL?dlWrap('wk-products','Products this week',prodWk):prodWk}${segWkDL?dlWrap('wk-segments','Product segments by state',segCard):segCard}${dlWrap('wk-trend','Focus product trend',prodTrend)}${note}
       ${mob?`<div style="text-align:center;padding:2px 0 4px">${src}</div>`:''}</div>`;
   }
 
