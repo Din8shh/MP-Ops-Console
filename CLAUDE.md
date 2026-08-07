@@ -119,9 +119,10 @@ the console. Work on a branch and fast-forward `main`; don't commit straight to 
   export (5,662 rows, **1 Jun – 6 Aug, every calendar day present**): **8 brands** — Centurion, Patela, Iris,
   Canora Ez, Brucia, Canora, Amicus, Alito. So the Iris ↔ Patela pair the focus-product trend was built to combine
   now charts, and the old "it has only Amicus, Alito, Patela, Brucia, Canora" note is dead.
-  Two live caveats remain on that tab: its `portfolio` column is **only `Herbicide` or blank** (4,716 / 946), so
-  the segment cards are Herbicide-vs-Other in practice rather than a four-way split; and it carries **AP and
-  Andaman** rows, which the `st!=='OT'` filter drops.
+  One live caveat remains on that tab: it carries **AP and Andaman** rows, which the `st!=='OT'` filter drops.
+  Its `portfolio` column was `Herbicide`-or-blank (4,716 / 946); since the brand backfill (see below) the blanks
+  resolve and the tab reads **100% Herbicide**, which is the honest reading — it holds eight herbicide brands and
+  never was a mix. Do not design a four-way segment split off this tab.
 - **Beware a TRUNCATED gviz export — it looks exactly like a narrow feed.** During the Month build one fetch of
   this tab returned 2,108 of its 5,662 rows, which read as "the tab only holds 24–31 Jul" and produced a
   confident, wrong conclusion about the feed being a rolling fortnight. The app handled it correctly (see the
@@ -314,8 +315,21 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   and **acres per running machine**. A "days with acres" count was removed: at national scope it can only ever
   read 7/7, so it asserted the obvious instead of informing. Sub-labels avoid internal jargon such as
   "machine-days" — they read the way the team says the number aloud.
-- **Product segments by state** joins the weekly sheet to the summary tab's brand → portfolio map (~99% of acres
-  match). Herbicide / Insecticide / Fungicide are named and **everything else falls into Other** — soil & seed
+- **A brand's category is decided ONCE for the brand, not per row (`buildBrandPort` / `BRAND_PORT`).** The sheet
+  fills `portfolio` per row, so the same brand is named on one row and blank on the next — measured 2026-08-07,
+  9,161 ac blank on the summary tab and 6,493 ac on the day-level tab, of which **IRIS alone was 13,217 ac that
+  both tabs call Herbicide on their other rows**. It was all landing in Unclassified → Other. So every named row
+  a brand holds on either dated tab votes, the brand's category is applied to its blank rows, and Unclassified
+  falls 7.8% → 0.3% of the summary tab. Three invariants hold it up: **the sheet's own value always wins where it
+  exists** (this only ever fills a blank); **most acres wins** on a brand with two named categories, with a
+  console warning, because gviz row order is not meaningful and first-row-wins would flip between refreshes (zero
+  such brands live today); and **`port0` holds the sheet's value and is never written to**, so re-running cannot
+  feed a filled row back in as evidence. `PROD_OVERRIDE` is the last resort for a brand blank on *every* row of
+  both tabs — five entries, supplied by the programme, each one a standing request to fix the sheet.
+  This also killed a real bug: `wkpSegments` used to build its own map **first-row-wins**, so a brand whose first
+  summary row was blank mapped to Other however many later rows named it — 5,510 ac of IRIS on the July paste.
+  The paste's match rate went 90% → 99%.
+- **Product segments by state** joins the weekly sheet to `BRAND_PORT` (~99% of acres match). Herbicide / Insecticide / Fungicide are named and **everything else falls into Other** — soil & seed
   health, unclassified, bio solution, or a product with no portfolio on record. Nothing is dropped from the base,
   which is the point: an earlier build excluded those categories and the card then showed 23,337 ac beside the
   products table's 24,284, two totals disagreeing on one screen with no footnote to explain it (the footnote had

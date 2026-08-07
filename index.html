@@ -606,7 +606,10 @@ function productBuild(rows){
     comp = comp==='SWAL' ? 'SWAL' : comp==='UPL' ? 'UPL' : null; if(!comp) continue;   // strictly the two companies
     out.push({ st, stName: st==='OT' ? 'Other states' : STATE_NAMES[st], crop: titleCase(r[K.crop])||'—',
       brand: titleCase(brandRaw), brandKey: brandRaw.toUpperCase().replace(/\s+/g,' '), company:comp,
-      portfolio: prodPortfolio(r[K.portfolio]), ytd:num(r[K.ytd]), yday:num(r[K.yday]) });
+      // port0 is the SHEET's own value and is never written to; `portfolio` is the resolved one that the views
+      // read, and buildBrandPort() recomputes it from port0 every time either product tab lands. See that note.
+      port0: prodPortfolio(r[K.portfolio]), portfolio: prodPortfolio(r[K.portfolio]),
+      ytd:num(r[K.ytd]), yday:num(r[K.yday]) });
   }
   PROD.rows=out;
 }
@@ -617,7 +620,7 @@ async function loadProduct(){
     productBuild(parseCSV(await res.text()));
     PROD.loaded=true; PROD.at=nowIST();
   }catch(e){ PROD.error=true; console.error('product load failed:', e); }
-  finally{ PROD.loading=false; render(); }
+  finally{ PROD.loading=false; buildBrandPort(); render(); }
 }
 // Aggregate PROD.rows under the page-local filters (state / crop / company) for the selected measure. Company
 // TOTALS (the UPL-vs-SWAL head-to-head) always cover both companies within the state+crop scope, so the toggle
@@ -681,7 +684,8 @@ function txBuild(rows){
     comp = comp==='SWAL' ? 'SWAL' : comp==='UPL' ? 'UPL' : null; if(!comp) continue;
     out.push({ d, st: PROD_REGION[region.toUpperCase()] || 'OT', crop: titleCase(r[K.crop])||'—',
       brand: titleCase(brandRaw), brandKey: brandRaw.toUpperCase().replace(/\s+/g,' '), company:comp,
-      portfolio: prodPortfolio(r[K.portfolio]), acres: num(r[K.acres]) });
+      port0: prodPortfolio(r[K.portfolio]), portfolio: prodPortfolio(r[K.portfolio]),   // see buildBrandPort
+      acres: num(r[K.acres]) });
   }
   TX.rows=out;
 }
@@ -692,7 +696,60 @@ async function loadTx(){
     txBuild(parseCSV(await res.text()));
     TX.loaded=true; TX.at=nowIST();
   }catch(e){ TX.error=true; console.error('product-day load failed:', e); }
-  finally{ TX.loading=false; render(); }
+  finally{ TX.loading=false; buildBrandPort(); render(); }
+}
+
+/* ===================== brand → segment, filled across a brand's own rows =====================
+   The sheet fills `portfolio` per ROW, not per product, so the same brand is named on one row and blank on the
+   next. Measured on the live tabs 2026-08-07: 9,161 ac blank on the summary tab and 6,493 ac on the day-level
+   tab — of which IRIS alone is 6,724 + 6,493 ac that those same tabs call **Herbicide** on their other rows.
+   All of it was landing in Unclassified → Other, which reads as "we don't know what this is" where the sheet
+   plainly does. This is a data gap, not a classification question, so it is filled rather than displayed.
+
+   A brand's category is therefore decided ONCE for the brand — from every named row it holds on EITHER product
+   tab — and applied to its blank rows. Three rules keep that honest:
+
+   · **The sheet's own value always wins where it exists.** This only ever fills a blank; it never overrides a
+     stated category, so no row on screen contradicts the cell behind it.
+   · **Where a brand carries two different named categories, the one with the most acres wins**, and the
+     conflict is logged. Row order on a gviz export is not meaningful, so a first-row-wins rule would flip
+     between refreshes. Measured live there are zero such brands — the warning exists to surface the first one.
+   · **`port0` is the sheet's value and is never written to.** The map is always rebuilt from it, so running
+     this again cannot feed a filled row back in as evidence and drift the answer.
+
+   PROD_OVERRIDE is the last resort, for a brand blank on EVERY row of both tabs — the rule above has nothing to
+   copy from there. Eight such brands hold 1,915 ac today. Keep this map small: the real fix is the sheet. */
+const PROD_OVERRIDE = {
+  // Supplied by the programme 2026-08-07 for brands the sheet leaves blank on every row of both tabs.
+  // These are the ONLY categories on the dashboard not traceable to a cell, so each one is a standing
+  // request to fill that cell — delete the line the day the sheet carries the value.
+  'SHENZI SC':      'Insecticide',
+  'IMIDAGOLD PLUS': 'Insecticide',
+  'LANCER':         'Insecticide',
+  'LINDSTAR':       'Insecticide',
+  'TEWLIS':         'Insecticide',
+  'MANZATE':        'Fungicide',
+  // STARPEN (6 ac) and SUPERPHOS (2 ac) are blank everywhere and deliberately NOT overridden. They keep
+  // falling into Other rather than being dropped from the base: excluding acres here is what once left the
+  // segments card and the products table showing two different totals on one screen. Confirmed 2026-08-07.
+};
+const BRAND_PORT = {};   // brandKey → the brand's one category. Rebuilt whenever either product tab lands.
+function buildBrandPort(){
+  const named={};   // brandKey → {category → acres}, from port0 only
+  const add=(k,p,ac)=>{ if(!k || !p || p==='Unclassified') return;
+    const e=named[k]||(named[k]={}); e[p]=(e[p]||0)+(ac>0?ac:0); };
+  PROD.rows.forEach(r=>add(r.brandKey, r.port0, r.ytd+r.yday));   // acres are a tie-break weight, nothing else
+  TX.rows  .forEach(r=>add(r.brandKey, r.port0, r.acres));
+  Object.keys(BRAND_PORT).forEach(k=>{ delete BRAND_PORT[k]; });
+  Object.keys(named).forEach(k=>{
+    const cats=Object.keys(named[k]);
+    if(cats.length>1) console.warn('[MP-Ops] portfolio conflict for', k, named[k], '→ taking the largest');
+    BRAND_PORT[k]=cats.sort((a,b)=>named[k][b]-named[k][a])[0];
+  });
+  Object.keys(PROD_OVERRIDE).forEach(k=>{ if(!BRAND_PORT[k]) BRAND_PORT[k]=PROD_OVERRIDE[k]; });
+  const fill=r=>{ r.portfolio = (r.port0 && r.port0!=='Unclassified') ? r.port0
+                              : (BRAND_PORT[r.brandKey] || 'Unclassified'); };
+  PROD.rows.forEach(fill); TX.rows.forEach(fill);
 }
 
 /* ================= product detail for ONE PASTED PERIOD (manual tab) =================
@@ -3139,24 +3196,26 @@ function insWeekProducts(A,W){
 }
 
 /* ===== product segments by state =====
-   The product-detail tab has no portfolio column, so the segment is joined on from the SUMMARY tab's
-   brand → portfolio map. Whatever the summary tab does not carry lands in Other rather than being dropped, so
-   this card's base always equals the products table's total.
+   The product-detail tab has no portfolio column, so the segment is joined on from BRAND_PORT — the brand's one
+   category, decided across every named row it has on the two dated tabs. Whatever those tabs have never heard of
+   lands in Other rather than being dropped, so this card's base always equals the products table's total.
 
-   Soil & Seed Health and Unclassified are excluded from the base entirely (they are not spray segments in the
-   sense this table is asking about), so the four shares sum to 100% of what remains. Everything that is neither
-   herbicide, insecticide nor fungicide — in practice Bio Solution — lands in Other. */
+   Nothing is excluded from the base. Herbicide / Insecticide / Fungicide are named and EVERYTHING else — bio
+   solution, soil & seed health, a brand with no category anywhere — falls into Other. An earlier build did drop
+   categories here and the screen then showed two totals that disagreed with no footnote to explain them.
+
+   The join reads BRAND_PORT rather than walking PROD.rows itself, and that is the point of it: the old map took
+   the FIRST row per brand, so a brand whose first summary row happened to be blank mapped to Unclassified → Other
+   however many later rows named it. On the July paste that was 5,510 ac of IRIS, sorted into Other while the same
+   tab called it Herbicide. Match rate went 90% → 99% of the paste's acres when this changed. */
 const INS_SEGS = ['Herbicide','Insecticide','Fungicide'];
 function wkpSegments(A){
-  const map={}; PROD.rows.forEach(r=>{ if(!map[r.brandKey]) map[r.brandKey]=r.portfolio; });
+  const map=BRAND_PORT;
   const scope=r=>(!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
   const by={};
   WKP.rows.filter(scope).forEach(r=>{
     if(r.st==='OT') return;                                 // dashboard states only
-    // Herbicide / Insecticide / Fungicide are named; EVERYTHING else — soil & seed health, unclassified,
-    // bio solution, or a product with no portfolio on record — falls into Other. Nothing is dropped, so this
-    // table's total equals the products table's, and the two cards on the same screen cannot disagree.
-    const seg=map[r.key]||'';
+    const seg=map[r.key]||'';   // the brand's decided category, or Other — nothing is dropped from the base
     const e=by[r.st]||(by[r.st]={ st:r.st, name:STATE_NAMES[r.st]||r.st, base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0, prod:{}, crop:{} });
     const k = INS_SEGS.indexOf(seg)>=0 ? seg : 'Other';
     e[k]+=r.acres; e.base+=r.acres;
