@@ -118,6 +118,23 @@ Nine tabs; the app reads five. Mapped by inspection — do not re-derive this.
 
 **Only the snake tab has real history.** That single fact drives most of the Insights design: anything asking "what changed over time" below state level is not computable today.
 
+## Products view
+A self-contained page over the summary tab: a UPL-vs-SWAL head-to-head, three tiles, a brand leaderboard and a
+state split, under its own Company / State / Measure controls. Two rules govern what it counts:
+
+- **Soil & seed health is excluded (`PROD_EXCLUDE`), and the page says so.** Seed treatment is a different job
+  from spraying a standing crop — applied once, to seed — so counting it beside foliar spray inflates a
+  comparison of ground covered. Live: 7 brands, 3,790 ac, 3.1% (UPL 1,828 / SWAL 1,962, so it barely moves the
+  split — it was noise, not signal). The filter reads the RESOLVED `portfolio`, so blanks backfilled by
+  `buildBrandPort` are excluded too. **Applied once, at the top of `productAgg`**, so hero, tiles, leaderboard
+  and states all sit on one base — the repo's standing rule that two totals on one screen must reconcile. Scope
+  is this page only: Insights and the Yesterday recap still count every category. To exclude another category,
+  add it to the set and nothing else.
+- **Crop is not a dimension here** (removed 2026-08-11 by request). No crop filter, no crop mix card, no
+  crops-covered tile, no crop under a brand. `PROD.rows` still carries `crop` because Insights and the recap use
+  it; only this page stopped showing it. With the crop card gone, the leaderboard pairs with the state card, and
+  takes the full width when a state is picked and that card retires.
+
 ## Access roles (the PIN gate)
 `GATE.ROLES` in index.html maps sha256(PIN) → a scope on **three axes**: org (`org` default + `allow` list),
 state (`states`, `switchStates`) and views (`views`). It is a soft client-side gate — the file says so, and the

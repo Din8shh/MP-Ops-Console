@@ -99,10 +99,10 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
   // (set once SNAKE helpers exist — see snakeTodayOff), so the range always seeds to season-to-date, not FY end.
   // snTrendWin = window (days) for the separate day-wise trend chart: 10 | 15 | 30, anchored to today.
   snState:'ALL', snFrom:0, snTo:364, snTrendWin:30,
-  // Product Insights view: its own independent scope over the "Product data" tab (State × Crop × Company ×
+  // Product Insights view: its own independent scope over the "Product data" tab (State × Company ×
   // {YTD, yesterday}). Deliberately NOT tied to the machine filter bar — product-scanned acres are a separate
   // metric from machine spray acres. pmCo = ALL|UPL|SWAL, pmMeasure = ytd|yday.
-  pmCo:'ALL', pmState:'ALL', pmCrop:'ALL', pmMeasure:'ytd',
+  pmCo:'ALL', pmState:'ALL', pmMeasure:'ytd',
   // Insights view: its own state scope ('' = all India, else a state code), page-local like snState/pmState so
   // nothing this page does can move the machine filter bar or any other view. The gate's state LOCK still
   // overrides it (see insAgg) — a state-restricted login can never widen its scope through this control.
@@ -608,6 +608,14 @@ const PROD_STATES = ['MP','MH','TG','GJ','RJ','PB','HR'];   // dashboard state o
 const PROD_COL = { region:0, crop:1, brand:2, company:3, portfolio:4, ytd:5, yday:6 };
 // Portfolio arrives free-typed ("INSECTICIDES" alongside "Insecticide", and ~7% blank).
 const PROD_PORTFOLIOS = ['Herbicide','Insecticide','Fungicide','Bio Solution','Soil and Seed Health'];
+// Categories the PRODUCTS PAGE leaves out of its numbers. Seed treatment is a different job from spraying a
+// standing crop — it is applied once, to seed, and counting it beside foliar spray inflates a comparison of how
+// much ground each company's products covered. Measured on the live tab: 7 brands, 3,790 ac, 3.1% of the total
+// (UPL 1,828 / SWAL 1,962 — so it barely moves the split, which is the point: it adds noise, not signal).
+// The filter reads the RESOLVED `portfolio`, so a blank row backfilled by buildBrandPort() is excluded too.
+// Scope is this page only — Insights and the Yesterday recap still count every category, and the page says on
+// its face that it excludes these, because a reader adding the sheet up by hand must be able to see why.
+const PROD_EXCLUDE = new Set(['Soil and Seed Health']);
 function prodPortfolio(s){
   const t=String(s||'').trim(); if(!t) return 'Unclassified';
   const u=t.toUpperCase().replace(/S$/,'');
@@ -644,43 +652,38 @@ async function loadProduct(){
   }catch(e){ PROD.error=true; console.error('product load failed:', e); }
   finally{ PROD.loading=false; buildBrandPort(); render(); }
 }
-// Aggregate PROD.rows under the page-local filters (state / crop / company) for the selected measure. Company
-// TOTALS (the UPL-vs-SWAL head-to-head) always cover both companies within the state+crop scope, so the toggle
-// drills the breakdowns without hiding the comparison. Returns everything the view renders.
+// Aggregate PROD.rows under the page-local filters (state / company) for the selected measure. Company TOTALS
+// (the UPL-vs-SWAL head-to-head) always cover both companies within the state scope, so the toggle drills the
+// breakdowns without hiding the comparison. PROD_EXCLUDE categories are dropped first, so every number on the
+// page — hero, tiles, leaderboard, states — is taken over the same base. Returns everything the view renders.
 function productAgg(){
-  const S=state, key = S.pmMeasure==='yday' ? 'yday' : 'ytd', meas = m => m[key];
-  const scoped = PROD.rows.filter(m => (S.pmState==='ALL'||m.st===S.pmState) && (S.pmCrop==='ALL'||m.crop===S.pmCrop));
+  const S=state, key = S.pmMeasure==='yday' ? 'yday' : 'ytd';
+  const base = PROD.rows.filter(m => !PROD_EXCLUDE.has(m.portfolio));
+  const scoped = base.filter(m => S.pmState==='ALL'||m.st===S.pmState);
   const rows = scoped.filter(m => S.pmCo==='ALL' || m.company===S.pmCo);
   // brand map over the company-agnostic scope (so per-company top-product is available even under a company drill)
   const P={};
-  scoped.forEach(m=>{ const p=P[m.brandKey]||(P[m.brandKey]={disp:m.brand,company:m.company,ytd:0,yday:0,crops:{}});
-    p.ytd+=m.ytd; p.yday+=m.yday; p.crops[m.crop]=(p.crops[m.crop]||0)+m[key]; });
-  const prodList = Object.values(P).map(p=>{ const tc=Object.entries(p.crops).sort((a,b)=>b[1]-a[1])[0];
-    return { disp:p.disp, company:p.company, ytd:p.ytd, yday:p.yday, meas:p[key], topCrop: tc&&tc[1]>0?tc[0]:'—' }; });
+  scoped.forEach(m=>{ const p=P[m.brandKey]||(P[m.brandKey]={disp:m.brand,company:m.company,ytd:0,yday:0});
+    p.ytd+=m.ytd; p.yday+=m.yday; });
+  const prodList = Object.values(P).map(p=>({ disp:p.disp, company:p.company, ytd:p.ytd, yday:p.yday, meas:p[key] }));
   // per-company summary (from the brand map, both companies)
   const coSum = comp => { const list=prodList.filter(p=>p.company===comp);
-    const crops=new Set(); let ytd=0,yday=0;
+    let ytd=0,yday=0;
     list.forEach(p=>{ ytd+=p.ytd; yday+=p.yday; });
-    scoped.filter(m=>m.company===comp && m[key]>0).forEach(m=>crops.add(m.crop));
     const top=list.slice().sort((a,b)=>b.meas-a.meas).find(p=>p.meas>0);
     return { company:comp, ytd, yday, meas:(key==='yday'?yday:ytd), nBrands:list.filter(p=>p.meas>0).length,
-      nCrops:crops.size, topBrand: top?top.disp:'—', topCrop: top?top.topCrop:'—' }; };
-  // crop split (respects company filter)
-  const cropMap={}; rows.forEach(m=>{ const c=cropMap[m.crop]||(cropMap[m.crop]={crop:m.crop,UPL:0,SWAL:0}); c[m.company]+=m[key]; });
-  const crops = Object.values(cropMap).map(c=>({...c,total:c.UPL+c.SWAL})).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
+      topBrand: top?top.disp:'—' }; };
   // state split (respects company filter)
   const stMap={}; rows.forEach(m=>{ const s=stMap[m.st]||(stMap[m.st]={st:m.st,name:m.stName,UPL:0,SWAL:0}); s[m.company]+=m[key]; });
   const states = Object.values(stMap).map(s=>({...s,total:s.UPL+s.SWAL})).filter(s=>s.total>0).sort((a,b)=>b.total-a.total);
   // products for the leaderboard (respects company filter)
   const products = prodList.filter(p=>(S.pmCo==='ALL'||p.company===S.pmCo) && p.meas>0).sort((a,b)=>b.meas-a.meas);
-  // picker options (from the full dataset, so they stay stable across filters)
-  const stPresent = PROD_STATES.filter(c=>PROD.rows.some(m=>m.st===c)); if(PROD.rows.some(m=>m.st==='OT')) stPresent.push('OT');
+  // picker options (from the full excluded-adjusted dataset, so they stay stable across filters)
+  const stPresent = PROD_STATES.filter(c=>base.some(m=>m.st===c)); if(base.some(m=>m.st==='OT')) stPresent.push('OT');
   const stateOptions=[{v:'ALL',t:'All states'},...stPresent.map(c=>({v:c,t:c==='OT'?'Other states':STATE_NAMES[c]}))];
-  const cropOptions=[{v:'ALL',t:'All crops'},...[...new Set(PROD.rows.map(m=>m.crop))].sort().map(c=>({v:c,t:c}))];
-  return { rows, products, crops, states, up:coSum('UPL'), sw:coSum('SWAL'), key,
+  return { rows, products, states, up:coSum('UPL'), sw:coSum('SWAL'), key,
     totYtd: rows.reduce((a,m)=>a+m.ytd,0), totYday: rows.reduce((a,m)=>a+m.yday,0),
-    nProducts: products.length, nCrops: crops.length, nStates: states.length,
-    stateOptions, cropOptions };
+    nProducts: products.length, nStates: states.length, stateOptions };
 }
 
 /* ===================== day-level product transactions =====================
@@ -4851,7 +4854,7 @@ function productBodyHTML(mob){
   const coToggle=`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${['ALL','UPL','SWAL'].map(c=>`<button data-act="pmco" data-co="${c}" style="${css(seg(S.pmCo===c))}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`;
   const measToggle=`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px"><button data-act="pmmeasure" data-m="ytd" style="${css(seg(S.pmMeasure==='ytd'))}">Total · YTD</button><button data-act="pmmeasure" data-m="yday" style="${css(seg(S.pmMeasure==='yday'))}">Yesterday</button></div>`;
   const header=`<div style="display:flex;align-items:center;gap:${mob?'9px':'14px'};flex-wrap:wrap">
-      ${labeled('Company',coToggle)}${labeled('State',selCtrl('pmStateSel',A.stateOptions,S.pmState))}${labeled('Crop',selCtrl('pmCropSel',A.cropOptions,S.pmCrop))}${labeled('Measure',measToggle)}
+      ${labeled('Company',coToggle)}${labeled('State',selCtrl('pmStateSel',A.stateOptions,S.pmState))}${labeled('Measure',measToggle)}
       <div style="flex:1"></div>
       <span style="font-size:10.5px;color:#9C988F">Product data · ${PROD.at||'—'} <button data-act="productretry" title="Reload" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>
     </div>`;
@@ -4861,8 +4864,8 @@ function productBodyHTML(mob){
     return `<div style="flex:1;min-width:0">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><span style="width:11px;height:11px;border-radius:3px;background:${cc(x.company)}"></span><span style="font-size:13.5px;font-weight:700">${x.company}</span><span style="font-size:10.5px;color:#9C988F">${share}% share</span></div>
       <div style="font-family:'IBM Plex Mono';font-size:27px;font-weight:700;line-height:1;color:${cInk(x.company)}">${fmt(x.meas)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> ac</span></div>
-      <div style="font-size:11px;color:#6E6A62;margin-top:8px">${fmt(x.nBrands)} products · ${fmt(x.nCrops)} crops</div>
-      <div style="font-size:11px;color:#9C988F;margin-top:3px">Top: <span style="color:#46433d;font-weight:600">${E(x.topBrand)}</span> · ${E(x.topCrop)}</div>
+      <div style="font-size:11px;color:#6E6A62;margin-top:8px">${fmt(x.nBrands)} products</div>
+      <div style="font-size:11px;color:#9C988F;margin-top:3px">Top: <span style="color:#46433d;font-weight:600">${E(x.topBrand)}</span></div>
     </div>`; };
   let hero;
   if(S.pmCo==='ALL'){
@@ -4886,7 +4889,7 @@ function productBodyHTML(mob){
       <div style="font-family:'IBM Plex Mono';font-size:20px;font-weight:700;color:${ink||C.ink}">${val}</div>
       <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">${lab}</div></div>`;
   const stats=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;display:flex;overflow-x:auto">
-      ${stat(fmt(A.totYtd),'Total acres · YTD')}${stat(fmt(A.totYday),'Sprayed yesterday')}${stat(fmt(A.nProducts),'Active products')}${stat(fmt(A.nCrops),'Crops covered')}</div>`;
+      ${stat(fmt(A.totYtd),'Total acres · YTD')}${stat(fmt(A.totYday),'Sprayed yesterday')}${stat(fmt(A.nProducts),'Active products')}</div>`;
 
   /* ---- top products leaderboard ---- */
   const pMax=A.products.length?A.products[0].meas:1;
@@ -4896,19 +4899,11 @@ function productBodyHTML(mob){
       <div style="display:grid;grid-template-columns:20px 1fr ${mob?'62px':'74px'};align-items:center;gap:10px;padding:8px 0;border-top:${i?'1px solid #F4F2EE':'none'}">
         <span style="font-family:'IBM Plex Mono';font-size:11px;color:#C9C4BA;text-align:right">${i+1}</span>
         <div style="min-width:0">
-          <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(p.disp)}</span>${chip(p.company)}<span style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(p.topCrop)}</span></div>
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(p.disp)}</span>${chip(p.company)}</div>
           <span style="display:block;height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(2,p.meas/pMax*100)}%;background:${cc(p.company)}"></span></span>
         </div>
         <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right">${fmt(p.meas)}</span>
       </div>`).join('')}</div>` : emptyBox('No products in this scope.')}`);
-
-  /* ---- crop mix (hidden when a single crop is selected) ---- */
-  const cropTop=A.crops.slice(0,12), cMax=A.crops.length?A.crops[0].total:1;
-  const cropRow=c=>`<div style="padding:9px 0;border-top:1px solid #F4F2EE">
-      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px"><span style="flex:1;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(c.crop)}</span><span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600">${fmt(c.total)}</span></div>
-      <div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB">${c.UPL>0?`<span style="width:${c.UPL/cMax*100}%;background:${C.orange}"></span>`:''}${c.SWAL>0?`<span style="width:${c.SWAL/cMax*100}%;background:${C.green}"></span>`:''}</div></div>`;
-  const cropCard = S.pmCrop!=='ALL' ? '' : card(`${cHead('Crop mix','Acres by crop · '+measWord+' · UPL / SWAL split')}
-    ${cropTop.length? `<div style="padding:4px 16px 12px">${cropTop.map(cropRow).join('')}${A.crops.length>12?`<div style="padding:9px 0 2px;font-size:11px;color:#9C988F;text-align:center">+${A.crops.length-12} more crops</div>`:''}</div>`:emptyBox('No crops in this scope.')}`);
 
   /* ---- state breakdown (only at all-states) ---- */
   const sMax=A.states.length?A.states[0].total:1;
@@ -4919,16 +4914,17 @@ function productBodyHTML(mob){
         <div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB">${s.UPL>0?`<span style="width:${s.UPL/sMax*100}%;background:${C.orange}"></span>`:''}${s.SWAL>0?`<span style="width:${s.SWAL/sMax*100}%;background:${C.green}"></span>`:''}</div></div>`).join('')}</div>`);
 
   const legend=`<div style="display:flex;align-items:center;gap:14px;font-size:11px;color:#6E6A62"><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:${C.orange}"></span>UPL</span><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:${C.green}"></span>SWAL</span></div>`;
+  // Products and states sit side by side — the pair the Crop mix card used to complete. When the state card is
+  // away (a state is picked, or there is only one) the leaderboard takes the full width rather than leaving a gap.
   const twoCol = mob
-    ? `${productsCard}${cropCard}`
-    : `<div style="display:grid;grid-template-columns:${cropCard?'1.35fr 1fr':'1fr'};gap:14px;align-items:start">${productsCard}${cropCard}</div>`;
+    ? `${productsCard}${stateCard}`
+    : `<div style="display:grid;grid-template-columns:${stateCard?'1.35fr 1fr':'1fr'};gap:14px;align-items:start">${productsCard}${stateCard}</div>`;
   return `<div style="display:flex;flex-direction:column;gap:14px">
     ${header}
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><div style="font-size:11px;color:#9C988F">Product-scanned acres — a separate measure from machine spray acres</div>${legend}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><div style="font-size:11px;color:#9C988F">Product-scanned acres — a separate measure from machine spray acres. Soil &amp; seed health products are not counted.</div>${legend}</div>
     ${hero}
     ${stats}
     ${twoCol}
-    ${stateCard}
   </div>`;
 }
 function recapViewHTML(v){ return `<section style="padding:18px 22px">${recapBodyHTML(false)}</section>`; }
@@ -5814,7 +5810,6 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='insCoSel') setState({insCo:e.target.value});
   else if(e.target.id==='insPaSel') setState({insPa:e.target.value});
   else if(e.target.id==='insPbSel') setState({insPb:e.target.value});
-  else if(e.target.id==='pmCropSel') setState({pmCrop:e.target.value});
 });
 app.addEventListener('click', e=>{
   if(e.target.closest('a[data-stop]')) { e.stopPropagation(); return; } // let tel: link work, don't open row
