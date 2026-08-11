@@ -29,6 +29,28 @@
   .insRow:hover{background:#FBFAF8}
   .insRow[data-act]:hover{background:#F7F5F1}
   .insMore:hover{background:#F4F2EE}
+  /* Left nav rail — its height is the constraint, and the failure was SILENT. An admin's rail carries twelve
+     buttons; at the original fixed 46×42 they want 592px, and with the logo, the phone button, the vertical
+     "Confidential" label and the padding the aside wants ~850px. The shell is a fixed 100vh with
+     overflow:hidden, so what happened on a short viewport was: the buttons (flex-shrink:1 by default) squeezed
+     down to a ~23px floor, then overlapped the phone button, then fell off the bottom entirely below ~460px of
+     viewport height — and the first icons lost are the LAST in the list, Products and Cumulative. A 1366×768
+     laptop at 150% Windows scaling, or any browser zoomed past ~125%, lands in exactly that range.
+     So: the buttons size CONTINUOUSLY with the viewport (clamp, no tier cliffs) between a comfortable 42px and
+     a still-tappable 26px, which keeps all twelve on screen down to ~450px; below that the list scrolls rather
+     than clipping. Its scrollbar is slim and dark rather than hidden: it appears only when something really is
+     below the fold, and it is the only thing telling the reader there is more rail to reach. */
+  .railNav{display:flex;flex-direction:column;align-items:center;gap:clamp(3px,.7vh,8px);flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#4a473f transparent}
+  .railNav::-webkit-scrollbar{width:5px}
+  .railNav::-webkit-scrollbar-thumb{background:#4a473f;border-radius:3px}
+  .navbtn{flex:0 0 auto;width:46px;height:clamp(26px,4.4vh,42px);border:none;border-radius:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:transparent;color:#807c73}
+  .navbtn.on{background:#34322d;color:#fff}
+  /* The chrome around the list gives up its space first — it is decoration, the buttons are the navigation.
+     The logo's geometry lives HERE and not in an inline style, or the media query below silently loses to it. */
+  .railLogo{width:38px;height:38px;flex-shrink:0;margin-bottom:26px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,#F5821F,#1FAE43);color:#fff;font-weight:700;font-size:13px;letter-spacing:.02em}
+  @media (max-height:880px){ .railLogo{width:32px;height:32px;font-size:11px;margin-bottom:12px} }
+  @media (max-height:780px){ .railConf{display:none} }
   /* Real phones: the mobile view drops its desktop preview bezel and runs full-bleed
      (see isPhone()/mobileHTML). Only viewport-level chrome is tuned here. */
   @media (max-width:820px){
@@ -1287,7 +1309,8 @@ function drawDrawerMap(){
 }
 
 /* ============================= style helpers ============================= */
-const navStyle = active => ({ width:'46px',height:'42px',border:'none',borderRadius:'11px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center', background:active?'#34322d':'transparent', color:active?'#fff':'#807c73' });
+// Rail buttons are styled by the .navbtn class, not inline — their size has to respond to viewport HEIGHT
+// (see the rail note in <style>), which an inline style cannot do.
 const seg = active => ({ border:'none',borderRadius:'6px',padding:'5px 11px',fontFamily:"'Noto Sans'",fontSize:'12px',fontWeight:active?600:500,cursor:'pointer', background:active?'#fff':'transparent', color:active?'#1B1A17':'#807c73', boxShadow:active?'0 1px 2px rgba(0,0,0,.08)':'none' });
 const segM = (active,touch) => ({ flex:1, border:'none',borderRadius:'8px',padding:touch?'11px 0':'8px 0',fontFamily:"'Noto Sans'",fontSize:touch?'13px':'12px',fontWeight:active?600:500,cursor:'pointer', background:active?'#fff':'transparent', color:active?'#1B1A17':'#807c73', boxShadow:active?'0 1px 2px rgba(0,0,0,.08)':'none', textAlign:'center' });
 const chip = (active,color) => ({ display:'flex',alignItems:'center',gap:'5px',border:'1px solid '+(active?color:'#E9E6DF'),borderRadius:'8px',padding:'5px 10px',fontFamily:"'Noto Sans'",fontSize:'11.5px',fontWeight:active?600:500,cursor:'pointer', background:active?(color+'14'):'#fff', color:active?color:'#6E6A62' });
@@ -1649,17 +1672,22 @@ function vals(){
 }
 
 /* ============================= HTML builders ============================= */
-const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" title="${act}" style="${css(navStyle(active))}">${icon}</button>`;
+const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" title="${NAV_TITLE[act]||act}" class="navbtn${active?' on':''}">${icon}</button>`;
+// Hover titles: the rail is icon-only, so this is the only place a view is named. "snake" and "recap" are internal
+// keys and mean nothing to a reader hunting for the cumulative chart.
+const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machine locations', weather:'Weather',
+  am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Yesterday', leader:'Leaders',
+  product:'Products', snake:'Cumulative acres' };
 
 function railHTML(){
   const v=state.view;
-  return `<aside style="width:74px;flex-shrink:0;background:#1B1A17;display:flex;flex-direction:column;align-items:center;padding:16px 0">
-    <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;letter-spacing:.02em;color:#fff;margin-bottom:26px">UPL</div>
-    <nav style="display:flex;flex-direction:column;gap:8px;flex:1">
+  return `<aside style="width:74px;flex-shrink:0;background:#1B1A17;display:flex;flex-direction:column;align-items:center;padding:16px 0;overflow:hidden">
+    <div class="railLogo">UPL</div>
+    <nav class="railNav">
       ${roleHidesView('insights')?'':navBtn('insights',I.insights,v==='insights')}${navBtn('map',I.map,v==='map')}${roleHidesView('tables')?'':navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${roleHidesView('am')?'':navBtn('am',I.am,v==='am')}${navBtn('bm',I.bm,v==='bm')}${roleHidesView('pending')?'':navBtn('pending',I.pending,v==='pending')}${roleHidesView('recap')?'':navBtn('recap',I.recap,v==='recap')}${roleHidesView('leader')?'':navBtn('leader',I.leader,v==='leader')}${roleHidesView('product')?'':navBtn('product',I.product,v==='product')}${roleHidesView('snake')?'':navBtn('snake',I.snake,v==='snake')}
     </nav>
-    <button data-act="device" title="Mobile view" style="${css({...navStyle(false),marginBottom:'8px'})}">${I.mobile}</button>
-    <div style="writing-mode:vertical-rl;font-size:8.5px;letter-spacing:.14em;color:#6b675f;margin-top:14px;text-transform:uppercase">Confidential</div>
+    <button data-act="device" title="Mobile view" class="navbtn" style="margin:6px 0 0">${I.mobile}</button>
+    <div class="railConf" style="writing-mode:vertical-rl;flex-shrink:0;font-size:8.5px;letter-spacing:.14em;color:#6b675f;margin-top:14px;text-transform:uppercase">Confidential</div>
   </aside>`;
 }
 function topbarHTML(v){

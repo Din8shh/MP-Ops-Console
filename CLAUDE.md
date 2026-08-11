@@ -39,6 +39,19 @@ Territory→Cluster→Machine behaves identically on both.
   Load-more button. `render()` resets it whenever the filter signature changes, so a stale offset is
   never applied to a freshly-filtered (shorter) set.
 
+**The desktop rail sizes itself off viewport HEIGHT, and that is load-bearing.** An admin carries twelve
+buttons; at a fixed 46×42 the aside wants ~850px once the logo, phone button and vertical "Confidential" label
+are counted, and the shell is a fixed `100vh` with `overflow:hidden`. The old fixed sizing degraded *silently*:
+the buttons (default `flex-shrink:1`) squeezed to a ~23px floor, then overlapped the phone button, then fell off
+the bottom below ~460px of viewport height — and the ones lost are the LAST in the list, Products and
+Cumulative, which is exactly what got reported missing. A 1366×768 laptop at 150% Windows scaling, or a browser
+zoomed past ~125%, sits in that range. So `.navbtn` height and `.railNav` gap are `clamp()`ed against `vh`
+(42px → 26px, continuous — no tier cliffs), the logo and the Confidential label give up their space first, and
+the list scrolls with a slim dark scrollbar below ~450px rather than clipping. Two rules follow: **rail geometry
+belongs in the stylesheet, not in an inline `style=`** (an inline style silently beats the media query — the
+logo shrink was written twice before that was spotted), and any new view added to the rail costs ~30px at the
+small end, so re-check the short-viewport case when you add one.
+
 `activeFilterCount()` is the single source of truth for "is this view narrowed?" — it feeds both
 `anyFilter` (the "(filtered)" label + Clear button, desktop and mobile) and the mobile Filters badge.
 It measures against the **role's** baseline via `gateDefaultOrg()`, not the global one: a UPL/SWAL
