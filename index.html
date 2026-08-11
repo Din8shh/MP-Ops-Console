@@ -5911,6 +5911,13 @@ const GATE = {
   ROLES: {                       // sha256(pin) -> role scope. 2-D: org (allow) × state (states/switchStates).
     // Admin: all-India, org Both, state dropdown enabled (switchStates). One global admin.
     'c64306c91d63dfeed553ccc9e3ba29bc7e84449a67c5714a2f5f497d140f845f': { id:'admin', role:'admin', org:'Both', allow:['Both','UPL','SWAL','Open'], states:['*'], switchStates:true, label:'Admin · All India' }, // 0088
+    // Leadership: all-India like admin, and free to move between All / UPL / SWAL and between states — but the role
+    // is NOT 'admin', so every isAdmin() gate still holds: Insights, Territories, Area managers, Leaders, Yesterday,
+    // Products, Cumulative and Pending stay hidden (roleHidesView), as do the Plan KPI and the IoT/ping columns.
+    // It sees Map, Machine locations, Weather and Business managers for the whole programme. 'Open' is not in
+    // `allow` — this login is for the two companies — so the Open segment re-prompts for a PIN like any other
+    // out-of-scope toggle. Note that "All" is every deployed row, which includes the handful of Open machines.
+    'c4876de490dcf38b74d6c0d4f120cf01126c3d6a3a49b93ec81caae38ea1497e': { id:'lead', role:'lead', org:'Both', allow:['Both','UPL','SWAL'], states:['*'], switchStates:true, label:'Leadership · UPL + SWAL' }, // 9090
     // UPL/SWAL: locked to one state (switchStates:false → dropdown hidden), org forced. MP keeps its original PINs.
     '0ffe1abd1a08215353c233d6e009613e95eec4253832a761af28ff37ac5a150c': { id:'mp-upl',  role:'upl',  org:'UPL',  allow:['UPL'],  states:['MP'], switchStates:false, label:'Madhya Pradesh · UPL'  }, // 1111
     'edee29f882543b956620b26d0ee0e7e950399b1c4222f5de05e06425b4c995e9': { id:'mp-swal', role:'swal', org:'SWAL', allow:['SWAL'], states:['MP'], switchStates:false, label:'Madhya Pradesh · SWAL' }, // 2222

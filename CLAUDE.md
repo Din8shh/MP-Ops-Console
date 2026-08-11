@@ -118,6 +118,24 @@ Nine tabs; the app reads five. Mapped by inspection — do not re-derive this.
 
 **Only the snake tab has real history.** That single fact drives most of the Insights design: anything asking "what changed over time" below state level is not computable today.
 
+## Access roles (the PIN gate)
+`GATE.ROLES` in index.html maps sha256(PIN) → a scope on **two axes**: org (`org` default + `allow` list) and
+state (`states`, `switchStates`). It is a soft client-side gate — the file says so, and the plaintext PIN sits in
+a trailing comment on each row by convention. Three shapes exist:
+
+| Role | Org | States | Views |
+|---|---|---|---|
+| `admin` | All / UPL / SWAL / Open | all, switchable | everything |
+| `lead` (leadership) | All / UPL / SWAL | all, switchable | Map, Machine locations, Weather, Business managers |
+| `upl` / `swal` × 7 states | one, forced | one, locked | Map, Machine locations, Weather, Business managers |
+
+**Only `role==='admin'` opens the admin surfaces** — `isAdmin()` is the single gate, and everything downstream of
+it (`roleHidesView`, the Plan KPI, the IoT/ping columns and drawer block, the admin CSV columns, and the
+role-conditional breakdown rule in `bdEff`) follows from that one string. Leadership is deliberately NOT admin:
+it is an all-India, both-companies *reading* of the fleet, not the ops-hygiene screens. So adding a role is a row
+in the table plus, if it needs a new capability, a named helper beside `isAdmin()` — never a second string
+compared in twenty places.
+
 ## Deploy
 GitHub Pages serves **`main` at repo root** → **https://din8shh.github.io/MP-Ops-Console/**. Push to `main` = deploy;
 Pages rebuilds in ~1 min. The Pages *build API* lags, so verify by fetching the live `index.html` and diffing it
