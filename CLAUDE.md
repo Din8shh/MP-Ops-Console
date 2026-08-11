@@ -119,22 +119,32 @@ Nine tabs; the app reads five. Mapped by inspection — do not re-derive this.
 **Only the snake tab has real history.** That single fact drives most of the Insights design: anything asking "what changed over time" below state level is not computable today.
 
 ## Access roles (the PIN gate)
-`GATE.ROLES` in index.html maps sha256(PIN) → a scope on **two axes**: org (`org` default + `allow` list) and
-state (`states`, `switchStates`). It is a soft client-side gate — the file says so, and the plaintext PIN sits in
-a trailing comment on each row by convention. Three shapes exist:
+`GATE.ROLES` in index.html maps sha256(PIN) → a scope on **three axes**: org (`org` default + `allow` list),
+state (`states`, `switchStates`) and views (`views`). It is a soft client-side gate — the file says so, and the
+plaintext PIN sits in a trailing comment on each row by convention. Three shapes exist:
 
-| Role | Org | States | Views |
+| Role | Org | States | Views beyond the fleet four |
 |---|---|---|---|
-| `admin` | All / UPL / SWAL / Open | all, switchable | everything |
-| `lead` (leadership) | All / UPL / SWAL | all, switchable | Map, Machine locations, Weather, Business managers |
-| `upl` / `swal` × 7 states | one, forced | one, locked | Map, Machine locations, Weather, Business managers |
+| `admin` | All / UPL / SWAL / Open | all, switchable | all of them |
+| `lead` (leadership) | All / UPL / SWAL | all, switchable | Products, Cumulative |
+| `upl` / `swal` × 7 states | one, forced | one, locked | none |
 
-**Only `role==='admin'` opens the admin surfaces** — `isAdmin()` is the single gate, and everything downstream of
-it (`roleHidesView`, the Plan KPI, the IoT/ping columns and drawer block, the admin CSV columns, and the
-role-conditional breakdown rule in `bdEff`) follows from that one string. Leadership is deliberately NOT admin:
-it is an all-India, both-companies *reading* of the fleet, not the ops-hygiene screens. So adding a role is a row
-in the table plus, if it needs a new capability, a named helper beside `isAdmin()` — never a second string
-compared in twenty places.
+Map, Machine locations, Weather and Business managers are the **baseline every login gets**; `GATED_VIEWS` lists
+the rest, and `roleHidesView` grants one only if the role is admin or names it in `views`. Putting the grant on
+the role is what made "give leadership the Products and Cumulative tabs" a one-token edit rather than another
+role-name string compared inside a boolean — do not reintroduce `role==='x'` tests there.
+
+**Org and view scope are SEPARATE axes, and `isAdmin()` still governs the data.** Everything downstream of it —
+the Plan KPI, the IoT/ping columns and drawer block, the admin CSV columns, the role-conditional breakdown rule
+in `bdEff` — keys off admin alone, so granting a view never leaks an admin column into it. Leadership is
+deliberately not admin: it is an all-India, both-companies *reading* of the programme, not the ops-hygiene
+screens (Pending, Insights, the people tables).
+
+**CONSTRAINT on `snake` and `product`:** both render their own all-India state pickers, and neither consults
+`gateAllowsState`. Grant them only to a role with `states:['*']`. A state-locked role handed either one would
+read its way straight out of its scope — if that is ever wanted, gate those two pickers first (Insights already
+shows the pattern: filter the options by `gateAllowsState` and render the picker only when
+`gateCanSwitchStates()`).
 
 ## Deploy
 GitHub Pages serves **`main` at repo root** → **https://din8shh.github.io/MP-Ops-Console/**. Push to `main` = deploy;
