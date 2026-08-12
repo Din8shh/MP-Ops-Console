@@ -60,6 +60,14 @@ permanently filtered. **`st` is deliberately excluded** — state is a scope, no
 own labelled control on desktop, `clear` doesn't reset it, and the active state is always in the
 header. Counting it would render a Clear button that leaves it behind.
 
+**The footnote is one string in one place.** `FOOTNOTE` + `footnoteHTML(mob)` (just above `desktopHTML`)
+render it three ways off the same constant: a fixed strip under the desktop `<main>` — a sibling of the
+scroller, not content, so it is on *every* view including the chromeless ones and nothing has to opt in —
+the foot of the phone's scroller, and a line on the PIN-gate card (which is built outside `#app`, hence
+the third call site). Reword it in `FOOTNOTE` only. The desktop `<main>` carries `min-height:0` so it
+yields to the strip inside the fixed-`100vh` shell instead of pushing it off; the rail is a sibling of
+that whole column, so its height clamp is untouched.
+
 ## Data
 One row = one machine. Live source is a published-CSV Google Sheet (see `CONFIG` in
 index.html). To go live, set `CONFIG.csvUrl` (Publish-to-web CSV link) or `CONFIG.sheetId`.

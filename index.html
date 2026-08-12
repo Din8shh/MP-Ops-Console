@@ -5393,12 +5393,21 @@ function contentHTML(v){
     default: return mapViewHTML(v);
   }
 }
+/* One footnote line, shown on every page: the desktop shell (a fixed strip under the scrolling
+   main, so it is there on every view including the chromeless ones), the foot of the phone's
+   scroller, and the PIN gate card. Single source of truth — change the wording here only. */
+const FOOTNOTE = 'Made with tokens using Claude by Dinesh';
+const footnoteHTML = mob => `<div style="flex-shrink:0;text-align:center;color:#9C988F;${mob
+  ? "padding:18px 0 2px;font-size:10px"
+  : "padding:7px 22px;font-size:10.5px;background:#F6F5F2;border-top:1px solid #E9E6DF"}">${FOOTNOTE}</div>`;
+
 function desktopHTML(v){
   return `<div style="height:100vh;display:flex;background:#F6F5F2;color:#1B1A17;overflow:hidden">
     ${railHTML()}
     <div style="flex:1;display:flex;flex-direction:column;min-width:0">
       ${topbarHTML(v)}${CHROMELESS.has(state.view)?'':filterBarHTML(v)}${CHROMELESS.has(state.view)?'':kpiStripHTML(v)}
-      <main style="flex:1;overflow:auto;position:relative">${contentHTML(v)}</main>
+      <main style="flex:1;overflow:auto;position:relative;min-height:0">${contentHTML(v)}</main>
+      ${footnoteHTML(false)}
     </div>
     ${drawerHTML(v)}
   </div>`;
@@ -5744,6 +5753,7 @@ function mobileHTML(v){
           ${v.kpis.map(k=>`<div style="flex-shrink:0;min-width:84px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px"><div style="${css(k.valStyle)}">${E(k.value)}</div><div style="font-size:9px;font-weight:600;letter-spacing:.04em;color:#9C988F;text-transform:uppercase;margin-top:4px;white-space:nowrap">${E(k.label)}</div></div>`).join('')}
         </div>`}
         ${body}
+        ${footnoteHTML(true)}
       </div>
       ${mBottomNavHTML()}
       ${sheet}
@@ -5969,6 +5979,7 @@ function gateShow(onOk, msg, cancelable){
       <div id="gateErr" style="font-size:12px;color:#DC3A2B;margin-top:10px;min-height:15px;font-weight:600"></div>
       <button id="gateCancel" type="button" style="display:none;margin-top:14px;width:100%;padding:10px 0;background:#fff;border:1.5px solid #E9E6DF;border-radius:9px;color:#6E6A62;font-size:13.5px;font-weight:600;cursor:pointer">← Cancel · keep current view</button>
       <div style="font-size:10.5px;color:#9C988F;margin-top:14px;line-height:1.4">Access auto-expires after 30 min of inactivity. <span style="opacity:.6">· build ms-p3</span></div>
+      <div style="font-size:10px;color:#9C988F;margin-top:10px;padding-top:10px;border-top:1px solid #F2F0EB">${FOOTNOTE}</div>
     </div>`;
     document.body.appendChild(ov);
     const inp=ov.querySelector('#gateInput');
