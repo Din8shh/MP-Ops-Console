@@ -105,8 +105,10 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
   pmCo:'ALL', pmState:'ALL', pmMeasure:'ytd',
   // MP product summary: page-local scope over the "Product Data MP" tab, same isolation rule as pm*/sn*.
   // There is no state axis — that tab is Madhya Pradesh only, and the view is offered only under MP.
-  // mpCo = ALL|UPL|SWAL (forced by the gate for field logins), mpMeasure = ytd|mtd|yday.
-  mpCo:'ALL', mpMeasure:'ytd',
+  // mpCo = ALL|UPL|SWAL (forced by the gate for field logins), mpMeasure = ytd|mtd|yday,
+  // mpTerr = '' (all) or a canonical MP district name — the SAME names the machine filter bar uses, since both
+  // sides canonicalise through canonTerr/COORDS, but page-local like the rest and never touches state.terr.
+  mpCo:'ALL', mpMeasure:'ytd', mpTerr:'',
   // Insights view: its own state scope ('' = all India, else a state code), page-local like snState/pmState so
   // nothing this page does can move the machine filter bar or any other view. The gate's state LOCK still
   // overrides it (see insAgg) — a state-restricted login can never widen its scope through this control.
@@ -718,6 +720,19 @@ const MPP_SHEET = 'Product Data MP';   // labels/logs only; the fetch keys off M
 // Named indices, same reason as PROD_COL: a column inserted upstream then costs one line here instead of
 // silently shifting the three acre columns into each other.
 const MPP_COL = { terr:0, state:1, org:2, brand:3, company:4, classification:5, yday:6, ytd:7, mtd:8, altOrg:9, finalTerr:10 };
+/* Brand hygiene, supplied by the programme 2026-08-14 and applied at PARSE time so every number on the page —
+   stat band, company split, territory ranking, product table — sits on the same corrected base.
+
+   MERGE: the sheet lists one product under two names. Both sides of a merge must be the SAME company, or the
+   merged row could not be coloured or chipped; `Canora` and `Canora EZ` are both SWAL herbicides (10,646 + 88 ac
+   YTD), so the pair is safe. The surviving key's spelling is the one displayed.
+   DROP: seed/root-application products, excluded for the same reason as the Soil and Seed Health category —
+   applied to seed rather than sprayed onto a standing crop, so counting them beside foliar spray overstates
+   ground covered. They are dropped here rather than added to PROD_EXCLUDE because the sheet classifies them
+   Fungicide and Bio Solution, and re-labelling a whole category to catch two brands would silently take the
+   rest of those categories with them. */
+const MPP_BRAND_MERGE = { 'CANORA':'CANORA EZ' };
+const MPP_BRAND_DROP  = new Set(['STARTUP SAAF','NEO ROOT']);
 const MPP = { loading:false, loaded:false, error:false, at:'', rows:[] };  // rows: {terr,brand,brandKey,company,portfolio,yday,mtd,ytd}
 function mppUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${MPP_GID}&t=${Date.now()}`; }
 function mppBuild(rows){
@@ -729,8 +744,12 @@ function mppBuild(rows){
     const brandRaw=String(r[K.brand]||'').trim(); if(!brandRaw) continue;
     let comp=String(r[K.company]||'').trim().toUpperCase();
     comp = comp==='SWAL' ? 'SWAL' : comp==='UPL' ? 'UPL' : null; if(!comp) continue;   // strictly the two companies
+    const key0=brandRaw.toUpperCase().replace(/\s+/g,' ');
+    const brandKey=MPP_BRAND_MERGE[key0]||key0;
+    if(MPP_BRAND_DROP.has(brandKey)) continue;
     out.push({ terr: canonTerr(aliasTerr('MP', terrRaw)),
-      brand: titleCase(brandRaw), brandKey: brandRaw.toUpperCase().replace(/\s+/g,' '),
+      // display comes off the RESOLVED key, so a merged brand shows one spelling wherever it appears
+      brand: titleCase(brandKey), brandKey,
       company: comp, portfolio: prodPortfolio(r[K.classification]),
       yday:num(r[K.yday]), mtd:num(r[K.mtd]), ytd:num(r[K.ytd]) });
   }
@@ -757,37 +776,48 @@ function mppAgg(){
   const S=state, key=(S.mpMeasure==='yday'||S.mpMeasure==='mtd') ? S.mpMeasure : 'ytd';
   const lock=mppOrgLock(), co = lock || S.mpCo;
   const base=MPP.rows.filter(m=>!PROD_EXCLUDE.has(m.portfolio));
-  const rows=base.filter(m => co==='ALL' || m.company===co);
-  // company totals across the SCOPE (both companies), so the head-to-head survives a company drill
-  const coSum = c => { const l=base.filter(m=>m.company===c), s={company:c,ytd:0,mtd:0,yday:0,brands:new Set()};
+  // TWO scopes, deliberately built in this order. `scoped` is the TERRITORY scope across both companies, which
+  // is what the head-to-head and the stat band read — so picking a company drills the product table without
+  // hiding the comparison, exactly as the Products page treats its state scope. `rows` adds the company filter
+  // and is what the product table itself reads.
+  const terrPick = S.mpTerr && base.some(m=>m.terr===S.mpTerr) ? S.mpTerr : '';   // a stale pick can't empty the page
+  const scoped = base.filter(m => !terrPick || m.terr===terrPick);
+  const rows   = scoped.filter(m => co==='ALL' || m.company===co);
+  const coSum = c => { const l=scoped.filter(m=>m.company===c), s={company:c,ytd:0,mtd:0,yday:0,brands:new Set()};
     l.forEach(m=>{ s.ytd+=m.ytd; s.mtd+=m.mtd; s.yday+=m.yday; if(m[key]>0) s.brands.add(m.brandKey); });
     return { company:c, ytd:s.ytd, mtd:s.mtd, yday:s.yday, meas:s[key], nBrands:s.brands.size }; };
-  // territory → products. Brand keys are company-clean on this tab (verified: no brand appears under both),
-  // but the company is kept on the product so a row can still be chipped and coloured under the Both view.
+  // PRODUCTS — the page's primary table, a flat ranked list over the current scope. Brand keys are
+  // company-clean on this tab (verified: no brand appears under both companies), but the company is kept on the
+  // product so a row can still be chipped and coloured under the Both view.
+  const P={};
+  rows.forEach(m=>{ const pk=m.company+'|'+m.brandKey;
+    const p=P[pk]||(P[pk]={disp:m.brand,company:m.company,portfolio:m.portfolio,ytd:0,mtd:0,yday:0,terrs:new Set()});
+    p.ytd+=m.ytd; p.mtd+=m.mtd; p.yday+=m.yday; if(m[key]>0) p.terrs.add(m.terr); });
+  const productsAll=Object.values(P).map(p=>({...p,meas:p[key],nTerr:p.terrs.size})).sort((a,b)=>b.meas-a.meas || a.disp.localeCompare(b.disp));
+  const products=productsAll.filter(p=>p.meas>0);
+  // TERRITORIES — the ranked breakdown, over the company scope but NOT the territory scope, so the card can act
+  // as the picker. It retires once a territory IS picked (it would be one row restating the hero).
   const T={};
-  rows.forEach(m=>{
-    const t=T[m.terr]||(T[m.terr]={terr:m.terr,UPL:0,SWAL:0,ytd:0,mtd:0,yday:0,P:{}});
-    t[m.company]+=m[key]; t.ytd+=m.ytd; t.mtd+=m.mtd; t.yday+=m.yday;
-    const pk=m.company+'|'+m.brandKey;
-    const p=t.P[pk]||(t.P[pk]={disp:m.brand,company:m.company,portfolio:m.portfolio,ytd:0,mtd:0,yday:0});
-    p.ytd+=m.ytd; p.mtd+=m.mtd; p.yday+=m.yday;
-  });
-  const all=Object.values(T).map(t=>{
-    const prods=Object.values(t.P).map(p=>({...p,meas:p[key]})).sort((a,b)=>b.meas-a.meas);
-    return {...t, meas:t[key], prods, nProducts:prods.filter(p=>p.meas>0).length};
-  }).sort((a,b)=>b.meas-a.meas || a.terr.localeCompare(b.terr));
+  base.filter(m => co==='ALL' || m.company===co).forEach(m=>{
+    const t=T[m.terr]||(T[m.terr]={terr:m.terr,UPL:0,SWAL:0,ytd:0,mtd:0,yday:0,B:new Set()});
+    t[m.company]+=m[key]; t.ytd+=m.ytd; t.mtd+=m.mtd; t.yday+=m.yday; if(m[key]>0) t.B.add(m.company+'|'+m.brandKey); });
+  const all=Object.values(T).map(t=>({...t, meas:t[key], nProducts:t.B.size}))
+    .sort((a,b)=>b.meas-a.meas || a.terr.localeCompare(b.terr));
   // Territories with nothing ON THIS MEASURE are not dropped silently — they are named under the list. Nine of
   // twenty recorded nothing yesterday, and a list that simply ended would read as "twenty territories, eleven
   // of them" without ever saying so.
   const terrs=all.filter(t=>t.meas>0), quiet=all.filter(t=>!(t.meas>0)).map(t=>t.terr).sort();
-  const brands=new Set(); rows.forEach(m=>{ if(m[key]>0) brands.add(m.company+'|'+m.brandKey); });
-  return { key, co, lock, terrs, quiet, nTerr:all.length,
+  // Filter options come off `base` — every territory the tab holds, independent of the company and measure
+  // scopes, so the list never changes shape (or drops the current selection) as those move.
+  const terrOptions=[{v:'',t:'All territories'},
+    ...[...new Set(base.map(m=>m.terr))].sort().map(t=>({v:t,t}))];
+  return { key, co, lock, terr:terrPick, terrOptions, terrs, quiet, nTerr:all.length,
+    products, nProducts: products.length,
     up:coSum('UPL'), sw:coSum('SWAL'),
     tot:  rows.reduce((a,m)=>a+m[key],0),
     ytd:  rows.reduce((a,m)=>a+m.ytd,0),
     mtd:  rows.reduce((a,m)=>a+m.mtd,0),
-    yday: rows.reduce((a,m)=>a+m.yday,0),
-    nProducts: brands.size };
+    yday: rows.reduce((a,m)=>a+m.yday,0) };
 }
 
 /* ===================== day-level product transactions =====================
@@ -5045,14 +5075,22 @@ function productBodyHTML(mob){
   </div>`;
 }
 function mpprodViewHTML(v){ return `<section style="padding:18px 22px">${mpprodBodyHTML(false)}</section>`; }
-/* MP product summary — a self-contained page over the "Product Data MP" tab, grouped at TERRITORY level with the
-   products nested inside each territory. Controls (company / measure) are page-local; the machine filter bar +
-   KPI strip are suppressed (CHROMELESS), like Products and Cumulative.
+/* MP product summary — a self-contained page over the "Product Data MP" tab. Controls (company / territory /
+   measure) are page-local; the machine filter bar + KPI strip are suppressed (CHROMELESS), like Products and
+   Cumulative.
+
+   TERRITORY IS A FILTER, NOT A CASCADE (changed by request 2026-08-14). The page's primary table is a flat
+   ranked product list, and the territory dropdown scopes the WHOLE page — stat band, company split and product
+   table together. The earlier build nested products inside expandable territory rows, which meant comparing two
+   territories' use of one product required opening both and reading across a gap, and no single screen ever
+   answered "where did this product go". A filter answers both: pick a territory to read its products, or leave
+   it on All to read Madhya Pradesh. The by-territory card stays as the ranked view and doubles as the picker,
+   and retires once a territory is chosen — it would otherwise be one row restating the hero.
 
    Three horizons on one page: the stat band always prints Yesterday / MTD / YTD side by side, and the measure
-   toggle decides which of them ranks and fills the territory list. Showing all three regardless is what stops
-   the toggle hiding context — a territory that is quiet this month but large for the season reads correctly
-   only when both numbers are on screen. */
+   toggle decides which of them ranks and fills the tables. Showing all three regardless is what stops the
+   toggle hiding context — a territory quiet this month but large for the season reads correctly only when both
+   numbers are on screen. */
 function mpprodBodyHTML(mob){
   const S=state;
   if(!MPP.loaded){
@@ -5073,11 +5111,14 @@ function mpprodBodyHTML(mob){
 
   /* ---- controls. The company toggle is ABSENT (not disabled) under a field login: the gate has already
           decided the scope, and a control with one reachable value is furniture. ---- */
+  const sel="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none";
   const labeled=(lab,inner)=>`<div style="display:flex;align-items:center;gap:7px"><span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">${lab}</span>${inner}</div>`;
   const coToggle = A.lock ? '' : labeled('Company',`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${['ALL','UPL','SWAL'].map(c=>`<button data-act="mpco" data-co="${c}" style="${css(seg(S.mpCo===c))}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`);
+  const terrCtrl=labeled('Territory',`<div style="position:relative"><select id="mpTerrSel" style="${sel}">${optionsHTML(A.terrOptions,A.terr)}</select>${I.caret}</div>`);
   const measToggle=labeled('Measure',`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${[['ytd','Season · YTD'],['mtd','This month · MTD'],['yday','Yesterday']].map(([k,t])=>`<button data-act="mpmeasure" data-m="${k}" style="${css(seg(S.mpMeasure===k))}">${t}</button>`).join('')}</div>`);
   const header=`<div style="display:flex;align-items:center;gap:${mob?'9px':'14px'};flex-wrap:wrap">
-      ${coToggle}${measToggle}
+      ${coToggle}${terrCtrl}${measToggle}
+      ${A.terr?`<button data-act="mpterr" data-terr="" style="border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;font-size:11.5px;font-weight:600;height:32px;padding:0 11px;cursor:pointer">Clear</button>`:''}
       <div style="flex:1"></div>
       <span style="font-size:10.5px;color:#9C988F">${E(MPP_SHEET)} · ${MPP.at||'—'} <button data-act="mppretry" title="Reload" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>
     </div>`;
@@ -5089,8 +5130,13 @@ function mpprodBodyHTML(mob){
   const stats=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;display:flex;overflow-x:auto">
       ${stat(A.yday,'Sprayed yesterday',A.key==='yday')}${stat(A.mtd,'This month · MTD',A.key==='mtd')}${stat(A.ytd,'Season · YTD',A.key==='ytd')}
       <div style="flex:1 0 auto;min-width:132px;padding:13px 16px">
-        <div style="font-family:'IBM Plex Mono';font-size:20px;font-weight:700;color:${C.ink}">${fmt(A.terrs.length)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> / ${fmt(A.nTerr)}</span></div>
-        <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">Territories active · ${fmt(A.nProducts)} products</div></div></div>`;
+        ${A.terr
+          // The territory count is an MP-wide figure and would read as a scoped one beside three scoped totals,
+          // so under a territory pick this tile switches to that territory's product count instead.
+          ? `<div style="font-family:'IBM Plex Mono';font-size:20px;font-weight:700;color:${C.ink}">${fmt(A.nProducts)}</div>
+             <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">Products in ${E(A.terr)}</div>`
+          : `<div style="font-family:'IBM Plex Mono';font-size:20px;font-weight:700;color:${C.ink}">${fmt(A.terrs.length)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> / ${fmt(A.nTerr)}</span></div>
+             <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">Territories active · ${fmt(A.nProducts)} products</div>`}</div></div>`;
 
   /* ---- company split. Under a field login the head-to-head would compare its own company against a column it
           may not read, so that login gets its own single-company summary instead. ---- */
@@ -5098,9 +5144,9 @@ function mpprodBodyHTML(mob){
   if(A.lock){
     const x = A.lock==='UPL' ? A.up : A.sw;
     hero=card(`<div style="padding:16px 18px">
-      <div style="font-size:13px;font-weight:700;margin-bottom:11px">${x.company} · Madhya Pradesh <span style="font-weight:400;color:#9C988F">· ${measWord}</span></div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:11px">${x.company} · ${A.terr?E(A.terr):'Madhya Pradesh'} <span style="font-weight:400;color:#9C988F">· ${measWord}</span></div>
       <div style="font-family:'IBM Plex Mono';font-size:27px;font-weight:700;line-height:1;color:${cInk(x.company)}">${fmt(x.meas)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> ac</span></div>
-      <div style="font-size:11px;color:#6E6A62;margin-top:8px">${fmt(x.nBrands)} products across ${fmt(A.terrs.length)} territories</div></div>`);
+      <div style="font-size:11px;color:#6E6A62;margin-top:8px">${fmt(x.nBrands)} products${A.terr?'':` across ${fmt(A.terrs.length)} territories`}</div></div>`);
   } else {
     const tot=A.up.meas+A.sw.meas, uP=tot?A.up.meas/tot*100:50, sP=100-uP;
     const splitLabel=(pct,side)=> pct>=14 ? `<span style="position:absolute;${side}:10px;top:50%;transform:translateY(-50%);color:#fff;font-size:11px;font-weight:700;font-family:'IBM Plex Mono'">${Math.round(pct)}%</span>`:'';
@@ -5109,7 +5155,7 @@ function mpprodBodyHTML(mob){
       <div style="font-family:'IBM Plex Mono';font-size:27px;font-weight:700;line-height:1;color:${cInk(x.company)}">${fmt(x.meas)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> ac</span></div>
       <div style="font-size:11px;color:#6E6A62;margin-top:8px">${fmt(x.nBrands)} products</div></div>`;
     hero=card(`<div style="padding:16px 18px">
-      <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:12px"><div style="font-size:13px;font-weight:700">UPL vs SWAL · Madhya Pradesh</div><div style="font-size:11px;color:#9C988F">${measWord} · ${fmt(tot)} ac total</div></div>
+      <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:12px"><div style="font-size:13px;font-weight:700">UPL vs SWAL · ${A.terr?E(A.terr):'Madhya Pradesh'}</div><div style="font-size:11px;color:#9C988F">${measWord} · ${fmt(tot)} ac total</div></div>
       <div style="position:relative;display:flex;height:34px;border-radius:8px;overflow:hidden;background:#F2F0EB;margin-bottom:16px">
         <div style="position:relative;width:${uP}%;background:${C.orange}">${splitLabel(uP,'left')}</div>
         <div style="position:relative;width:${sP}%;background:${C.green}">${splitLabel(sP,'right')}</div>
@@ -5118,48 +5164,52 @@ function mpprodBodyHTML(mob){
     </div>`);
   }
 
-  /* ---- territory rows → products. Drill-down runs on state.expanded via the shared data-act="exp" handler,
-          exactly as the Territory tables do; keys are namespaced 'mpp:' so they cannot collide with those. ---- */
-  const tMax=A.terrs.length?A.terrs[0].meas:1;
-  const pRow=(p,i,pMax)=>`<div style="display:grid;grid-template-columns:1fr ${mob?'64px':'78px'};align-items:center;gap:10px;padding:7px 0;border-top:${i?'1px solid #F4F2EE':'none'}">
+  /* ---- PRODUCTS: the page's primary table, flat and ranked over the current scope ---- */
+  const pMax=A.products.length?A.products[0].meas:1;
+  const pRow=(p,i)=>`<div style="display:grid;grid-template-columns:22px 1fr ${mob?'64px':'78px'};align-items:center;gap:10px;padding:8px 0;border-top:${i?'1px solid #F4F2EE':'none'}">
+      <span style="font-family:'IBM Plex Mono';font-size:11px;color:#C9C4BA;text-align:right">${i+1}</span>
       <div style="min-width:0">
-        <div style="display:flex;align-items:center;gap:7px;margin-bottom:4px"><span style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(p.disp)}</span>${A.co==='ALL'?chip(p.company):''}<span style="font-size:10px;color:#B6B1A8;white-space:nowrap">${E(p.portfolio)}</span></div>
-        <span style="display:block;height:6px;border-radius:3px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(2,p.meas/pMax*100)}%;background:${cc(p.company)}"></span></span>
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px"><span style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(p.disp)}</span>${A.co==='ALL'?chip(p.company):''}<span style="font-size:10px;color:#B6B1A8;white-space:nowrap">${E(p.portfolio)}</span>${A.terr?'':`<span style="font-size:10px;color:#C9C4BA;white-space:nowrap">${fmt(p.nTerr)} terr</span>`}</div>
+        <span style="display:block;height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${Math.max(2,p.meas/pMax*100)}%;background:${cc(p.company)}"></span></span>
       </div>
-      <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;text-align:right">${fmt(p.meas)}</span>
+      <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right">${fmt(p.meas)}</span>
     </div>`;
-  const tRow=(t,i)=>{
-    const k='mpp:'+t.terr, open=!!S.expanded[k];
-    const shown=t.prods.filter(p=>p.meas>0), pMax=shown.length?shown[0].meas:1;
-    return `<div style="border-top:${i?'1px solid #F4F2EE':'none'}">
-      <div data-act="exp" data-key="${E(k)}" style="padding:10px 0;cursor:pointer">
-        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
-          <span style="width:11px;flex-shrink:0;color:#B6B1A8;font-size:10px;transition:transform .15s;display:inline-block;transform:rotate(${open?90:0}deg)">▶</span>
-          <span style="flex:1;font-size:12.5px;font-weight:600;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(t.terr)}</span>
-          <span style="font-size:10.5px;color:#9C988F;white-space:nowrap">${fmt(t.nProducts)} products</span>
-          ${A.co==='ALL'?`<span style="font-size:10.5px;white-space:nowrap"><span style="color:${C.orangeD};font-weight:600">${fmt(t.UPL)}</span><span style="color:#C9C4BA"> / </span><span style="color:${C.greenD};font-weight:600">${fmt(t.SWAL)}</span></span>`:''}
-          <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;min-width:60px;text-align:right">${fmt(t.meas)}</span>
-        </div>
-        <div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;margin-left:19px">${t.UPL>0?`<span style="width:${t.UPL/tMax*100}%;background:${C.orange}"></span>`:''}${t.SWAL>0?`<span style="width:${t.SWAL/tMax*100}%;background:${C.green}"></span>`:''}</div>
+  const prodCard=card(`${cHead(A.terr?`Products in ${E(A.terr)}`:'Products across Madhya Pradesh',
+      `${fmt(A.products.length)} products ranked by ${measWord}${A.co==='ALL'?' · coloured by company':''}`)}
+    ${A.products.length?`<div style="padding:6px 16px 12px">${A.products.map(pRow).join('')}</div>`
+      :emptyBox(`No products recorded ${A.terr?'in '+E(A.terr):''} on this measure.`)}`);
+
+  /* ---- BY TERRITORY: the ranked view, and the picker. Rows set the filter rather than expanding in place, so
+          the products table below is the one place products are ever read. Retires once a territory is picked —
+          it would be a single row restating the hero. ---- */
+  const tMax=A.terrs.length?A.terrs[0].meas:1;
+  const tRow=(t,i)=>`<div data-act="mpterr" data-terr="${E(t.terr)}" style="padding:9px 0;border-top:${i?'1px solid #F4F2EE':'none'};cursor:pointer">
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:5px">
+        <span style="flex:1;font-size:12.5px;font-weight:600;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(t.terr)}</span>
+        <span style="font-size:10.5px;color:#9C988F;white-space:nowrap">${fmt(t.nProducts)} products</span>
+        ${A.co==='ALL'?`<span style="font-size:10.5px;white-space:nowrap"><span style="color:${C.orangeD};font-weight:600">${fmt(t.UPL)}</span><span style="color:#C9C4BA"> / </span><span style="color:${C.greenD};font-weight:600">${fmt(t.SWAL)}</span></span>`:''}
+        <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;min-width:60px;text-align:right">${fmt(t.meas)}</span>
       </div>
-      ${open?`<div style="margin:0 0 10px 19px;padding:2px 12px 4px;border-left:2px solid #EFEDE7;background:#FBFAF8;border-radius:0 8px 8px 0">
-        ${shown.length?shown.map((p,j)=>pRow(p,j,pMax)).join(''):emptyBox('No products recorded for this territory on this measure.')}</div>`:''}
+      <div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB">${t.UPL>0?`<span style="width:${t.UPL/tMax*100}%;background:${C.orange}"></span>`:''}${t.SWAL>0?`<span style="width:${t.SWAL/tMax*100}%;background:${C.green}"></span>`:''}</div>
     </div>`;
-  };
   // The quiet territories are NAMED, not dropped. A list that simply ended would read as though every territory
   // were on it — the same silent-floor problem the Insights league table states its cut-off to avoid.
   const quietLine = A.quiet.length ? `<div style="padding:11px 16px;border-top:1px solid #F4F2EE;font-size:11px;color:#9C988F;line-height:1.6">
       ${fmt(A.quiet.length)} territor${A.quiet.length===1?'y':'ies'} recorded nothing on this measure: <span style="color:#6E6A62">${A.quiet.map(E).join(', ')}</span>.</div>` : '';
-  const terrCard=card(`${cHead('By territory','Product acres by territory · '+measWord+(A.co==='ALL'?' · UPL / SWAL split':'')+' · tap a territory for its products')}
-    ${A.terrs.length?`<div style="padding:2px 16px 4px">${A.terrs.map(tRow).join('')}</div>${quietLine}`:emptyBox('No product acres recorded in this scope.')}`);
+  const terrCard = A.terr ? '' : card(`${cHead('By territory','Product acres by territory · '+measWord+(A.co==='ALL'?' · UPL / SWAL split':'')+' · tap a territory to filter the page')}
+    ${A.terrs.length?`<div style="padding:4px 16px 4px">${A.terrs.map(tRow).join('')}</div>${quietLine}`:emptyBox('No product acres recorded in this scope.')}`);
 
   const legend = A.co==='ALL' ? `<div style="display:flex;align-items:center;gap:14px;font-size:11px;color:#6E6A62"><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:${C.orange}"></span>UPL</span><span style="display:flex;align-items:center;gap:5px"><span style="width:9px;height:9px;border-radius:2px;background:${C.green}"></span>SWAL</span></div>` : '';
+  // Products lead; the territory card sits beside them on desktop and takes the leaderboard's full width once a
+  // territory is picked and that card retires — same pairing rule as the Products page's state card.
+  const twoCol = mob ? `${prodCard}${terrCard}`
+    : `<div style="display:grid;grid-template-columns:${terrCard?'1.35fr 1fr':'1fr'};gap:14px;align-items:start">${prodCard}${terrCard}</div>`;
   return `<div style="display:flex;flex-direction:column;gap:14px">
     ${header}
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><div style="font-size:11px;color:#9C988F">Madhya Pradesh only. Product-scanned acres — a separate measure from machine spray acres. Territory is the product company's own territory, and soil &amp; seed health products are not counted.</div>${legend}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><div style="font-size:11px;color:#9C988F">Madhya Pradesh${A.terr?' · '+E(A.terr):''} only. Product-scanned acres — a separate measure from machine spray acres. Territory is the product company's own territory. Soil &amp; seed health products are not counted, nor are Startup Saaf and Neo Root; Canora is counted as Canora Ez.</div>${legend}</div>
     ${stats}
     ${hero}
-    ${terrCard}
+    ${twoCol}
   </div>`;
 }
 function recapViewHTML(v){ return `<section style="padding:18px 22px">${recapBodyHTML(false)}</section>`; }
@@ -6057,6 +6107,7 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='snFromSel'){ const f=snakeDateToOff(e.target.value); if(f!=null) setState({snFrom:f, snTo:Math.max(f,state.snTo)}); }
   else if(e.target.id==='snToSel'){ const t=snakeDateToOff(e.target.value); if(t!=null) setState({snTo:t, snFrom:Math.min(t,state.snFrom)}); }
   else if(e.target.id==='pmStateSel') setState({pmState:e.target.value});
+  else if(e.target.id==='mpTerrSel') setState({mpTerr:e.target.value});
   else if(e.target.id==='insStateSel') setState({insSt:e.target.value, insAm:'', insCo:''});   // page-local; never touches state.st
   // Changing the AM drops the officer with it — the old officer almost certainly reports to somebody else.
   else if(e.target.id==='insAmSel') setState({insAm:e.target.value, insCo:''});
@@ -6105,6 +6156,7 @@ app.addEventListener('click', e=>{
     case 'mppretry': MPP.loaded=false; MPP.error=false; loadMPProduct(); break;
     case 'mpco': setState({mpCo:el.dataset.co}); track('mpprod_company',{co:el.dataset.co}); break;
     case 'mpmeasure': setState({mpMeasure:el.dataset.m}); track('mpprod_measure',{m:el.dataset.m}); break;
+    case 'mpterr': setState({mpTerr:el.dataset.terr||''}); track('mpprod_territory',{terr:el.dataset.terr||'all'}); break;
     case 'txretry': TX.loaded=false; TX.error=false; loadTx(); break;
     case 'wkpretry': WKP.loaded=false; WKP.error=false; loadWkp(); break;
     // Insights reads all three tabs, so its refresh reloads all three rather than just the machine sheet.

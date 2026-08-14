@@ -147,10 +147,27 @@ state split, under its own Company / State / Measure controls. Two rules govern 
   takes the full width when a state is picked and that card retires.
 
 ## MP products view (territory grain)
-A self-contained page over the **Product Data MP** tab (gid `123586424`), grouped at TERRITORY level with each
-territory's products nested inside it. It is the only place in the app that can say *which product, in whose
-territory* — the summary tab is region × crop × brand and the day-level tab has no territory column either, so
-neither can go below state. 753 rows, 20 territories, 89 products, all Madhya Pradesh.
+A self-contained page over the **Product Data MP** tab (gid `123586424`): a flat ranked product table under a
+TERRITORY FILTER. It is the only place in the app that can say *which product, in whose territory* — the
+summary tab is region × crop × brand and the day-level tab has no territory column either, so neither can go
+below state. 753 rows, 20 territories, 88 raw products (79 after the exclusions below), all Madhya Pradesh.
+
+- **Territory is a FILTER, not a cascade** (changed by request 2026-08-14; the first build nested products
+  inside expandable territory rows). The dropdown scopes the WHOLE page — stat band, company split and product
+  table together — and the by-territory card stays as the ranked view while doubling as the picker
+  (`data-act="mpterr"`), retiring once a territory is chosen because it would be one row restating the hero.
+  The cascade was wrong for the two questions actually asked of this page: comparing two territories' use of
+  one product meant opening both and reading across a gap, and no single screen ever answered "where did this
+  product go". Territory names are the SAME canonical MP district names the machine filter bar uses — both
+  sides go through `canonTerr`/`COORDS` — but `mpTerr` is page-local and never touches `state.terr`.
+- **A stale territory pick can never empty the page**: `terrPick` is honoured only if some row still carries it,
+  so a territory vanishing from the sheet falls back to All rather than showing a blank scope.
+- **Two scopes are built, in order, and the order is load-bearing.** `scoped` is the territory scope across
+  BOTH companies and feeds the stat band and the head-to-head; `rows` adds the company filter and feeds the
+  product table. So picking a company drills the table without hiding the comparison — the same rule the
+  Products page applies to its state scope.
+- **The fourth stat tile switches under a territory pick.** "Territories active N / 20" is an MP-wide figure and
+  would read as a scoped one beside three scoped totals, so it becomes that territory's product count instead.
 
 - **Read column K (`Final territory`), never column A (`territory`).** A row's product can belong to the OTHER
   company's territory — a UPL organisation selling a SWAL product sits in the SWAL territory — and the sheet
@@ -166,10 +183,21 @@ neither can go below state. 753 rows, 20 territories, 89 products, all Madhya Pr
   This month · MTD / Yesterday) decides which figure ranks and fills the territory list, but Yesterday, MTD and
   YTD are printed side by side regardless, with an inset rule marking the active one. A territory that is quiet
   this month but large for the season only reads correctly when both numbers are on screen.
-- **Soil & seed health is excluded** via the shared `PROD_EXCLUDE`, same rule and same reason as the Products
-  page, and the page says so on its face. Applied once at the top of `mppAgg`, so the stat band, the company
-  split, the territory rows and the products inside them all sit on one base. Live cost: 6 brands, 1,539 ac YTD
-  / 214 MTD / 6 yesterday (77,146 → **75,608 ac YTD**).
+- **Three exclusions, and they are applied at two different layers on purpose.** Live YTD lands at
+  **75,456 ac** from a raw 77,146.
+  · *Soil & seed health* — the shared `PROD_EXCLUDE`, same rule and reason as the Products page, applied once
+    at the top of `mppAgg` so stat band, company split, territory ranking and product table share one base.
+    6 brands, 1,539 ac YTD / 214 MTD / 6 yesterday.
+  · *`MPP_BRAND_DROP`* — `STARTUP SAAF` and `NEO ROOT`, seed/root-application products named by the programme
+    2026-08-14 (152 ac YTD). Dropped **by brand at parse time, not by category**, because the sheet classifies
+    them Fungicide and Bio Solution; re-labelling either category to catch these two would silently take the
+    rest of that category with them.
+  · *`MPP_BRAND_MERGE`* — `CANORA` folds into `CANORA EZ` (88 + 10,646 = **10,734 ac**), one product listed
+    under two names. **Both sides of a merge must be the same company** or the merged row could not be
+    coloured or chipped; this pair is SWAL/Herbicide on both sides. The surviving key's spelling is what
+    displays, since `brand` is derived from the RESOLVED key rather than the raw cell.
+  All three are named on the page's own footnote — a reader adding the sheet up by hand has to be able to see
+  why their total differs.
 - **Territories with nothing on the selected measure are NAMED, not dropped.** Nine of twenty recorded nothing
   yesterday; a list that simply ended there would read as though twenty territories were on it. Same
   silent-floor rule as the Insights league table stating its cut-off.
