@@ -5779,6 +5779,7 @@ function render(){
   // restore inputs/selects + focus
   const si=document.getElementById('searchInput'); if(si){ si.value=state.search; }
   if(focusId){ const el=document.getElementById(focusId); if(el){ el.focus(); if(selStart!=null&&el.setSelectionRange){ try{el.setSelectionRange(selStart,selStart);}catch(_){ } } } }
+  helpSync();   // the concern button lives on document.body, outside this innerHTML swap — see the HELP block
   paint();
 }
 function paint(){
@@ -5963,7 +5964,7 @@ function gateSave(r){ GATE.cur=r; try{ sessionStorage.setItem(GATE.SKEY, JSON.st
 function gateRead(){ try{ return JSON.parse(sessionStorage.getItem(GATE.SKEY)||'null'); }catch(_){ return null; } }
 function gateExpired(){ const o=gateRead(); return !o||!o.id||(Date.now()-(o.at||0))>=GATE.TTL_MS; }
 function gateRestore(){ const o=gateRead(); if(!o||!o.id) return false; const age=Date.now()-(o.at||0); if(age>=GATE.TTL_MS) return false; const f=Object.values(GATE.ROLES).find(r=>r.id===o.id); if(!f) return false; GATE.cur=f; gateArmTimer(GATE.TTL_MS-age); return true; }
-function gateLock(){ clearTimeout(GATE.timer); GATE.cur=null; try{ sessionStorage.removeItem(GATE.SKEY); }catch(_){ } gateShow(()=>bootApp()); }
+function gateLock(){ clearTimeout(GATE.timer); GATE.cur=null; try{ sessionStorage.removeItem(GATE.SKEY); }catch(_){ } helpClose(); helpSync(); gateShow(()=>bootApp()); }
 function gateHide(){ const ov=document.getElementById('gateOv'); if(ov) ov.style.display='none'; }
 function gateShow(onOk, msg, cancelable){
   let ov=document.getElementById('gateOv');
@@ -6007,11 +6008,292 @@ function gateShow(onOk, msg, cancelable){
 window.addEventListener('focus', ()=>{ if(_booted && gateExpired()) gateLock(); });
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && _booted && gateExpired()) gateLock(); });
 
+/* ===================== Help · raise a concern (field logins) =====================
+   A floating button → a small form → one appended row on the Concerns tab (gid 1305107614)
+   of the same workbook everything else reads. Three facts govern the whole feature:
+
+   1. **The sheet is read-only to this page.** Everything else here is a `gviz` CSV *fetch*; a
+      published sheet cannot be written to. The write path is a Google Apps Script Web App
+      (`apps-script/feedback.gs`) deployed from the workbook, and `HELP.url` is its /exec URL.
+      **Blank `HELP.url` hides the button entirely** — a form that cannot submit is worse than
+      no form, so the feature is absent until the endpoint exists rather than failing on send.
+      The POST deliberately sends a bare string body: adding a JSON content-type would make it a
+      preflighted request, and Apps Script answers no OPTIONS, so the send would fail CORS.
+   2. **It renders OUTSIDE the render() cycle**, like the PIN gate — built once onto `document.body`
+      and toggled. `render()` replaces `app.innerHTML` wholesale, so a textarea living inside it
+      would lose its caret (and its contents) on any state change while someone was mid-sentence.
+      `helpSync()` is the single line render() spends on it, and it only toggles the button.
+   3. **Field logins only** (`upl`/`swal`). Admin and leadership read this console in reviews; they
+      are not the people raising concerns from a territory, and a button offering to file one from
+      a review screen invites test rows into a live tab.
+
+   The three visible dropdowns are Organisation → BM → TM, cascading off the live sheet exactly as
+   the filter bar does. **The other six columns are derived, and asked for only when derivation is
+   ambiguous.** Measured on live data (1,518 rows, 138 distinct BM+TM pairs) a TM resolves to one
+   Area Manager 91% of the time but to one Territory only 71% and one Cluster 55% — so a blanket
+   "fill it when unique, blank otherwise" rule would leave the two most locating fields empty on a
+   third to a half of all rows. Territory and Cluster therefore appear as dropdowns *only* on the
+   pairs where they cannot be inferred, which keeps the common path at three taps and stops the
+   ambiguous path writing a blank. Area Manager and Cluster officer are never asked for: they follow
+   from the answers above them, and asking a TM to name their own AM is asking them to type back
+   something the sheet already knows. */
+const HELP = {
+  url:     'https://script.google.com/macros/s/AKfycbyo6h6owBFczltLcfdXPxPMeumJjyi6g5VvXgN86oT52VAfNzzw4Yw-1tFoUVp9PXtq/exec',   // blank ⇒ no button
+
+  token:   'mpops-concerns-7f3ka9',     // must match TOKEN in apps-script/feedback.gs
+  MAX:     1200,                        // matches MAX_TEXT in the script; the counter warns before the server truncates
+  COOL_MS: 45000,                       // per-browser gap between sends — stops a double-tap filing twice
+  KEY:     'mpops.help.sent',
+};
+// Localhost-only override, same rule and same reason as the CSV staging override above: an endpoint
+// settable from the query string on the live site would let a crafted link redirect whatever a user
+// types into it to somebody else's server.
+try{
+  const H=location.hostname, isLocal = H==='localhost'||H==='127.0.0.1'||H==='';
+  const q=new URLSearchParams(location.search);
+  if(isLocal && q.get('helpUrl')) HELP.url=q.get('helpUrl');
+}catch(_){}
+
+function helpAllowed(){ const r=GATE.cur&&GATE.cur.role; return !!HELP.url && (r==='upl'||r==='swal'); }
+
+// The rows this login may speak for: its state, its org. ALL_ROWS rather than ROWS on purpose — a
+// machine that has not been deployed yet is exactly the sort of thing a TM opens this form about.
+function helpRows(){
+  const st=gateDefaultState(), org=gateDefaultOrg();
+  return ALL_ROWS.filter(m => (!st||m.st===st) && (org==='Both'||m.org===org));
+}
+const helpEq = (a,b) => String(a||'').trim().toLowerCase()===String(b||'').trim().toLowerCase();
+// The single distinct value of a field across `list`, or '' if the list disagrees or is silent.
+function helpOnly(list, f){
+  const s=[...new Set(list.map(m=>String(m[f]||'').trim()).filter(v=>v&&!insJunkTerr(v)))];
+  return s.length===1 ? s[0] : '';
+}
+// The most common non-blank value. Used for phone numbers, which are an attribute of one person and
+// vary across rows only through typos — unlike a territory, where two values mean two real places.
+function helpDom(list, f){
+  const n={}; list.forEach(m=>{ const v=String(m[f]||'').trim(); if(v) n[v]=(n[v]||0)+1; });
+  const k=Object.keys(n); return k.length ? k.sort((a,b)=>n[b]-n[a])[0] : '';
+}
+const helpOpts = (list,f) => [...new Set(list.map(m=>String(m[f]||'').trim()).filter(v=>v&&!insJunkTerr(v)))].sort((a,b)=>a.localeCompare(b));
+
+const HELP_SEL = "width:100%;margin-top:5px;padding:9px 10px;border:1.5px solid #E9E6DF;border-radius:9px;background:#fff;font-family:inherit;font-size:13.5px;color:#1B1A17;outline:none";
+const HELP_LBL = "font-size:10.5px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase";
+
+function helpMount(){
+  if(document.getElementById('helpFab')) return;
+
+  const st=document.createElement('style');
+  st.textContent=`#helpFab{transition:transform .14s,box-shadow .14s}#helpFab:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(217,106,18,.34)}
+    #helpOv select:focus,#helpOv textarea:focus{border-color:#D96A12}
+    #helpOv button[disabled]{opacity:.45;cursor:not-allowed}
+    @keyframes helpIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}`;
+  document.head.appendChild(st);
+
+  const fab=document.createElement('button');
+  fab.id='helpFab'; fab.type='button'; fab.setAttribute('aria-label','Raise a concern');
+  fab.style.cssText="position:fixed;right:18px;z-index:30;display:none;align-items:center;gap:8px;padding:11px 16px 11px 14px;border:none;border-radius:26px;background:#D96A12;color:#fff;font-family:'Noto Sans',system-ui,sans-serif;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(217,106,18,.3)";
+  fab.innerHTML=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.9 8.9 0 0 1-3.8-.9L3 20.5l1.6-4.9A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4Z"/><path d="M12 8.2v4"/><path d="M12 15.4h.01"/></svg><span>Raise a concern</span>`;
+  fab.addEventListener('click', helpOpen);
+  document.body.appendChild(fab);
+
+  const ov=document.createElement('div');
+  ov.id='helpOv';
+  ov.style.cssText="position:fixed;inset:0;z-index:90;display:none;align-items:flex-end;justify-content:center;background:rgba(27,26,23,.34);font-family:'Noto Sans',system-ui,sans-serif";
+  ov.innerHTML=`<div id="helpCard" role="dialog" aria-modal="true" aria-labelledby="helpTitle"
+      style="width:420px;max-width:100%;max-height:92vh;overflow:auto;background:#fff;border-radius:18px 18px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,.18);animation:helpIn .2s cubic-bezier(.2,.7,.3,1);padding:20px 20px calc(env(safe-area-inset-bottom) + 18px)">
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="flex:1">
+        <div id="helpTitle" style="font-size:17px;font-weight:700;color:#1B1A17">Raise a concern</div>
+        <div style="font-size:12px;color:#6E6A62;margin-top:3px">Goes to the ops team's tracker. Tell us who you are and what the problem is.</div>
+      </div>
+      <button id="helpX" type="button" aria-label="Close" style="flex-shrink:0;width:30px;height:30px;border:none;border-radius:8px;background:#F2F0EB;color:#6E6A62;font-size:17px;line-height:1;cursor:pointer">×</button>
+    </div>
+    <div id="helpForm" style="margin-top:16px;display:flex;flex-direction:column;gap:12px">
+      <div><label style="${HELP_LBL}" for="helpOrg">Organisation</label><select id="helpOrg" style="${HELP_SEL}"></select></div>
+      <div><label style="${HELP_LBL}" for="helpBm">Business manager</label><select id="helpBm" style="${HELP_SEL}"></select></div>
+      <div><label style="${HELP_LBL}" for="helpTm">Territory manager</label><select id="helpTm" style="${HELP_SEL}"></select></div>
+      <div id="helpTerrWrap" style="display:none"><label style="${HELP_LBL}" for="helpTerr">Territory</label><select id="helpTerr" style="${HELP_SEL}"></select></div>
+      <div id="helpCluWrap" style="display:none"><label style="${HELP_LBL}" for="helpClu">Cluster <span style="font-weight:600;letter-spacing:0;text-transform:none;color:#9C988F">· optional</span></label><select id="helpClu" style="${HELP_SEL}"></select></div>
+      <div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <label style="${HELP_LBL}" for="helpText">Your concern</label>
+          <span id="helpCount" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9C988F"></span>
+        </div>
+        <textarea id="helpText" rows="4" maxlength="${HELP.MAX}" placeholder="What is the problem, and where?"
+          style="${HELP_SEL};resize:vertical;line-height:1.45"></textarea>
+      </div>
+      <div id="helpDerived" style="font-size:11px;color:#9C988F;line-height:1.5"></div>
+      <div id="helpMsg" style="display:none;font-size:12.5px;font-weight:600;padding:9px 11px;border-radius:9px"></div>
+      <button id="helpSend" type="button" style="width:100%;padding:12px 0;border:none;border-radius:10px;background:#D96A12;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">Send</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+
+  ov.addEventListener('click', e=>{ if(e.target===ov) helpClose(); });
+  ov.querySelector('#helpX').addEventListener('click', helpClose);
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape' && ov.style.display==='flex') helpClose(); });
+  ov.querySelector('#helpOrg').addEventListener('change', ()=>helpCascade('org'));
+  ov.querySelector('#helpBm').addEventListener('change', ()=>helpCascade('bm'));
+  ov.querySelector('#helpTm').addEventListener('change', ()=>helpCascade('tm'));
+  ov.querySelector('#helpTerr').addEventListener('change', ()=>helpCascade('terr'));
+  ov.querySelector('#helpClu').addEventListener('change', helpRefine);
+  ov.querySelector('#helpText').addEventListener('input', helpRefine);
+  ov.querySelector('#helpSend').addEventListener('click', helpSend);
+}
+
+// Show/hide only — called from render(), so it must stay this cheap.
+function helpSync(){
+  const fab=document.getElementById('helpFab'); if(!fab) return;
+  const on=helpAllowed();
+  fab.style.display = on ? 'flex' : 'none';
+  // clear the phone's bottom nav (52px + the home indicator); on desktop just sit off the footnote strip
+  fab.style.bottom = isPhone() ? 'calc(env(safe-area-inset-bottom) + 64px)' : '26px';
+}
+
+const helpFill=(el,opts,placeholder,keep)=>{
+  const prev=keep&&opts.some(o=>helpEq(o,keep)) ? keep : '';
+  el.innerHTML=`<option value="">${E(placeholder)}</option>`+opts.map(o=>`<option value="${E(o)}"${helpEq(o,prev)?' selected':''}>${E(o)}</option>`).join('');
+  return prev;
+};
+
+function helpOpen(){
+  const ov=document.getElementById('helpOv'); if(!ov) return;
+  const orgSel=ov.querySelector('#helpOrg');
+  // The org axis is fixed by the PIN for every login that can see this button, so this select carries
+  // exactly one option and is disabled. It stays a field rather than a line of text so that widening
+  // the button to a multi-org role later needs no new markup.
+  const allow=(GATE.cur&&GATE.cur.allow||[]).filter(o=>o!=='Both');
+  orgSel.innerHTML=allow.map(o=>`<option value="${E(o)}">${E(o)}</option>`).join('');
+  orgSel.disabled = allow.length<2;
+  orgSel.style.background = allow.length<2 ? '#F6F5F2' : '#fff';
+  helpCascade('org');
+  ov.style.display='flex';
+  track('concern_open', { role:(GATE.cur&&GATE.cur.role)||'', mp_state:gateDefaultState()||'all' });
+}
+function helpClose(){ const ov=document.getElementById('helpOv'); if(ov) ov.style.display='none'; }
+
+// Rebuilds everything below whichever level changed. Every level is rebuilt with its CURRENT value
+// offered back as `keep`, so a selection survives anything that does not invalidate it — reopening the
+// form, the ten-minute data refresh landing new rows, or picking a different BM who has the same TM
+// under them. Two things depend on that: the sheet may not have loaded on the first open (the lists
+// would be empty and must be rebuilt on the next one), and the same person files repeatedly, so making
+// them re-identify every time is three wasted taps per concern.
+function helpCascade(level){
+  const q=id=>document.getElementById(id);
+  const was={ bm:q('helpBm').value, tm:q('helpTm').value, terr:q('helpTerr').value };
+  const rows=helpRows();
+  const org=q('helpOrg').value;
+  const scoped=rows.filter(m=>helpEq(m.org,org));
+
+  if(level==='org') helpFill(q('helpBm'), helpOpts(scoped,'bmName'), '— select —', was.bm);
+  const bm=q('helpBm').value;
+  const byBm=bm ? scoped.filter(m=>helpEq(m.bmName,bm)) : [];
+
+  if(level==='org'||level==='bm') helpFill(q('helpTm'), helpOpts(byBm,'tmName'), bm?'— select —':'— pick a business manager first —', was.tm);
+  const tm=q('helpTm').value;
+  const byTm=tm ? byBm.filter(m=>helpEq(m.tmName,tm)) : [];
+
+  if(level!=='terr') helpFill(q('helpTerr'), helpOpts(byTm,'territory'), '— select —', was.terr);
+  const terr=q('helpTerr').value;
+  const byTerr=terr ? byTm.filter(m=>helpEq(m.territory,terr)) : byTm;
+  helpFill(q('helpClu'), helpOpts(byTerr,'cluster'), '— select —', q('helpClu').value);
+
+  helpRefine();
+}
+
+// Decides what still has to be asked, and shows what will be written without being asked.
+function helpRefine(){
+  const q=id=>document.getElementById(id);
+  const s=helpScope();
+  const askTerr = !!s.tm && !helpOnly(s.rows,'territory');
+  q('helpTerrWrap').style.display = askTerr ? 'block' : 'none';
+  const clusterRows = s.terr ? s.rows.filter(m=>helpEq(m.territory,s.terr)) : s.rows;
+  const askClu = !!s.tm && !helpOnly(clusterRows,'cluster');
+  q('helpCluWrap').style.display = askClu ? 'block' : 'none';
+
+  const d=helpDerive();
+  const parts=[['Territory',d.territory],['Area manager',d.am],['Cluster',d.cluster],['Cluster officer',d.co]].filter(p=>p[1]);
+  q('helpDerived').innerHTML = s.tm && parts.length
+    ? 'Filed against ' + parts.map(p=>`${p[0].toLowerCase()} <span style="color:#6E6A62;font-weight:600">${E(p[1])}</span>`).join(' · ') + ' — taken from the sheet.'
+    : '';
+
+  const n=q('helpText').value.length;
+  q('helpCount').textContent = n>HELP.MAX-200 ? `${n} / ${HELP.MAX}` : '';
+  // Territory is REQUIRED once asked for, cluster is not. The dropdown only appears where the sheet
+  // cannot settle the answer, and a person always knows their own territory — so skipping it would
+  // hand the tab a blank in the one column that says where the problem is. A cluster they may
+  // genuinely not know, and a wrong one is worse than none.
+  q('helpSend').disabled = !(s.tm && q('helpText').value.trim() && (!askTerr || s.terr));
+}
+
+function helpScope(){
+  const v=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const org=v('helpOrg'), bm=v('helpBm'), tm=v('helpTm');
+  let rows=helpRows().filter(m=>helpEq(m.org,org));
+  if(bm) rows=rows.filter(m=>helpEq(m.bmName,bm));
+  if(tm) rows=rows.filter(m=>helpEq(m.tmName,tm));
+  return { org, bm, tm, terr:v('helpTerr'), clu:v('helpClu'), rows };
+}
+
+// The six columns nobody types. Anything still ambiguous after the visible answers is left blank —
+// a guessed cluster on a concern is worse than an empty one, because it reads as fact.
+function helpDerive(){
+  const s=helpScope();
+  let r=s.rows;
+  const terr = s.terr || helpOnly(r,'territory');
+  if(terr) r=r.filter(m=>helpEq(m.territory,terr));
+  const clu = s.clu || helpOnly(r,'cluster');
+  if(clu) r=r.filter(m=>helpEq(m.cluster,clu));
+  return {
+    territory: terr, cluster: clu,
+    am: helpOnly(r,'am'), co: helpOnly(r,'co'),
+    bmMob: helpDom(r,'bmMob'), tmMob: helpDom(r,'tmMob'),
+  };
+}
+
+function helpNote(kind, text){
+  const el=document.getElementById('helpMsg'); if(!el) return;
+  const tone = kind==='ok' ? ['#E6F5EA','#15A24A'] : kind==='err' ? ['#FBEAE7','#DC3A2B'] : ['#FBF1DA','#8A6A12'];
+  el.style.display='block'; el.style.background=tone[0]; el.style.color=tone[1]; el.textContent=text;
+}
+
+async function helpSend(){
+  const q=id=>document.getElementById(id);
+  const s=helpScope(), d=helpDerive(), text=q('helpText').value.trim();
+  if(!s.tm || !text) return;
+
+  const last=Number(localStorage.getItem(HELP.KEY)||0), wait=HELP.COOL_MS-(Date.now()-last);
+  if(wait>0){ helpNote('warn', `Just a moment — you can send another in ${Math.ceil(wait/1000)}s.`); return; }
+
+  const btn=q('helpSend'); btn.disabled=true; btn.textContent='Sending…';
+  helpNote('warn','Sending…');
+  const payload={ token:HELP.token, org:s.org, bmName:s.bm, tmName:s.tm, concerns:text,
+    territory:d.territory, cluster:d.cluster, am:d.am, co:d.co, bmMob:d.bmMob, tmMob:d.tmMob,
+    state:gateDefaultState()||'', role:(GATE.cur&&GATE.cur.label)||'' };
+  try{
+    // Bare string body ⇒ text/plain ⇒ a simple request. See the note at the top of this section.
+    const res=await fetch(HELP.url, { method:'POST', body:JSON.stringify(payload) });
+    const j=await res.json().catch(()=>({ok:false,error:'bad_response'}));
+    if(!j.ok) throw new Error(j.error||'failed');
+    localStorage.setItem(HELP.KEY, String(Date.now()));
+    helpNote('ok','Sent. The ops team has it — thank you.');
+    q('helpText').value=''; btn.textContent='Sent ✓';
+    track('concern_submit', { role:(GATE.cur&&GATE.cur.role)||'', mp_state:gateDefaultState()||'all' });
+    setTimeout(()=>{ helpClose(); btn.textContent='Send'; btn.disabled=false; const m=q('helpMsg'); if(m) m.style.display='none'; helpRefine(); }, 1900);
+  }catch(err){
+    // The text is deliberately left in the box: a failed send must never cost somebody their typing.
+    helpNote('err','Could not send — check your connection and try again. Your text is still here.');
+    btn.textContent='Send'; btn.disabled=false;
+    console.warn('[MP-Ops] concern submit failed →', err);
+  }
+}
+
 /* ============================= mount ============================= */
 let _booted=false;
 function bootApp(){
   if(_booted){ if(!gateAllows(state.org)) state.org=gateDefaultOrg(); if(!gateAllowsState(state.st)) state.st=gateDefaultState(); render(); return; }
   _booted=true;
+  helpMount();
   state.org=gateDefaultOrg();
   state.st=gateDefaultState();   // scoped UPL/SWAL land locked on their state; admin lands on all-India ('')
   setupProj();

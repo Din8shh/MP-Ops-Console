@@ -171,6 +171,42 @@ read its way straight out of its scope — if that is ever wanted, gate those tw
 shows the pattern: filter the options by `gateAllowsState` and render the picker only when
 `gateCanSwitchStates()`).
 
+## Raise a concern (the only WRITE path in the app)
+A floating button for **field logins only** (`upl`/`swal`) → a small form → one appended row on the workbook's
+Concerns tab (**gid `1305107614`**). Everything else here fetches CSV; this is the one thing that writes, and it
+writes through `apps-script/feedback.gs`, a Google Apps Script Web App deployed from the workbook. `HELP.url` is
+its `/exec` URL and **a blank `HELP.url` hides the button entirely** — a form that cannot submit is worse than no
+form, so the feature is absent until the endpoint exists rather than failing on send. `HELP.token` must equal
+`TOKEN` in the script; both ship in a public repo, so the token stops drive-by discovery and nothing else (the
+endpoint is append-only into one tab, so the worst case is junk rows).
+
+- **The POST body is a bare string on purpose.** A JSON content-type makes it a preflighted request, Apps Script
+  answers no `OPTIONS`, and the send fails CORS. Don't add headers to that `fetch`.
+- **It renders OUTSIDE `render()`**, built once onto `document.body` like the PIN gate, because `render()` swaps
+  `app.innerHTML` wholesale and a textarea inside it loses its caret and contents on any state change — including
+  the ten-minute refresh — while somebody is mid-sentence. `helpSync()` is the one line `render()` spends on it.
+- **Three fields are asked, six are derived, and the ambiguous ones are asked for only where derivation fails.**
+  Measured on 1,518 live rows / 138 distinct BM+TM pairs, a TM resolves to one Area Manager 91% of the time but
+  to one Territory only 71% and one Cluster 55%. A blanket fill-if-unique rule would therefore have left the two
+  most *locating* columns empty on a third to a half of all rows. So Territory and Cluster appear as dropdowns
+  only on the pairs that need them: the common path stays three taps, the ambiguous path stops writing a blank.
+  Territory is **required once shown** (a person knows their own, and it is the column that says where the problem
+  is); Cluster is **optional** (they may genuinely not know, and a wrong one is worse than none). Picking a
+  territory usually collapses the cluster to one value anyway, which then resolves the cluster officer too.
+- **Org is a disabled select, not a line of text.** Every login that can see this button is locked to one org by
+  its PIN, so the control carries one option — but keeping it a field means opening the button to a multi-org role
+  later needs no new markup.
+- Every level rebuilds with its current value offered back as `keep`, so selections survive reopening, a data
+  refresh, and switching to a BM who shares a TM name. **A failed send never clears the textarea** and never
+  consumes the cooldown; only a success does. `?helpUrl=` overrides the endpoint on **localhost only**, same rule
+  and same reason as the CSV staging override — a settable endpoint on the live site would let a crafted link
+  redirect whatever a user types to somebody else's server.
+- The script's `ensureHeaders` adds **Timestamp / State / Role** to the right of the tab's original ten columns on
+  first run and never rewrites the ten (which carry trailing spaces in the sheet — `COLUMNS` reproduces them
+  verbatim). Cells opening `= + - @` are apostrophe-prefixed so a pasted concern cannot execute as a formula.
+- **Editing `feedback.gs` is not enough — redeploy it.** Deploy → Manage deployments → edit → New version, or the
+  live URL keeps serving the old code.
+
 ## Deploy
 GitHub Pages serves **`main` at repo root** → **https://din8shh.github.io/MP-Ops-Console/**. Push to `main` = deploy;
 Pages rebuilds in ~1 min. The Pages *build API* lags, so verify by fetching the live `index.html` and diffing it
