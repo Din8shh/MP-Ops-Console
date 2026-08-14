@@ -6124,6 +6124,7 @@ function helpMount(){
       </div>
       <div id="helpDerived" style="font-size:11px;color:#9C988F;line-height:1.5"></div>
       <div id="helpMsg" style="display:none;font-size:12.5px;font-weight:600;padding:9px 11px;border-radius:9px"></div>
+      <div id="helpHint" style="display:none;font-size:12px;color:#8A6A12;background:#FBF1DA;padding:8px 11px;border-radius:9px"></div>
       <button id="helpSend" type="button" style="width:100%;padding:12px 0;border:none;border-radius:10px;background:#D96A12;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">Send</button>
     </div>
   </div>`;
@@ -6205,10 +6206,15 @@ function helpCascade(level){
 function helpRefine(){
   const q=id=>document.getElementById(id);
   const s=helpScope();
-  const askTerr = !!s.tm && !helpOnly(s.rows,'territory');
+  // A dropdown is only asked for when it can actually be ANSWERED. Where a TM's rows carry no usable
+  // territory at all (every value blank or junk — `0`, `Not in Plan`), `helpOnly` returns '' exactly as
+  // it does for a genuine ambiguity, and asking would render an empty select that gates a required
+  // field: the Send button could then never enable, with nothing on screen saying why. No TM hits that
+  // on today's sheet, but it is one bad cell away, so the option count is part of the test.
+  const askTerr = !!s.tm && !helpOnly(s.rows,'territory') && q('helpTerr').options.length>1;
   q('helpTerrWrap').style.display = askTerr ? 'block' : 'none';
   const clusterRows = s.terr ? s.rows.filter(m=>helpEq(m.territory,s.terr)) : s.rows;
-  const askClu = !!s.tm && !helpOnly(clusterRows,'cluster');
+  const askClu = !!s.tm && !helpOnly(clusterRows,'cluster') && q('helpClu').options.length>1;
   q('helpCluWrap').style.display = askClu ? 'block' : 'none';
 
   const d=helpDerive();
@@ -6223,7 +6229,20 @@ function helpRefine(){
   // cannot settle the answer, and a person always knows their own territory — so skipping it would
   // hand the tab a blank in the one column that says where the problem is. A cluster they may
   // genuinely not know, and a wrong one is worse than none.
-  q('helpSend').disabled = !(s.tm && q('helpText').value.trim() && (!askTerr || s.terr));
+  //
+  // **A disabled button must say why it is disabled.** Without this line the form dead-ends in silence:
+  // the Territory select appears mid-form only for the ~3-in-10 ambiguous pairs, so somebody who has
+  // filled in everything they can see is left pressing a button that does nothing and has no way to
+  // learn what it wants. Reported from the field on day one, and it is the whole reason this hint
+  // exists — name the ONE next thing, in the order the form is read.
+  const missing = !s.bm  ? 'Choose your business manager to continue.'
+                : !s.tm  ? 'Choose your territory manager to continue.'
+                : (askTerr && !s.terr) ? 'Choose your territory — your rows cover more than one, so we cannot tell which.'
+                : !q('helpText').value.trim() ? 'Type your concern, then press Send.'
+                : '';
+  q('helpHint').textContent = missing;
+  q('helpHint').style.display = missing ? 'block' : 'none';
+  q('helpSend').disabled = !!missing;
 }
 
 function helpScope(){

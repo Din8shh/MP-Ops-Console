@@ -193,6 +193,13 @@ endpoint is append-only into one tab, so the worst case is junk rows).
   Territory is **required once shown** (a person knows their own, and it is the column that says where the problem
   is); Cluster is **optional** (they may genuinely not know, and a wrong one is worse than none). Picking a
   territory usually collapses the cluster to one value anyway, which then resolves the cluster officer too.
+- **A disabled Send must say WHY it is disabled** (`#helpHint`). The first field report was "I can't
+  submit": the Territory select appears mid-form for only the ~3-in-10 ambiguous pairs, so somebody who
+  had filled in everything they could see was left pressing a dead button with nothing on screen to
+  explain it. The hint names the ONE next thing, in the order the form is read. Related: a dropdown is
+  only asked for when it can be *answered* — where a TM's rows carry no usable territory at all,
+  `helpOnly` returns '' exactly as it does for a real ambiguity, and asking would gate a required field
+  behind an empty select that can never be satisfied. Hence the `options.length>1` test.
 - **Org is a disabled select, not a line of text.** Every login that can see this button is locked to one org by
   its PIN, so the control carries one option — but keeping it a field means opening the button to a multi-org role
   later needs no new markup.
