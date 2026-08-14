@@ -40,7 +40,9 @@ Territory→Cluster→Machine behaves identically on both.
   never applied to a freshly-filtered (shorter) set.
 
 **The desktop rail sizes itself off viewport HEIGHT, and that is load-bearing.** An admin carries twelve
-buttons; at a fixed 46×42 the aside wants ~850px once the logo, phone button and vertical "Confidential" label
+buttons — **thirteen under MP**, where the MP products view joins them; measured after that addition, all
+thirteen still fit unscrolled at a 620px viewport (clamped to 27px each) and the list starts scrolling around
+440px rather than clipping, which is the designed degradation. At a fixed 46×42 the aside wants ~850px once the logo, phone button and vertical "Confidential" label
 are counted, and the shell is a fixed `100vh` with `overflow:hidden`. The old fixed sizing degraded *silently*:
 the buttons (default `flex-shrink:1`) squeezed to a ~23px floor, then overlapped the phone button, then fell off
 the bottom below ~460px of viewport height — and the ones lost are the LAST in the list, Products and
@@ -110,13 +112,14 @@ designing anything on a column — several look usable and are not:
 | `scanned` per machine | 149/1,518 | **No** — too sparse for per-machine product mix |
 
 ## Workbook tabs (one sheet, `CONFIG.sheetId`)
-Nine tabs; the app reads five. Mapped by inspection — do not re-derive this.
+Ten tabs; the app reads six. Mapped by inspection — do not re-derive this.
 
 | gid | What it is | Grain | History? | Used by |
 |---|---|---|---|---|
 | `0` | Machine master (`Sheet1`) | 1 row/machine | **No** — overwritten daily | everything |
 | `603091795` | Cumulative "snake" | fiscal-day × state × 3 FY | **Yes**, 3 seasons | Cumulative view, Insights |
 | `1039187695` | Product data (summary) | region × crop × brand | No (YTD + yesterday only) | Products view, Insights, segment join |
+| `123586424` | **Product Data MP** — the only product tab with a TERRITORY | territory × product × company, **MP only** | No (yesterday + MTD + YTD on the row) | MP products view |
 | `718502150` | Product day-level (`TX`) | **date** × region × crop × brand | Yes, from 1 Jun, no gaps | Week + Month → products, segments, focus-product trend |
 | `1973671649` | Pasted product detail (`WKP`), tab named **"July 1-31"** | region × crop × product, ONE period | n/a — the tab IS the period | **Month** → products + segments (Week when the paste is a week) |
 | `1199323704` | Richer machine feed (per-machine branded acres, lat/lon, ping) | 1 row/machine | No | **not wired** |
@@ -143,6 +146,56 @@ state split, under its own Company / State / Measure controls. Two rules govern 
   it; only this page stopped showing it. With the crop card gone, the leaderboard pairs with the state card, and
   takes the full width when a state is picked and that card retires.
 
+## MP products view (territory grain)
+A self-contained page over the **Product Data MP** tab (gid `123586424`), grouped at TERRITORY level with each
+territory's products nested inside it. It is the only place in the app that can say *which product, in whose
+territory* — the summary tab is region × crop × brand and the day-level tab has no territory column either, so
+neither can go below state. 753 rows, 20 territories, 89 products, all Madhya Pradesh.
+
+- **Read column K (`Final territory`), never column A (`territory`).** A row's product can belong to the OTHER
+  company's territory — a UPL organisation selling a SWAL product sits in the SWAL territory — and the sheet
+  already resolves that in K. The rule, verified on all 753 rows with zero violations: `K = A` where
+  `organisation` === `product_company_name`, else `K = J` (`Alternate Organisation`). **93 rows are re-routed
+  this way**, so reading A files them under the wrong territory. Columns A / C / J are K's working and the
+  parser ignores all three.
+- **K still needs canonicalising, and this is not cosmetic.** Raw K splits on casing alone — `Khargone`
+  (1,066 ac) and `khargone` (9,277 ac) arrive as two separate territories, as do `khandwa` and `Mandsor`.
+  `canonTerr(aliasTerr('MP', …))` folds them; after that **all 20 territories are real MP districts present in
+  `COORDS`**, so unlike the machine sheet there are no junk-territory rows to filter here.
+- **Three horizons on one page, and the stat band always shows all three.** The measure toggle (Season · YTD /
+  This month · MTD / Yesterday) decides which figure ranks and fills the territory list, but Yesterday, MTD and
+  YTD are printed side by side regardless, with an inset rule marking the active one. A territory that is quiet
+  this month but large for the season only reads correctly when both numbers are on screen.
+- **Soil & seed health is excluded** via the shared `PROD_EXCLUDE`, same rule and same reason as the Products
+  page, and the page says so on its face. Applied once at the top of `mppAgg`, so the stat band, the company
+  split, the territory rows and the products inside them all sit on one base. Live cost: 6 brands, 1,539 ac YTD
+  / 214 MTD / 6 yesterday (77,146 → **75,608 ac YTD**).
+- **Territories with nothing on the selected measure are NAMED, not dropped.** Nine of twenty recorded nothing
+  yesterday; a list that simply ended there would read as though twenty territories were on it. Same
+  silent-floor rule as the Insights league table stating its cut-off.
+- **Visibility is a STATE-SCOPE test, not a role test** (`roleHidesView`, ahead of the role check, so it binds
+  admin and leadership too): the tab appears only while `state.st === 'MP'` — not at All India, not under
+  another state. An all-India reader gets it by picking Madhya Pradesh in the State control, and `render()`'s
+  standing guard bounces anyone sitting on the view when the state moves off MP. Rendering one state's numbers
+  under an all-India header is exactly the misreading this prevents.
+- **It is the one gated view safe to grant a state-locked login**, which is why the MP UPL / SWAL field PINs
+  carry `views:['mpprod']` where they hold nothing else. The constraint on `snake`/`product` is that they render
+  their own all-India state pickers; this page renders **no state picker at all** and its tab is MP-only, so it
+  cannot read out of anybody's lock.
+- **Field logins are locked to their own company** (`mppOrgLock`): the gate's org becomes the scope, and the
+  company toggle is **absent rather than disabled** — a control with one reachable value is furniture. Those
+  logins get a single-company summary card in place of the UPL-vs-SWAL head-to-head, since the head-to-head
+  would compare their company against a column they may not read. Admin and leadership carry org `Both`, so
+  they keep the toggle and the comparison. Live: UPL 44,087 / SWAL 31,521 ac YTD.
+- Drill-down runs on `state.expanded` through the shared `data-act="exp"` handler, exactly as the Territory
+  tables do; keys are namespaced `mpp:` so they cannot collide with those.
+
+**Adding a view means editing BOTH view chains.** `contentHTML`'s switch has a `default` of map, but
+`mobileHTML`'s if/else chain ends in an `else` that is **WEATHER** — so a view registered in `M_VIEWS` but
+missing its `mobileHTML` branch renders the weather page under its own name instead of failing. That is
+precisely what the phone did for `mpprod` until the branch was added, and it is silent: the button is there,
+the page loads, the content is simply the wrong view.
+
 ## Access roles (the PIN gate)
 `GATE.ROLES` in index.html maps sha256(PIN) → a scope on **three axes**: org (`org` default + `allow` list),
 state (`states`, `switchStates`) and views (`views`). It is a soft client-side gate — the file says so, and the
@@ -151,8 +204,8 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | Role | Org | States | Views beyond the fleet four |
 |---|---|---|---|
 | `admin` | All / UPL / SWAL / Open | all, switchable | all of them |
-| `lead` (leadership) | All / UPL / SWAL | all, switchable | Products, Cumulative |
-| `upl` / `swal` × 7 states | one, forced | one, locked | none |
+| `lead` (leadership) | All / UPL / SWAL | all, switchable | Products, Cumulative, MP products |
+| `upl` / `swal` × 7 states | one, forced | one, locked | MP products (the two **MP** logins only) |
 
 Map, Machine locations, Weather and Business managers are the **baseline every login gets**; `GATED_VIEWS` lists
 the rest, and `roleHidesView` grants one only if the role is admin or names it in `views`. Putting the grant on
@@ -166,7 +219,9 @@ deliberately not admin: it is an all-India, both-companies *reading* of the prog
 screens (Pending, Insights, the people tables).
 
 **CONSTRAINT on `snake` and `product`:** both render their own all-India state pickers, and neither consults
-`gateAllowsState`. Grant them only to a role with `states:['*']`. A state-locked role handed either one would
+`gateAllowsState`. Grant them only to a role with `states:['*']`. (`mpprod` is the exception that proves the
+rule — no state picker, MP-only tab — which is why the state-locked MP logins can hold it. See the MP products
+note above.) A state-locked role handed either one would
 read its way straight out of its scope — if that is ever wanted, gate those two pickers first (Insights already
 shows the pattern: filter the options by `gateAllowsState` and render the picker only when
 `gateCanSwitchStates()`).
