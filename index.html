@@ -916,15 +916,20 @@ function buildBrandPort(){
    picture: the summary tab has no dates, and the day-level tab carries only eight focus brands. This one is the
    real mix — every product the programme scanned in its period, ~57% of the fleet's acres.
 
-   It has no date column: the tab IS the period. So it is pinned to WKP_PERIOD, and whichever review selects
-   exactly that window reads it — Week when the paste is a week, MONTH when it is a month. Any other window says
-   so rather than silently relabelling this period's numbers as another's.
+   It has no date column: the tab IS the period. So it is pinned to WKP_PERIOD, and a review whose window is the
+   same LENGTH and within WKP_SLACK_DAYS of it reads it — Week when the paste is a week, MONTH when it is a month.
+   Any other window says so rather than silently relabelling this period's numbers as another's.
 
-   On 2026-08-07 the weekly paste was REPLACED by 1–31 July 2026 for the monthly review, so Month now claims the
-   tab and Week reports where the detail went. It is one tab holding one period at a time: when the recurring
-   sheet lands, change WKP_PERIOD (and the gid) and nothing else. */
+   On 2026-08-15 the paste went back to a WEEK: 9–15 Aug 2026 (Sun–Sat). The programme's review week is Sat–Fri
+   (INS_WEEK_END_DOW), so the paste sits ONE DAY later than the week under review — hence the slack, and hence
+   every card built off it carries the tab's OWN dates rather than the week's. The period was not read off the
+   tab name: the tab's eight overlapping brands were matched against the dated day-level tab across every window
+   in its range, and 9–15 Aug was the only exact fit. Do that again if a paste ever arrives unlabelled.
+
+   It is one tab holding one period at a time: when the recurring sheet lands, change WKP_PERIOD (and the gid)
+   and nothing else. */
 const WKP_GID    = '1973671649';
-const WKP_PERIOD = { start:'2026-07-01', end:'2026-07-31' };          // the period this manual tab covers
+const WKP_PERIOD = { start:'2026-08-09', end:'2026-08-15' };          // the period this manual tab covers
 const WKP_COL  = { region:0, crop:1, product:2, company:3, acres:4 };
 const WKP = { loading:false, loaded:false, error:false, at:'', rows:[] };
 function wkpUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${WKP_GID}&t=${Date.now()}`; }
@@ -2343,6 +2348,17 @@ function exHeader(title,sub,y){
   if(sub) s+=exText(EX.PAD,y+62,sub,{size:EX.fSub,fill:EX.ink3});
   return { svg:s, y:y+(sub?86:58) };
 }
+/* A small WRAPPED footnote. exHeader's subtitle is a single unwrapped line and silently runs off the canvas, so
+   anything longer than a clause — a caveat about what a card is actually showing — must come through here. */
+function exNote(text,y){
+  const t=String(text||'').trim(); if(!t) return { svg:'', y };
+  const max=Math.floor((EX.W-EX.PAD*2)/(EX.fSubCell*0.545));
+  const lines=[]; let ln='';
+  t.split(/\s+/).forEach(w=>{ if(!ln) ln=w; else if((ln+' '+w).length<=max) ln+=' '+w; else { lines.push(ln); ln=w; } });
+  if(ln) lines.push(ln);
+  let s=''; lines.forEach((l,i)=>{ s+=exText(EX.PAD,y+18+i*22,l,{size:EX.fSubCell,fill:EX.ink3}); });
+  return { svg:s, y:y+18+(lines.length-1)*22+6 };
+}
 /* A row of large figures. Widths are shared equally only when that fits; otherwise each cell takes what its
    content needs, so four short numbers don't sprawl across a metre of slide. */
 function exStats(items,y){
@@ -2475,7 +2491,9 @@ function buildWeekExport(id){
 
   if(id==='wk-products'){
     const TP=D.TP; if(!TP||TP.wrongPeriod||TP.empty||!TP.total) return null;
-    const h=exHeader('Products this week',`${sub} · ${fmt(TP.products.length)} products · ${fmt(TP.total)} ac`,y); out+=h.svg; y=h.y;
+    // An offset paste is headed with the TAB'S dates, not the week's, and carries the same caveat as the screen.
+    const pShift=TP.mt&&!TP.mt.exact, pRange=pShift?`${wkpRangeLabel()} · ${scopeName}`:sub;
+    const h=exHeader(pShift?`Products, ${wkpRangeLabel()}`:'Products this week',`${pRange} · ${fmt(TP.products.length)} products · ${fmt(TP.total)} ac`,y); out+=h.svg; y=h.y;
     const rows=TP.products.slice(0,14).map(p=>({ name:p.disp, co:p.company, ac:fmt(p.ac), share:(p.ac/TP.total*100).toFixed(0)+'%',
       co_ink:p.company==='UPL'?C.orangeD:C.greenD }));
     rows.push({ name:'All products', co:'', ac:fmt(TP.total), share:'100%', _total:true });
@@ -2483,12 +2501,14 @@ function buildWeekExport(id){
       {label:'Product',key:'name'},{label:'Company',key:'co',weight:700},
       {label:'Acres',key:'ac',mono:true,align:'right'},{label:'Share',key:'share',mono:true,align:'right'},
     ],rows,y); out+=t.svg; y=t.y;
+    const n=exNote(wkpShiftNote(TP.mt,W),y); out+=n.svg; y=n.y;
     return exWrap(out,y+EX.PAD);
   }
 
   if(id==='wk-segments'){
     const SG=D.SG; if(!SG||SG.wrongPeriod||SG.empty) return null;
-    const h=exHeader('Product segments by state',`${sub} · share of each state’s product acres`,y); out+=h.svg; y=h.y;
+    const sShift=SG.mt&&!SG.mt.exact;
+    const h=exHeader('Product segments by state',`${sShift?`${wkpRangeLabel()} · ${scopeName}`:sub} · share of each state’s product acres`,y); out+=h.svg; y=h.y;
     const L=exLegend([{label:'Herbicide',color:C.green},{label:'Insecticide',color:C.orange},{label:'Fungicide',color:C.open},{label:'Other',color:'#B6B1A8'}],y+8);
     out+=L.svg; y=L.y+10;
     const mk=r=>({ name:r.name,
@@ -2503,6 +2523,7 @@ function buildWeekExport(id){
       {label:'Herb',key:'h',mono:true,align:'right'},{label:'Ins',key:'i',mono:true,align:'right'},
       {label:'Fung',key:'f',mono:true,align:'right'},{label:'Other',key:'o',mono:true,align:'right'},
     ],rows,y); out+=t.svg; y=t.y;
+    const n=exNote(wkpShiftNote(SG.mt,W),y); out+=n.svg; y=n.y;
     return exWrap(out,y+EX.PAD);
   }
 
@@ -3348,11 +3369,49 @@ function insWeekAgg(A,back){
   return W;
 }
 const insISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-/* The manual product-detail tab has no dates — it IS one named period (WKP_PERIOD). Whichever review selects
-   exactly that window may read it; every other window must say so rather than relabel these numbers as its own.
+/* The manual product-detail tab has no dates — it IS one named period (WKP_PERIOD). A review window may read it
+   when it is the SAME LENGTH and starts and ends within WKP_SLACK_DAYS of it; every other window must say so
+   rather than relabel these numbers as its own.
+
+   The slack exists because the paste is hand-pulled and the programme's review week is Sat–Fri: a Sun–Sat pull
+   is the same seven days shifted by one, and refusing it would leave the review with no product mix at all. The
+   equal-length test is what keeps that honest — a pasted WEEK can never satisfy a MONTH window (or the reverse),
+   which is the failure the exact test was really guarding against. Nothing is relabelled: wkpMatch reports the
+   shift, and every card built off an offset paste is titled with the TAB'S dates and measured against the fleet
+   acres of those same days, never the review week's.
+
    Pure period test: it says nothing about whether the tab has loaded, which the callers check separately. */
-const wkpIsPeriod = (d0,d1) => insISO(d0)===WKP_PERIOD.start && insISO(d1)===WKP_PERIOD.end;
+const WKP_SLACK_DAYS = 2;
+const wkpDayDiff = (a,b) => Math.round((b-a)/864e5);
+function wkpMatch(d0,d1){
+  if(!d0||!d1) return null;
+  // Midnight-anchored, ALWAYS: a review window is built from new Date() and carries the current time of day, so
+  // comparing the raw instants makes a genuine one-day offset round to zero — and a shift that reports itself as
+  // zero is exactly the silent relabelling this gate exists to prevent.
+  const at=x=>new Date((typeof x==='string'?x:insISO(x))+'T00:00:00');
+  const a=at(WKP_PERIOD.start), b=at(WKP_PERIOD.end), p0=at(d0), p1=at(d1);
+  if(wkpDayDiff(a,b)!==wkpDayDiff(p0,p1)) return null;              // same length only
+  const s=wkpDayDiff(p0,a), e=wkpDayDiff(p1,b);                     // + = the tab runs later than the window
+  if(Math.abs(s)>WKP_SLACK_DAYS || Math.abs(e)>WKP_SLACK_DAYS) return null;
+  return { shift:s, exact:(s===0&&e===0) };
+}
+const wkpIsPeriod = (d0,d1) => !!wkpMatch(d0,d1);
 const wkpRangeLabel = () => `${insWeekLabel(new Date(WKP_PERIOD.start+'T00:00:00'))} – ${insWeekLabel(new Date(WKP_PERIOD.end+'T00:00:00'))}`;
+const wkpDaysWord = n => Math.abs(n)===1 ? 'one day' : `${Math.abs(n)} days`;
+/* What an offset paste is, in one sentence — shown on the face of every card built from it, on screen and in the
+   PNG, so the numbers are never read as the review week's own. Empty string when the paste sits on the week. */
+const wkpShiftNote = (mt,W) => (!mt || mt.exact || !W) ? '' :
+  `The product tab covers ${wkpRangeLabel()}. This review week is ${insWeekLabel(W.d0)} – ${insWeekLabel(W.d1)}, `
+  + `so these product acres run ${wkpDaysWord(mt.shift)} ${mt.shift>0?'later':'earlier'} than the fleet figures on this page `
+  + `and are measured against the fleet's acres on their own days.`;
+/* Fleet acres over the TAB'S OWN days, so an offset paste's share is measured against the days it actually
+   covers. Identical to the window's own total when the paste is exact. Null if the period leaves the season. */
+function wkpFleetAcres(A){
+  const a=new Date(WKP_PERIOD.start+'T00:00:00'), b=new Date(WKP_PERIOD.end+'T00:00:00');
+  const from=snakeOff(a.getMonth()+1,a.getDate()), to=snakeOff(b.getMonth()+1,b.getDate());
+  if(from==null||to==null||to<from) return null;
+  return insWeekSum(A.snCode, INS_CUR.key, from, to);
+}
 
 /* The product mix for whatever period the manual tab holds. Scope-aware, and shared by Week and Month — the
    aggregation is the same in both; only the window that may claim it differs. */
@@ -3373,12 +3432,13 @@ function wkpProducts(A){
     crops:    listOf(cm,(k,v)=>({ key:k, ac:v })),
     regions:  listOf(rm,(k,v)=>({ st:k, name: k==='OT'?'Other':(STATE_NAMES[k]||k), ac:v })) };
 }
-/* Products for the week. The tab currently holds a MONTH, so this reports where the detail went rather than
-   showing a month's acres under a week's heading. */
+/* Products for the week. `mt` carries the paste's offset from the review week (0 when they coincide) and `fleet`
+   the acres the fleet sprayed on the TAB'S days — both so the card can name what it is really showing. */
 function insWeekProducts(A,W){
   if(!WKP.loaded || !W) return null;
-  if(!wkpIsPeriod(W.d0,W.d1)) return { wrongPeriod:true };
-  return wkpProducts(A);
+  const mt=wkpMatch(W.d0,W.d1);
+  if(!mt) return { wrongPeriod:true };
+  return { ...wkpProducts(A), mt, fleet: mt.exact ? W.acres : wkpFleetAcres(A) };
 }
 
 /* ===== product segments by state =====
@@ -3421,8 +3481,9 @@ function wkpSegments(A){
 }
 function insWeekSegments(A,W){
   if(!WKP.loaded || !PROD.loaded || !W) return null;
-  if(!wkpIsPeriod(W.d0,W.d1)) return { wrongPeriod:true };
-  return wkpSegments(A);
+  const mt=wkpMatch(W.d0,W.d1);
+  if(!mt) return { wrongPeriod:true };
+  return { ...wkpSegments(A), mt };
 }
 
 /* ===== focus-product daily trend =====
@@ -4539,13 +4600,17 @@ function insightsBodyHTML(mob){
     if(!WKP.loaded){
       prodWk=card(`${cHead('What was sprayed this week','From the product-detail tab')}${waiting(WKP.error, WKP.error?'Could not load the product-detail tab.':'Loading the product-detail tab…','wkpretry')}`);
     } else if(TP && TP.wrongPeriod){
-      // One tab, one pasted period, no dates of its own — so it cannot be cut into weeks, and a week that is not
-      // that period says where the detail is rather than showing another period's acres under this week's name.
-      prodWk=card(`${cHead('What was sprayed this week','From the product-detail tab')}${waiting(false,`Per-product detail currently covers ${E(wkpRangeLabel())} — a whole month, on the Month review. The tab holds one pasted period at a time and carries no dates, so it cannot be split back into weeks.`,'wkpretry')}`);
+      // One tab, one pasted period, no dates of its own — so it cannot be re-cut, and a week that is not that
+      // period says where the detail is rather than showing another period's acres under this week's name.
+      prodWk=card(`${cHead('What was sprayed this week','From the product-detail tab')}${waiting(false,`Per-product detail currently covers ${E(wkpRangeLabel())}, which is not the week under review. The tab holds one pasted period at a time and carries no dates, so it cannot be split or shifted into another week.`,'wkpretry')}`);
     } else if(!TP || TP.empty || !TP.total){
       prodWk=card(`${cHead('What was sprayed this week','From the product-detail tab')}${waiting(false,'No product acres recorded for this scope.','wkpretry')}`);
     } else {
-      const share = W.acres ? TP.total/W.acres*100 : null;
+      // Share is taken against the fleet's acres ON THE TAB'S OWN DAYS — an offset paste over the review week's
+      // total would divide two different windows and print a number that is nobody's.
+      const pShift = TP.mt && !TP.mt.exact, pNote = wkpShiftNote(TP.mt,W);
+      const pFleet = TP.fleet;
+      const share = pFleet ? TP.total/pFleet*100 : null;
       const pMax = TP.products.length ? TP.products[0].ac : 1;
       const top = TP.products.slice(0,12);
       const pRow = (x,i) => `<div style="display:grid;grid-template-columns:${mob?'1fr 66px':'minmax(150px,300px) minmax(0,1fr) 84px 58px'};gap:10px;align-items:center;padding:9px 16px;border-top:${i?'1px solid #F4F2EE':'none'}">
@@ -4556,8 +4621,8 @@ function insightsBodyHTML(mob){
         </div>`;
       const regStrip = (!A.gst && TP.regions.length>1) ? `<div style="padding:11px 16px;border-top:1px solid #EFEDE7;display:flex;gap:14px;flex-wrap:wrap">
           ${TP.regions.slice(0,5).map(r=>`<span style="font-size:11.5px;color:#6E6A62"><strong style="color:#46433d">${E(r.name)}</strong> ${fmt(r.ac)} ac<span style="color:#B6B1A8"> · ${(r.ac/TP.total*100).toFixed(0)}%</span></span>`).join('')}</div>` : '';
-      prodWk=card(`${cHead(`Products this week · ${E(A.gst?A.regionName:'all India')}`,
-          `${fmt(TP.products.length)} products${share!=null?` · ${fmt(TP.total)} ac, ${share.toFixed(0)}% of the ${fmt(W.acres)} ac the fleet sprayed`:''}`)}
+      prodWk=card(`${cHead(`Products, ${pShift?E(wkpRangeLabel()):'this week'} · ${E(A.gst?A.regionName:'all India')}`,
+          `${fmt(TP.products.length)} products${share!=null?` · ${fmt(TP.total)} ac, ${share.toFixed(0)}% of the ${fmt(pFleet)} ac the fleet sprayed over those days`:''}`)}
         <div style="display:flex;flex-wrap:wrap;background:#FBFAF8;border-bottom:1px solid #EFEDE7">
           ${big(fmt(TP.total),'product acres', `${fmt(TP.products.length)} products, ${fmt(TP.crops.length)} crops`, C.orangeD)}
           ${big(fmt(TP.upl),'UPL', TP.total?`${(TP.upl/TP.total*100).toFixed(0)}% of product acres`:'', C.orangeD)}
@@ -4569,7 +4634,8 @@ function insightsBodyHTML(mob){
         ${top.map(pRow).join('')}
         ${TP.products.length>top.length?`<div style="padding:9px 16px;border-top:1px solid #F4F2EE;font-size:11px;color:#B6B1A8">${fmt(TP.products.length-top.length)} further products account for ${fmt(TP.total-top.reduce((s,x)=>s+x.ac,0))} ac.</div>`:''}
         ${TP.crops.length>1?`<div style="padding:11px 16px;border-top:1px solid #EFEDE7;font-size:11.5px;color:#6E6A62">By crop · ${TP.crops.slice(0,5).map(c=>`${E(c.key)} <span style="font-family:'IBM Plex Mono';color:#46433d">${fmt(c.ac)}</span>`).join(' · ')}</div>`:''}
-        ${regStrip}`);
+        ${regStrip}
+        ${pNote?`<div style="padding:11px 16px;border-top:1px solid #EFEDE7;font-size:11px;color:#9C988F;line-height:1.5">${E(pNote)}</div>`:''}`);
     }
 
     /* ---- product segments by state ---- */
@@ -4599,13 +4665,15 @@ function insightsBodyHTML(mob){
           ${SEGL.map(k=>(mob&&k==='Other')?'':`<span style="font-family:'IBM Plex Mono';font-size:12.5px;text-align:right;color:${r[k]>0?C.ink:'#C9C4BA'};font-weight:${isTot?700:400}">${r.base?(r[k]/r.base*100).toFixed(0)+'%':'—'}</span>`).join('')}
         </div>`;
       const legend=`<div style="display:flex;gap:14px;flex-wrap:wrap;padding:11px 16px 4px">${SEGL.map(k=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#6E6A62"><span style="width:10px;height:10px;border-radius:3px;background:${SEG_C[k]}"></span>${k}</span>`).join('')}</div>`;
-      segCard=card(`${cHead(`Product segments by state · ${E(A.gst?A.regionName:'all India')}`,
+      const sShift = SG.mt && !SG.mt.exact, sNote = wkpShiftNote(SG.mt,W);
+      segCard=card(`${cHead(`Product segments by state${sShift?`, ${E(wkpRangeLabel())}`:''} · ${E(A.gst?A.regionName:'all India')}`,
           'Share of each state’s product acres by segment, with its largest products and crops')}
         ${legend}
         <div style="display:grid;grid-template-columns:${gc};gap:10px;padding:8px 16px 10px;border-bottom:1px solid #EFEDE7">
           ${hdr.map(h=>`<span style="font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase;${['Acres','Herb','Ins','Fung','Other'].includes(h)?'text-align:right':''}">${h}</span>`).join('')}</div>
         ${SG.rows.map((r,i)=>row(r,i,false)).join('')}
-        ${SG.rows.length>1?row(SG.tot,0,true):''}`);
+        ${SG.rows.length>1?row(SG.tot,0,true):''}
+        ${sNote?`<div style="padding:11px 16px;border-top:1px solid #EFEDE7;font-size:11px;color:#9C988F;line-height:1.5">${E(sNote)}</div>`:''}`);
     }
 
     /* ---- focus-product daily trend, with the UPL/SWAL equivalents combined into one line ----
