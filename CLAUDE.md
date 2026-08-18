@@ -112,7 +112,7 @@ designing anything on a column — several look usable and are not:
 | `scanned` per machine | 149/1,518 | **No** — too sparse for per-machine product mix |
 
 ## Workbook tabs (one sheet, `CONFIG.sheetId`)
-Ten tabs; the app reads six. Mapped by inspection — do not re-derive this.
+Eleven tabs; the app reads seven. Mapped by inspection — do not re-derive this.
 
 | gid | What it is | Grain | History? | Used by |
 |---|---|---|---|---|
@@ -122,12 +122,16 @@ Ten tabs; the app reads six. Mapped by inspection — do not re-derive this.
 | `123586424` | **Product Data MP** — the only product tab with a TERRITORY | territory × product × company, **MP only** | No (yesterday + MTD + YTD on the row) | MP products view |
 | `718502150` | Product day-level (`TX`) | **date** × region × crop × brand | Yes, from 1 Jun, no gaps | Week + Month → products, segments, focus-product trend |
 | `1973671649` | Pasted product detail (`WKP`) | region × crop × product, ONE period — **9–15 Aug 2026** | n/a — the tab IS the period | **Week** → products + segments (Month when the paste is a month) |
+| `1562411178` | **Operator leaderboard** — the 14–31 Aug contest ledger | **date** × operator, keyed on MOBILE | **Yes**, day by day inside the window | Leaders view |
 | `1199323704` | Richer machine feed (per-machine branded acres, lat/lon, ping) | 1 row/machine | No | **not wired** |
 | `1433754421` | Org roster (AM/CI/BM/TM/FO/retailer) | 1 row/machine | No | not wired |
 | `266726831` | The Athena SQL behind the machine feed | — | — | reference only |
 | `1999606625` | Scratch, misaligned columns | — | — | unusable |
 
-**Only the snake tab has real history.** That single fact drives most of the Insights design: anything asking "what changed over time" below state level is not computable today.
+The operator-leaderboard tab is the SECOND source with real history, and the only one carrying it *below*
+state level — which is what lets the Leaders page rebuild yesterday's standings and show movement.
+
+**Apart from those two, no tab has history.** That single fact drives most of the Insights design: anything asking "what changed over time" below state level is not computable today.
 
 ## Products view
 A self-contained page over the summary tab: a UPL-vs-SWAL head-to-head, three tiles, a brand leaderboard and a
@@ -223,6 +227,50 @@ below state. 753 rows, 20 territories, 88 raw products (79 after the exclusions 
 missing its `mobileHTML` branch renders the weather page under its own name instead of failing. That is
 precisely what the phone did for `mpprod` until the branch was added, and it is silent: the button is there,
 the page loads, the content is simply the wrong view.
+
+## Leaders — the operator contest
+`leader` is a self-contained page over the operator-leaderboard tab, and it REPLACED the old cluster-officer /
+operator ranking that was derived from the machine sheet. The two could not have coexisted honestly: the old
+board ranked by season achieved-acres off a tab with no history, this one ranks by acres inside a dated 18-day
+window, and both under one "Leaderboard" heading would have put two different answers to "who is winning" on
+one screen. `state.lbScope` and its Total/Yesterday toggle went with it.
+
+**The contest.** `CONTEST = { start:'2026-08-14', end:'2026-08-31', bar:300, topPerState:3 }` — one constant
+driving three prizes: an incentive for every operator past 300 acres, the top three in each state, and one
+national topper. Rows outside the window are read and then dropped, so widening the contest is a one-line edit.
+
+**The base is the MOBILE NUMBER, never the name.** `oplbMob` collapses every variant — `+91`, a leading `0`,
+spaces, a numeric cell's trailing `.0`, and scientific notation — to the last ten digits. Name, state and
+territory are DISPLAY fields: read from the tab where it carries them, joined from the machine sheet on the
+same normalised number where it does not. Splitting one operator's acres across two keys is the one error a
+prize table must not make, so a cell that cannot yield ten digits is dropped rather than guessed at.
+
+**The tab is read defensively, because it is new and hand-kept.** Three things are detected, not assumed:
+columns resolve by header NAME (`resolveCols`'s pattern); a LONG layout (a `Date` column) and a WIDE one (a
+column per date) are both accepted, chosen on how many headers parse as dates; and DAILY vs CUMULATIVE acres
+is decided by whether any operator's series ever falls — a running total never does. Every one of those
+decisions, plus each matched column index, is logged on load as `[MP-Ops] operator leaderboard → {…}`.
+**Read that console line first if a figure looks wrong.** `OPLB_LAYOUT` / `OPLB_MODE` force either decision
+if a sheet change ever fools the detector.
+
+**Placing and movement are always read on the board in front of the reader** — the national one at All India,
+the state's own once scoped. Each operator therefore carries two placings (`rank`/`stRank`) and two movements
+(`delta`/`stDelta`), and the view picks the pair. Mixing them is what made an early build unreadable: the same
+operator showed as 1st on the podium and 3rd in the table below it, both correct, neither explained. Ties share
+a placing on both boards, and "yesterday" means **the last day the tab carries**, not the calendar's.
+
+**Tone is part of the spec.** The page never reports an absence. Below the bar an operator is a *distance from
+it* ("53 ac to go"), never a failure to reach it; a board with nobody past 300 still names its leader and how
+far ahead of the field he is. People read this page about themselves.
+
+**Scope.** Chromeless — it renders its own state picker and drops the machine filter bar, because none of
+those filters reach this tab. `state.lbSt` is page-local and gate-clamped exactly like `insSt`; a state-locked
+login gets **no picker at all** and is pinned to its own state, which is why this page does not breach the
+`snake`/`product` constraint below. The national topper is the one deliberate exception and is shown to
+everyone — it is a single named prize the whole programme is competing for.
+
+**Who can see it:** admin only, as the old leaderboard was. Granting it to leadership or a field login is one
+token in that role's `views` — and unlike `snake`/`product`, safe for a state-locked role.
 
 ## Access roles (the PIN gate)
 `GATE.ROLES` in index.html maps sha256(PIN) → a scope on **three axes**: org (`org` default + `allow` list),

@@ -92,13 +92,16 @@ const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#15923
 // The same breakpoint drives both, so `device` and the chrome never disagree.
 const PHONE_MQ = '(max-width:820px)';
 const isPhone = () => window.matchMedia(PHONE_MQ).matches;
-const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', day:'yday', lbScope:'total', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
+const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   // Cumulative (snake) view: its own independent scope — region + a day-level fiscal range stored as offsets
   // (0 = Apr 1 … 364 = Mar 31). NOT tied to the machine filter bar. snTo defaults to today's fiscal offset
   // (set once SNAKE helpers exist — see snakeTodayOff), so the range always seeds to season-to-date, not FY end.
   // snTrendWin = window (days) for the separate day-wise trend chart: 10 | 15 | 30, anchored to today.
   snState:'ALL', snFrom:0, snTo:364, snTrendWin:30,
+  // Leaders (operator contest): page-local state scope + "show every operator" toggle. lbSt is clamped
+  // by the gate exactly like insSt and never touches state.st.
+  lbSt:'', lbAll:false,
   // Product Insights view: its own independent scope over the "Product data" tab (State × Company ×
   // {YTD, yesterday}). Deliberately NOT tied to the machine filter bar — product-scanned acres are a separate
   // metric from machine spray acres. pmCo = ALL|UPL|SWAL, pmMeasure = ytd|yday.
@@ -957,6 +960,245 @@ async function loadWkp(){
   finally{ WKP.loading=false; render(); }
 }
 
+
+/* ===================== operator leaderboard — the contest tab =====================
+   The programme is running a 14–31 August contest, and this tab is its ledger: date-wise acres per
+   OPERATOR, keyed on the mobile number. Three prizes hang off it — an incentive for every operator past
+   300 acres, the top three in each state, and one national topper.
+
+   It is the only per-operator source with DATES, which is what makes the Leaders page a standings board
+   rather than a snapshot: yesterday's ranking can be rebuilt by dropping the last day, so every row can
+   say how far its operator moved overnight.
+
+   THE BASE IS THE MOBILE NUMBER, never the name. Operator names arrive spelled several ways across the
+   workbook (canonicalizeNames exists for exactly that reason) and two operators can share one; a number
+   is the only field that identifies one person and keeps identifying him after a rename. Name, state and
+   territory are therefore display fields — read from this tab where it carries them, joined from the
+   machine sheet on the number where it does not.
+
+   The tab is read DEFENSIVELY, because it is new and hand-kept: columns resolve by header name (not
+   position), both a long and a wide layout are accepted, and daily-vs-cumulative acres are detected from
+   the data rather than assumed. Every one of those decisions is logged to the console as
+   `[MP-Ops] operator leaderboard → {...}` on each load — read that line first if a number looks wrong. */
+const OPLB_GID = '1562411178';
+// The contest this page exists to run. `bar` is the incentive threshold; `topPerState` the state podium.
+const CONTEST = { start:'2026-08-14', end:'2026-08-31', bar:300, topPerState:3 };
+// Shape overrides for the day a sheet change fools the detector. 'auto' reads both off the data.
+const OPLB_LAYOUT = 'auto';   // 'auto' | 'long' | 'wide'
+const OPLB_MODE   = 'auto';   // 'auto' | 'daily' | 'cumulative'
+const OPLB = { loading:false, loaded:false, error:false, at:'', rows:[], dates:[], mode:'', shape:'', diag:null };
+function oplbUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${OPLB_GID}&t=${Date.now()}`; }
+
+/* Every variant of one number collapses to its last ten digits — +91, a leading 0, spaces, dashes and the
+   stray `.0` a numeric cell leaves behind all name the same operator. A cell that cannot produce ten
+   digits is DROPPED rather than guessed at: an operator keyed on half a number competes against himself,
+   and splitting one man's acres across two rows is the one error a prize table must not make. */
+function oplbMob(v){
+  let s = String(v==null?'':v).trim();
+  // A number-formatted cell arrives as 9876543210.0, or as 9.87654321E9 once the column is wide enough to
+  // provoke it. Both are FORMATTING, not digits, and both have to be resolved before non-digits are
+  // stripped — pulling the digits out of "9876543210.0" yields an eleven-digit string whose last ten are a
+  // different number entirely, which is exactly how one operator's acres end up split across two rows.
+  if(/^\d+(\.\d+)?[eE][+-]?\d+$/.test(s)){ const n=Number(s); if(isFinite(n)) s=n.toFixed(0); }
+  const d = s.replace(/\.\d+$/,'').replace(/\D/g,'');
+  return d.length>=10 ? d.slice(-10) : '';
+}
+const OPLB_MON = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+const oplbPad2 = n => String(n).padStart(2,'0');
+const oplbIso  = (y,m,d) => (m>=1&&m<=12&&d>=1&&d<=31) ? `${y}-${oplbPad2(m)}-${oplbPad2(d)}` : '';
+const oplbYr   = s => { const n=+s; return n<100 ? 2000+n : n; };
+/* → 'YYYY-MM-DD', so a string compare is a date compare (the same trick the day-level product tab uses).
+   Accepts what a hand-kept Indian sheet actually produces: ISO, 14/08/2026, 14-08-26, 14-Aug-2026,
+   "Aug 14, 2026", and gviz's own Date(y,m,d) serialisation of a real date cell.
+   AMBIGUITY RULE: a bare n/n/yyyy is read DD/MM — the convention this workbook is kept in. It can only
+   ever matter for the first twelve days of a month, and MM/DD is detected and honoured wherever the
+   second component proves it (>12). */
+function oplbDate(v){
+  const s=String(v==null?'':v).trim(); if(!s) return '';
+  let m;
+  if((m=s.match(/^Date\((\d{4}),(\d{1,2}),(\d{1,2})\)$/)))                 return oplbIso(+m[1], +m[2]+1, +m[3]);   // gviz month is 0-based
+  if((m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)))                          return oplbIso(+m[1], +m[2], +m[3]);
+  if((m=s.match(/^(\d{1,2})[\/\-.\s]([A-Za-z]{3,})[\/\-.\s]?(\d{2,4})$/))){ const mo=OPLB_MON[m[2].slice(0,3).toLowerCase()]; if(mo) return oplbIso(oplbYr(m[3]), mo, +m[1]); }
+  if((m=s.match(/^([A-Za-z]{3,})[\/\-.\s](\d{1,2}),?\s*(\d{2,4})$/))){      const mo=OPLB_MON[m[1].slice(0,3).toLowerCase()]; if(mo) return oplbIso(oplbYr(m[3]), mo, +m[2]); }
+  if((m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/))){
+    let d=+m[1], mo=+m[2];
+    if(mo>12 && d<=12){ const t=d; d=mo; mo=t; }    // the second component proves MM/DD
+    return oplbIso(oplbYr(m[3]), mo, d);
+  }
+  return '';
+}
+// State arrives as a code or a full name depending on who typed the row; both resolve to the 2-letter code
+// every other view is keyed on. Anything unrecognised stays blank and is filled from the machine sheet.
+const OPLB_ST = {};
+Object.keys(STATE_NAMES).forEach(c=>{ OPLB_ST[c.toLowerCase()]=c; OPLB_ST[STATE_NAMES[c].toLowerCase()]=c; });
+const oplbStCode = s => OPLB_ST[String(s==null?'':s).trim().toLowerCase()] || '';
+
+function oplbBuild(rows){
+  if(!rows.length) throw new Error('operator leaderboard: no rows');
+  const head = rows[0].map(x=>String(x||'').trim());
+  const h = head.map(x=>x.toLowerCase());
+  const find=(...preds)=>{ for(const p of preds){ const i=h.findIndex(p); if(i>=0) return i; } return -1; };
+  const cMob  = find(x=>x.includes('mobile'), x=>x.includes('phone'), x=>x.includes('contact'),
+                     x=>x.includes('number')&&!x.includes('machine'));
+  const cName = find(x=>x.includes('operator')&&!(x.includes('mob')||x.includes('phone')||x.includes('number')||x.includes('contact')),
+                     x=>x==='name', x=>x.includes('name'));
+  const cSt   = find(x=>x==='state', x=>x.includes('state')&&!x.includes('estate'));
+  const cTerr = find(x=>x.includes('territory'), x=>x.includes('district'));
+  const cDate = find(x=>x==='date', x=>x.includes('date'), x=>x==='day');
+  const cAc   = find(x=>x.includes('acre'), x=>x.includes('area'), x=>x.includes('sprayed'));
+
+  /* LAYOUT. A WIDE tab spends its header on dates — one column per day — so two or more date-like headers
+     is the signal. A LONG tab has at most one ("Date"), and carries the day in the cell instead. */
+  const dateCols = head.map((t,i)=>({ i, d:oplbDate(t) })).filter(x=>x.d);
+  const wide = OPLB_LAYOUT==='auto' ? dateCols.length>=2 : OPLB_LAYOUT==='wide';
+  if(cMob<0) throw new Error('operator leaderboard: no mobile-number column in '+JSON.stringify(head));
+
+  const recs=[];
+  if(wide){
+    if(!dateCols.length) throw new Error('operator leaderboard: wide layout with no date columns in '+JSON.stringify(head));
+    for(const r of rows.slice(1)){
+      if(!r) continue;
+      const mob=oplbMob(r[cMob]); if(!mob) continue;
+      const name=cName>=0?txt(r[cName]):'', st=cSt>=0?txt(r[cSt]):'', terr=cTerr>=0?txt(r[cTerr]):'';
+      dateCols.forEach(({i,d})=>{ recs.push({ mob, name, st, terr, d, acres:num(r[i]) }); });
+    }
+  } else {
+    if(cDate<0 || cAc<0) throw new Error('operator leaderboard: no date/acres column in '+JSON.stringify(head));
+    for(const r of rows.slice(1)){
+      if(!r) continue;
+      const mob=oplbMob(r[cMob]); if(!mob) continue;
+      const d=oplbDate(r[cDate]); if(!d) continue;
+      recs.push({ mob, name:cName>=0?txt(r[cName]):'', st:cSt>=0?txt(r[cSt]):'', terr:cTerr>=0?txt(r[cTerr]):'',
+                  d, acres:num(r[cAc]) });
+    }
+  }
+
+  /* DAILY vs CUMULATIVE. A running total never falls; real daily acres fall constantly — a rest day, rain,
+     a breakdown. So "does any operator's series ever go down?" separates the two shapes cleanly, and in the
+     absence of a signal the safer read is daily (differencing a daily column would destroy it, whereas
+     summing a cumulative one is visibly, checkably wrong on screen). Series under three points don't vote:
+     they are consistent with either shape. */
+  const byMob={};
+  recs.forEach(r=>{ (byMob[r.mob]||(byMob[r.mob]=[])).push(r); });
+  const series = m => byMob[m].slice().sort((a,b)=> a.d<b.d?-1 : a.d>b.d?1 : 0);
+  let falls=0, pairs=0, voters=0;
+  Object.keys(byMob).forEach(m=>{ const s=series(m); if(s.length<3) return; voters++;
+    for(let i=1;i<s.length;i++){ pairs++; if(s[i].acres < s[i-1].acres - 1e-9) falls++; } });
+  const detected = (voters>=3 && pairs>0 && falls/pairs < 0.02) ? 'cumulative' : 'daily';
+  const mode = OPLB_MODE==='auto' ? detected : OPLB_MODE;
+  // Differencing runs over the WHOLE series before the contest window is applied, so a tab that starts
+  // before 14 Aug contributes each day's own acres rather than dumping its pre-contest total on day one.
+  if(mode==='cumulative'){
+    Object.keys(byMob).forEach(m=>{ let prev=0;
+      series(m).forEach(r=>{ const c=r.acres; r.acres=Math.max(0, c-prev); prev=c; }); });
+  }
+
+  const out = recs.filter(r=> r.acres>=0 && r.d>=CONTEST.start && r.d<=CONTEST.end);
+  OPLB.rows  = out;
+  OPLB.dates = Array.from(new Set(out.map(r=>r.d))).sort();
+  OPLB.mode  = mode;
+  OPLB.shape = wide ? 'wide' : 'long';
+  OPLB.diag  = { headers:head, shape:OPLB.shape, mode, detected, forcedMode:OPLB_MODE!=='auto',
+                 forcedLayout:OPLB_LAYOUT!=='auto', cols:{ mobile:cMob, name:cName, state:cSt, territory:cTerr, date:cDate, acres:cAc },
+                 dateColumns:dateCols.length, rowsInWindow:out.length, operators:Object.keys(byMob).length,
+                 days:OPLB.dates.length, window:CONTEST.start+'…'+CONTEST.end };
+  // The one line to read if a figure looks wrong: it names every column the parser matched and both
+  // shape decisions, so a mis-read tab is diagnosable without stepping through the build.
+  console.info('[MP-Ops] operator leaderboard →', OPLB.diag);
+  if(!out.length) console.warn('[MP-Ops] operator leaderboard: no rows fell inside', CONTEST.start, '…', CONTEST.end);
+}
+async function loadOplb(){
+  if(OPLB.loading) return; OPLB.loading=true; OPLB.error=false; render();
+  try{
+    const res=await fetch(oplbUrl()); if(!res.ok) throw new Error('HTTP '+res.status);
+    oplbBuild(parseCSV(await res.text()));
+    OPLB.loaded=true; OPLB.at=nowIST();
+  }catch(e){ OPLB.error=true; console.error('operator leaderboard load failed:', e); }
+  finally{ OPLB.loading=false; render(); }
+}
+
+/* ---------------------------------------------------------------------------
+   Standings. Built ONCE per render and handed to both the desktop and phone
+   bodies, because the two must never disagree about who is winning.
+
+   "Yesterday" here means THE LAST DAY THE TAB CARRIES, not the calendar's. A
+   sheet updated this morning and one last touched two days ago must each
+   describe their own movement honestly rather than claim a day of silence was
+   a day of zero acres.
+--------------------------------------------------------------------------- */
+function oplbStandings(){
+  const dates = OPLB.dates;
+  const last  = dates[dates.length-1] || '';
+  const prev  = dates[dates.length-2] || '';
+
+  // Identity fallback: the machine sheet, joined on the same normalised number.
+  const mcBy={};
+  ROWS.forEach(m=>{ const k=oplbMob(m.opNum); if(!k) return; (mcBy[k]||(mcBy[k]=[])).push(m); });
+
+  const by={};
+  OPLB.rows.forEach(r=>{
+    const o = by[r.mob] || (by[r.mob]={ mob:r.mob, names:[], sts:[], terrs:[], day:{}, total:0, prevTotal:0 });
+    o.names.push(r.name); o.sts.push(r.st); o.terrs.push(r.terr);
+    o.day[r.d]=(o.day[r.d]||0)+r.acres;
+    o.total+=r.acres;
+    if(prev && r.d<=prev) o.prevTotal+=r.acres;
+  });
+
+  const ops = Object.keys(by).map(k=>{
+    const o=by[k], mcs=mcBy[k]||[];
+    const name = domStr(o.names) || domStr(mcs.map(m=>m.opName)) || '—';
+    const st   = oplbStCode(domStr(o.sts)) || domStr(mcs.map(m=>m.st)) || '';
+    const terr = domStr(o.terrs) || domStr(mcs.map(m=>m.territory)) || '';
+    return { mob:o.mob, name, st, terr, total:o.total, prevTotal:o.prevTotal, day:o.day,
+             machines: mcs.length, org: domStr(mcs.map(m=>m.org)) || '',
+             yday: o.day[last]||0,
+             toBar: Math.max(0, CONTEST.bar - o.total),
+             past: o.total >= CONTEST.bar,
+             // Last seven days the tab carries, oldest first — the sparkline's series.
+             spark: dates.slice(-7).map(d=>o.day[d]||0) };
+  });
+
+  // Ranking. Acres descending; the name breaks a tie only so the order is STABLE between renders — it is
+  // never presented as a placing. Genuine ties are shown as ties (see `tied`), because a prize table that
+  // silently puts one of two equal operators ahead of the other invents a result the data does not hold.
+  const order = (a,b)=> b.total-a.total || (a.name<b.name?-1:a.name>b.name?1:0);
+  const ranked = ops.slice().sort(order);
+  ranked.forEach((o,i)=>{ o.rank = (i>0 && Math.abs(ranked[i-1].total-o.total)<1e-9) ? ranked[i-1].rank : i+1; });
+
+  // Yesterday's board, rebuilt by dropping the last day. An operator with nothing before it is NEW rather
+  // than "unchanged" — a null delta, not a zero.
+  const prevRanked = ops.filter(o=>o.prevTotal>0).sort((a,b)=> b.prevTotal-a.prevTotal || (a.name<b.name?-1:a.name>b.name?1:0));
+  // Placings are tie-aware on BOTH boards. Ranking today by placing and yesterday by list position would
+  // manufacture a ±1 move out of a tie that simply persisted.
+  const prevRank={};
+  prevRanked.forEach((o,i)=>{ prevRank[o.mob] = (i>0 && Math.abs(prevRanked[i-1].prevTotal-o.prevTotal)<1e-9)
+    ? prevRank[prevRanked[i-1].mob] : i+1; });
+  ranked.forEach(o=>{ const p=prevRank[o.mob];
+    o.prevRank = p||null;
+    o.delta = p ? (p - o.rank) : null;      // positive = climbed
+    o.isNew = !p; });
+
+  // Per-state boards, ranked the same way inside each state.
+  const states={};
+  ranked.forEach(o=>{ if(!o.st) return; (states[o.st]||(states[o.st]=[])).push(o); });
+  Object.keys(states).forEach(st=>{
+    const list=states[st];
+    list.forEach((o,i)=>{ o.stRank = (i>0 && Math.abs(list[i-1].total-o.total)<1e-9) ? list[i-1].stRank : i+1; });
+    // …and yesterday's placing INSIDE the state. A state prize is won on the state's board, so movement
+    // toward it has to be measured there: an operator can climb two places in his state on a day he did not
+    // move nationally at all, and the podium he is chasing is the one that has to be able to say so.
+    const pv=list.filter(o=>o.prevTotal>0).sort((a,b)=> b.prevTotal-a.prevTotal || (a.name<b.name?-1:a.name>b.name?1:0));
+    const pr={}; pv.forEach((o,i)=>{ pr[o.mob] = (i>0 && Math.abs(pv[i-1].prevTotal-o.prevTotal)<1e-9) ? pr[pv[i-1].mob] : i+1; });
+    list.forEach(o=>{ o.stPrevRank=pr[o.mob]||null; o.stDelta=pr[o.mob]?(pr[o.mob]-o.stRank):null; o.stIsNew=!pr[o.mob]; });
+  });
+
+  return { ops:ranked, states, last, prev, dates,
+           india: ranked[0]||null,
+           // Everyone sharing the top total — normally one person, but the board must be able to say so
+           // when it is not.
+           indiaTied: ranked.filter(o=>ranked[0] && Math.abs(o.total-ranked[0].total)<1e-9) };
+}
+
 /* ============================= derived ============================= */
 // Global Yesterday/Today toggle (state.day = 'yday' | 'today', default 'yday'). acD(m) is the single accessor
 // for "acres on the selected day": it swaps the sheet's "Acres yesterday" (col L) for "Today acres" (col AH)
@@ -1058,7 +1300,7 @@ function roleHidesView(view){
 }
 // Views that render their OWN controls and so drop the shared machine filter bar + KPI strip (desktop) and the
 // weather banner + KPI cards (mobile): the standalone rollup/insight pages.
-const CHROMELESS = new Set(['insights','snake','product','recap','mpprod']);
+const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader']);
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
@@ -1801,28 +2043,7 @@ function vals(){
       dotStyle:{width:'9px',height:'9px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
       acresLabel: acD(m)>0? fmt(acD(m))+' ac' : (m.breakdown?'down':'idle') }; });
 
-  // Leaderboard — aggregate filtered machines by Cluster Officer and by Operator
-  const lbScope = S.lbScope==='yday' ? 'yday' : 'total';
-  const sortKey = lbScope==='yday' ? 'acresY' : 'achieved';
-  const coAgg={};
-  F.forEach(m=>{ const nm=(m.co||'').trim(); if(!nm) return; const k=nm.toLowerCase();
-    const o=coAgg[k] || (coAgg[k]={names:[],ams:[],machines:0,achieved:0,target:0,acresY:0,opMapped:0});
-    o.names.push(m.co); o.ams.push(m.am); o.machines++; o.achieved+=m.achieved; o.target+=m.target; o.acresY+=acD(m);
-    if(m.opName&&m.opNum&&m.opNum!=='0') o.opMapped++; });
-  const coLeaders = Object.values(coAgg).map(o=>{ const val=o[sortKey];
-    return { name:domStr(o.names), am:domStr(o.ams), machines:o.machines, achieved:o.achieved, target:o.target, acresY:o.acresY,
-      opMapped:o.opMapped, perMc:o.machines? val/o.machines : 0, pct:o.target? o.achieved/o.target : 0, val }; })
-    .sort((a,b)=>b.val-a.val).slice(0,10);
-  const opAgg={};
-  F.forEach(m=>{ const nm=(m.opName||'').trim(); if(!nm) return; const k=nm.toLowerCase()+'|'+(m.opNum||'').trim();
-    const o=opAgg[k] || (opAgg[k]={names:[],num:m.opNum,cos:[],terrs:[],machines:0,achieved:0,target:0,acresY:0});
-    o.names.push(m.opName); o.machines++; o.achieved+=m.achieved; o.target+=m.target; o.acresY+=acD(m); o.cos.push(m.co); o.terrs.push(m.territory); });
-  const opLeaders = Object.values(opAgg).map(o=>{ const val=o[sortKey];
-    return { name:domStr(o.names), num:o.num, co:domStr(o.cos), terr:domStr(o.terrs), machines:o.machines,
-      achieved:o.achieved, target:o.target, acresY:o.acresY, pct:o.target? o.achieved/o.target : 0, val }; })
-    .sort((a,b)=>b.val-a.val).slice(0,20);
-
-  return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, rows, terrTable, wetTerr, amRows, bmRows, pendRows, pendCount:pendAll.length, machineTable, mobileList, d, lbScope, wxDay:wxDayIdx(S.wxDay), coLeaders, opLeaders,
+  return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, rows, terrTable, wetTerr, amRows, bmRows, pendRows, pendCount:pendAll.length, machineTable, mobileList, d, wxDay:wxDayIdx(S.wxDay),
     multiState, stOptions, stName:(S.st?(STATE_NAMES[S.st]||S.st):''), canSwitchStates:gateCanSwitchStates(),
     scopeLabel:(S.st ? S.st : (multiState ? 'India' : (allStates[0]||'MP'))),  // header/title scope: state code when scoped, 'India' for multi-state all-India, sole state when single-state
     anyFilter, amCount:amKeys.length, bmCount:bmKeys.length, pinCount:F.length, mListCount:F.length, mListShown:mobileList.length,
@@ -5594,66 +5815,236 @@ function pendViewHTML(v){
     </div>
   </section>`;
 }
-function leaderViewHTML(v){
-  const yday = v.lbScope==='yday';
-  const sub = (yday?'by acres sprayed '+dayWord().toLowerCase():'by total acres achieved') + (v.anyFilter?' · filtered':'');
-  const seg2 = on => css({...seg(on),padding:'6px 14px'});
-  const toggle = `<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
-      <button data-act="lbscope" data-scope="total" style="${seg2(!yday)}">Total · so far</button>
-      <button data-act="lbscope" data-scope="yday" style="${seg2(yday)}">${dayWord()}</button>
-    </div>`;
+/* ===================== Leaders — the operator contest =====================
+   ONE page over the operator-leaderboard tab, replacing the old cluster-officer / operator ranking that
+   was derived from the machine sheet. The two could not have coexisted honestly: that board ranked by
+   season achieved-acres off a tab with no history, this one ranks by acres inside a dated 18-day window,
+   and showing both under one "Leaderboard" heading would have put two different answers to "who is
+   winning" on one screen.
+
+   It is CHROMELESS — it renders its own scope control and drops the machine filter bar, because none of
+   those filters reach this tab. A Territory or Health filter that visibly changed nothing would be worse
+   than no filter at all, and one that silently DID change a prize table would be worse still.
+
+   TONE: the page never reports an absence. Below the bar an operator is a distance from it, not a
+   failure to reach it, and a board with nobody past 300 acres still has a leader — so every empty-ish
+   state is phrased as standing and distance. This is a live contest people are reading about
+   themselves. */
+function leaderBodyHTML(mob){
+  const card = inner => `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">${inner}</div>`;
+  const cHead = (t,sub) => `<div style="padding:13px 16px;border-bottom:1px solid #EFEDE7"><div style="font-size:13px;font-weight:700">${t}</div>${sub?`<div style="font-size:11px;color:#9C988F;margin-top:2px">${sub}</div>`:''}</div>`;
+
+  if(!OPLB.loaded){
+    if(!OPLB.loading && !OPLB.error) setTimeout(loadOplb,0);
+    const msg = OPLB.error ? 'Could not load the operator leaderboard tab.' : 'Loading the operator leaderboard…';
+    return `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:60px 20px;text-align:center;color:#9C988F;font-size:13px">
+      ${OPLB.error?'⚠ ':''}${msg}${OPLB.error?`<div style="margin-top:14px"><button data-act="oplbretry" style="padding:8px 16px;border:1px solid #E9E6DF;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Retry</button></div>`:''}</div>`;
+  }
+
+  const S=state, A=oplbStandings();
+  // Scope: the gate's state LOCK wins outright, exactly as on Insights — a state-locked login can never
+  // widen its board through this page's own picker. The national topper is the one deliberate exception
+  // and is shown to everybody: it is a single named prize the whole programme is competing for.
+  const lock = gateDefaultState();
+  const pick = (S.lbSt && gateAllowsState(S.lbSt)) ? S.lbSt : '';
+  const gst  = lock || pick;
+  const scopeName = gst ? (STATE_NAMES[gst]||gst) : 'All India';
+
+  const inScope = gst ? A.ops.filter(o=>o.st===gst) : A.ops;
+  /* Placing and movement are always read on the BOARD THE READER IS LOOKING AT — the national one at All
+     India, the state's own once scoped. A state podium sitting above a table of national ranks was the one
+     thing that made the scoped page hard to read: the same operator appeared as 1st and as 3rd on one
+     screen, both correct, neither explained. */
+  const rankOf  = o => gst ? o.stRank  : o.rank;
+  const moveOf  = o => gst ? { delta:o.stDelta, isNew:o.stIsNew } : { delta:o.delta, isNew:o.isNew };
+  const shown   = S.lbAll ? inScope : inScope.slice(0,25);
+
+  /* ---- window ---- */
+  const dayNo = d => d ? Math.round((Date.parse(d+'T00:00:00Z') - Date.parse(CONTEST.start+'T00:00:00Z'))/864e5)+1 : 0;
+  const totalDays = dayNo(CONTEST.end);
+  const elapsed   = Math.max(0, Math.min(totalDays, dayNo(A.last)));
+  const pretty = d => { if(!d) return '—'; const [y,m,dd]=d.split('-');
+    return `${+dd} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]}`; };
+  const windowLine = `${pretty(CONTEST.start)} – ${pretty(CONTEST.end)} ${CONTEST.end.slice(0,4)} · through ${pretty(A.last)} · day ${elapsed} of ${totalDays}`;
+
+  /* ---- shared row furniture ---- */
   const medal=['#E0A93B','#AEB4BC','#C68A52'];
-  const rankChip = i => `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;background:${i<3?medal[i]:'#F2F0EB'};color:${i<3?'#fff':'#807c73'};font-size:11px;font-weight:700;font-family:'IBM Plex Mono'">${i+1}</span>`;
-  const metricHead = yday ? 'Acres '+dayShort() : 'Achieved / target';
-  const metricCell = o => yday
-    ? `<div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700;text-align:right">${fmt(o.acresY)}<span style="font-size:10px;color:#9C988F;font-weight:500"> ac</span></div>`
+  const rankChip = r => `<span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;flex-shrink:0;background:${r<=3?medal[r-1]:'#F2F0EB'};color:${r<=3?'#fff':'#807c73'};font-size:11.5px;font-weight:700;font-family:'IBM Plex Mono'">${r}</span>`;
+  // Movement since yesterday's board. NEW is its own state, not a zero — an operator who was not ranked
+  // yesterday has not "held position".
+  const deltaChip = o => o.isNew
+    ? `<span style="display:inline-flex;align-items:center;padding:1px 6px;border-radius:5px;font-size:9.5px;font-weight:700;background:${C.softB};color:${C.openD}">NEW</span>`
+    : o.delta>0 ? `<span style="display:inline-flex;align-items:center;gap:2px;padding:1px 6px;border-radius:5px;font-size:10px;font-weight:700;background:${C.softG};color:${C.greenD}">▲${o.delta}</span>`
+    : o.delta<0 ? `<span style="display:inline-flex;align-items:center;gap:2px;padding:1px 6px;border-radius:5px;font-size:10px;font-weight:700;background:${C.softR};color:${C.brk}">▼${-o.delta}</span>`
+    : `<span style="display:inline-flex;align-items:center;padding:1px 6px;border-radius:5px;font-size:10px;font-weight:600;background:#F2F0EB;color:#9C988F">—</span>`;
+  /* Seven-day sparkline, oldest bar first, each bar scaled against the operator's OWN best day. It answers
+     "is he speeding up or coasting", which is a shape question — scaling it against the board's best day
+     would flatten every operator but the leader into an unreadable line. */
+  const spark = o => { const s=o.spark||[], mx=Math.max(...s,0);
+    if(!s.length || mx<=0) return `<span style="font-size:10px;color:#C9C4BA">no acres in the last 7 days</span>`;
+    const w=7, gap=2, bw=6, h=22;
+    return `<svg width="${s.length*(bw+gap)}" height="${h}" viewBox="0 0 ${s.length*(bw+gap)} ${h}" style="display:block">
+      ${s.map((v,i)=>{ const bh=Math.max(v>0?2:1, Math.round((v/mx)*h));
+        return `<rect x="${i*(bw+gap)}" y="${h-bh}" width="${bw}" height="${bh}" rx="1.5" fill="${v>0?(i===s.length-1?C.ink:'#C9C4BA'):'#EFEDE7'}"><title>${pretty(A.dates.slice(-7)[i])} · ${fmt(v)} ac</title></rect>`; }).join('')}
+    </svg>`; };
+  /* Distance to the incentive bar. Past it, the row states by how much; short of it, how far there is to
+     go — never that the operator has not made it. */
+  const barCell = o => o.past
+    ? `<div style="display:flex;align-items:center;gap:7px;justify-content:flex-end"><span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;background:${C.softG};color:${C.greenD}">PAST 300</span><span style="font-family:'IBM Plex Mono';font-size:11px;color:#6E6A62">+${fmt(o.total-CONTEST.bar)}</span></div>`
     : `<div style="text-align:right">
-        <div style="display:flex;align-items:baseline;justify-content:flex-end;gap:6px"><span style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${fmt(o.achieved)}</span><span style="font-size:10.5px;color:#9C988F">/ ${fmt(o.target)}</span></div>
-        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:3px"><div style="width:66px;height:5px;border-radius:3px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${Math.min(100,Math.round(o.pct*100))}%;background:${C.act}"></span></div><span style="font-size:10px;color:#6E6A62;font-family:'IBM Plex Mono'">${Math.round(o.pct*100)}%</span></div>
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:7px"><div style="width:${mob?'56px':'74px'};height:5px;border-radius:3px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${Math.min(100,Math.round(o.total/CONTEST.bar*100))}%;background:${C.orange}"></span></div></div>
+        <div style="font-size:10px;color:#9C988F;margin-top:3px;font-family:'IBM Plex Mono'">${fmt(o.toBar)} ac to go</div>
       </div>`;
-  const coGrid='grid-template-columns:40px 1fr 86px 124px 116px 178px;gap:14px';
-  const opGrid='grid-template-columns:40px 1fr 86px 178px;gap:14px';
-  const card=(title,subtitle,inner)=>`<div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
-      <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;display:flex;align-items:baseline;gap:9px"><div style="font-size:13px;font-weight:700">${title}</div><div style="font-size:11px;color:#9C988F">${subtitle}</div></div>
-      ${inner}</div>`;
-  const empty = `<div style="padding:26px 18px;font-size:12px;color:#9C988F;text-align:center">No data for the current filters.</div>`;
 
-  const coInner = !v.coLeaders.length ? empty : `<div style="overflow-x:auto"><div style="min-width:760px">
-      <div style="display:grid;${coGrid};padding:10px 18px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
-        <div style="text-align:center">#</div><div>Cluster Officer</div><div style="text-align:right">Machines</div><div style="text-align:right">Operators mapped</div><div style="text-align:right">Avg / machine</div><div style="text-align:right">${metricHead}</div>
+  /* ---- controls ---- */
+  const canPick = !lock && gateCanSwitchStates();
+  const stSel = canPick ? `<div style="display:flex;align-items:center;gap:7px">
+      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Scope</span>
+      <div style="position:relative"><select id="lbStateSel" style="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none">${
+        optionsHTML([{v:'',t:'All India'},...INS_STATES.filter(gateAllowsState).map(c=>({v:c,t:STATE_NAMES[c]}))], gst)
+      }</select>${I.caret}</div></div>` : '';
+  const header = `<div style="display:flex;align-items:${mob?'flex-start':'center'};gap:${mob?'9px':'14px'};flex-wrap:wrap">
+      <div style="min-width:0">
+        <div style="font-size:${mob?'14px':'15px'};font-weight:700">Operator contest</div>
+        <div style="font-size:11px;color:#9C988F;margin-top:2px">${E(windowLine)}</div>
       </div>
-      ${v.coLeaders.map((o,i)=>`<div style="display:grid;${coGrid};padding:11px 18px;border-bottom:1px solid #F4F2EE;align-items:center">
-        <div style="text-align:center">${rankChip(i)}</div>
-        <div style="min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</div><div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">AM · ${E(o.am||'—')}</div></div>
-        <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${o.machines}</div>
-        <div style="text-align:right"><span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;color:${o.opMapped===o.machines?C.greenD:'#6E6A62'}">${o.opMapped}/${o.machines}</span></div>
-        <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right;color:#3A6FA0">${o.perMc.toFixed(1)}<span style="font-size:9.5px;color:#9C988F;font-weight:500"> ac</span></div>
-        <div>${metricCell(o)}</div>
-      </div>`).join('')}
-    </div></div>`;
+      <div style="flex:1"></div>${stSel}
+      <span style="font-size:10.5px;color:#9C988F">Leaderboard tab · ${OPLB.at||'—'} <button data-act="oplbretry" title="Reload" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>
+    </div>`;
 
-  const opInner = !v.opLeaders.length ? empty : `<div style="overflow-x:auto"><div style="min-width:560px">
-      <div style="display:grid;${opGrid};padding:10px 18px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
-        <div style="text-align:center">#</div><div>Operator</div><div style="text-align:right">Machines</div><div style="text-align:right">${metricHead}</div>
+  /* ---- the national prize: one operator, shown to every login regardless of state scope ---- */
+  const champ = A.india;
+  const heroInner = !champ
+    ? `<div style="padding:26px 18px;text-align:center;color:#9C988F;font-size:12.5px">The national standing opens with the contest's first day of acres.</div>`
+    : `<div style="display:flex;align-items:center;gap:${mob?'12px':'18px'};padding:${mob?'16px':'20px 22px'};flex-wrap:wrap">
+        <div style="width:${mob?'44px':'54px'};height:${mob?'44px':'54px'};border-radius:14px;background:linear-gradient(140deg,#E0A93B,#C68A52);color:#fff;display:flex;align-items:center;justify-content:center;font-size:${mob?'20px':'25px'};flex-shrink:0">🏆</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase">Leading all India${A.indiaTied.length>1?` · ${A.indiaTied.length} level`:''}</div>
+          <div style="font-size:${mob?'17px':'20px'};font-weight:700;letter-spacing:-.01em;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(A.indiaTied.length>1 ? A.indiaTied.map(o=>o.name).join(' · ') : champ.name)}</div>
+          <div style="font-size:11.5px;color:#9C988F;margin-top:2px"><span style="font-family:'IBM Plex Mono'">${E(champ.mob)}</span>${champ.st?` · ${E(STATE_NAMES[champ.st]||champ.st)}`:''}${champ.terr?` · ${E(champ.terr)}`:''}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:'IBM Plex Mono';font-size:${mob?'22px':'26px'};font-weight:700;line-height:1">${fmt(champ.total)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> ac</span></div>
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-top:5px">${deltaChip(champ)}<span style="font-size:10.5px;color:#9C988F;font-family:'IBM Plex Mono'">+${fmt(champ.yday)} ac ${pretty(A.last)}</span></div>
+        </div>
+      </div>`;
+
+  /* ---- stat band ---- */
+  const pastCount = inScope.filter(o=>o.past).length;
+  const leader    = inScope[0];
+  const totalAc   = inScope.reduce((a,o)=>a+o.total,0);
+  const ranAc     = inScope.reduce((a,o)=>a+o.yday,0);
+  // The bar tile reads as a distance whenever nobody has crossed yet, so the page states where the front
+  // of the race is rather than that the prize is unclaimed.
+  const barSub = pastCount
+    ? `of ${fmt(inScope.length)} operators${pastCount===1?'':''}`
+    : (leader ? `leader at ${fmt(leader.total)} ac · ${fmt(leader.toBar)} to go` : 'the contest is open');
+  const stat=(i,val,lab,sub,ink)=>{
+    const edge = mob ? `${i%2===0?'border-right:1px solid #EFEDE7;':''}${i<2?'border-bottom:1px solid #EFEDE7;':''}`
+                     : (i<3?'border-right:1px solid #EFEDE7;':'');
+    return `<div style="min-width:0;padding:13px 16px;${edge}">
+      <div style="font-family:'IBM Plex Mono';font-size:${mob?'17px':'20px'};font-weight:700;color:${ink||C.ink}">${val}</div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">${lab}</div>
+      ${sub?`<div style="font-size:10px;color:#B6B1A8;margin-top:3px">${E(sub)}</div>`:''}</div>`; };
+  const ac = n => fmt(n)+'<span style="font-size:11px;color:#B6B1A8;font-weight:500"> ac</span>';
+  const stats=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;display:grid;grid-template-columns:${mob?'1fr 1fr':'repeat(4,1fr)'}">
+      ${stat(0, fmt(pastCount), 'Past the 300 ac bar', barSub, pastCount?C.greenD:C.ink)}
+      ${stat(1, fmt(inScope.length), 'Operators on the board', gst ? `${fmt(A.ops.length)} all India` : `across ${fmt(Object.keys(A.states).length)} states`)}
+      ${stat(2, ac(totalAc), 'Contest acres', `${elapsed} of ${totalDays} days run`)}
+      ${stat(3, ac(ranAc), 'On '+pretty(A.last), `${fmt(inScope.filter(o=>o.yday>0).length)} operators ran`)}
+    </div>`;
+
+  /* ---- state podiums: three prizes per state ---- */
+  const podStates = (gst ? [gst] : Object.keys(A.states).filter(gateAllowsState))
+    .filter(st=>A.states[st] && A.states[st].length)
+    .sort((a,b)=> A.states[b].reduce((x,o)=>x+o.total,0) - A.states[a].reduce((x,o)=>x+o.total,0));
+  // A state's podium is every operator holding a top-three PLACING, so a tie shows both names rather than
+  // the board picking a winner the acres do not.
+  const podium = st => { const list=A.states[st].filter(o=>o.stRank<=CONTEST.topPerState);
+    return `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;flex:1 1 ${mob?'100%':'320px'};min-width:0">
+      <div style="padding:11px 15px;border-bottom:1px solid #EFEDE7;display:flex;align-items:baseline;gap:8px">
+        <div style="font-size:12.5px;font-weight:700">${E(STATE_NAMES[st]||st)}</div>
+        <div style="font-size:10.5px;color:#9C988F">${fmt(A.states[st].length)} operators</div>
       </div>
-      ${v.opLeaders.map((o,i)=>`<div style="display:grid;${opGrid};padding:11px 18px;border-bottom:1px solid #F4F2EE;align-items:center">
-        <div style="text-align:center">${rankChip(i)}</div>
-        <div style="min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</div><div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-family:'IBM Plex Mono'">${E(o.num||'—')}</span> · ${E(o.co||'—')} · ${E(o.terr||'—')}</div></div>
-        <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${o.machines}</div>
-        <div>${metricCell(o)}</div>
+      ${list.map((o,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 15px;${i<list.length-1?'border-bottom:1px solid #F4F2EE':''}">
+        ${rankChip(o.stRank)}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</div>
+          <div style="font-size:10px;color:#9C988F;font-family:'IBM Plex Mono';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.mob)}${o.terr?` · ${E(o.terr)}`:''}</div>
+        </div>
+        ${deltaChip({delta:o.stDelta, isNew:o.stIsNew})}
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${fmt(o.total)}<span style="font-size:9.5px;color:#9C988F;font-weight:500"> ac</span></div>
+          <div style="font-size:9.5px;color:${o.past?C.greenD:'#9C988F'};margin-top:2px">${o.past?'past 300':fmt(o.toBar)+' to go'}</div>
+        </div>
       </div>`).join('')}
-    </div></div>`;
+    </div>`; };
+  const podiums = podStates.length
+    ? `<div style="display:flex;gap:14px;flex-wrap:wrap">${podStates.map(podium).join('')}</div>`
+    : card(cHead('State podiums','Top three in each state')+`<div style="padding:26px 18px;text-align:center;color:#9C988F;font-size:12.5px">State podiums fill in as the tab's rows carry a state.</div>`);
 
+  /* ---- the standings ---- */
+  const grid = mob ? '' : 'grid-template-columns:52px 1fr 96px 132px 84px 74px;gap:12px';
+  const rows = shown.map(o=>mob
+    ? `<div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 12px;margin-bottom:8px">
+        ${rankChip(rankOf(o))}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</div>
+          <div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-family:'IBM Plex Mono'">${E(o.mob)}</span>${o.st?` · ${E(o.st)}`:''}</div>
+          <div style="display:flex;align-items:center;gap:7px;margin-top:5px">${deltaChip(moveOf(o))}<span style="font-size:10px;color:#9C988F;font-family:'IBM Plex Mono'">+${fmt(o.yday)} ac</span></div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${fmt(o.total)}<span style="font-size:9.5px;color:#9C988F;font-weight:500"> ac</span></div>
+          <div style="font-size:9.5px;color:${o.past?C.greenD:'#9C988F'};margin-top:2px">${o.past?'past 300':fmt(o.toBar)+' to go'}</div>
+          <div style="margin-top:5px;display:flex;justify-content:flex-end">${spark(o)}</div>
+        </div>
+      </div>`
+    : `<div style="display:grid;${grid};padding:11px 16px;border-bottom:1px solid #F4F2EE;align-items:center">
+        <div style="display:flex;align-items:center;gap:6px">${rankChip(rankOf(o))}</div>
+        <div style="min-width:0">
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</div>
+          <div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-family:'IBM Plex Mono'">${E(o.mob)}</span>${o.st?` · ${E(STATE_NAMES[o.st]||o.st)}`:''}${o.terr?` · ${E(o.terr)}`:''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">${deltaChip(moveOf(o))}</div>
+        <div>${barCell(o)}</div>
+        <div style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right;color:${o.yday>0?C.ink:'#C9C4BA'}">${fmt(o.yday)}</div>
+        <div style="display:flex;justify-content:flex-end">${spark(o)}</div>
+      </div>`).join('');
+
+  const headRow = mob ? '' : `<div style="display:grid;${grid};padding:10px 16px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
+      <div>#</div><div>Operator</div><div>Since y'day</div><div style="text-align:right">Toward 300 ac</div><div style="text-align:right">${E(pretty(A.last))}</div><div style="text-align:right">7 days</div>
+    </div>`;
+  const more = inScope.length>shown.length || S.lbAll
+    ? `<div style="padding:12px 16px;text-align:center;border-top:1px solid #F4F2EE"><button data-act="lball" style="border:1px solid #E9E6DF;border-radius:9px;background:#fff;color:#6E6A62;font-size:12px;font-weight:600;padding:8px 16px;cursor:pointer">${S.lbAll?`Show the top 25`:`Show all ${fmt(inScope.length)} operators`}</button></div>`
+    : '';
+  const standingsInner = shown.length
+    ? (mob ? rows : `<div style="overflow-x:auto"><div style="min-width:720px">${headRow}${rows}</div></div>${more}`)
+    : `<div style="padding:26px 18px;text-align:center;color:#9C988F;font-size:12.5px">${gst?`${E(scopeName)}'s board opens with its first operator's acres.`:`The board opens with the contest's first day of acres.`}</div>`;
+
+  const standingsSub = `Ranked ${gst?`within ${scopeName}`:'all India'} on acres from ${pretty(CONTEST.start)} · movement against ${A.prev?pretty(A.prev):'the previous day'}`;
+
+  if(mob){
+    return `${header}
+      <div style="height:12px"></div>
+      ${card(heroInner)}
+      <div style="height:12px"></div>
+      ${stats}
+      <div style="height:14px"></div>
+      ${mSectionTitle('State podiums','Top three in each state')}${podiums}
+      <div style="height:14px"></div>
+      ${mSectionTitle('Standings', standingsSub)}
+      ${standingsInner}
+      ${more}`;
+  }
   return `<section style="padding:18px 22px;display:flex;flex-direction:column;gap:16px">
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-      <div style="font-size:15px;font-weight:700">Leaderboard</div>
-      <div style="font-size:11.5px;color:#9C988F">${sub}</div>
-      <div style="flex:1"></div>${toggle}
-    </div>
-    ${card('Top cluster officers','Top 10 · '+sub, coInner)}
-    ${card('Top operators','Top 20 · '+sub, opInner)}
+    ${header}
+    ${card(heroInner)}
+    ${stats}
+    ${podiums}
+    ${card(cHead('Standings', standingsSub)+standingsInner)}
   </section>`;
 }
+function leaderViewHTML(){ return leaderBodyHTML(false); }
 // Escalation contact row — shared by desktop drawer + mobile sheet. Optional roles hide when blank.
 function escRowHTML(label,name,mob,tel,phoneIcon,extra,optional){
   const hasName=name&&String(name).trim(), hasMob=mob&&String(mob).trim();
@@ -5739,7 +6130,7 @@ function contentHTML(v){
     case 'am': return amViewHTML(v);
     case 'bm': return bmViewHTML(v);
     case 'pending': return pendViewHTML(v);
-    case 'leader': return leaderViewHTML(v);
+    case 'leader': return leaderViewHTML();
     case 'snake': return snakeViewHTML(v);
     case 'product': return productViewHTML(v);
     case 'mpprod': return mpprodViewHTML(v);
@@ -5975,28 +6366,7 @@ function mobileHTML(v){
          + (v.pendRows.length ? v.pendRows.map(r=>mHierCardHTML(r,{pending:true})).join('')
                               : mEmpty('No pending machines in this scope. MP, Punjab, Haryana & Rajasthan have no pending list (all rows show as deployed).'));
   } else if(S.view==='leader'){
-    const yday=v.lbScope==='yday';
-    const medal=['#E0A93B','#AEB4BC','#C68A52'];
-    const rank=i=>`<span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;flex-shrink:0;background:${i<3?medal[i]:'#F2F0EB'};color:${i<3?'#fff':'#807c73'};font-size:11.5px;font-weight:700;font-family:'IBM Plex Mono'">${i+1}</span>`;
-    const metric=o=>yday
-      ? `<div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700;white-space:nowrap">${fmt(o.acresY)}<span style="font-size:9.5px;color:#9C988F;font-weight:500"> ac</span></div>`
-      : `<div style="text-align:right"><div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700;white-space:nowrap">${fmt(o.achieved)}<span style="font-size:10px;color:#9C988F;font-weight:500"> / ${fmt(o.target)}</span></div>
-         <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-top:3px"><div style="width:54px;height:5px;border-radius:3px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${Math.min(100,Math.round(o.pct*100))}%;background:${C.act}"></span></div><span style="font-size:10px;color:#6E6A62;font-family:'IBM Plex Mono'">${Math.round(o.pct*100)}%</span></div></div>`;
-    const row=(o,i,sub)=>`<div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 12px;margin-bottom:8px">
-        ${rank(i)}
-        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</div>
-        <div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div></div>
-        ${metric(o)}
-      </div>`;
-    body=`<div style="display:flex;background:#EDEAE3;border-radius:11px;padding:3px;gap:2px;margin-bottom:14px">
-        <button data-act="lbscope" data-scope="total" style="${css(segM(!yday,ph))}">Total · so far</button>
-        <button data-act="lbscope" data-scope="yday" style="${css(segM(yday,ph))}">${dayWord()}</button>
-      </div>
-      ${mSectionTitle('Top cluster officers','Top 10 · '+(yday?'by acres '+dayWord().toLowerCase():'by total acres achieved'))}
-      ${v.coLeaders.length ? v.coLeaders.map((o,i)=>row(o,i,`${o.machines} mc · ${o.opMapped}/${o.machines} mapped · AM ${E(o.am||'—')}`)).join('') : mEmpty('No data for the current filters.')}
-      <div style="height:8px"></div>
-      ${mSectionTitle('Top operators','Top 20 · '+(yday?'by acres '+dayWord().toLowerCase():'by total acres achieved'))}
-      ${v.opLeaders.length ? v.opLeaders.map((o,i)=>row(o,i,`${o.machines} mc · ${E(o.co||'—')} · ${E(o.terr||'—')}`)).join('') : mEmpty('No data for the current filters.')}`;
+    body = leaderBodyHTML(true);
   } else if(S.view==='insights'){
     body = insightsBodyHTML(true);
   } else if(S.view==='snake'){
@@ -6176,6 +6546,7 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='snToSel'){ const t=snakeDateToOff(e.target.value); if(t!=null) setState({snTo:t, snFrom:Math.min(t,state.snFrom)}); }
   else if(e.target.id==='pmStateSel') setState({pmState:e.target.value});
   else if(e.target.id==='mpTerrSel') setState({mpTerr:e.target.value});
+  else if(e.target.id==='lbStateSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({lbSt:w, lbAll:false}); }   // page-local; never touches state.st
   else if(e.target.id==='insStateSel') setState({insSt:e.target.value, insAm:'', insCo:''});   // page-local; never touches state.st
   // Changing the AM drops the officer with it — the old officer almost certainly reports to somebody else.
   else if(e.target.id==='insAmSel') setState({insAm:e.target.value, insCo:''});
@@ -6198,7 +6569,8 @@ app.addEventListener('click', e=>{
     case 'org': { const want=el.dataset.org; if(gateAllows(want)){ setState({org:want, bm:'', tm:''}); } else { gateShow(()=>setState({org: gateAllows(want)?want:gateDefaultOrg(), bm:'', tm:''}), `Enter PIN for ${want} access`, true); } break; }
     case 'metric': setState({metric:el.dataset.metric}); break;
     case 'day': { const d=el.dataset.day==='today'?'today':'yday'; setState({day:d}); track('day_scope',{day:d}); break; }
-    case 'lbscope': setState({lbScope:el.dataset.scope}); break;
+    case 'lball': setState(s=>({lbAll:!s.lbAll})); break;
+    case 'oplbretry': OPLB.loaded=false; OPLB.error=false; loadOplb(); break;
     case 'wxday': setState({wxDay:wxDayIdx(+el.dataset.day||0)}); track('weather_day',{day:wxDayLabel(wxDayIdx(+el.dataset.day||0))}); break;
     case 'pinmode': setState({pinMode:el.dataset.mode}); break;
     case 'health': { const h=el.dataset.h; setState(s=>({health: s.health.includes(h)? s.health.filter(x=>x!==h) : [...s.health,h]})); break; }
