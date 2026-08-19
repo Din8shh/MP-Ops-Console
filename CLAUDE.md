@@ -273,6 +273,16 @@ decisions, plus each matched column index, is logged on load as `[MP-Ops] operat
 **Read that console line first if a figure looks wrong.** `OPLB_LAYOUT` / `OPLB_MODE` force either decision
 if a sheet change ever fools the detector.
 
+**The state podium rows carry the national placing too, and the asymmetry in how the two are labelled is
+the point.** The medal chip is the placing WITHIN that state — the card header already names the state, so
+it inherits its scope from the card it sits in. The grey `#5 India` badge beside the name is the national
+one and says so. A number that carries its own scope can sit next to one that inherits it; two bare numbers
+cannot, which is exactly the failure recorded in the paragraph below. The badge is `opRankChip`, the same
+one the drawer and the machine tables use, so an operator reads identically wherever he appears. The rows
+also carry the standings table's 7-day sparkline, scaled to the operator's own best day: the podium says
+who is ahead, the sparkline says whether he is pulling away, and it stacks under the acres rather than
+competing for width because these cards go three to a row.
+
 **Placing and movement are always read on the board in front of the reader** — the national one at All India,
 the state's own once scoped. Each operator therefore carries two placings (`rank`/`stRank`) and two movements
 (`delta`/`stDelta`), and the view picks the pair. Mixing them is what made an early build unreadable: the same

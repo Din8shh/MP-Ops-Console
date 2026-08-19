@@ -6093,8 +6093,21 @@ function leaderBodyHTML(mob){
   const podStates = (gst ? [gst] : Object.keys(A.states).filter(gateAllowsState))
     .filter(st=>A.states[st] && A.states[st].length)
     .sort((a,b)=> A.states[b].reduce((x,o)=>x+o.total,0) - A.states[a].reduce((x,o)=>x+o.total,0));
-  // A state's podium is every operator holding a top-three PLACING, so a tie shows both names rather than
-  // the board picking a winner the acres do not.
+  /* A state's podium is every operator holding a top-three PLACING, so a tie shows both names rather than
+     the board picking a winner the acres do not.
+
+     TWO PLACINGS SIT ON EACH OF THESE ROWS, and only one of them is labelled — deliberately. The medal
+     chip is the placing WITHIN this state, which the card header already names; the grey `#5 India` badge
+     is the national one, and it says so. That asymmetry is the whole reason this is readable: an early
+     build put a state placing and a national placing on one screen as two bare numbers, and the same
+     operator reading as 1st above and 3rd below was correct both times and explicable neither. A number
+     that carries its own scope can sit beside one that inherits it from the card it is in; two bare
+     numbers cannot. The badge is `opRankChip`, the same one used in the drawer and the machine tables,
+     so an operator reads identically wherever he appears.
+
+     The sparkline is the standings table's, scaled to the operator's OWN best day — the podium says who
+     is ahead, and this says whether he is pulling away or coasting, which is the half a total cannot
+     carry. It stacks under the acres rather than competing for width: these cards go three to a row. */
   const podium = st => { const list=A.states[st].filter(o=>o.stRank<=CONTEST.topPerState);
     return `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;flex:1 1 ${mob?'100%':'320px'};min-width:0">
       <div style="padding:11px 15px;border-bottom:1px solid #EFEDE7;display:flex;align-items:baseline;gap:8px">
@@ -6104,13 +6117,14 @@ function leaderBodyHTML(mob){
       ${list.map((o,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 15px;${i<list.length-1?'border-bottom:1px solid #F4F2EE':''}">
         ${rankChip(o.stRank)}
         <div style="flex:1;min-width:0">
-          <div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</div>
+          <div style="display:flex;align-items:center;gap:6px;min-width:0"><span style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</span>${opRankChip(o.mob,'s')}</div>
           <div style="font-size:10px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-family:'IBM Plex Mono'">${E(o.mob)}</span>${o.ci?` · CI ${E(o.ci)}`:''}</div>
         </div>
         ${deltaChip({delta:o.stDelta, isNew:o.stIsNew})}
         <div style="text-align:right;flex-shrink:0">
           <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${fmt(o.total)}<span style="font-size:9.5px;color:#9C988F;font-weight:500"> ac</span></div>
           <div style="font-size:9.5px;color:${o.past?C.greenD:'#9C988F'};margin-top:2px">${o.past?'past 300':fmt(o.toBar)+' to go'}</div>
+          <div style="margin-top:5px;display:flex;justify-content:flex-end">${spark(o)}</div>
         </div>
       </div>`).join('')}
     </div>`; };
