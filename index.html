@@ -965,7 +965,7 @@ async function loadWkp(){
 
 
 /* ===================== operator leaderboard — the contest tab =====================
-   The programme is running a 14–31 August contest, and this tab is its ledger: date-wise acres per
+   The programme is running a 15–31 August contest, and this tab is its ledger: date-wise acres per
    OPERATOR, keyed on the mobile number. Three prizes hang off it — an incentive for every operator past
    300 acres, the top three in each state, and one national topper.
 
@@ -985,7 +985,7 @@ async function loadWkp(){
    `[MP-Ops] operator leaderboard → {...}` on each load — read that line first if a number looks wrong. */
 const OPLB_GID = '1562411178';
 // The contest this page exists to run. `bar` is the incentive threshold; `topPerState` the state podium.
-const CONTEST = { start:'2026-08-14', end:'2026-08-31', bar:300, topPerState:3 };
+const CONTEST = { start:'2026-08-15', end:'2026-08-31', bar:300, topPerState:3 };
 // Shape overrides for the day a sheet change fools the detector. 'auto' reads both off the data.
 const OPLB_LAYOUT = 'auto';   // 'auto' | 'long' | 'wide'
 const OPLB_MODE   = 'auto';   // 'auto' | 'daily' | 'cumulative'
@@ -1007,6 +1007,10 @@ function oplbMob(v){
   return d.length>=10 ? d.slice(-10) : '';
 }
 const OPLB_MON = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+// '2026-08-15' → '15 Aug'. One formatter, shared by the Leaders page and the rank badge's tooltip, so a
+// contest that moves month never leaves a hard-coded 'Aug' behind on one of them.
+const OPLB_MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const oplbPretty = d => { if(!d) return '—'; const [,m,dd]=d.split('-'); return `${+dd} ${OPLB_MONS[+m-1]}`; };
 const oplbPad2 = n => String(n).padStart(2,'0');
 const oplbIso  = (y,m,d) => (m>=1&&m<=12&&d>=1&&d<=31) ? `${y}-${oplbPad2(m)}-${oplbPad2(d)}` : '';
 const oplbYr   = s => { const n=+s; return n<100 ? 2000+n : n; };
@@ -1109,7 +1113,8 @@ function oplbBuild(rows){
   const detected = (voters>=3 && pairs>0 && falls/pairs < 0.02) ? 'cumulative' : 'daily';
   const mode = OPLB_MODE==='auto' ? detected : OPLB_MODE;
   // Differencing runs over the WHOLE series before the contest window is applied, so a tab that starts
-  // before 14 Aug contributes each day's own acres rather than dumping its pre-contest total on day one.
+  // before the contest's first day contributes each day's own acres rather than dumping its pre-contest
+  // total on day one.
   if(mode==='cumulative'){
     Object.keys(byMob).forEach(m=>{ let prev=0;
       series(m).forEach(r=>{ const c=r.acres; r.acres=Math.max(0, c-prev); prev=c; }); });
@@ -1264,7 +1269,7 @@ function opRankChip(numOrMob, sz){
   const medal = ['#E0A93B','#AEB4BC','#C68A52'];
   const top = r.rank<=3;
   const small = sz==='s';
-  return `<span title="Operator contest · ${fmt(r.total)} ac since ${CONTEST.start.slice(8)} Aug · ${r.rank} of ${r.of} operators" style="display:inline-flex;align-items:center;gap:3px;padding:${small?'1px 5px':'2px 7px'};border-radius:${small?'5px':'6px'};font-size:${small?'9.5px':'10px'};font-weight:700;white-space:nowrap;flex-shrink:0;background:${top?medal[r.rank-1]:'#F2F0EB'};color:${top?'#fff':'#807c73'}"><span style="font-family:'IBM Plex Mono'">#${r.rank}</span><span style="font-weight:600;opacity:.85">India</span></span>`;
+  return `<span title="Operator contest · ${fmt(r.total)} ac since ${oplbPretty(CONTEST.start)} · ${r.rank} of ${r.of} operators" style="display:inline-flex;align-items:center;gap:3px;padding:${small?'1px 5px':'2px 7px'};border-radius:${small?'5px':'6px'};font-size:${small?'9.5px':'10px'};font-weight:700;white-space:nowrap;flex-shrink:0;background:${top?medal[r.rank-1]:'#F2F0EB'};color:${top?'#fff':'#807c73'}"><span style="font-family:'IBM Plex Mono'">#${r.rank}</span><span style="font-weight:600;opacity:.85">India</span></span>`;
 }
 
 /* --------------------------------------------------------------------------
@@ -5947,7 +5952,7 @@ function pendViewHTML(v){
 /* ===================== Leaders — the operator contest =====================
    ONE page over the operator-leaderboard tab, replacing the old cluster-officer / operator ranking that
    was derived from the machine sheet. The two could not have coexisted honestly: that board ranked by
-   season achieved-acres off a tab with no history, this one ranks by acres inside a dated 18-day window,
+   season achieved-acres off a tab with no history, this one ranks by acres inside a dated 17-day window,
    and showing both under one "Leaderboard" heading would have put two different answers to "who is
    winning" on one screen.
 
@@ -5992,8 +5997,7 @@ function leaderBodyHTML(mob){
   const dayNo = d => d ? Math.round((Date.parse(d+'T00:00:00Z') - Date.parse(CONTEST.start+'T00:00:00Z'))/864e5)+1 : 0;
   const totalDays = dayNo(CONTEST.end);
   const elapsed   = Math.max(0, Math.min(totalDays, dayNo(A.last)));
-  const pretty = d => { if(!d) return '—'; const [y,m,dd]=d.split('-');
-    return `${+dd} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]}`; };
+  const pretty = oplbPretty;
   const windowLine = `${pretty(CONTEST.start)} – ${pretty(CONTEST.end)} ${CONTEST.end.slice(0,4)} · through ${pretty(A.last)} · day ${elapsed} of ${totalDays}`;
 
   /* ---- shared row furniture ---- */

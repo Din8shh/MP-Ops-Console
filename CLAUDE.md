@@ -122,7 +122,7 @@ Eleven tabs; the app reads seven. Mapped by inspection — do not re-derive this
 | `123586424` | **Product Data MP** — the only product tab with a TERRITORY | territory × product × company, **MP only** | No (yesterday + MTD + YTD on the row) | MP products view |
 | `718502150` | Product day-level (`TX`) | **date** × region × crop × brand | Yes, from 1 Jun, no gaps | Week + Month → products, segments, focus-product trend |
 | `1973671649` | Pasted product detail (`WKP`) | region × crop × product, ONE period — **9–15 Aug 2026** | n/a — the tab IS the period | **Week** → products + segments (Month when the paste is a month) |
-| `1562411178` | **Operator leaderboard** — the 14–31 Aug contest ledger | **date** × operator, keyed on MOBILE | **Yes**, day by day inside the window | Leaders view, the India-rank badge everywhere |
+| `1562411178` | **Operator leaderboard** — the 15–31 Aug contest ledger | **date** × operator, keyed on MOBILE | **Yes**, day by day inside the window | Leaders view, the India-rank badge everywhere |
 | `1199323704` | Richer machine feed (per-machine branded acres, lat/lon, ping) | 1 row/machine | No | **not wired** |
 | `1433754421` | Org roster (AM/CI/BM/TM/FO/retailer) | 1 row/machine | No | not wired |
 | `266726831` | The Athena SQL behind the machine feed | — | — | reference only |
@@ -231,13 +231,24 @@ the page loads, the content is simply the wrong view.
 ## Leaders — the operator contest
 `leader` is a self-contained page over the operator-leaderboard tab, and it REPLACED the old cluster-officer /
 operator ranking that was derived from the machine sheet. The two could not have coexisted honestly: the old
-board ranked by season achieved-acres off a tab with no history, this one ranks by acres inside a dated 18-day
+board ranked by season achieved-acres off a tab with no history, this one ranks by acres inside a dated 17-day
 window, and both under one "Leaderboard" heading would have put two different answers to "who is winning" on
 one screen. `state.lbScope` and its Total/Yesterday toggle went with it.
 
-**The contest.** `CONTEST = { start:'2026-08-14', end:'2026-08-31', bar:300, topPerState:3 }` — one constant
+**The contest.** `CONTEST = { start:'2026-08-15', end:'2026-08-31', bar:300, topPerState:3 }` — one constant
 driving three prizes: an incentive for every operator past 300 acres, the top three in each state, and one
-national topper. Rows outside the window are read and then dropped, so widening the contest is a one-line edit.
+national topper. Rows outside the window are read and then dropped, so moving the contest is a one-line edit.
+
+**It has already moved once, and that is the case to keep in mind.** The contest opened on 14 Aug and was
+re-dated to **15 Aug** (2026-08-19); the source tab was regenerated to match and its 354 rows of 14 Aug —
+6,866 ac — went with it. Everything on the page follows the constant, so the edit was `start` plus prose,
+but note the failure mode it exposed: for the hours between the tab being re-cut and the constant being
+moved, the page summed a 15 Aug tab against a 14 Aug window and reported a total 7,461 ac short **with no
+indication anything was missing**. Placings moved for 611 of 667 operators; one man fell from 2nd to 22nd.
+Nothing was wrong with the code — the window and the ledger simply disagreed, and only one of them said so.
+If the tab's earliest date is ever later than `CONTEST.start` again, that is the same disagreement, and the
+page still cannot see it. Dates are formatted through the shared `oplbPretty` for the same reason: the rank
+badge's tooltip used to spell 'Aug' itself, which survives a change of day and not a change of month.
 
 **Its seven columns, and what is NOT among them** (verified on the live tab 2026-08-19, 1,795 rows /
 667 operators / 72 CIs): `operator_mobile, operator_name, transaction_date, region_name,
