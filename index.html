@@ -6020,14 +6020,33 @@ function leaderBodyHTML(mob){
       ${s.map((v,i)=>{ const bh=Math.max(v>0?2:1, Math.round((v/mx)*h));
         return `<rect x="${i*(bw+gap)}" y="${h-bh}" width="${bw}" height="${bh}" rx="1.5" fill="${v>0?(i===s.length-1?C.ink:'#C9C4BA'):'#EFEDE7'}"><title>${pretty(A.dates.slice(-7)[i])} · ${fmt(v)} ac</title></rect>`; }).join('')}
     </svg>`; };
-  /* Distance to the incentive bar. Past it, the row states by how much; short of it, how far there is to
-     go — never that the operator has not made it. */
+  /* Progress to the incentive bar, labelled with the ACRES HE HAS RUN rather than the acres he has not.
+     The bar already draws the gap — a reader sees how much of it is unfilled — so spending the only number
+     under it on the remainder said the same thing twice and never once said what the man has actually
+     done. The desktop table carried no total-acres column at all before this: the operator's own figure,
+     the one he would look for first, was the single thing the standings did not print. */
   const barCell = o => o.past
-    ? `<div style="display:flex;align-items:center;gap:7px;justify-content:flex-end"><span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;background:${C.softG};color:${C.greenD}">PAST 300</span><span style="font-family:'IBM Plex Mono';font-size:11px;color:#6E6A62">+${fmt(o.total-CONTEST.bar)}</span></div>`
+    ? `<div style="display:flex;align-items:center;gap:7px;justify-content:flex-end"><span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;background:${C.softG};color:${C.greenD}">PAST 300</span><span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:700">${fmt(o.total)}<span style="font-size:9.5px;color:#9C988F;font-weight:500"> ac</span></span></div>`
     : `<div style="text-align:right">
         <div style="display:flex;align-items:center;justify-content:flex-end;gap:7px"><div style="width:${mob?'56px':'74px'};height:5px;border-radius:3px;background:#F2F0EB;overflow:hidden"><span style="display:block;height:100%;width:${Math.min(100,Math.round(o.total/CONTEST.bar*100))}%;background:${C.orange}"></span></div></div>
-        <div style="font-size:10px;color:#9C988F;margin-top:3px;font-family:'IBM Plex Mono'">${fmt(o.toBar)} ac to go</div>
+        <div style="font-size:11px;margin-top:3px;font-family:'IBM Plex Mono';font-weight:600">${fmt(o.total)}<span style="font-size:9.5px;color:#9C988F;font-weight:500"> ac</span></div>
       </div>`;
+
+  /* THE PACE THAT STILL GETS HIM THERE — acres a day needed from here to clear 300 by the close.
+     Counted against the days AFTER the last day the tab carries, because that day's acres are already in
+     his total: 18 Aug against a 31 Aug close leaves 13 days, not 14. It moves with the LEDGER, not the
+     calendar, exactly as "yesterday" does everywhere else on this page — a sheet two days stale would
+     otherwise quietly shorten every operator's runway and overstate what he has left to do.
+     It is a TARGET, never a shortfall: a man short of the bar reads the pace that gets him there, and a
+     man past it reads nothing at all rather than a zero. */
+  const daysLeft = Math.max(0, Math.round((Date.parse(CONTEST.end+'T00:00:00Z') - Date.parse((A.last||CONTEST.start)+'T00:00:00Z'))/864e5));
+  const needRate = o => (o.past || !daysLeft) ? null : o.toBar/daysLeft;
+  const rateTxt  = r => r>=10 ? fmt(Math.round(r)) : r.toFixed(1);
+  const rateCell = o => { const r=needRate(o);
+    if(r==null) return `<div style="text-align:right;font-size:11px;color:#C9C4BA">—</div>`;
+    return `<div style="text-align:right">
+      <div style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700">${rateTxt(r)}</div>
+      <div style="font-size:9px;color:#9C988F;margin-top:1px">ac/day</div></div>`; };
 
   /* ---- controls ---- */
   const canPick = !lock && gateCanSwitchStates();
@@ -6137,7 +6156,7 @@ function leaderBodyHTML(mob){
     : card(cHead('State podiums','Top three in each state')+`<div style="padding:26px 18px;text-align:center;color:#9C988F;font-size:12.5px">State podiums fill in as the tab's rows carry a state.</div>`);
 
   /* ---- the standings ---- */
-  const grid = mob ? '' : 'grid-template-columns:52px 1fr 96px 132px 84px 74px;gap:12px';
+  const grid = mob ? '' : 'grid-template-columns:48px 1fr 90px 126px 78px 78px 70px;gap:11px';
   const rows = shown.map(o=>mob
     ? `<div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 12px;margin-bottom:8px">
         ${rankChip(rankOf(o))}
@@ -6148,7 +6167,7 @@ function leaderBodyHTML(mob){
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${fmt(o.total)}<span style="font-size:9.5px;color:#9C988F;font-weight:500"> ac</span></div>
-          <div style="font-size:9.5px;color:${o.past?C.greenD:'#9C988F'};margin-top:2px">${o.past?'past 300':fmt(o.toBar)+' to go'}</div>
+          <div style="font-size:9.5px;color:${o.past?C.greenD:'#9C988F'};margin-top:2px">${o.past?'past 300':(needRate(o)!=null?`needs ${rateTxt(needRate(o))} ac/day`:fmt(o.toBar)+' to go')}</div>
           <div style="margin-top:5px;display:flex;justify-content:flex-end">${spark(o)}</div>
         </div>
       </div>`
@@ -6160,21 +6179,22 @@ function leaderBodyHTML(mob){
         </div>
         <div style="display:flex;align-items:center;gap:6px">${deltaChip(moveOf(o))}</div>
         <div>${barCell(o)}</div>
+        <div>${rateCell(o)}</div>
         <div style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right;color:${o.yday>0?C.ink:'#C9C4BA'}">${fmt(o.yday)}</div>
         <div style="display:flex;justify-content:flex-end">${spark(o)}</div>
       </div>`).join('');
 
   const headRow = mob ? '' : `<div style="display:grid;${grid};padding:10px 16px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
-      <div>#</div><div>Operator</div><div>Since y'day</div><div style="text-align:right">Toward 300 ac</div><div style="text-align:right">${E(pretty(A.last))}</div><div style="text-align:right">7 days</div>
+      <div>#</div><div>Operator</div><div>Since y'day</div><div style="text-align:right">Acres · toward 300</div><div style="text-align:right">Needs / day</div><div style="text-align:right">${E(pretty(A.last))}</div><div style="text-align:right">7 days</div>
     </div>`;
   const more = inScope.length>shown.length || S.lbAll
     ? `<div style="padding:12px 16px;text-align:center;border-top:1px solid #F4F2EE"><button data-act="lball" style="border:1px solid #E9E6DF;border-radius:9px;background:#fff;color:#6E6A62;font-size:12px;font-weight:600;padding:8px 16px;cursor:pointer">${S.lbAll?`Show the top 25`:`Show all ${fmt(inScope.length)} operators`}</button></div>`
     : '';
   const standingsInner = shown.length
-    ? (mob ? rows : `<div style="overflow-x:auto"><div style="min-width:720px">${headRow}${rows}</div></div>${more}`)
+    ? (mob ? rows : `<div style="overflow-x:auto"><div style="min-width:790px">${headRow}${rows}</div></div>${more}`)
     : `<div style="padding:26px 18px;text-align:center;color:#9C988F;font-size:12.5px">${gst?`${E(scopeName)}'s board opens with its first operator's acres.`:`The board opens with the contest's first day of acres.`}</div>`;
 
-  const standingsSub = `Ranked ${gst?`within ${scopeName}`:'all India'} on acres from ${pretty(CONTEST.start)} · movement against ${A.prev?pretty(A.prev):'the previous day'}`;
+  const standingsSub = `Ranked ${gst?`within ${scopeName}`:'all India'} on acres from ${pretty(CONTEST.start)} · movement against ${A.prev?pretty(A.prev):'the previous day'}${daysLeft?` · pace needed over the ${daysLeft} day${daysLeft===1?'':'s'} left to ${pretty(CONTEST.end)}`:''}`;
 
   /* ================= the CI board ==================================================================
      Built from `inScope`, so the state picker, the gate's lock and the "board in front of the reader"

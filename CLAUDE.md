@@ -300,6 +300,23 @@ the state's own once scoped. Each operator therefore carries two placings (`rank
 operator showed as 1st on the podium and 3rd in the table below it, both correct, neither explained. Ties share
 a placing on both boards, and "yesterday" means **the last day the tab carries**, not the calendar's.
 
+**The standings answer three questions per operator, and the acres column used to answer none of them.**
+The desktop table printed a progress bar labelled "N ac to go" and no total anywhere — the operator's own
+figure, the first thing he looks for, was the one number the standings did not carry, while the bar already
+drew the gap the label restated. It now reads **acres run** under the bar, with the pace he still needs
+beside it:
+- **`Needs / day`** = `toBar / daysLeft`, the acres a day that clear 300 by the close. `daysLeft` counts the
+  days **after the last day the tab carries**, because that day's acres are already in his total — 18 Aug
+  against a 31 Aug close is 13 days, not 14. It moves with the LEDGER, not the calendar, the same rule
+  "yesterday" follows everywhere on this page: a sheet two days stale would otherwise silently shorten every
+  operator's runway and overstate what he has left to do. The standings subtitle names the figure it used
+  ("pace needed over the 13 days left to 31 Aug") so the arithmetic is checkable from the screen.
+- An operator **past the bar shows a dash, not a zero** — no pace is required of him, and 0 would read as a
+  target. The phone card keeps the same pair: the total large, `needs 9.3 ac/day` beneath it.
+- The **state podium rows deliberately still read "N to go"**. They already print the total above it, so the
+  complaint that drove this change does not apply there, and a compact prize card is the one place a plain
+  distance beats a rate.
+
 **Tone is part of the spec.** The page never reports an absence. Below the bar an operator is a *distance from
 it* ("53 ac to go"), never a failure to reach it; a board with nobody past 300 still names its leader and how
 far ahead of the field he is. People read this page about themselves.
