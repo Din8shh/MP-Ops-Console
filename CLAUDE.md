@@ -122,7 +122,7 @@ Eleven tabs; the app reads seven. Mapped by inspection — do not re-derive this
 | `123586424` | **Product Data MP** — the only product tab with a TERRITORY | territory × product × company, **MP only** | No (yesterday + MTD + YTD on the row) | MP products view |
 | `718502150` | Product day-level (`TX`) | **date** × region × crop × brand | Yes, from 1 Jun, no gaps | Week + Month → products, segments, focus-product trend |
 | `1973671649` | Pasted product detail (`WKP`) | region × crop × product, ONE period — **9–15 Aug 2026** | n/a — the tab IS the period | **Week** → products + segments (Month when the paste is a month) |
-| `1562411178` | **Operator leaderboard** — the 14–31 Aug contest ledger | **date** × operator, keyed on MOBILE | **Yes**, day by day inside the window | Leaders view |
+| `1562411178` | **Operator leaderboard** — the 14–31 Aug contest ledger | **date** × operator, keyed on MOBILE | **Yes**, day by day inside the window | Leaders view, the India-rank badge everywhere |
 | `1199323704` | Richer machine feed (per-machine branded acres, lat/lon, ping) | 1 row/machine | No | **not wired** |
 | `1433754421` | Org roster (AM/CI/BM/TM/FO/retailer) | 1 row/machine | No | not wired |
 | `266726831` | The Athena SQL behind the machine feed | — | — | reference only |
@@ -239,6 +239,26 @@ one screen. `state.lbScope` and its Total/Yesterday toggle went with it.
 driving three prizes: an incentive for every operator past 300 acres, the top three in each state, and one
 national topper. Rows outside the window are read and then dropped, so widening the contest is a one-line edit.
 
+**Its seven columns, and what is NOT among them** (verified on the live tab 2026-08-19, 1,795 rows /
+667 operators / 72 CIs): `operator_mobile, operator_name, transaction_date, region_name,
+operator_manager_contact, operator_manager_name, acres`.
+
+- **There is no territory column, and that is why the page shows STATE.** Territory used to be printed
+  beside every operator, and it could only ever come from joining the machine sheet on the mobile — which
+  reaches 500 of the 667 operators (75%). A column invented by a join for a quarter of a prize table is not
+  a column, so it is gone. `region_name` IS the state and is 100% filled; the state matcher looks for
+  `region` explicitly, because the old pattern (`state`/`district`) matched nothing here and quietly sent
+  state through the same 75% join. Standings and the hero read `mobile · State · CI`; the state podium
+  cards name their state in the card header and so carry the **CI** on each row instead of repeating it.
+- **`operator_manager_*` is the CI** (Cluster Incharge) — the same role the machine sheet calls Cluster
+  Officer, confirmed by 1,583 of 1,795 rows carrying a manager number that is a known `Cluster officer Mob`
+  there. It is keyed on the NUMBER exactly as operators are, with the machine sheet's `co`/`coMob` as the
+  fallback for an operator the tab names without a manager.
+- **Every operator column excludes `manager` explicitly** (`notMgr`). The manager pair matches the operator
+  patterns word for word — `operator_manager_name` satisfies the operator-name test — and today only column
+  ORDER keeps them apart. A reordered sheet would key the whole contest on the CI's number and silently
+  merge twenty operators into one row.
+
 **The base is the MOBILE NUMBER, never the name.** `oplbMob` collapses every variant — `+91`, a leading `0`,
 spaces, a numeric cell's trailing `.0`, and scientific notation — to the last ten digits. Name, state and
 territory are DISPLAY fields: read from the tab where it carries them, joined from the machine sheet on the
@@ -268,6 +288,40 @@ those filters reach this tab. `state.lbSt` is page-local and gate-clamped exactl
 login gets **no picker at all** and is pinned to its own state, which is why this page does not breach the
 `snake`/`product` constraint below. The national topper is the one deliberate exception and is shown to
 everyone — it is a single named prize the whole programme is competing for.
+
+**The CI board is the same contest re-grouped, on a toggle rather than a second rail view** (`state.lbBoard`
+= `ops`|`ci`). Same tab, same window, same fetch, same state scope — two rail entries would invite the two
+to be read as two contests. It is built from whichever operator list the reader is looking at
+(`oplbCiBoard(inScope, …)`), so a scoped board ranks that state's CIs on that state's acres and "in the top
+ten" is measured on THAT board — the page's standing rule about placings, applied to the second board.
+
+**It ranks on TOTAL CONTEST ACRES, with the counts as columns, and that was a deliberate rejection of the
+literal ask.** "How many of a CI's operators are on top" is the obvious reading and it makes a bad board:
+72 CIs hold the 667 operators and only about fifteen have anyone in the national top ten, so fifty-odd rows
+would read 0 and sort alphabetically — saying nothing about a CI with twenty operators all working steadily.
+Acres rank; ops, acres-per-operator, the top-ten count and the past-300 count sit beside them. The literal
+question is answered once, in a stat tile ("Most in the top 10"), rather than left to a column scan. Live at
+2026-08-19: manish kumar Bishnoi 22 ops / 2,294 ac / 2 in the top ten, ahead of Rajesh Kumar FO on 18 / 1,522
+with none — which is exactly the pair that shows why the count could not be the ranking.
+
+**A CI with no number is grouped under his name, never merged with other blanks** — one shared "not named"
+bucket would invent a CI out of unrelated operators. Nine of the 72 span more than one state, so a CI row
+names every state it covers rather than picking one.
+
+**The India rank now travels with the operator across the whole console.** `opRank(number)` /
+`opRankChip(number)` print `#33 India` beside the operator in the desktop drawer, the phone sheet, the
+machine-wise metrics table and the phone machine list. Three things follow:
+- **The contest tab is fetched at BOOT** (`bootApp`) and refreshed on the machine sheet's own clock, not
+  lazily on first sight of the Leaders page — the badge has to exist before any of those views render.
+- **Standings are MEMOISED** (`oplbA()`, keyed on the two load stamps + `ROWS.length`). The badge is read
+  once per rendered row; an unmemoised `oplbStandings()` would rebuild 667 operators per row.
+- **An operator the tab does not carry gets NO badge** — not a zero, not a last place. A machine's operator
+  may simply not be in the contest, and an invented placing is worse than none. 493 of 1,315 machine rows
+  carry one. The badge sits on the operator's NUMBER line in the dense table, because putting it beside the
+  name squeezed that `1fr` column until names truncated at about nine characters.
+- **It is NOT admin-gated, unlike the Leaders view itself.** The badge is one operator's own standing shown
+  next to his own name, it leaks nothing across companies or states, and the page's tone argues for field
+  logins seeing it. If that is ever unwanted, gate `opRankChip` and nothing else changes.
 
 **Who can see it:** admin only, as the old leaderboard was. Granting it to leadership or a field login is one
 token in that role's `views` — and unlike `snake`/`product`, safe for a state-locked role.

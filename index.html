@@ -102,6 +102,9 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
   // Leaders (operator contest): page-local state scope + "show every operator" toggle. lbSt is clamped
   // by the gate exactly like insSt and never touches state.st.
   lbSt:'', lbAll:false,
+  // Which board the Leaders page is showing: 'ops' (the operator contest) or 'ci' (the same contest
+  // re-grouped on the Cluster Incharge). One page, one tab, one fetch — see oplbCiBoard.
+  lbBoard:'ops',
   // Product Insights view: its own independent scope over the "Product data" tab (State × Company ×
   // {YTD, yesterday}). Deliberately NOT tied to the machine filter bar — product-scanned acres are a separate
   // metric from machine spray acres. pmCo = ALL|UPL|SWAL, pmMeasure = ytd|yday.
@@ -1038,12 +1041,30 @@ function oplbBuild(rows){
   const head = rows[0].map(x=>String(x||'').trim());
   const h = head.map(x=>x.toLowerCase());
   const find=(...preds)=>{ for(const p of preds){ const i=h.findIndex(p); if(i>=0) return i; } return -1; };
-  const cMob  = find(x=>x.includes('mobile'), x=>x.includes('phone'), x=>x.includes('contact'),
-                     x=>x.includes('number')&&!x.includes('machine'));
-  const cName = find(x=>x.includes('operator')&&!(x.includes('mob')||x.includes('phone')||x.includes('number')||x.includes('contact')),
-                     x=>x==='name', x=>x.includes('name'));
-  const cSt   = find(x=>x==='state', x=>x.includes('state')&&!x.includes('estate'));
-  const cTerr = find(x=>x.includes('territory'), x=>x.includes('district'));
+  /* Every operator column excludes `manager` explicitly. The live tab carries BOTH
+     `operator_mobile`/`operator_name` and `operator_manager_contact`/`operator_manager_name`, and the
+     manager pair matches the operator patterns word for word — today only column ORDER keeps them apart,
+     which is not a thing to rest an identity key on. A reordered sheet would silently key the whole
+     contest on the CI's number and merge twenty operators into one row. */
+  const notMgr = x => !(x.includes('manager')||x.includes('incharge'));
+  const cMob  = find(x=>x.includes('mobile')&&notMgr(x), x=>x.includes('phone')&&notMgr(x), x=>x.includes('contact')&&notMgr(x),
+                     x=>x.includes('number')&&!x.includes('machine')&&notMgr(x));
+  const cName = find(x=>x.includes('operator')&&notMgr(x)&&!(x.includes('mob')||x.includes('phone')||x.includes('number')||x.includes('contact')),
+                     x=>x==='name', x=>x.includes('name')&&notMgr(x));
+  /* STATE comes off the tab itself, and `region_name` is the header it actually ships under — the pattern
+     used to look only for `state`/`district`, matched nothing, and left every operator's state to the
+     machine-sheet join, which reaches 75% of the board (502 of 667 measured 2026-08-19). `region_name` is
+     100% filled. The tab has NO territory column at all, which is why the page shows state and never
+     territory: a column that has to be invented by a join for a quarter of a prize table is not a column. */
+  const cSt   = find(x=>x==='state', x=>x==='region_name', x=>x.includes('region'),
+                     x=>x.includes('state')&&!x.includes('estate'));
+  /* CI = Cluster Incharge, the tab's `operator_manager_*` pair. Verified against the machine sheet
+     2026-08-19: 1,583 of 1,795 rows carry a manager number that IS a known Cluster-Officer mobile there,
+     so the two are the same role under two names. Keyed on the NUMBER for the same reason operators are. */
+  const cCiM  = find(x=>!notMgr(x)&&(x.includes('contact')||x.includes('mob')||x.includes('phone')||x.includes('number')),
+                     x=>x==='ci contact', x=>x.startsWith('ci ')&&(x.includes('contact')||x.includes('mob')));
+  const cCi   = find(x=>!notMgr(x)&&x.includes('name'), x=>x==='ci name', x=>x==='ci',
+                     x=>x.startsWith('ci ')&&x.includes('name'));
   const cDate = find(x=>x==='date', x=>x.includes('date'), x=>x==='day');
   const cAc   = find(x=>x.includes('acre'), x=>x.includes('area'), x=>x.includes('sprayed'));
 
@@ -1059,8 +1080,9 @@ function oplbBuild(rows){
     for(const r of rows.slice(1)){
       if(!r) continue;
       const mob=oplbMob(r[cMob]); if(!mob) continue;
-      const name=cName>=0?txt(r[cName]):'', st=cSt>=0?txt(r[cSt]):'', terr=cTerr>=0?txt(r[cTerr]):'';
-      dateCols.forEach(({i,d})=>{ recs.push({ mob, name, st, terr, d, acres:num(r[i]) }); });
+      const name=cName>=0?txt(r[cName]):'', st=cSt>=0?txt(r[cSt]):'';
+      const ci=cCi>=0?txt(r[cCi]):'', ciMob=cCiM>=0?oplbMob(r[cCiM]):'';
+      dateCols.forEach(({i,d})=>{ recs.push({ mob, name, st, ci, ciMob, d, acres:num(r[i]) }); });
     }
   } else {
     if(cDate<0 || cAc<0) throw new Error('operator leaderboard: no date/acres column in '+JSON.stringify(head));
@@ -1068,8 +1090,8 @@ function oplbBuild(rows){
       if(!r) continue;
       const mob=oplbMob(r[cMob]); if(!mob) continue;
       const d=oplbDate(r[cDate]); if(!d) continue;
-      recs.push({ mob, name:cName>=0?txt(r[cName]):'', st:cSt>=0?txt(r[cSt]):'', terr:cTerr>=0?txt(r[cTerr]):'',
-                  d, acres:num(r[cAc]) });
+      recs.push({ mob, name:cName>=0?txt(r[cName]):'', st:cSt>=0?txt(r[cSt]):'',
+                  ci:cCi>=0?txt(r[cCi]):'', ciMob:cCiM>=0?oplbMob(r[cCiM]):'', d, acres:num(r[cAc]) });
     }
   }
 
@@ -1099,7 +1121,7 @@ function oplbBuild(rows){
   OPLB.mode  = mode;
   OPLB.shape = wide ? 'wide' : 'long';
   OPLB.diag  = { headers:head, shape:OPLB.shape, mode, detected, forcedMode:OPLB_MODE!=='auto',
-                 forcedLayout:OPLB_LAYOUT!=='auto', cols:{ mobile:cMob, name:cName, state:cSt, territory:cTerr, date:cDate, acres:cAc },
+                 forcedLayout:OPLB_LAYOUT!=='auto', cols:{ mobile:cMob, name:cName, state:cSt, ci:cCi, ciMobile:cCiM, date:cDate, acres:cAc },
                  dateColumns:dateCols.length, rowsInWindow:out.length, operators:Object.keys(byMob).length,
                  days:OPLB.dates.length, window:CONTEST.start+'…'+CONTEST.end };
   // The one line to read if a figure looks wrong: it names every column the parser matched and both
@@ -1137,8 +1159,8 @@ function oplbStandings(){
 
   const by={};
   OPLB.rows.forEach(r=>{
-    const o = by[r.mob] || (by[r.mob]={ mob:r.mob, names:[], sts:[], terrs:[], day:{}, total:0, prevTotal:0 });
-    o.names.push(r.name); o.sts.push(r.st); o.terrs.push(r.terr);
+    const o = by[r.mob] || (by[r.mob]={ mob:r.mob, names:[], sts:[], cis:[], ciMobs:[], day:{}, total:0, prevTotal:0 });
+    o.names.push(r.name); o.sts.push(r.st); o.cis.push(r.ci); o.ciMobs.push(r.ciMob);
     o.day[r.d]=(o.day[r.d]||0)+r.acres;
     o.total+=r.acres;
     if(prev && r.d<=prev) o.prevTotal+=r.acres;
@@ -1148,8 +1170,13 @@ function oplbStandings(){
     const o=by[k], mcs=mcBy[k]||[];
     const name = domStr(o.names) || domStr(mcs.map(m=>m.opName)) || '—';
     const st   = oplbStCode(domStr(o.sts)) || domStr(mcs.map(m=>m.st)) || '';
-    const terr = domStr(o.terrs) || domStr(mcs.map(m=>m.territory)) || '';
-    return { mob:o.mob, name, st, terr, total:o.total, prevTotal:o.prevTotal, day:o.day,
+    /* CI, same identity discipline as the operator: the NUMBER is the key, the name is display. The tab
+       carries both; the machine sheet's Cluster Officer is the fallback for an operator the tab names
+       without a manager. A CI with no number at all is grouped under his name rather than dropped —
+       a prize table may not silently lose a man's operators, but neither may it merge two blanks. */
+    const ciMob = domStr(o.ciMobs) || oplbMob(domStr(mcs.map(m=>m.coMob))) || '';
+    const ci    = domStr(o.cis)    || domStr(mcs.map(m=>m.co)) || '';
+    return { mob:o.mob, name, st, ci, ciMob, total:o.total, prevTotal:o.prevTotal, day:o.day,
              machines: mcs.length, org: domStr(mcs.map(m=>m.org)) || '',
              yday: o.day[last]||0,
              toBar: Math.max(0, CONTEST.bar - o.total),
@@ -1197,6 +1224,108 @@ function oplbStandings(){
            // Everyone sharing the top total — normally one person, but the board must be able to say so
            // when it is not.
            indiaTied: ranked.filter(o=>ranked[0] && Math.abs(o.total-ranked[0].total)<1e-9) };
+}
+
+/* Standings are MEMOISED, and that is a requirement rather than a tune-up. Since the operator's national
+   placing is now printed beside him everywhere in the console — the drawer, the phone sheet, the machine
+   table — a full rebuild per row would run this over 667 operators once per rendered row. The token is the
+   two load stamps plus the machine-row count, so a CSV refresh, a leaderboard refresh and a demo/live swap
+   each invalidate it and nothing else does. */
+let _oplbMemo = { key:'', val:null };
+function oplbA(){
+  const key = `${OPLB.at}|${typeof lastUpdated!=='undefined'?lastUpdated:''}|${ROWS.length}|${OPLB.rows.length}`;
+  if(_oplbMemo.key!==key){ _oplbMemo = { key, val:oplbStandings() }; }
+  return _oplbMemo.val;
+}
+
+/* --------------------------------------------------------------------------
+   The India rank, read from anywhere in the console.
+
+   `opRank(number)` answers "where does this operator stand nationally" for any
+   mobile in any view, on the SAME normalisation the contest is keyed on. It
+   returns null — not a zero, not a last place — for an operator the tab does
+   not carry, because a machine's operator may simply not be in the contest and
+   an invented placing would be worse than none.
+-------------------------------------------------------------------------- */
+function opRank(numOrMob){
+  if(!OPLB.loaded) return null;
+  const k = oplbMob(numOrMob); if(!k) return null;
+  const A = oplbA();
+  if(!A._idx){ A._idx = {}; A.ops.forEach(o=>{ A._idx[o.mob]=o; }); }
+  const o = A._idx[k]; if(!o) return null;
+  return { rank:o.rank, stRank:o.stRank||null, total:o.total, of:A.ops.length, st:o.st, past:o.past };
+}
+/* The badge that carries it. Top three are medalled to match the leaderboard's own chips, so the same
+   operator reads the same on both screens. `#4 India` is deliberately terse: it sits inside dense rows
+   that already carry a name, a number and a health chip, and the contest window is named on the tooltip
+   rather than in the badge. Absent from the contest = NO badge, never a grey placeholder. */
+function opRankChip(numOrMob, sz){
+  const r = opRank(numOrMob); if(!r) return '';
+  const medal = ['#E0A93B','#AEB4BC','#C68A52'];
+  const top = r.rank<=3;
+  const small = sz==='s';
+  return `<span title="Operator contest · ${fmt(r.total)} ac since ${CONTEST.start.slice(8)} Aug · ${r.rank} of ${r.of} operators" style="display:inline-flex;align-items:center;gap:3px;padding:${small?'1px 5px':'2px 7px'};border-radius:${small?'5px':'6px'};font-size:${small?'9.5px':'10px'};font-weight:700;white-space:nowrap;flex-shrink:0;background:${top?medal[r.rank-1]:'#F2F0EB'};color:${top?'#fff':'#807c73'}"><span style="font-family:'IBM Plex Mono'">#${r.rank}</span><span style="font-weight:600;opacity:.85">India</span></span>`;
+}
+
+/* --------------------------------------------------------------------------
+   The CI board — the same contest, re-grouped on the Cluster Incharge.
+
+   RANKED ON TOTAL CONTEST ACRES, with the counts as columns rather than as the
+   ranking. Counting "operators on top" alone was the obvious reading of the ask
+   and it makes a bad board: 72 CIs hold the 667 operators, and only about
+   fifteen of them have anyone in the national top ten — the other fifty-odd
+   would all read 0 and sort alphabetically, which says nothing about a CI who
+   has twenty operators all working steadily. Acres rank; the top-ten count and
+   the past-300 count sit beside them, so the board answers "who is running the
+   biggest effort" and "who has the fastest men" on one screen.
+
+   It is built from whichever operator list the reader is looking at, so the
+   state scope flows through untouched and `topN` is measured on THAT board —
+   the same rule the operator page applies to placings and movement.
+-------------------------------------------------------------------------- */
+const CI_TOP_N = 10;
+function oplbCiBoard(ops, dates){
+  const last = dates[dates.length-1] || '';
+  // Placing on the board in view: national ranks at All India, the state's own once scoped. `ops` arrives
+  // already ordered, so position IS the placing to measure "in the top ten" against.
+  const place = {}; ops.forEach((o,i)=>{ place[o.mob]=i+1; });
+
+  const by={};
+  ops.forEach(o=>{
+    // Key on the CI's number; fall back to his lower-cased name, and only then to one shared "not named"
+    // bucket. Grouping every unnamed CI's operators together would invent a 23-operator CI out of blanks.
+    const key = o.ciMob || (o.ci ? 'n:'+o.ci.toLowerCase() : '');
+    if(!key) return;
+    const c = by[key] || (by[key]={ key, mob:o.ciMob, names:[], sts:[], ops:[], total:0, prevTotal:0, yday:0, day:{} });
+    c.names.push(o.ci); c.sts.push(o.st); c.ops.push(o);
+    c.total += o.total; c.prevTotal += o.prevTotal; c.yday += o.yday;
+    dates.forEach(d=>{ c.day[d]=(c.day[d]||0)+(o.day[d]||0); });
+  });
+
+  const list = Object.keys(by).map(k=>{
+    const c=by[k], sts=Array.from(new Set(c.sts.filter(Boolean)));
+    return { key:c.key, mob:c.mob, name:domStr(c.names)||'Not named on the tab',
+             sts, st:sts[0]||'', total:c.total, prevTotal:c.prevTotal, yday:c.yday,
+             count:c.ops.length, avg: c.ops.length ? c.total/c.ops.length : 0,
+             topN: c.ops.filter(o=>place[o.mob]<=CI_TOP_N).length,
+             past: c.ops.filter(o=>o.past).length,
+             best: c.ops.reduce((a,o)=> !a||o.total>a.total ? o : a, null),
+             ran:  c.ops.filter(o=>o.yday>0).length,
+             spark: dates.slice(-7).map(d=>c.day[d]||0) };
+  });
+
+  const order = (a,b)=> b.total-a.total || (a.name<b.name?-1:a.name>b.name?1:0);
+  const ranked = list.sort(order);
+  ranked.forEach((c,i)=>{ c.rank = (i>0 && Math.abs(ranked[i-1].total-c.total)<1e-9) ? ranked[i-1].rank : i+1; });
+  // Movement, on the same rebuilt-yesterday rule the operator board uses: drop the last day, re-rank, and
+  // call a CI with nothing before it NEW rather than unchanged.
+  const pv = ranked.filter(c=>c.prevTotal>0).slice().sort((a,b)=> b.prevTotal-a.prevTotal || (a.name<b.name?-1:a.name>b.name?1:0));
+  const pr={}; pv.forEach((c,i)=>{ pr[c.key] = (i>0 && Math.abs(pv[i-1].prevTotal-c.prevTotal)<1e-9) ? pr[pv[i-1].key] : i+1; });
+  ranked.forEach(c=>{ const p=pr[c.key]; c.delta = p ? (p-c.rank) : null; c.isNew = !p; });
+  return { cis:ranked, last, topN:CI_TOP_N,
+           // The CI with the most operators in the top ten — the literal "who has the most on top"
+           // question, answered once at the head rather than left to the reader to scan a column for.
+           mostTop: ranked.slice().sort((a,b)=> b.topN-a.topN || b.total-a.total)[0] || null };
 }
 
 /* ============================= derived ============================= */
@@ -2038,7 +2167,7 @@ function vals(){
   const bannerSt = S.terr ? (S.st || (F[0]&&F[0].st) || wxScopeState()) : wxScopeState();
   const mobileWeather = weather(S.terr || '', bannerSt);
   const mobileList = F.slice(0,S.listLimit).map(m=>{ const hs=hstate(m);
-    return { mc:m.mc, org:m.org, opName:m.opName, geo:`${m.territory} · ${m.cluster}`,
+    return { mc:m.mc, org:m.org, opName:m.opName, opNum:m.opNum, geo:`${m.territory} · ${m.cluster}`,
       orgStyle:{display:'inline-flex',fontSize:'9px',fontWeight:700,padding:'1px 6px',borderRadius:'5px',background:orgSoft(m.org),color:orgInk(m.org)},
       dotStyle:{width:'9px',height:'9px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
       acresLabel: acD(m)>0? fmt(acD(m))+' ac' : (m.breakdown?'down':'idle') }; });
@@ -5715,7 +5844,7 @@ function machinesViewHTML(v){
             <div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600">${E(r.mc)}</div>
             <div><span style="${css(r.orgStyle)}">${E(r.org)}</span></div>
             <div><span style="${css(r.healthStyle)}"><span style="${css(r.healthDot)}"></span>${E(r.health)}</span></div>
-            <div style="min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(r.opName)}</div><div style="font-family:'IBM Plex Mono';font-size:10.5px;color:#9C988F">${E(r.opNum)}</div></div>
+            <div style="min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(r.opName)}</div><div style="display:flex;align-items:center;gap:6px"><span style="font-family:'IBM Plex Mono';font-size:10.5px;color:#9C988F">${E(r.opNum)}</span>${opRankChip(r.opNum,'s')}</div></div>
             <div style="font-size:11.5px;color:#6E6A62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(r.geo)}</div>
             <div style="${css(r.acresStyle)}">${E(r.acresY)}</div>
             <div style="min-width:0;font-size:11.5px;color:#6E6A62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(r.co)} <span style="color:#C9C4BA">·</span> ${E(r.am)}</div>
@@ -5841,7 +5970,7 @@ function leaderBodyHTML(mob){
       ${OPLB.error?'⚠ ':''}${msg}${OPLB.error?`<div style="margin-top:14px"><button data-act="oplbretry" style="padding:8px 16px;border:1px solid #E9E6DF;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Retry</button></div>`:''}</div>`;
   }
 
-  const S=state, A=oplbStandings();
+  const S=state, A=oplbA();
   // Scope: the gate's state LOCK wins outright, exactly as on Insights — a state-locked login can never
   // widen its board through this page's own picker. The national topper is the one deliberate exception
   // and is shown to everybody: it is a single named prize the whole programme is competing for.
@@ -5903,12 +6032,18 @@ function leaderBodyHTML(mob){
       <div style="position:relative"><select id="lbStateSel" style="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none">${
         optionsHTML([{v:'',t:'All India'},...INS_STATES.filter(gateAllowsState).map(c=>({v:c,t:STATE_NAMES[c]}))], gst)
       }</select>${I.caret}</div></div>` : '';
+  /* One tab, two readings of it. The toggle is a control rather than a second rail view because the CI
+     board IS the operator board re-grouped — same window, same acres, same fetch — and two rail entries
+     would invite the two to be read as two contests. */
+  const isCI = S.lbBoard==='ci';
+  const segBtn = (v,t) => `<button data-act="lbboard" data-v="${v}" style="border:none;background:${(v==='ci')===isCI?'#fff':'transparent'};box-shadow:${(v==='ci')===isCI?'0 1px 2px rgba(27,26,23,.10)':'none'};color:${(v==='ci')===isCI?C.ink:'#9C988F'};font-family:'Noto Sans';font-size:12px;font-weight:${(v==='ci')===isCI?700:600};padding:0 ${mob?'11px':'14px'};height:26px;border-radius:6px;cursor:pointer;white-space:nowrap">${t}</button>`;
+  const boardSel = `<div style="display:inline-flex;align-items:center;gap:2px;background:#F2F0EB;border-radius:8px;padding:3px">${segBtn('ops','Operators')}${segBtn('ci','Cluster Incharge')}</div>`;
   const header = `<div style="display:flex;align-items:${mob?'flex-start':'center'};gap:${mob?'9px':'14px'};flex-wrap:wrap">
       <div style="min-width:0">
         <div style="font-size:${mob?'14px':'15px'};font-weight:700">Operator contest</div>
         <div style="font-size:11px;color:#9C988F;margin-top:2px">${E(windowLine)}</div>
       </div>
-      <div style="flex:1"></div>${stSel}
+      <div style="flex:1"></div>${boardSel}${stSel}
       <span style="font-size:10.5px;color:#9C988F">Leaderboard tab · ${OPLB.at||'—'} <button data-act="oplbretry" title="Reload" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>
     </div>`;
 
@@ -5921,7 +6056,7 @@ function leaderBodyHTML(mob){
         <div style="flex:1;min-width:0">
           <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase">Leading all India${A.indiaTied.length>1?` · ${A.indiaTied.length} level`:''}</div>
           <div style="font-size:${mob?'17px':'20px'};font-weight:700;letter-spacing:-.01em;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(A.indiaTied.length>1 ? A.indiaTied.map(o=>o.name).join(' · ') : champ.name)}</div>
-          <div style="font-size:11.5px;color:#9C988F;margin-top:2px"><span style="font-family:'IBM Plex Mono'">${E(champ.mob)}</span>${champ.st?` · ${E(STATE_NAMES[champ.st]||champ.st)}`:''}${champ.terr?` · ${E(champ.terr)}`:''}</div>
+          <div style="font-size:11.5px;color:#9C988F;margin-top:2px"><span style="font-family:'IBM Plex Mono'">${E(champ.mob)}</span>${champ.st?` · ${E(STATE_NAMES[champ.st]||champ.st)}`:''}${champ.ci?` · CI ${E(champ.ci)}`:''}</div>
         </div>
         <div style="text-align:right">
           <div style="font-family:'IBM Plex Mono';font-size:${mob?'22px':'26px'};font-weight:700;line-height:1">${fmt(champ.total)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> ac</span></div>
@@ -5970,7 +6105,7 @@ function leaderBodyHTML(mob){
         ${rankChip(o.stRank)}
         <div style="flex:1;min-width:0">
           <div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</div>
-          <div style="font-size:10px;color:#9C988F;font-family:'IBM Plex Mono';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.mob)}${o.terr?` · ${E(o.terr)}`:''}</div>
+          <div style="font-size:10px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-family:'IBM Plex Mono'">${E(o.mob)}</span>${o.ci?` · CI ${E(o.ci)}`:''}</div>
         </div>
         ${deltaChip({delta:o.stDelta, isNew:o.stIsNew})}
         <div style="text-align:right;flex-shrink:0">
@@ -5990,7 +6125,7 @@ function leaderBodyHTML(mob){
         ${rankChip(rankOf(o))}
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</div>
-          <div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-family:'IBM Plex Mono'">${E(o.mob)}</span>${o.st?` · ${E(o.st)}`:''}</div>
+          <div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-family:'IBM Plex Mono'">${E(o.mob)}</span>${o.st?` · ${E(STATE_NAMES[o.st]||o.st)}`:''}</div>
           <div style="display:flex;align-items:center;gap:7px;margin-top:5px">${deltaChip(moveOf(o))}<span style="font-size:10px;color:#9C988F;font-family:'IBM Plex Mono'">+${fmt(o.yday)} ac</span></div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -6003,7 +6138,7 @@ function leaderBodyHTML(mob){
         <div style="display:flex;align-items:center;gap:6px">${rankChip(rankOf(o))}</div>
         <div style="min-width:0">
           <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</div>
-          <div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-family:'IBM Plex Mono'">${E(o.mob)}</span>${o.st?` · ${E(STATE_NAMES[o.st]||o.st)}`:''}${o.terr?` · ${E(o.terr)}`:''}</div>
+          <div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-family:'IBM Plex Mono'">${E(o.mob)}</span>${o.st?` · ${E(STATE_NAMES[o.st]||o.st)}`:''}${o.ci?` · CI ${E(o.ci)}`:''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px">${deltaChip(moveOf(o))}</div>
         <div>${barCell(o)}</div>
@@ -6022,6 +6157,109 @@ function leaderBodyHTML(mob){
     : `<div style="padding:26px 18px;text-align:center;color:#9C988F;font-size:12.5px">${gst?`${E(scopeName)}'s board opens with its first operator's acres.`:`The board opens with the contest's first day of acres.`}</div>`;
 
   const standingsSub = `Ranked ${gst?`within ${scopeName}`:'all India'} on acres from ${pretty(CONTEST.start)} · movement against ${A.prev?pretty(A.prev):'the previous day'}`;
+
+  /* ================= the CI board ==================================================================
+     Built from `inScope`, so the state picker, the gate's lock and the "board in front of the reader"
+     rule all carry over untouched — a scoped CI board ranks that state's CIs on that state's acres, and
+     "in the top ten" means the top ten OF THAT BOARD. Nine of the 72 CIs hold operators in more than one
+     state, which is why a CI row names every state it spans rather than picking one.
+     Tone is the operator page's: a CI with nobody in the top ten is described by what his operators DID
+     do, never by the count he is missing. =============================================================*/
+  if(isCI){
+    const B = oplbCiBoard(inScope, A.dates);
+    const cis = S.lbAll ? B.cis : B.cis.slice(0,25);
+    const top = B.cis[0];
+    const stLabel = c => c.sts.length ? c.sts.map(x=>STATE_NAMES[x]||x).join(' · ') : '';
+
+    const ciHero = !top
+      ? `<div style="padding:26px 18px;text-align:center;color:#9C988F;font-size:12.5px">The Cluster-Incharge board opens with the contest's first day of acres.</div>`
+      : `<div style="display:flex;align-items:center;gap:${mob?'12px':'18px'};padding:${mob?'16px':'20px 22px'};flex-wrap:wrap">
+          <div style="width:${mob?'44px':'54px'};height:${mob?'44px':'54px'};border-radius:14px;background:linear-gradient(140deg,#4C7399,#6E93B5);color:#fff;display:flex;align-items:center;justify-content:center;font-size:${mob?'19px':'23px'};flex-shrink:0">👥</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase">Leading CI ${gst?`in ${E(scopeName)}`:'all India'}</div>
+            <div style="font-size:${mob?'17px':'20px'};font-weight:700;letter-spacing:-.01em;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(top.name)}</div>
+            <div style="font-size:11.5px;color:#9C988F;margin-top:2px">${top.mob?`<span style="font-family:'IBM Plex Mono'">${E(top.mob)}</span>`:''}${stLabel(top)?`${top.mob?' · ':''}${E(stLabel(top))}`:''} · ${fmt(top.count)} operator${top.count===1?'':'s'}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:'IBM Plex Mono';font-size:${mob?'22px':'26px'};font-weight:700;line-height:1">${fmt(top.total)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> ac</span></div>
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:7px;margin-top:5px">${deltaChip(top)}<span style="font-size:10.5px;color:#9C988F;font-family:'IBM Plex Mono'">+${fmt(top.yday)} ac ${pretty(A.last)}</span></div>
+          </div>
+        </div>`;
+
+    // The literal "who has the most operators on top" answer, stated once rather than left to a column
+    // scan — and phrased as a standing even when the leader holds only one.
+    const mt = B.mostTop;
+    const mtSub = mt && mt.topN ? `${E(mt.name)} · ${fmt(mt.count)} operator${mt.count===1?'':'s'} in all`
+                : (top ? `${E(top.name)} leads on acres` : 'the contest is open');
+    const ciTotalAc = B.cis.reduce((a,c)=>a+c.total,0);
+    const ciRan     = B.cis.reduce((a,c)=>a+c.yday,0);
+    const ciStats = `<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;display:grid;grid-template-columns:${mob?'1fr 1fr':'repeat(4,1fr)'}">
+        ${stat(0, fmt(B.cis.length), 'Cluster Incharges', `holding ${fmt(inScope.length)} operator${inScope.length===1?'':'s'}`)}
+        ${stat(1, mt&&mt.topN?fmt(mt.topN):'—', `Most in the top ${B.topN}`, mtSub, mt&&mt.topN?C.greenD:C.ink)}
+        ${stat(2, ac(ciTotalAc), 'Contest acres', `${elapsed} of ${totalDays} days run`)}
+        ${stat(3, ac(ciRan), 'On '+pretty(A.last), `${fmt(B.cis.filter(c=>c.yday>0).length)} CIs had a man out`)}
+      </div>`;
+
+    const cGrid = mob ? '' : 'grid-template-columns:46px 1fr 82px 68px 100px 76px 88px 70px;gap:11px';
+    const cRows = cis.map(c=>mob
+      ? `<div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 12px;margin-bottom:8px">
+          ${rankChip(c.rank)}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(c.name)}</div>
+            <div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmt(c.count)} operator${c.count===1?'':'s'}${stLabel(c)?` · ${E(stLabel(c))}`:''}</div>
+            <div style="display:flex;align-items:center;gap:7px;margin-top:5px">${deltaChip(c)}<span style="font-size:10px;color:#9C988F;font-family:'IBM Plex Mono'">+${fmt(c.yday)} ac</span>${c.topN?`<span style="display:inline-flex;align-items:center;padding:1px 6px;border-radius:5px;font-size:9.5px;font-weight:700;background:${C.softG};color:${C.greenD}">${c.topN} in top ${B.topN}</span>`:''}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${fmt(c.total)}<span style="font-size:9.5px;color:#9C988F;font-weight:500"> ac</span></div>
+            <div style="font-size:9.5px;color:#9C988F;margin-top:2px">${fmt(Math.round(c.avg))} ac / operator</div>
+            <div style="margin-top:5px;display:flex;justify-content:flex-end">${spark(c)}</div>
+          </div>
+        </div>`
+      : `<div style="display:grid;${cGrid};padding:11px 16px;border-bottom:1px solid #F4F2EE;align-items:center">
+          <div style="display:flex;align-items:center;gap:6px">${rankChip(c.rank)}</div>
+          <div style="min-width:0">
+            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(c.name)}</div>
+            <div style="font-size:10.5px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.mob?`<span style="font-family:'IBM Plex Mono'">${E(c.mob)}</span>`:''}${stLabel(c)?`${c.mob?' · ':''}${E(stLabel(c))}`:''}${c.past?` · <span style="color:${C.greenD};font-weight:600">${c.past} past 300</span>`:''}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">${deltaChip(c)}</div>
+          <div style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right">${fmt(c.count)}</div>
+          <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700;text-align:right">${fmt(c.total)}<span style="font-size:9.5px;color:#9C988F;font-weight:500"> ac</span></div>
+          <div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;text-align:right;color:#6E6A62">${fmt(Math.round(c.avg))}</div>
+          <div style="text-align:right">${c.topN
+              ? `<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:700;background:${C.softG};color:${C.greenD};font-family:'IBM Plex Mono'">${c.topN}</span>`
+              : `<span style="font-size:11px;color:#C9C4BA">—</span>`}</div>
+          <div style="display:flex;justify-content:flex-end">${spark(c)}</div>
+        </div>`).join('');
+
+    const cHeadRow = mob ? '' : `<div style="display:grid;${cGrid};padding:10px 16px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:9.5px;font-weight:700;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">
+        <div>#</div><div>Cluster Incharge</div><div>Since y'day</div><div style="text-align:right">Ops</div><div style="text-align:right">Contest acres</div><div style="text-align:right">Ac / op</div><div style="text-align:right">Top ${B.topN}</div><div style="text-align:right">7 days</div>
+      </div>`;
+    const cMore = B.cis.length>cis.length || S.lbAll
+      ? `<div style="padding:12px 16px;text-align:center;border-top:1px solid #F4F2EE"><button data-act="lball" style="border:1px solid #E9E6DF;border-radius:9px;background:#fff;color:#6E6A62;font-size:12px;font-weight:600;padding:8px 16px;cursor:pointer">${S.lbAll?`Show the top 25`:`Show all ${fmt(B.cis.length)} CIs`}</button></div>`
+      : '';
+    const cInner = cis.length
+      ? (mob ? cRows : `<div style="overflow-x:auto"><div style="min-width:760px">${cHeadRow}${cRows}</div></div>${cMore}`)
+      : `<div style="padding:26px 18px;text-align:center;color:#9C988F;font-size:12.5px">${gst?`${E(scopeName)}'s CI board opens with its first operator's acres.`:`The CI board opens with the contest's first day of acres.`}</div>`;
+    const cSub = `Ranked ${gst?`within ${scopeName}`:'all India'} on the contest acres of every operator under them · in the top ${B.topN} counts against ${gst?`${scopeName}'s`:'the national'} board`;
+
+    if(mob){
+      return `${header}
+        <div style="height:12px"></div>
+        ${card(ciHero)}
+        <div style="height:12px"></div>
+        ${ciStats}
+        <div style="height:14px"></div>
+        ${mSectionTitle('Cluster Incharge standings', cSub)}
+        ${cInner}
+        ${cMore}`;
+    }
+    return `<section style="padding:18px 22px;display:flex;flex-direction:column;gap:16px">
+      ${header}
+      ${card(ciHero)}
+      ${ciStats}
+      ${card(cHead('Cluster Incharge standings', cSub)+cInner)}
+    </section>`;
+  }
 
   if(mob){
     return `${header}
@@ -6083,7 +6321,7 @@ function drawerHTML(v){
       <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Operator</div>
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
         <div style="width:40px;height:40px;border-radius:50%;background:#F2F0EB;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;color:#6E6A62;flex-shrink:0">${E(d.opInitial)}</div>
-        <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:7px">${E(d.opName)}<span style="${css(d.opTagStyle)}">${E(d.opTag)}</span></div><div style="font-family:'IBM Plex Mono';font-size:12px;color:#6E6A62;margin-top:2px">${E(d.opNum)}</div></div>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:7px;flex-wrap:wrap">${E(d.opName)}<span style="${css(d.opTagStyle)}">${E(d.opTag)}</span>${opRankChip(d.opNum)}</div><div style="font-family:'IBM Plex Mono';font-size:12px;color:#6E6A62;margin-top:2px">${E(d.opNum)}</div></div>
         <a href="${E(d.opTel)}" data-stop="1" style="${css(d.callStyle)}">${I.phone}</a>
       </div>
       <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Acreage funnel</div>
@@ -6348,7 +6586,7 @@ function mobileHTML(v){
         <span style="${css(m.dotStyle)}"></span>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600">${E(m.mc)}</span><span style="${css(m.orgStyle)}">${E(m.org)}</span></div>
-          <div style="font-size:11px;color:#9C988F;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.opName)} · ${E(m.geo)}</div>
+          <div style="display:flex;align-items:center;gap:6px;min-width:0;margin-top:2px"><span style="font-size:11px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.opName)} · ${E(m.geo)}</span>${opRankChip(m.opNum,'s')}</div>
         </div>
         <span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(m.acresLabel)}</span>
       </div>`).join('') : mEmpty('No machines match these filters.')}
@@ -6416,7 +6654,7 @@ function mobileHTML(v){
         <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Operator</div>
         <div style="display:flex;align-items:center;gap:11px;margin-bottom:16px">
           <div style="width:38px;height:38px;border-radius:50%;background:#F2F0EB;display:flex;align-items:center;justify-content:center;font-weight:600;color:#6E6A62;flex-shrink:0">${E(d.opInitial)}</div>
-          <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px">${E(d.opName)}<span style="${css(d.opTagStyle)}">${E(d.opTag)}</span></div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(d.opNum)}</div></div>
+          <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${E(d.opName)}<span style="${css(d.opTagStyle)}">${E(d.opTag)}</span>${opRankChip(d.opNum,'s')}</div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(d.opNum)}</div></div>
           <a href="${E(d.opTel)}" data-stop="1" style="${css(d.callStyle)}">${I.phone}</a>
         </div>
         <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Acreage funnel</div>
@@ -6570,6 +6808,9 @@ app.addEventListener('click', e=>{
     case 'metric': setState({metric:el.dataset.metric}); break;
     case 'day': { const d=el.dataset.day==='today'?'today':'yday'; setState({day:d}); track('day_scope',{day:d}); break; }
     case 'lball': setState(s=>({lbAll:!s.lbAll})); break;
+    // Switching board resets the "show everything" toggle: 667 operators and 72 CIs are different lengths,
+    // and a list left expanded from the other board reads as though this one is that long.
+    case 'lbboard': { const v=el.dataset.v==='ci'?'ci':'ops'; setState({lbBoard:v, lbAll:false}); break; }
     case 'oplbretry': OPLB.loaded=false; OPLB.error=false; loadOplb(); break;
     case 'wxday': setState({wxDay:wxDayIdx(+el.dataset.day||0)}); track('weather_day',{day:wxDayLabel(wxDayIdx(+el.dataset.day||0))}); break;
     case 'pinmode': setState({pinMode:el.dataset.mode}); break;
@@ -7059,7 +7300,11 @@ function bootApp(){
   render();
   trackView(state.view);   // landing view for this session (map)
   loadData();
-  if(CONFIG.refreshMinutes>0) setInterval(loadData, CONFIG.refreshMinutes*60000);
+  // The contest tab is fetched at BOOT now, not on first sight of the Leaders page: the operator's India
+  // rank is printed beside him across the console (drawer, phone sheet, machine table), so the standings
+  // have to exist before any of those render. It refreshes on the same clock as the machine sheet.
+  loadOplb();
+  if(CONFIG.refreshMinutes>0) setInterval(()=>{ loadData(); loadOplb(); }, CONFIG.refreshMinutes*60000);
 }
 if(gateRestore()) bootApp(); else gateShow(()=>bootApp());
 </script>
