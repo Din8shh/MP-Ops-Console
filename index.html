@@ -1971,7 +1971,7 @@ function vals(){
             rows.push({ click:{act:'open',mc:m.mc}, indent:'38px',
               rowStyle:{...grid5,padding:'8px 18px',borderTop:'1px solid #F6F4F0',cursor:'pointer',background:'#fff'},
               chev:'', chevStyle:{width:'12px'}, dotStyle:{width:'7px',height:'7px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
-              name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName, subStyle:{fontSize:'11px',color:'#9C988F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'},
+              name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName, rank:opRankChip(m.opNum,'s'), subStyle:{fontSize:'11px',color:'#9C988F',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'},
               deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},orgOStyle:{display:'none'},
               mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
               paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(acD(m)), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk) });
@@ -2025,7 +2025,7 @@ function vals(){
             amRows.push({ click:{act:'open',mc:m.mc}, indent:'40px',
               rowStyle:{...grid5am,padding:'8px 18px',borderTop:'1px solid #F6F4F0',cursor:'pointer',background:'#fff'},
               chev:'', chevStyle:{width:'12px'}, role:'', roleStyle:{display:'none'}, dotStyle:{width:'7px',height:'7px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
-              name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName+' · '+m.territory, subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
+              name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:m.opName+' · '+m.territory, rank:opRankChip(m.opNum,'s'), subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
               deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},orgOStyle:{display:'none'},
               mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
               paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(acD(m)), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk),
@@ -2074,7 +2074,7 @@ function vals(){
                 bmRows.push({ click:{act:'open',mc:m.mc}, indent:'60px',
                   rowStyle:{...grid5bm,padding:'8px 18px',borderTop:'1px solid #F6F4F0',cursor:'pointer',background:'#fff'},
                   chev:'', chevStyle:{width:'12px'}, role:'', roleStyle:{display:'none'}, dotStyle:{width:'7px',height:'7px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
-                  name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:(m.foName?('FO · '+m.foName+' · '):'')+m.opName, subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
+                  name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub:(m.foName?('FO · '+m.foName+' · '):'')+m.opName, rank:opRankChip(m.opNum,'s'), subStyle:{fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'},
                   deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},orgOStyle:{display:'none'},
                   mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
                   paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(acD(m)), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk),
@@ -2369,7 +2369,7 @@ function tablesViewHTML(v){
         ${v.rows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;padding-left:${r.indent}">
             <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.dotStyle)}"></span>
-            <span style="${css(r.nameStyle)}">${E(r.name)}</span><span style="${css(r.subStyle)}">${E(r.sub)}</span>
+            <span style="${css(r.nameStyle)}">${E(r.name)}</span><span style="${css(r.subStyle)}">${E(r.sub)}</span>${r.rank||''}
           </div>
           <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span><span style="${css(r.orgOStyle)}"></span></span></div>
           <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
@@ -5869,7 +5869,7 @@ function amViewHTML(v){
           ${v.amRows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
             <div style="display:flex;align-items:center;gap:9px;min-width:0;padding-left:${r.indent}">
               <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.roleStyle)}">${E(r.role)}</span><span style="${css(r.dotStyle)}"></span>
-              <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="${css(r.subStyle)}">${E(r.sub)}</div></div>
+              <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="display:flex;align-items:center;gap:6px;min-width:0"><span style="${css(r.subStyle)}">${E(r.sub)}</span>${r.rank||''}</div></div>
             </div>
             <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span><span style="${css(r.orgOStyle)}"></span></span></div>
             <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
@@ -5899,7 +5899,7 @@ function bmViewHTML(v){
           ${v.bmRows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
             <div style="display:flex;align-items:center;gap:9px;min-width:0;padding-left:${r.indent}">
               <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.roleStyle)}">${E(r.role)}</span><span style="${css(r.dotStyle)}"></span>
-              <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="${css(r.subStyle)}">${E(r.sub)}</div></div>
+              <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="display:flex;align-items:center;gap:6px;min-width:0"><span style="${css(r.subStyle)}">${E(r.sub)}</span>${r.rank||''}</div></div>
             </div>
             <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span><span style="${css(r.orgOStyle)}"></span></span></div>
             <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
@@ -5932,7 +5932,7 @@ function pendViewHTML(v){
           v.pendRows.map(r=>`<div ${r.click?rowDataAttrs(r.click):''} style="${css({...grid,...r.rowStyle})}">
             <div style="display:flex;align-items:center;gap:9px;min-width:0;padding-left:${r.indent}">
               <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.roleStyle)}">${E(r.role)}</span><span style="${css(r.dotStyle)}"></span>
-              <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="${css(r.subStyle)}">${E(r.sub)}</div></div>
+              <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="display:flex;align-items:center;gap:6px;min-width:0"><span style="${css(r.subStyle)}">${E(r.sub)}</span>${r.rank||''}</div></div>
             </div>
             <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;color:${r.count?'#3A5B7D':'#C4BFB5'}">${E(r.count)}</div>
             <div style="font-size:11px;color:#6E6A62;white-space:nowrap">${E(r.mix)}</div>
@@ -6512,7 +6512,7 @@ function mHierCardHTML(r, opts){
       <span style="${css(r.dotStyle)}"></span>
       <div style="flex:1;min-width:0">
         <div style="${css({...r.nameStyle,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'})}">${E(r.name)}</div>
-        ${r.sub?`<div style="${css({...r.subStyle,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'})}">${E(r.sub)}</div>`:''}
+        ${r.sub?`<div style="display:flex;align-items:center;gap:6px;min-width:0"><span style="${css({...r.subStyle,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'})}">${E(r.sub)}</span>${r.rank||''}</div>`:''}
       </div>
       ${r.contact?`<a href="${E(r.callTel)}" data-stop="1" style="${css({...r.callStyle,width:'34px',height:'34px',flexShrink:0})}">${I.phoneS}</a>`:''}
     </div>

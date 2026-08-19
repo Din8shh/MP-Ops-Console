@@ -309,8 +309,12 @@ bucket would invent a CI out of unrelated operators. Nine of the 72 span more th
 names every state it covers rather than picking one.
 
 **The India rank now travels with the operator across the whole console.** `opRank(number)` /
-`opRankChip(number)` print `#33 India` beside the operator in the desktop drawer, the phone sheet, the
-machine-wise metrics table and the phone machine list. Three things follow:
+`opRankChip(number)` print `#33 India` beside the operator EVERYWHERE an operator is named: the desktop
+drawer, the phone sheet, the machine-wise metrics table, the phone machine list, and the machine leaf rows
+of all three hierarchy trees (Territory → Cluster → Machine, Area managers, Business managers) on desktop
+and phone alike. The tree rows carry it in their own `rank` field rather than appended to `sub`, because
+every render site escapes `sub` with `E()` — it holds sheet data — and HTML pushed through it would be
+printed as text. Three things follow:
 - **The contest tab is fetched at BOOT** (`bootApp`) and refreshed on the machine sheet's own clock, not
   lazily on first sight of the Leaders page — the badge has to exist before any of those views render.
 - **Standings are MEMOISED** (`oplbA()`, keyed on the two load stamps + `ROWS.length`). The badge is read
