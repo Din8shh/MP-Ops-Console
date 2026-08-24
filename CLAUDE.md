@@ -121,7 +121,7 @@ Eleven tabs; the app reads seven. Mapped by inspection — do not re-derive this
 | `1039187695` | Product data (summary) | region × crop × brand | No (YTD + yesterday only) | Products view, Insights, segment join |
 | `123586424` | **Product Data MP** — the only product tab with a TERRITORY | territory × product × company, **MP only** | No (yesterday + MTD + YTD on the row) | MP products view |
 | `718502150` | Product day-level (`TX`) | **date** × region × crop × brand | Yes, from 1 Jun, no gaps | Week + Month → products, segments, focus-product trend |
-| `1973671649` | Pasted product detail (`WKP`) | region × crop × product, ONE period — **9–15 Aug 2026** | n/a — the tab IS the period | **Week** → products + segments (Month when the paste is a month) |
+| `1973671649` | Pasted product detail (`WKP`), tab named **"Aug 15-22"** | region × crop × product, ONE period — **15–22 Aug 2026, eight days** | n/a — the tab IS the period | **Week** → products + segments, ALWAYS (Month only when the paste is a month, which this one is not) |
 | `1562411178` | **Operator leaderboard** — the 15–31 Aug contest ledger | **date** × operator, keyed on MOBILE | **Yes**, day by day inside the window | Leaders view, the India-rank badge everywhere |
 | `1199323704` | Richer machine feed (per-machine branded acres, lat/lon, ping) | 1 row/machine | No | **not wired** |
 | `1433754421` | Org roster (AM/CI/BM/TM/FO/retailer) | 1 row/machine | No | not wired |
@@ -464,23 +464,24 @@ the console. Work on a branch and fast-forward `main`; don't commit straight to 
   confident, wrong conclusion about the feed being a rolling fortnight. The app handled it correctly (see the
   partial-coverage rule under Month), but **verify a surprising range against a second fetch and a real CSV parse
   before writing it down** — a naive `split(',')` over this export also mis-parses and will confirm the error.
-- **`WKP_PERIOD` is pinned to 9–15 Aug 2026**, because that tab is a manual paste holding one period at a time.
-  It was a week (25–31 Jul), then the whole of July for the monthly review (2026-08-07), and on 2026-08-15 the
-  user put a week back: **9–15 Aug, a Sun–Sat pull**. The gid never changes. A review reads the tab when its
-  window is the **same length** and within `WKP_SLACK_DAYS` (2) of it — so Week claims it again and Month has
-  gone back to the day-level tab. When the recurring sheet lands, change `WKP_PERIOD` + `WKP_GID` and nothing else.
+- **`WKP_PERIOD` is pinned to 15–22 Aug 2026**, because that tab is a manual paste holding one period at a time.
+  It was a week (25–31 Jul), then the whole of July for the monthly review (2026-08-07), then 9–15 Aug, and on
+  2026-08-24 the user pasted **15–22 Aug into a tab named "Aug 15-22" — EIGHT days**, the Sat–Fri review week plus
+  the following Saturday. The gid never changes. That eight-day span is what forced the gating change: **Week now
+  shows the tab unconditionally** and Month keeps the strict same-length test, so Month stays on the day-level tab.
+  When the next paste lands, change `WKP_PERIOD` (+ `WKP_GID` if it moves) and nothing else.
 - **Date an unlabelled paste by FINGERPRINT, not by the tab's name.** The tab has no date column and its name is
   whatever the user typed. The eight brands it shares with the day-level tab (which *is* dated) identify it: sum
-  the day-level tab per brand over every window in its range and compare. For the Aug paste, 9–15 Aug matched all
-  eight to the decimal and was the only window in ~2,900 with a zero error; 8–14 Aug was out by 181 ac. That is an
-  identification, and it is worth the two minutes — the whole Week review hangs off which days these acres are.
-- **The 9–15 Aug paste joins at 97.7% of acres** (measured against `BRAND_PORT` before building anything), a real
-  improvement on the July paste's 88% — the summary tab now carries five real portfolios across 141 brands
-  (Herbicide, Insecticide, Fungicide, Bio Solution, Soil and Seed Health) instead of Herbicide-or-blank, so the
-  IRIS gap that sank the July join is closed. Two things still land in Other and both are sheet fixes, not code:
-  535 ac on six brands the dated tabs have never named (**Shenzi Sc** 305, Tewlis 88, Manzate 74, Lancer 53,
-  Lindstar 16), and 135 ac on **KINSTA**, whose portfolio is spelled `INSECTICIDES` — a variant `INS_SEGS` does
-  not recognise. The rest of Other is Bio Solution and Soil & Seed Health, which belong there by design.
+  the day-level tab per brand over every window in its range and compare. For the previous paste, 9–15 Aug matched
+  all eight to the decimal and was the only window in ~2,900 with a zero error; 8–14 Aug was out by 181 ac. That is
+  an identification, and it is worth the two minutes — the whole Week review hangs off which days these acres are.
+- **The 15–22 Aug paste joins at 100.0% of acres** — re-measured 2026-08-24 against `BRAND_PORT`, up from the
+  9–15 Aug paste's 97.7% and July's 88%. **One row fails to join: `ACEPHATE`, 1 ac.** The named brands the earlier
+  paste missed (Shenzi Sc, Tewlis, Manzate, Lancer, Lindstar) are covered by `PROD_OVERRIDE`, and `KINSTA`'s
+  `INSECTICIDES` spelling resolves through `prodPortfolio`'s trailing-S strip. Base is **26,257 ac** across the
+  seven dashboard states: Insecticide 16,666 · Fungicide 4,081 · Herbicide 3,411 · Bio Solution 1,666 · Soil and
+  Seed Health 432. The last two plus the stray acre are the segments card's **Other, 8%** — they belong there by
+  design, and that 8% is the figure on screen, so the card and this note reconcile.
 - **A periodic snapshot of Sheet1's cumulative column** (machine + `Kharif achieved`, appended each week) would
   unlock territory/AM-level weekly **and monthly** history, which is the single biggest gap — it is the one thing
   standing between Month/Week mode and sub-state detail. ~15 lines of Apps Script.
@@ -702,17 +703,28 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   Crops per state, not a truncated footnote).
 - **Week mode carries TWO product cards, from two different sources.**
   *Products this week* ← `WKP` (gid 1973671649), a **hand-built tab covering ONE named period** (`WKP_PERIOD`).
-  It has no date column — the tab IS the period — so it renders only for a window of the SAME LENGTH within
-  `WKP_SLACK_DAYS` of it, and otherwise says what the tab covers rather than relabelling those numbers as this
-  week's. When a card is only a message it gets **no PNG button** — an export of it would warn to the console
-  instead of producing an image.
-  **The slack (2 days) exists because the programme's review week is Sat–Fri and the paste is hand-pulled: the
-  Aug paste is Sun–Sat, the same seven days shifted by one.** The user's call (2026-08-16) was to show it rather
-  than lose the week's product mix — but nothing is relabelled. `wkpMatch(d0,d1)` returns `{shift,exact}`, and an
-  offset paste is **titled with the TAB'S own dates**, has its share taken against the fleet's acres on **those**
-  days (`wkpFleetAcres`, not the review week's total — dividing across two windows prints a number that is
-  nobody's), and carries `wkpShiftNote` on its face, on screen **and** in the PNG. The equal-length test is what
-  keeps the slack honest: a pasted week can never satisfy a month window, or the reverse.
+  **Week ALWAYS renders it, whatever week is on screen** (changed by request 2026-08-24): this is the programme's
+  standing source for per-product detail, and the old rule — render only for a window of the same LENGTH within
+  `WKP_SLACK_DAYS`, otherwise print a message saying what the tab covers — cost the review its whole product mix
+  the moment a paste stopped being exactly seven days. The 15–22 Aug paste is exactly that case: the Sat–Fri
+  review week **plus the following Saturday, eight days**, which the equal-length gate refused outright.
+  **Showing it always is only honest because nothing is relabelled**, and that machinery is unchanged. `wkpRel`
+  is the never-refusing relation Week reads (`{shift,exact,fits}`); `wkpMatch` is the strict test and now has
+  exactly one caller, Month. Any non-exact paste is **titled with the TAB'S own dates**, has its share taken
+  against the fleet's acres on **those** days (`wkpFleetAcres`, not the review week's total — dividing across two
+  windows prints a number that is nobody's), and carries `wkpShiftNote` on its face, on screen **and** in the PNG.
+  That note has two forms and picking the right one matters: a **same-length offset** (`fits`) is stated as an
+  offset — "these acres run one day later" — while **differing spans** print both windows in full with their day
+  counts, because "shifted by n days" is not a true description of eight days against seven.
+  **Month keeps the strict gate, and the asymmetry is the design.** A week card can print the tab's own dates over
+  its own denominator and be completely true; a month card carries a whole-month denominator and a
+  vs-previous-month column that a shorter paste cannot fill. On the current eight-day paste `wkpIsPeriod` is false
+  for every month, so Month sits on the day-level tab and says so — verified on screen.
+  **The slack (2 days) still exists** because the programme's review week is Sat–Fri and the paste is hand-pulled;
+  it is now only load-bearing for Month, where the equal-length test is what stops a pasted week satisfying a
+  month window or the reverse.
+  Live on 15–22 Aug: **97 products, 26,257 ac, 50% of the 52,272 ac the fleet sprayed over those eight days**, and
+  the segments card reports the same 26,257 — the two-totals-must-reconcile rule still holds.
   **`wkpMatch` compares MIDNIGHT-ANCHORED dates.** A review window is built from `new Date()` and carries the
   current time of day, so comparing the raw instants rounds a genuine one-day offset to zero — which is precisely
   the silent relabelling the gate exists to prevent. Caught by the node harness, never on screen.

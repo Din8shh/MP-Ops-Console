@@ -922,20 +922,31 @@ function buildBrandPort(){
    picture: the summary tab has no dates, and the day-level tab carries only eight focus brands. This one is the
    real mix — every product the programme scanned in its period, ~57% of the fleet's acres.
 
-   It has no date column: the tab IS the period. So it is pinned to WKP_PERIOD, and a review whose window is the
-   same LENGTH and within WKP_SLACK_DAYS of it reads it — Week when the paste is a week, MONTH when it is a month.
-   Any other window says so rather than silently relabelling this period's numbers as another's.
+   It has no date column: the tab IS the period, pinned to WKP_PERIOD.
 
-   On 2026-08-15 the paste went back to a WEEK: 9–15 Aug 2026 (Sun–Sat). The programme's review week is Sat–Fri
-   (INS_WEEK_END_DOW), so the paste sits ONE DAY later than the week under review — hence the slack, and hence
-   every card built off it carries the tab's OWN dates rather than the week's. The period was not read off the
-   tab name: the tab's eight overlapping brands were matched against the dated day-level tab across every window
-   in its range, and 9–15 Aug was the only exact fit. Do that again if a paste ever arrives unlabelled.
+   THE WEEK REVIEW ALWAYS SHOWS IT (changed by request 2026-08-24). This tab is the programme's standing source
+   for per-product detail, so the Week page renders it whatever week is on screen instead of withholding it when
+   the dates do not line up. Withholding was the old rule and it cost the review its entire product mix the
+   moment a paste stopped being exactly seven days — which is what the 15–22 Aug paste is: the Sat–Fri review
+   week plus the following Saturday, EIGHT days, so the old equal-length gate refused it outright.
 
-   It is one tab holding one period at a time: when the recurring sheet lands, change WKP_PERIOD (and the gid)
-   and nothing else. */
-const WKP_GID    = '1973671649';
-const WKP_PERIOD = { start:'2026-08-09', end:'2026-08-15' };          // the period this manual tab covers
+   Showing it always is only honest because nothing is relabelled. A card built from a paste that is not the
+   review week is titled with the TAB'S OWN dates, takes its share against the fleet's acres on the TAB'S OWN
+   days (wkpFleetAcres — never the review week's total, which would divide across two different windows), and
+   carries wkpShiftNote naming both spans on its face, on screen and in the PNG.
+
+   MONTH mode is unchanged and still gated (wkpIsPeriod → wkpMatch). A month card prints a vs-previous-month
+   column against a whole-month denominator, so it may only read this tab where the paste really IS that month;
+   an eight-day paste can never satisfy that test, and Month therefore stays on the day-level tab.
+
+   The period is not read off the tab name — that name is a label somebody typed. It is verified by matching the
+   tab's overlapping brands against the dated day-level tab across every window in range. Do that again if a
+   paste ever arrives unlabelled.
+
+   It is one tab holding one period at a time: when the next paste lands, change WKP_PERIOD (and the gid if it
+   moves) and nothing else. */
+const WKP_GID    = '1973671649';                                      // the workbook tab named "Aug 15-22"
+const WKP_PERIOD = { start:'2026-08-15', end:'2026-08-22' };          // the period this manual tab covers
 const WKP_COL  = { region:0, crop:1, product:2, company:3, acres:4 };
 const WKP = { loading:false, loaded:false, error:false, at:'', rows:[] };
 function wkpUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${WKP_GID}&t=${Date.now()}`; }
@@ -2845,7 +2856,7 @@ function buildWeekExport(id){
   }
 
   if(id==='wk-products'){
-    const TP=D.TP; if(!TP||TP.wrongPeriod||TP.empty||!TP.total) return null;
+    const TP=D.TP; if(!TP||TP.empty||!TP.total) return null;
     // An offset paste is headed with the TAB'S dates, not the week's, and carries the same caveat as the screen.
     const pShift=TP.mt&&!TP.mt.exact, pRange=pShift?`${wkpRangeLabel()} · ${scopeName}`:sub;
     const h=exHeader(pShift?`Products, ${wkpRangeLabel()}`:'Products this week',`${pRange} · ${fmt(TP.products.length)} products · ${fmt(TP.total)} ac`,y); out+=h.svg; y=h.y;
@@ -2861,7 +2872,7 @@ function buildWeekExport(id){
   }
 
   if(id==='wk-segments'){
-    const SG=D.SG; if(!SG||SG.wrongPeriod||SG.empty) return null;
+    const SG=D.SG; if(!SG||SG.empty) return null;
     const sShift=SG.mt&&!SG.mt.exact;
     const h=exHeader('Product segments by state',`${sShift?`${wkpRangeLabel()} · ${scopeName}`:sub} · share of each state’s product acres`,y); out+=h.svg; y=h.y;
     const L=exLegend([{label:'Herbicide',color:C.green},{label:'Insecticide',color:C.orange},{label:'Fungicide',color:C.open},{label:'Other',color:'#B6B1A8'}],y+8);
@@ -3724,16 +3735,15 @@ function insWeekAgg(A,back){
   return W;
 }
 const insISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-/* The manual product-detail tab has no dates — it IS one named period (WKP_PERIOD). A review window may read it
-   when it is the SAME LENGTH and starts and ends within WKP_SLACK_DAYS of it; every other window must say so
-   rather than relabel these numbers as its own.
+/* The manual product-detail tab has no dates — it IS one named period (WKP_PERIOD). wkpMatch is the STRICT test:
+   a window may claim the paste as its own only when it is the SAME LENGTH and starts and ends within
+   WKP_SLACK_DAYS of it. Since the Week page started showing the tab unconditionally (see WKP_PERIOD above), the
+   only caller of the strict test is MONTH — which is exactly the window it was written to guard, because a month
+   card carries a vs-previous-month column and a whole-month denominator that a shorter paste cannot fill.
 
    The slack exists because the paste is hand-pulled and the programme's review week is Sat–Fri: a Sun–Sat pull
-   is the same seven days shifted by one, and refusing it would leave the review with no product mix at all. The
-   equal-length test is what keeps that honest — a pasted WEEK can never satisfy a MONTH window (or the reverse),
-   which is the failure the exact test was really guarding against. Nothing is relabelled: wkpMatch reports the
-   shift, and every card built off an offset paste is titled with the TAB'S dates and measured against the fleet
-   acres of those same days, never the review week's.
+   is the same seven days shifted by one. The equal-length test is what keeps the slack honest — a pasted WEEK can
+   never satisfy a MONTH window, or the reverse, which is the failure the exact test was really guarding against.
 
    Pure period test: it says nothing about whether the tab has loaded, which the callers check separately. */
 const WKP_SLACK_DAYS = 2;
@@ -3751,14 +3761,31 @@ function wkpMatch(d0,d1){
   return { shift:s, exact:(s===0&&e===0) };
 }
 const wkpIsPeriod = (d0,d1) => !!wkpMatch(d0,d1);
+/* The WEEK page's relation to the tab, which — unlike wkpIsPeriod — never refuses. Week reads this tab whatever
+   week is on screen, so what it needs is not a yes/no but a description of how the two spans sit: `exact` when
+   they coincide, `fits` when the paste is the same length and merely offset (the offset is then the whole story
+   and wkpShiftNote says it as one), and neither when the spans differ in length — which is when the note prints
+   both windows in full instead. Every non-exact case is titled and measured on the TAB'S own days. */
+function wkpRel(d0,d1){
+  const m=wkpMatch(d0,d1);
+  return m ? { ...m, fits:true } : { shift:null, exact:false, fits:false };
+}
 const wkpRangeLabel = () => `${insWeekLabel(new Date(WKP_PERIOD.start+'T00:00:00'))} – ${insWeekLabel(new Date(WKP_PERIOD.end+'T00:00:00'))}`;
 const wkpDaysWord = n => Math.abs(n)===1 ? 'one day' : `${Math.abs(n)} days`;
 /* What an offset paste is, in one sentence — shown on the face of every card built from it, on screen and in the
    PNG, so the numbers are never read as the review week's own. Empty string when the paste sits on the week. */
-const wkpShiftNote = (mt,W) => (!mt || mt.exact || !W) ? '' :
-  `The product tab covers ${wkpRangeLabel()}. This review week is ${insWeekLabel(W.d0)} – ${insWeekLabel(W.d1)}, `
-  + `so these product acres run ${wkpDaysWord(mt.shift)} ${mt.shift>0?'later':'earlier'} than the fleet figures on this page `
-  + `and are measured against the fleet's acres on their own days.`;
+const wkpSpanWord = (a,b) => wkpDaysWord(wkpDayDiff(a,b)+1);
+const wkpTabSpanWord = () => wkpSpanWord(new Date(WKP_PERIOD.start+'T00:00:00'), new Date(WKP_PERIOD.end+'T00:00:00'));
+const wkpShiftNote = (mt,W) => (!mt || mt.exact || !W) ? '' : (mt.fits
+  // Same seven days, one or two later. The offset IS the finding, so it is said as an offset.
+  ? `The product tab covers ${wkpRangeLabel()}. This review week is ${insWeekLabel(W.d0)} – ${insWeekLabel(W.d1)}, `
+    + `so these product acres run ${wkpDaysWord(mt.shift)} ${mt.shift>0?'later':'earlier'} than the fleet figures on this page `
+    + `and are measured against the fleet's acres on their own days.`
+  // Different spans — an eight-day paste against a seven-day week. "Shifted by n days" would be the wrong claim
+  // about that, so both windows are printed in full and the reader is told which one these figures belong to.
+  : `The product tab covers ${wkpRangeLabel()} (${wkpTabSpanWord()}); this review week is `
+    + `${insWeekLabel(W.d0)} – ${insWeekLabel(W.d1)} (${wkpSpanWord(W.d0,W.d1)}). Every figure on this card is the tab's `
+    + `own period, measured against the fleet's acres over those days — not the review week's.`);
 /* Fleet acres over the TAB'S OWN days, so an offset paste's share is measured against the days it actually
    covers. Identical to the window's own total when the paste is exact. Null if the period leaves the season. */
 function wkpFleetAcres(A){
@@ -3787,12 +3814,12 @@ function wkpProducts(A){
     crops:    listOf(cm,(k,v)=>({ key:k, ac:v })),
     regions:  listOf(rm,(k,v)=>({ st:k, name: k==='OT'?'Other':(STATE_NAMES[k]||k), ac:v })) };
 }
-/* Products for the week. `mt` carries the paste's offset from the review week (0 when they coincide) and `fleet`
-   the acres the fleet sprayed on the TAB'S days — both so the card can name what it is really showing. */
+/* Products for the week — ALWAYS built, whatever week is on screen. `mt` is the tab's relation to the review week
+   (exact / offset / a different span) and `fleet` the acres the fleet sprayed on the TAB'S own days; between them
+   the card can title and measure itself as the tab's period rather than as this week's. */
 function insWeekProducts(A,W){
   if(!WKP.loaded || !W) return null;
-  const mt=wkpMatch(W.d0,W.d1);
-  if(!mt) return { wrongPeriod:true };
+  const mt=wkpRel(W.d0,W.d1);
   return { ...wkpProducts(A), mt, fleet: mt.exact ? W.acres : wkpFleetAcres(A) };
 }
 
@@ -3836,9 +3863,7 @@ function wkpSegments(A){
 }
 function insWeekSegments(A,W){
   if(!WKP.loaded || !PROD.loaded || !W) return null;
-  const mt=wkpMatch(W.d0,W.d1);
-  if(!mt) return { wrongPeriod:true };
-  return { ...wkpSegments(A), mt };
+  return { ...wkpSegments(A), mt: wkpRel(W.d0,W.d1) };
 }
 
 /* ===== focus-product daily trend =====
@@ -4121,10 +4146,14 @@ function insMonthAgg(A,back){
 /* ===== products for the month =====
    TWO possible sources, and the better one wins:
 
-   · The manual product-detail tab, WHERE IT IS THIS MONTH (WKP_PERIOD — currently 1–31 July 2026). It is the full
+   · The manual product-detail tab, WHERE IT IS THIS MONTH (wkpIsPeriod → the STRICT wkpMatch). It is the full
      product mix for the month, ~115 products against the day-level tab's eight, so where it applies it is not a
      close call. It carries no dates and no earlier month, so there is nothing to set each product against — the
      vs-previous-month column is DROPPED on that path rather than printed as a column of dashes.
+     Month keeps the strict gate even though WEEK now reads the tab unconditionally, and the asymmetry is the
+     point: a week card can honestly print the tab's own dates over its own denominator, but a month card carries
+     a whole-month denominator and a vs-previous-month column that a shorter paste cannot fill. WKP_PERIOD is
+     currently the eight days 15–22 Aug 2026, so this branch is dormant and every month reads the day-level tab.
    · Otherwise the day-level tab, which is the only *dated* product source and therefore the only one that can
      answer any other month — but it is narrow in both directions (a handful of focus brands, and only the days it
      holds), so that path says so on the card's face and divides by the fleet's acres on the covered days.
@@ -4949,15 +4978,11 @@ function insightsBodyHTML(mob){
     const TP=insWeekProducts(A,W);
     // A card that is only a message has nothing to redraw, and its export would warn to the console instead of
     // producing an image — so the PNG button is withheld rather than offered and then failing.
-    const prodWkDL = !!(TP && !TP.wrongPeriod && !TP.empty && TP.total);
+    const prodWkDL = !!(TP && !TP.empty && TP.total);
     const chip = c => `<span style="display:inline-block;padding:1px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:.03em;background:${c==='UPL'?C.softO:C.softG};color:${c==='UPL'?C.orangeD:C.greenD}">${c}</span>`;
     let prodWk='';
     if(!WKP.loaded){
       prodWk=card(`${cHead('What was sprayed this week','From the product-detail tab')}${waiting(WKP.error, WKP.error?'Could not load the product-detail tab.':'Loading the product-detail tab…','wkpretry')}`);
-    } else if(TP && TP.wrongPeriod){
-      // One tab, one pasted period, no dates of its own — so it cannot be re-cut, and a week that is not that
-      // period says where the detail is rather than showing another period's acres under this week's name.
-      prodWk=card(`${cHead('What was sprayed this week','From the product-detail tab')}${waiting(false,`Per-product detail currently covers ${E(wkpRangeLabel())}, which is not the week under review. The tab holds one pasted period at a time and carries no dates, so it cannot be split or shifted into another week.`,'wkpretry')}`);
     } else if(!TP || TP.empty || !TP.total){
       prodWk=card(`${cHead('What was sprayed this week','From the product-detail tab')}${waiting(false,'No product acres recorded for this scope.','wkpretry')}`);
     } else {
@@ -4995,13 +5020,11 @@ function insightsBodyHTML(mob){
 
     /* ---- product segments by state ---- */
     const SG=insWeekSegments(A,W);
-    const segWkDL = !!(SG && !SG.wrongPeriod && !SG.empty);
+    const segWkDL = !!(SG && !SG.empty);
     const SEG_C={ Herbicide:C.green, Insecticide:C.orange, Fungicide:C.open, Other:'#B6B1A8' };
     let segCard='';
     if(!WKP.loaded || !PROD.loaded){
       segCard=card(`${cHead('Kinds of product, by state','The product-detail tab, grouped into what each brand treats')}${waiting(WKP.error||PROD.error, (WKP.error||PROD.error)?'Could not load the product sheets.':'Loading product segments…','wkpretry')}`);
-    } else if(SG && SG.wrongPeriod){
-      segCard='';                                            // the week card already explains the coverage
     } else if(!SG || SG.empty){
       segCard=card(`${cHead('Kinds of product, by state','The product-detail tab, grouped into what each brand treats')}${waiting(false,'No segment-classified product acres for this scope.','wkpretry')}`);
     } else {
