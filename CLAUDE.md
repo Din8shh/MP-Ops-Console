@@ -91,6 +91,29 @@ Other states derive plan from `ALL_ROWS` (deployed + pending, incl. Open) and us
 `planScope()` compute the per-org Plan; the **Plan KPI and the Pending Deployment view are
 admin-only**. Global filter dropdowns (territory/AM/CO/BM/TM) scope to the selected state.
 
+**RECORDED ACRES OVERRIDE A "No" — the flag is a claim, the acres are the evidence** (added 2026-08-25,
+`worked` in `rowsToMachines`). Outside `FULL_DEPLOY`, a row counts as deployed when `Deployed status`
+says Yes *or* when it carries acres on any of the four acre columns (`achieved`/`mtd`/`acresY`/`acresT`)
+or IoT acres. A machine that sprayed IS deployed; the flag is simply stale on it — nobody goes back to
+flip a Yes once the acres start arriving. Live on 2026-08-25 that was **21 rows in GJ/MH/TG**, and the
+cost of dropping them was that **every acres KPI read under the sheet's own column sum with nothing on
+screen saying so**: MTD 1,32,624 against a Sheet1 column of 1,33,395, i.e. the reported "1.32 lakh vs
+1.33 lakh" — a difference small enough to look like rounding and large enough to be wrong. All four acre
+columns now reconcile row-for-row with Sheet1, which is the property to re-check after any change here.
+
+**The override is gated on a KNOWN state (`STATE_NAMES`), and that gate is load-bearing.** The State
+dropdown is built from `ROWS` (`allStates` in `vals()`), so flipping a row whose State cell is not one of
+the seven would invent a state in the filter bar off a single machine. Live there is exactly one such row
+— `UPL_2309`, State cell "ANDHRA PRADESH", **coordinates 23.894285/77.7798684 which are in Madhya
+Pradesh** — so it is a mislabelled MP machine, not an AP programme. It stays out, and its 43.7 season
+acres are the only acreage on the sheet the console does not count. That is a **sheet fix**, not a code
+one: absorbing it would either add a phantom state or hide acres in an all-India total that no scoped
+view could ever reach.
+
+Every load logs `[MP-Ops] deployed reconcile → {flips, flipSeasonAc, orphanRows, orphanSeasonAc,
+orphanStates}`. **Read that line first if a total disagrees with the sheet.** `orphanRows` above zero
+means somebody typed a state the console does not know.
+
 Object shape: `{ mc, org, deployed(1/0), st, territory, cluster, co, coMob, am, amNum, target,
 achieved, mtd, acresY, acresT, iotAcresY, scanned:[{product,acres}], breakdown(1/0), opMapped(1/0),
 pinged(1/0), lastPing, daysSincePing, opName, opNum, bmName/bmMob, tmName/tmMob, foName/foMob,
@@ -105,7 +128,7 @@ designing anything on a column — several look usable and are not:
 | `co`/`coMob`, `am`/`amNum` | ~100% | **Yes** — the reason peer detectors are cluster/AM grain |
 | BM / TM / FO / retailer | 85–92% | Yes, unused by Insights so far |
 | `mtd` | 343 of 938 season-active | Yes, but thin early in a month |
-| `iotAcresY` | **0/1,518** | **No** — column is entirely empty. An IoT-vs-reported divergence detector would be the best signal on the sheet; ask for this to be populated |
+| `iotAcresY` | **now populated** — 4,304 ac across the sheet on 2026-08-25, where the 2026-08-03 audit found 0/1,518 | **Re-audit before designing on it.** The IoT-vs-reported divergence detector this table has been asking for is now possible in principle. It already counts for one thing: IoT acres satisfy the deployed-override `worked` test, since a sensor reporting sprayed area is the same evidence a reported acre is (3 GJ rows live, 55 ac, all with zero reported acres) |
 | `lastPing` / `daysSincePing` | 100% | **No** — the two columns are **swapped** (`daysSincePing` holds an Excel serial date, `lastPing` holds the day count) *and* stale: median last ping 76 days old, only 17 machines in the last day |
 | `target` | 100% | **No** — flat 1000 for every row, so any %-of-target measure is just `achieved` rescaled |
 | `acresT` (today) | 18/1,518 | **No** — the page runs on yesterday anyway |

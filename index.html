@@ -340,6 +340,8 @@ function resolveCols(header){
 function rowsToMachines(grid){
   if(grid.length<2) return [];
   const col=resolveCols(grid[0]); const out=[];
+  // Reconciliation counters for the load-time log — see the deployed-flag note below.
+  let depFlips=0, depFlipAc=0, orphans=0, orphanAc=0; const orphanSt={};
   for(let r=1;r<grid.length;r++){ const row=grid[r]; if(!row||!row.join('').trim()) continue;
     const g=i=>i>=0&&i<row.length?row[i]:'';
     const mc=txt(g(col.mc)); if(!mc) continue;
@@ -351,15 +353,27 @@ function rowsToMachines(grid){
               : orgRaw==='upl'  ? 'UPL'
               : (orgRaw==='unimart' && st==='MP') ? 'UPL'
               : 'Open';
-    // Deployed: full-deployment states (MP/PB/HR/RJ) show every sheet row as deployed regardless of status; other states use the "Deployed status"=Yes flag.
-    const deployed = FULL_DEPLOY.has(st) ? 1 : (txt(g(col.dep)).trim().toLowerCase()==='yes' ? 1 : 0);
+    const target=num(g(col.target)), achieved=num(g(col.achieved)), mtd=num(g(col.mtd)),
+          acresY=num(g(col.acresY)), acresT=num(g(col.acresT)), iotAcresY=num(g(col.iotAcresY));
+    // Deployed: full-deployment states (MP/PB/HR/RJ) show every sheet row as deployed regardless of status; other
+    // states use the "Deployed status"=Yes flag — EXCEPT that RECORDED ACRES OVERRIDE A "No". A machine that
+    // sprayed is deployed; the flag is simply stale on it. See the deployed-flag note in CLAUDE.md.
+    // Gated on a KNOWN state so one mislabelled row cannot invent a state in the filter dropdown (built from ROWS).
+    const worked = achieved>0 || mtd>0 || acresY>0 || acresT>0 || iotAcresY>0;
+    const flagged = txt(g(col.dep)).trim().toLowerCase()==='yes';
+    const known = !!STATE_NAMES[st];
+    const deployed = FULL_DEPLOY.has(st) ? 1 : (flagged || (worked && known)) ? 1 : 0;
+    if(!FULL_DEPLOY.has(st) && !flagged && worked){
+      if(known){ depFlips++; depFlipAc+=achieved; }
+      else { orphans++; orphanAc+=achieved; orphanSt[st]=(orphanSt[st]||0)+achieved; }
+    }
     out.push({
       mc, org,
       deployed,
       st,
       territory:aliasTerr(st, canonTerr(txt(g(col.territory))))||'Unassigned', cluster:txt(g(col.cluster))||'Unassigned',
       co:txt(g(col.co)), coMob:txt(g(col.coMob)), am:txt(g(col.am)), amNum:txt(g(col.amNum)),
-      target:num(g(col.target)), achieved:num(g(col.achieved)), mtd:num(g(col.mtd)), acresY:num(g(col.acresY)), acresT:num(g(col.acresT)), iotAcresY:num(g(col.iotAcresY)),
+      target, achieved, mtd, acresY, acresT, iotAcresY,
       scanned:parseScanned(g(col.scanned)),
       breakdown:(txt(g(col.breakdown))==='1'?1:0), opMapped:(txt(g(col.opMapped))==='1'?1:0),
       pinged:(txt(g(col.pinged))==='1'?1:0), lastPing:txt(g(col.lastPing)), daysSincePing:txt(g(col.daysSincePing)),
@@ -370,6 +384,11 @@ function rowsToMachines(grid){
       lat, lon
     });
   }
+  // One line, every load: how the acres KPIs reconcile against a hand-added Sheet1 column.
+  // `flips` is what the acres-override rescued; `orphans` is the only acreage still outside the console,
+  // and it is a SHEET FIX (a row whose State is not one of the seven), never something the code should absorb.
+  if(depFlips||orphans) console.info('[MP-Ops] deployed reconcile →',
+    {flips:depFlips, flipSeasonAc:Math.round(depFlipAc), orphanRows:orphans, orphanSeasonAc:Math.round(orphanAc), orphanStates:orphanSt});
   return out;
 }
 // Every text field a view groups or displays by. [field, mobile field, merge spellings?] — the mobile
