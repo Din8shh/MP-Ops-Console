@@ -368,6 +368,75 @@ printed as text. Three things follow:
 **Who can see it:** admin only, as the old leaderboard was. Granting it to leadership or a field login is one
 token in that role's `views` — and unlike `snake`/`product`, safe for a state-locked role.
 
+## The share card — the contest as one image (Leaders → Share)
+
+A **Share** control on the Leaders header downloads the standings as **one 1080×1920 PNG** (rasterised at 2×,
+~500 KB) built for the WhatsApp groups the operators sit in. It is themed as the incentive programme itself —
+**AZADI SE PRAGATI TAK** — with a tricolour rule top and bottom, the Ashoka chakra drawn behind the header, and
+saffron as the accent; the contest window opens on 15 August, so the theme is the programme's, not decoration.
+
+**It is not a screenshot of the page and does not try to be.** The page answers "where does everyone stand";
+the card answers "the prize is being taken and you are not on it yet". Four mechanics carry that, and each is
+a figure the ledger already holds, so any of 800 men can check it:
+
+- **Every cut-off is printed with what it was three ledger days ago.** "Three days ago, 311 acres put you in
+  the national top 3. Today it takes 464." Same for a state's 3rd place (MP: 299 → 422) and the tiles.
+- **The gap to the man directly above** sits under every acres figure — always about one good day's work.
+- **One operator's single day is shown as proof**: nationally the biggest CLIMB, in a state the hardest day's
+  work. The national climber is read only among operators who were RANKED yesterday — a man arriving on the
+  tab for the first time has no placing to have climbed from, and printing him would be an artefact of the
+  join rather than a day's work.
+- **The clock is in the header**, counted off the LEDGER's last day exactly as the standings are.
+
+**Nothing on it reports an absence** — the page's tone rule, which matters more in a broadcast than on an
+admin-only screen. The state headline has three forms and picks itself from the data: most-past-300 in the
+country ("6 of us are already past 300 — more than any other state"), some ("…the rest of the prize list is
+still open"), or none ("Nobody in Gujarat has crossed 300 yet. The first prize here is unclaimed").
+
+### Languages
+Copy lives in `SC_T`, keyed by string id, in **six languages**; `SC_M.byState` decides which a scope offers —
+English everywhere because the CIs read it, plus the state's own: **Hindi** (MP/HR/RJ), **Punjabi** (PB),
+**Telugu** (TG), **Marathi** (MH), **Gujarati** (GJ). They are COPY, not translation: "standing still now means
+going backwards" lands in Hindi as "रुकने का मतलब है पीछे खिसकना", which a literal rendering would not. Adding a
+language is one block in `SC_T` plus its `script`, `month`, `prog` and state names in `SC_M`; adding it to a
+state is one entry in `byState`. **Operator names stay in the sheet's own Latin spelling in every language** —
+transliterating 795 hand-entered names would misspell people, and a man's own name misspelled on a prize card
+is worse than a name in the wrong script.
+
+### Two constraints that shape the code
+- **Webfonts do not exist inside a rasterised SVG.** The card follows the same export route as the chart and
+  week-card exports (SVG string → `<img>` → canvas → `toBlob`), and that route cannot load the page's Noto Sans
+  or IBM Plex Mono. So the card names **system stacks only** (`SC_FF`, `SC_MONO`) — Nirmala UI on Windows, the
+  Sangam/Kohinoor faces on Apple, Noto on Android — and measures with those SAME strings through a canvas 2D
+  context. Naming a webfont anywhere here would mean measuring in one face and drawing in another; because
+  every `tspan` carries its own `x`, the drift does not push words along, it **overlaps them**, and the symptom
+  is words running together with their spaces eaten. That bug was hit and fixed during the build.
+- **Line breaking is done here, not by the renderer.** `scWrap` measures and wraps runs (`<b>` for the figures,
+  `<u>` for a FOMO line's accent colour); `scClip` truncates the one-line fields.
+
+### Layout
+Laid out top-down with a cursor; the LEFTOVER height is then split around the single-fact strip so **every
+language lands on exactly 1920 with the footer flush** — Telugu and Gujarati run 4–8% taller than English at
+the same point size, and a card that ends short shows a pale band under the footer in every group it is
+forwarded to. How many chasing-pack rows are drawn is decided from the space left (4–13), and **the section
+label names the range it actually drew**. Two Latin-only devices are switched off for Indic scripts: uppercase
+and letter-spacing on the small labels. On the podium the `#N India` badge sits on the CI line, not beside the
+name — inline it cost ~120px of the one field that must never be shortened.
+
+### Two data rules worth keeping
+- **A gap under one acre is a TIE, not a distance.** "0 ac behind #6" reads as a rounding bug to the man it is
+  about; it prints "level with #6" instead.
+- **The mover's distance is to the PRIZE LINE**, not to whoever is one row above him. A #39 operator described
+  as "0 acres off a prize position" — which the first build did say — is simply wrong.
+
+### Scope and access
+Chromeless like the page itself: the card takes its scope from `gst`, so what downloads is always what the
+reader is looking at, and a state-locked login can only ever produce its own state's card. The control appears
+on the **operators board only** — the card is the operator contest, and a download button under the CI board
+would read as exporting the board on screen. Admin-only, because the Leaders view is. Filename:
+`Azadi-se-Pragati-tak_<Scope>_<LANG>_<ledger date>.png`. Downloads are tracked as `share_card_download`
+with `{scope, lang}` — no operator identity leaves the page, same rule as every other event.
+
 ## Access roles (the PIN gate)
 `GATE.ROLES` in index.html maps sha256(PIN) → a scope on **three axes**: org (`org` default + `allow` list),
 state (`states`, `switchStates`) and views (`views`). It is a soft client-side gate — the file says so, and the

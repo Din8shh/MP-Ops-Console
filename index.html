@@ -3118,6 +3118,829 @@ function downloadChart(kind){
   img.onerror=()=>{ console.error('chart export: SVG rasterisation failed'); alert('Sorry — could not generate the chart image.'); };
   img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(built.xml);
 }
+
+const SC_T = {
+   en:{
+    kickerIndia:"All India · Operator Contest",
+    kickerState:"{st} · Operator Contest",
+    sub:"Standings after <b>{d}</b> · closes <b>31 Aug</b> · <b>{n} days left</b>",
+    hlIndia:"{n} operators have already won the incentive.",
+    hlStateTop:"{n} of us are already past 300 — more than any other state.",
+    hlStateSome:"{n} of us are already past 300. The rest of the prize list is still open.",
+    hlStateNone:"Nobody in {st} has crossed 300 yet. The first prize here is unclaimed.",
+    t_past:"Past 300 acres",
+    t_bar:"Top-3 bar",
+    t_yday:"Acres yesterday",
+    t_left:"Days left",
+    t_stacres:"State acres",
+    t_prizebar:"Prize bar (3rd)",
+    t_strank:"State rank",
+    s_in3:"+{n} in 3 days",
+    s_out:"{n} operators out",
+    s_close:"closes 31 Aug",
+    s_of:"of {n}",
+    s_behindst:"{n} ac behind {st}",
+    ac:"ac",
+    acres:"acres",
+    fomoIndiaA:"Three days ago, <u>{a} acres</u> put you in the national top 3. Today it takes <u>{b}</u>.",
+    fomoIndiaB:"A week ago, 10th place was {a} acres. Today it is {b}. {c} operators moved up last night — standing still now means going backwards.",
+    fomoStateA:"Three days ago, <u>{a} acres</u> held 3rd place in {st}. Today it takes <u>{b}</u>.",
+    fomoStateB:"{a} of {st}’s {b} operators sprayed yesterday and added {c} acres. Every one of them pushed someone down the list.",
+    secPodIndia:"The three holding the national prize",
+    secPodState:"The three holding the state prize",
+    secRowsIndia:"Close enough to take it",
+    secRowsState:"One good week from a prize",
+    leads:"Leads by {n} ac",
+    behind:"{n} ac behind #{r}",
+    won:"Incentive won ✓",
+    togo:"{n} ac to the incentive",
+    mvIndiaL:"Biggest jump yesterday",
+    mvIndiaT:"{name} sprayed {n} acres in one day.",
+    mvIndiaS:"That moved him {n} places, to #{r} in India — in a single day.",
+    mvIndiaF:"places in a day",
+    mvStateL:"Hardest day’s work in {st}",
+    mvStateT:"{name} sprayed {n} acres in a single day.",
+    mvStateS:"That is #{r} in the state on {t} acres — {g} acres off a prize position.",
+    mvStateF:"acres yesterday",
+    pz1:"<b>300+ acres</b> → incentive for every operator",
+    pz2:"<b>Top 3</b> in every state",
+    pz3:"<b>1</b> national topper",
+    ctaIndia:"{n} days left. Even from zero, {a} acres a day crosses 300.",
+    ctaState:"{n} acres separate #4 from a prize position.",
+    lgBars:"Bars = daily acres, 15–{d}",
+    lgArrow:"▲▼ = places moved since {d}",
+    lgNear:"{n} operators are within 50 acres of the incentive",
+    lgIndia:"Grey #N India = national placing",
+    level:"level with #{r}",
+    mvStateHold:"That is #{r} in the state on {t} acres — a prize position, and he is holding it.",
+    range:"{a} to {b}"
+   },
+   hi:{
+    kickerIndia:"पूरा भारत · ऑपरेटर प्रतियोगिता",
+    kickerState:"{st} · ऑपरेटर प्रतियोगिता",
+    sub:"<b>{d}</b> तक की स्थिति · <b>31 अगस्त</b> को समापन · <b>{n} दिन बाकी</b>",
+    hlIndia:"{n} ऑपरेटर इनाम पक्का कर चुके हैं।",
+    hlStateTop:"हम में से {n} अब 300 पार — किसी भी राज्य से ज़्यादा।",
+    hlStateSome:"हम में से {n} अब 300 पार। बाकी इनाम अब भी खुले हैं।",
+    hlStateNone:"{st} से अब तक कोई 300 पार नहीं। पहला इनाम अब भी खाली है।",
+    t_past:"300 एकड़ पार",
+    t_bar:"टॉप-3 की सीमा",
+    t_yday:"कल का छिड़काव",
+    t_left:"दिन बाकी",
+    t_stacres:"राज्य के एकड़",
+    t_prizebar:"तीसरे नंबर की सीमा",
+    t_strank:"राज्य की रैंक",
+    s_in3:"3 दिन में +{n}",
+    s_out:"{n} ऑपरेटर मैदान में",
+    s_close:"31 अगस्त को समापन",
+    s_of:"/ {n}",
+    s_behindst:"{st} से {n} एकड़ पीछे",
+    ac:"एकड़",
+    acres:"एकड़",
+    fomoIndiaA:"तीन दिन पहले <u>{a} एकड़</u> पर देश की टॉप-3 में जगह मिल जाती थी। आज <u>{b}</u> चाहिए।",
+    fomoIndiaB:"हफ़्ता भर पहले 10वें नंबर पर {a} एकड़ थे, आज {b}। कल रात {c} ऑपरेटर ऊपर चढ़ गए — रुकने का मतलब है पीछे खिसकना।",
+    fomoStateA:"तीन दिन पहले {st} में तीसरा नंबर <u>{a} एकड़</u> पर था। आज <u>{b}</u> चाहिए।",
+    fomoStateB:"कल {st} के {b} में से {a} ऑपरेटर मैदान में उतरे और {c} एकड़ जोड़े। हर एक ने किसी न किसी को नीचे धकेला।",
+    secPodIndia:"देश का इनाम फ़िलहाल इन तीन के पास",
+    secPodState:"राज्य का इनाम फ़िलहाल इन तीन के पास",
+    secRowsIndia:"एक अच्छा दिन और जगह आपकी",
+    secRowsState:"इनाम बस एक हफ़्ते की दूरी पर",
+    leads:"{n} एकड़ की बढ़त",
+    behind:"#{r} से {n} एकड़ पीछे",
+    won:"इनाम पक्का ✓",
+    togo:"इनाम से {n} एकड़ दूर",
+    mvIndiaL:"कल का सबसे बड़ा उछाल",
+    mvIndiaT:"{name} ने एक ही दिन में {n} एकड़ कर दिए।",
+    mvIndiaS:"एक दिन में {n} पायदान चढ़कर देश में #{r} पर।",
+    mvIndiaF:"पायदान, एक दिन में",
+    mvStateL:"{st} में कल की सबसे बड़ी मेहनत",
+    mvStateT:"{name} ने एक दिन में {n} एकड़ कर दिए।",
+    mvStateS:"राज्य में #{r}, कुल {t} एकड़ — इनाम की जगह से सिर्फ़ {g} एकड़ दूर।",
+    mvStateF:"एकड़, कल",
+    pz1:"<b>300+ एकड़</b> → हर ऑपरेटर को इनाम",
+    pz2:"हर राज्य में <b>टॉप 3</b>",
+    pz3:"<b>एक</b> राष्ट्रीय विजेता",
+    ctaIndia:"{n} दिन बाकी। रोज़ {a} एकड़ — शून्य से भी 300 पार।",
+    ctaState:"सिर्फ़ {n} एकड़ #4 को इनाम से दूर रखे हैं।",
+    lgBars:"बार = रोज़ का छिड़काव, 15–{d}",
+    lgArrow:"▲▼ = {d} से पायदान का बदलाव",
+    lgNear:"{n} ऑपरेटर इनाम से 50 एकड़ के भीतर",
+    lgIndia:"स्लेटी #N India = देश में स्थान",
+    level:"#{r} के बराबर",
+    mvStateHold:"राज्य में #{r}, कुल {t} एकड़ — इनाम की जगह, और वो उसे थामे हुए हैं।",
+    range:"{a} से {b}"
+   },
+   pa:{
+    kickerIndia:"ਪੂਰਾ ਭਾਰਤ · ਆਪਰੇਟਰ ਮੁਕਾਬਲਾ",
+    kickerState:"{st} · ਆਪਰੇਟਰ ਮੁਕਾਬਲਾ",
+    sub:"<b>{d}</b> ਤੱਕ ਦੀ ਸਥਿਤੀ · <b>31 ਅਗਸਤ</b> ਨੂੰ ਸਮਾਪਤ · <b>{n} ਦਿਨ ਬਾਕੀ</b>",
+    hlIndia:"{n} ਆਪਰੇਟਰ ਇਨਾਮ ਪੱਕਾ ਕਰ ਚੁੱਕੇ ਹਨ।",
+    hlStateTop:"ਸਾਡੇ ਵਿੱਚੋਂ {n} ਹੁਣ 300 ਪਾਰ — ਕਿਸੇ ਵੀ ਸੂਬੇ ਨਾਲੋਂ ਵੱਧ।",
+    hlStateSome:"ਸਾਡੇ ਵਿੱਚੋਂ {n} ਹੁਣ 300 ਪਾਰ। ਬਾਕੀ ਇਨਾਮ ਹਾਲੇ ਵੀ ਖੁੱਲ੍ਹੇ ਹਨ।",
+    hlStateNone:"{st} ਤੋਂ ਹਾਲੇ ਕੋਈ 300 ਪਾਰ ਨਹੀਂ। ਪਹਿਲਾ ਇਨਾਮ ਹਾਲੇ ਖਾਲੀ ਹੈ।",
+    t_past:"300 ਏਕੜ ਪਾਰ",
+    t_bar:"ਟਾਪ-3 ਦੀ ਹੱਦ",
+    t_yday:"ਕੱਲ੍ਹ ਦੀ ਸਪਰੇ",
+    t_left:"ਦਿਨ ਬਾਕੀ",
+    t_stacres:"ਸੂਬੇ ਦੇ ਏਕੜ",
+    t_prizebar:"ਤੀਜੇ ਨੰਬਰ ਦੀ ਹੱਦ",
+    t_strank:"ਸੂਬੇ ਦੀ ਰੈਂਕ",
+    s_in3:"3 ਦਿਨਾਂ ਵਿੱਚ +{n}",
+    s_out:"{n} ਆਪਰੇਟਰ ਮੈਦਾਨ ਵਿੱਚ",
+    s_close:"31 ਅਗਸਤ ਨੂੰ ਸਮਾਪਤ",
+    s_of:"/ {n}",
+    s_behindst:"{st} ਤੋਂ {n} ਏਕੜ ਪਿੱਛੇ",
+    ac:"ਏਕੜ",
+    acres:"ਏਕੜ",
+    fomoIndiaA:"ਤਿੰਨ ਦਿਨ ਪਹਿਲਾਂ <u>{a} ਏਕੜ</u> ’ਤੇ ਦੇਸ਼ ਦੇ ਟਾਪ-3 ਵਿੱਚ ਥਾਂ ਮਿਲ ਜਾਂਦੀ ਸੀ। ਅੱਜ <u>{b}</u> ਚਾਹੀਦੇ ਹਨ।",
+    fomoIndiaB:"ਹਫ਼ਤਾ ਪਹਿਲਾਂ 10ਵੇਂ ਨੰਬਰ ’ਤੇ {a} ਏਕੜ ਸਨ, ਅੱਜ {b}। ਕੱਲ੍ਹ ਰਾਤ {c} ਆਪਰੇਟਰ ਉੱਪਰ ਚੜ੍ਹ ਗਏ — ਰੁਕਣ ਦਾ ਮਤਲਬ ਪਿੱਛੇ ਖਿਸਕਣਾ ਹੈ।",
+    fomoStateA:"ਤਿੰਨ ਦਿਨ ਪਹਿਲਾਂ {st} ਵਿੱਚ ਤੀਜਾ ਨੰਬਰ <u>{a} ਏਕੜ</u> ’ਤੇ ਸੀ। ਅੱਜ <u>{b}</u> ਚਾਹੀਦੇ ਹਨ।",
+    fomoStateB:"ਕੱਲ੍ਹ {st} ਦੇ {b} ਵਿੱਚੋਂ {a} ਆਪਰੇਟਰ ਮੈਦਾਨ ਵਿੱਚ ਨਿੱਕਲੇ ਅਤੇ {c} ਏਕੜ ਜੋੜੇ। ਹਰ ਇੱਕ ਨੇ ਕਿਸੇ ਨਾ ਕਿਸੇ ਨੂੰ ਹੇਠਾਂ ਧੱਕਿਆ।",
+    secPodIndia:"ਦੇਸ਼ ਦਾ ਇਨਾਮ ਫ਼ਿਲਹਾਲ ਇਨ੍ਹਾਂ ਤਿੰਨਾਂ ਕੋਲ",
+    secPodState:"ਸੂਬੇ ਦਾ ਇਨਾਮ ਫ਼ਿਲਹਾਲ ਇਨ੍ਹਾਂ ਤਿੰਨਾਂ ਕੋਲ",
+    secRowsIndia:"ਇੱਕ ਚੰਗਾ ਦਿਨ ਤੇ ਥਾਂ ਤੁਹਾਡੀ",
+    secRowsState:"ਇਨਾਮ ਸਿਰਫ਼ ਇੱਕ ਹਫ਼ਤੇ ਦੀ ਦੂਰੀ ’ਤੇ",
+    leads:"{n} ਏਕੜ ਦੀ ਲੀਡ",
+    behind:"#{r} ਤੋਂ {n} ਏਕੜ ਪਿੱਛੇ",
+    won:"ਇਨਾਮ ਪੱਕਾ ✓",
+    togo:"ਇਨਾਮ ਤੋਂ {n} ਏਕੜ ਦੂਰ",
+    mvIndiaL:"ਕੱਲ੍ਹ ਦੀ ਸਭ ਤੋਂ ਵੱਡੀ ਛਾਲ",
+    mvIndiaT:"{name} ਨੇ ਇੱਕੋ ਦਿਨ ਵਿੱਚ {n} ਏਕੜ ਕਰ ਦਿੱਤੇ।",
+    mvIndiaS:"ਇੱਕ ਦਿਨ ਵਿੱਚ {n} ਦਰਜੇ ਚੜ੍ਹ ਕੇ ਦੇਸ਼ ਵਿੱਚ #{r} ’ਤੇ।",
+    mvIndiaF:"ਦਰਜੇ, ਇੱਕ ਦਿਨ ਵਿੱਚ",
+    mvStateL:"{st} ਵਿੱਚ ਕੱਲ੍ਹ ਦੀ ਸਭ ਤੋਂ ਵੱਡੀ ਮਿਹਨਤ",
+    mvStateT:"{name} ਨੇ ਇੱਕ ਦਿਨ ਵਿੱਚ {n} ਏਕੜ ਕਰ ਦਿੱਤੇ।",
+    mvStateS:"ਸੂਬੇ ਵਿੱਚ #{r}, ਕੁੱਲ {t} ਏਕੜ — ਇਨਾਮ ਵਾਲੀ ਥਾਂ ਤੋਂ ਸਿਰਫ਼ {g} ਏਕੜ ਦੂਰ।",
+    mvStateF:"ਏਕੜ, ਕੱਲ੍ਹ",
+    pz1:"<b>300+ ਏਕੜ</b> → ਹਰ ਆਪਰੇਟਰ ਨੂੰ ਇਨਾਮ",
+    pz2:"ਹਰ ਸੂਬੇ ਵਿੱਚ <b>ਟਾਪ 3</b>",
+    pz3:"<b>ਇੱਕ</b> ਰਾਸ਼ਟਰੀ ਜੇਤੂ",
+    ctaIndia:"{n} ਦਿਨ ਬਾਕੀ। ਰੋਜ਼ {a} ਏਕੜ — ਸਿਫ਼ਰ ਤੋਂ ਵੀ 300 ਪਾਰ।",
+    ctaState:"ਸਿਰਫ਼ {n} ਏਕੜ #4 ਨੂੰ ਇਨਾਮ ਤੋਂ ਦੂਰ ਰੱਖ ਰਹੇ ਹਨ।",
+    lgBars:"ਬਾਰ = ਰੋਜ਼ ਦੀ ਸਪਰੇ, 15–{d}",
+    lgArrow:"▲▼ = {d} ਤੋਂ ਦਰਜੇ ਦਾ ਬਦਲਾਅ",
+    lgNear:"{n} ਆਪਰੇਟਰ ਇਨਾਮ ਤੋਂ 50 ਏਕੜ ਦੇ ਅੰਦਰ",
+    lgIndia:"ਸਲੇਟੀ #N India = ਦੇਸ਼ ਵਿੱਚ ਥਾਂ",
+    level:"#{r} ਦੇ ਬਰਾਬਰ",
+    mvStateHold:"ਸੂਬੇ ਵਿੱਚ #{r}, ਕੁੱਲ {t} ਏਕੜ — ਇਨਾਮ ਵਾਲੀ ਥਾਂ, ਤੇ ਉਹ ਉੱਥੇ ਟਿਕੇ ਹੋਏ ਹਨ।",
+    range:"{a} ਤੋਂ {b}"
+   },
+   mr:{
+    kickerIndia:"संपूर्ण भारत · ऑपरेटर स्पर्धा",
+    kickerState:"{st} · ऑपरेटर स्पर्धा",
+    sub:"<b>{d}</b> पर्यंतची स्थिती · <b>31 ऑगस्ट</b>ला समाप्ती · <b>{n} दिवस बाकी</b>",
+    hlIndia:"{n} ऑपरेटरनी बक्षीस पक्कं केलं आहे.",
+    hlStateTop:"आपल्यापैकी {n} जण 300 पार — कोणत्याही राज्यापेक्षा जास्त.",
+    hlStateSome:"आपल्यापैकी {n} जण 300 पार. बाकीची बक्षिसं अजून खुली आहेत.",
+    hlStateNone:"{st}मधून अजून कोणीही 300 पार केलेलं नाही. पहिलं बक्षीस अजून रिकामं आहे.",
+    t_past:"300 एकर पार",
+    t_bar:"टॉप-3 ची मर्यादा",
+    t_yday:"कालची फवारणी",
+    t_left:"दिवस बाकी",
+    t_stacres:"राज्याचे एकर",
+    t_prizebar:"तिसऱ्या क्रमांकाची मर्यादा",
+    t_strank:"राज्याचा क्रमांक",
+    s_in3:"3 दिवसांत +{n}",
+    s_out:"{n} ऑपरेटर मैदानात",
+    s_close:"31 ऑगस्टला समाप्ती",
+    s_of:"/ {n}",
+    s_behindst:"{st}पेक्षा {n} एकर मागे",
+    ac:"एकर",
+    acres:"एकर",
+    fomoIndiaA:"तीन दिवसांपूर्वी <u>{a} एकर</u>वर देशाच्या टॉप-3 मध्ये जागा मिळत होती. आज <u>{b}</u> लागतात.",
+    fomoIndiaB:"आठवड्यापूर्वी 10व्या क्रमांकावर {a} एकर होते, आज {b}. काल रात्री {c} ऑपरेटर वर चढले — थांबणं म्हणजे मागे सरकणं.",
+    fomoStateA:"तीन दिवसांपूर्वी {st}मध्ये तिसरा क्रमांक <u>{a} एकर</u>वर होता. आज <u>{b}</u> लागतात.",
+    fomoStateB:"काल {st}च्या {b} पैकी {a} ऑपरेटर मैदानात उतरले आणि {c} एकर जोडले. प्रत्येकाने कोणाला ना कोणाला खाली ढकललं.",
+    secPodIndia:"देशाचं बक्षीस सध्या या तिघांकडे",
+    secPodState:"राज्याचं बक्षीस सध्या या तिघांकडे",
+    secRowsIndia:"एक चांगला दिवस आणि जागा तुमची",
+    secRowsState:"बक्षीस फक्त एका आठवड्याच्या अंतरावर",
+    leads:"{n} एकरची आघाडी",
+    behind:"#{r}पेक्षा {n} एकर मागे",
+    won:"बक्षीस पक्कं ✓",
+    togo:"बक्षिसापासून {n} एकर दूर",
+    mvIndiaL:"कालची सर्वात मोठी झेप",
+    mvIndiaT:"{name} यांनी एकाच दिवसात {n} एकर केले.",
+    mvIndiaS:"एका दिवसात {n} क्रमांक वर चढून देशात #{r}वर.",
+    mvIndiaF:"क्रमांक, एका दिवसात",
+    mvStateL:"{st}मधली कालची सर्वात मोठी मेहनत",
+    mvStateT:"{name} यांनी एका दिवसात {n} एकर केले.",
+    mvStateS:"राज्यात #{r}, एकूण {t} एकर — बक्षिसाच्या जागेपासून फक्त {g} एकर दूर.",
+    mvStateF:"एकर, काल",
+    pz1:"<b>300+ एकर</b> → प्रत्येक ऑपरेटरला बक्षीस",
+    pz2:"प्रत्येक राज्यात <b>टॉप 3</b>",
+    pz3:"<b>एक</b> राष्ट्रीय विजेता",
+    ctaIndia:"{n} दिवस बाकी. रोज {a} एकर — शून्यापासूनही 300 पार.",
+    ctaState:"फक्त {n} एकर #4ला बक्षिसापासून दूर ठेवत आहेत.",
+    lgBars:"बार = रोजची फवारणी, 15–{d}",
+    lgArrow:"▲▼ = {d}पासून क्रमांकातील बदल",
+    lgNear:"{n} ऑपरेटर बक्षिसापासून 50 एकरच्या आत",
+    lgIndia:"करडा #N India = देशातील स्थान",
+    level:"#{r}च्या बरोबरीत",
+    mvStateHold:"राज्यात #{r}, एकूण {t} एकर — बक्षिसाची जागा, आणि ती त्यांनी धरून ठेवली आहे.",
+    range:"{a} ते {b}"
+   },
+   te:{
+    kickerIndia:"యావత్ భారతదేశం · ఆపరేటర్ పోటీ",
+    kickerState:"{st} · ఆపరేటర్ పోటీ",
+    sub:"<b>{d}</b> వరకు స్థితి · <b>ఆగస్టు 31</b>న ముగింపు · <b>{n} రోజులు మిగిలాయి</b>",
+    hlIndia:"{n} ఆపరేటర్లు ఇప్పటికే బహుమతి ఖాయం చేసుకున్నారు.",
+    hlStateTop:"మనలో {n} మంది 300 దాటారు — ఏ రాష్ట్రం కంటే ఎక్కువ.",
+    hlStateSome:"మనలో {n} మంది 300 దాటారు. మిగిలిన బహుమతులు ఇంకా ఖాళీగానే ఉన్నాయి.",
+    hlStateNone:"{st} నుంచి ఇంకా ఎవరూ 300 దాటలేదు. మొదటి బహుమతి ఇంకా ఎవరిదీ కాలేదు.",
+    t_past:"300 ఎకరాలు దాటినవారు",
+    t_bar:"టాప్-3 హద్దు",
+    t_yday:"నిన్నటి స్ప్రే",
+    t_left:"మిగిలిన రోజులు",
+    t_stacres:"రాష్ట్ర ఎకరాలు",
+    t_prizebar:"మూడో స్థానం హద్దు",
+    t_strank:"రాష్ట్ర ర్యాంక్",
+    s_in3:"3 రోజుల్లో +{n}",
+    s_out:"{n} ఆపరేటర్లు బయటకు",
+    s_close:"ఆగస్టు 31న ముగింపు",
+    s_of:"/ {n}",
+    s_behindst:"{st} కంటే {n} ఎకరాలు వెనుక",
+    ac:"ఎకరాలు",
+    acres:"ఎకరాలు",
+    fomoIndiaA:"మూడు రోజుల క్రితం <u>{a} ఎకరాలు</u> ఉంటే దేశంలో టాప్-3లో చోటు దక్కేది. ఇప్పుడు <u>{b}</u> కావాలి.",
+    fomoIndiaB:"వారం క్రితం 10వ స్థానం {a} ఎకరాలు, ఇప్పుడు {b}. నిన్న రాత్రి {c} మంది పైకి ఎగబాకారు — ఆగిపోవడం అంటే వెనక్కి జారడమే.",
+    fomoStateA:"మూడు రోజుల క్రితం {st}లో మూడో స్థానం <u>{a} ఎకరాల</u> వద్ద ఉండేది. ఇప్పుడు <u>{b}</u> కావాలి.",
+    fomoStateB:"నిన్న {st}లోని {b} మందిలో {a} మంది బయటకు వచ్చి {c} ఎకరాలు కలిపారు. ప్రతి ఒక్కరూ ఎవరో ఒకరిని కిందకు నెట్టారు.",
+    secPodIndia:"దేశ బహుమతి ప్రస్తుతం వీరి ముగ్గురి చేతిలో",
+    secPodState:"రాష్ట్ర బహుమతి ప్రస్తుతం వీరి ముగ్గురి చేతిలో",
+    secRowsIndia:"ఒక్క మంచి రోజు, స్థానం మీదే",
+    secRowsState:"బహుమతి ఒక్క వారం దూరంలో",
+    leads:"{n} ఎకరాల ఆధిక్యం",
+    behind:"#{r} కంటే {n} ఎకరాలు వెనుక",
+    won:"బహుమతి ఖాయం ✓",
+    togo:"బహుమతికి {n} ఎకరాలు దూరం",
+    mvIndiaL:"నిన్నటి అతిపెద్ద ఎగబాకు",
+    mvIndiaT:"{name} ఒక్క రోజులో {n} ఎకరాలు పూర్తి చేశారు.",
+    mvIndiaS:"ఒక్క రోజులో {n} స్థానాలు ఎగబాకి దేశంలో #{r}కి.",
+    mvIndiaF:"స్థానాలు, ఒక్క రోజులో",
+    mvStateL:"{st}లో నిన్నటి అత్యధిక కృషి",
+    mvStateT:"{name} ఒక్క రోజులో {n} ఎకరాలు పూర్తి చేశారు.",
+    mvStateS:"రాష్ట్రంలో #{r}, మొత్తం {t} ఎకరాలు — బహుమతి స్థానానికి కేవలం {g} ఎకరాలు దూరం.",
+    mvStateF:"ఎకరాలు, నిన్న",
+    pz1:"<b>300+ ఎకరాలు</b> → ప్రతి ఆపరేటర్‌కు ప్రోత్సాహకం",
+    pz2:"ప్రతి రాష్ట్రంలో <b>టాప్ 3</b>",
+    pz3:"<b>ఒక</b> జాతీయ విజేత",
+    ctaIndia:"{n} రోజులు మిగిలాయి. రోజుకు {a} ఎకరాలు — సున్నా నుంచైనా 300 దాటొచ్చు.",
+    ctaState:"కేవలం {n} ఎకరాలే #4ని బహుమతికి దూరంగా ఉంచుతున్నాయి.",
+    lgBars:"బార్లు = రోజువారీ స్ప్రే, ఆగస్టు 15–{d}",
+    lgArrow:"▲▼ = {d} నుంచి స్థానంలో మార్పు",
+    lgNear:"{n} మంది బహుమతికి 50 ఎకరాల లోపు",
+    lgIndia:"బూడిద #N India = దేశంలో స్థానం",
+    level:"#{r}తో సమానం",
+    mvStateHold:"రాష్ట్రంలో #{r}, మొత్తం {t} ఎకరాలు — బహుమతి స్థానం, దాన్ని నిలబెట్టుకుంటున్నారు.",
+    range:"{a} నుంచి {b}"
+   },
+   gu:{
+    kickerIndia:"સમગ્ર ભારત · ઓપરેટર સ્પર્ધા",
+    kickerState:"{st} · ઓપરેટર સ્પર્ધા",
+    sub:"<b>{d}</b> સુધીની સ્થિતિ · <b>31 ઓગસ્ટ</b>ના રોજ સમાપ્ત · <b>{n} દિવસ બાકી</b>",
+    hlIndia:"{n} ઓપરેટરે ઇનામ પાકું કરી લીધું છે.",
+    hlStateTop:"આપણામાંથી {n} હવે 300 પાર — કોઈપણ રાજ્ય કરતાં વધુ.",
+    hlStateSome:"આપણામાંથી {n} હવે 300 પાર. બાકીનાં ઇનામ હજી ખુલ્લાં છે.",
+    hlStateNone:"{st}માંથી હજી કોઈએ 300 પાર કર્યું નથી. પહેલું ઇનામ હજી કોઈનું નથી.",
+    t_past:"300 એકર પાર",
+    t_bar:"ટોપ-3ની હદ",
+    t_yday:"ગઈકાલનો છંટકાવ",
+    t_left:"દિવસ બાકી",
+    t_stacres:"રાજ્યના એકર",
+    t_prizebar:"ત્રીજા નંબરની હદ",
+    t_strank:"રાજ્યનો ક્રમ",
+    s_in3:"3 દિવસમાં +{n}",
+    s_out:"{n} ઓપરેટર મેદાનમાં",
+    s_close:"31 ઓગસ્ટે સમાપ્ત",
+    s_of:"/ {n}",
+    s_behindst:"{st} કરતાં {n} એકર પાછળ",
+    ac:"એકર",
+    acres:"એકર",
+    fomoIndiaA:"ત્રણ દિવસ પહેલાં <u>{a} એકર</u>થી દેશની ટોપ-3માં જગ્યા મળી જતી. આજે <u>{b}</u> જોઈએ.",
+    fomoIndiaB:"અઠવાડિયા પહેલાં 10મા નંબરે {a} એકર હતા, આજે {b}. ગઈ રાત્રે {c} ઓપરેટર ઉપર ચઢ્યા — અટકવું એટલે પાછળ સરકવું.",
+    fomoStateA:"ત્રણ દિવસ પહેલાં {st}માં ત્રીજો નંબર <u>{a} એકર</u> પર હતો. આજે <u>{b}</u> જોઈએ.",
+    fomoStateB:"ગઈકાલે {st}ના {b}માંથી {a} ઓપરેટર મેદાનમાં ઊતર્યા અને {c} એકર ઉમેર્યા. દરેકે કોઈને ને કોઈને નીચે ધકેલ્યા.",
+    secPodIndia:"દેશનું ઇનામ હાલ આ ત્રણ પાસે",
+    secPodState:"રાજ્યનું ઇનામ હાલ આ ત્રણ પાસે",
+    secRowsIndia:"એક સારો દિવસ અને જગ્યા તમારી",
+    secRowsState:"ઇનામ ફક્ત એક અઠવાડિયું દૂર",
+    leads:"{n} એકરની લીડ",
+    behind:"#{r} કરતાં {n} એકર પાછળ",
+    won:"ઇનામ પાકું ✓",
+    togo:"ઇનામથી {n} એકર દૂર",
+    mvIndiaL:"ગઈકાલની સૌથી મોટી છલાંગ",
+    mvIndiaT:"{name}એ એક જ દિવસમાં {n} એકર કરી નાખ્યા.",
+    mvIndiaS:"એક દિવસમાં {n} ક્રમ ચઢીને દેશમાં #{r} પર.",
+    mvIndiaF:"ક્રમ, એક દિવસમાં",
+    mvStateL:"{st}માં ગઈકાલની સૌથી મોટી મહેનત",
+    mvStateT:"{name}એ એક દિવસમાં {n} એકર કરી નાખ્યા.",
+    mvStateS:"રાજ્યમાં #{r}, કુલ {t} એકર — ઇનામની જગ્યાથી ફક્ત {g} એકર દૂર.",
+    mvStateF:"એકર, ગઈકાલે",
+    pz1:"<b>300+ એકર</b> → દરેક ઓપરેટરને ઇનામ",
+    pz2:"દરેક રાજ્યમાં <b>ટોપ 3</b>",
+    pz3:"<b>એક</b> રાષ્ટ્રીય વિજેતા",
+    ctaIndia:"{n} દિવસ બાકી. રોજ {a} એકર — શૂન્યથી પણ 300 પાર.",
+    ctaState:"ફક્ત {n} એકર #4ને ઇનામથી દૂર રાખે છે.",
+    lgBars:"બાર = રોજનો છંટકાવ, 15–{d}",
+    lgArrow:"▲▼ = {d}થી ક્રમમાં ફેરફાર",
+    lgNear:"{n} ઓપરેટર ઇનામથી 50 એકરની અંદર",
+    lgIndia:"ગ્રે #N India = દેશમાં સ્થાન",
+    level:"#{r}ની બરાબરી",
+    mvStateHold:"રાજ્યમાં #{r}, કુલ {t} એકર — ઇનામની જગ્યા, અને તે એને જાળવી રાખે છે.",
+    range:"{a}થી {b}"
+   }
+  };
+const SC_M = {
+   prog:{
+    en:"AZADI SE PRAGATI TAK",
+    hi:"आज़ादी से प्रगति तक",
+    pa:"ਆਜ਼ਾਦੀ ਸੇ ਪ੍ਰਗਤੀ ਤਕ",
+    mr:"आज़ादी से प्रगति तक",
+    te:"ఆజాదీ సే ప్రగతి తక్",
+    gu:"આઝાદી સે પ્રગતિ તક"
+   },
+   month:{
+    en:"Aug",
+    hi:"अगस्त",
+    pa:"ਅਗਸਤ",
+    mr:"ऑगस्ट",
+    te:"ఆగస్టు",
+    gu:"ઓગસ્ટ"
+   },
+   dateMonthFirst:{
+    te:true
+   },
+   states:{
+    hi:{
+     "Madhya Pradesh":"मध्य प्रदेश",
+     Rajasthan:"राजस्थान",
+     Haryana:"हरियाणा",
+     Punjab:"पंजाब",
+     Telangana:"तेलंगाना",
+     Gujarat:"गुजरात",
+     Maharashtra:"महाराष्ट्र"
+    },
+    pa:{
+     "Madhya Pradesh":"ਮੱਧ ਪ੍ਰਦੇਸ਼",
+     Rajasthan:"ਰਾਜਸਥਾਨ",
+     Haryana:"ਹਰਿਆਣਾ",
+     Punjab:"ਪੰਜਾਬ",
+     Telangana:"ਤੇਲੰਗਾਨਾ",
+     Gujarat:"ਗੁਜਰਾਤ",
+     Maharashtra:"ਮਹਾਰਾਸ਼ਟਰ"
+    },
+    mr:{
+     "Madhya Pradesh":"मध्य प्रदेश",
+     Rajasthan:"राजस्थान",
+     Haryana:"हरियाणा",
+     Punjab:"पंजाब",
+     Telangana:"तेलंगणा",
+     Gujarat:"गुजरात",
+     Maharashtra:"महाराष्ट्र"
+    },
+    te:{
+     "Madhya Pradesh":"మధ్యప్రదేశ్",
+     Rajasthan:"రాజస్థాన్",
+     Haryana:"హర్యానా",
+     Punjab:"పంజాబ్",
+     Telangana:"తెలంగాణ",
+     Gujarat:"గుజరాత్",
+     Maharashtra:"మహారాష్ట్ర"
+    },
+    gu:{
+     "Madhya Pradesh":"મધ્ય પ્રદેશ",
+     Rajasthan:"રાજસ્થાન",
+     Haryana:"હરિયાણા",
+     Punjab:"પંજાબ",
+     Telangana:"તેલંગાણા",
+     Gujarat:"ગુજરાત",
+     Maharashtra:"મહારાષ્ટ્ર"
+    }
+   },
+   byState:{
+    "":["en","hi"],
+    MP:["en","hi"],
+    HR:["en","hi"],
+    RJ:["en","hi"],
+    PB:["en","pa"],
+    TG:["en","te"],
+    MH:["en","mr"],
+    GJ:["en","gu"]
+   },
+   label:{
+    en:"English",
+    hi:"हिंदी",
+    pa:"ਪੰਜਾਬੀ",
+    mr:"मराठी",
+    te:"తెలుగు",
+    gu:"ગુજરાતી"
+   },
+   script:{
+    en:"latin",
+    hi:"deva",
+    mr:"deva",
+    pa:"guru",
+    te:"telu",
+    gu:"gujr"
+   }
+  };
+
+/* ===================== the share card - the contest as one image =====================
+   ONE portrait PNG, 1080x1920, built for the WhatsApp groups the operators actually sit in. It is not a
+   screenshot of this page and deliberately does not try to be: the page answers "where does everyone
+   stand", the card answers "the prize is being taken and you are not on it yet". Every line on it is
+   COMPUTED - the cut-offs, the counts, the movement, the gap to the man above - because a motivational
+   line nobody can check is worth nothing in a group where 800 men can check it.
+
+   Four mechanics carry that, and each is a number the ledger already holds:
+     - the prize line is RISING - every cut-off is printed with what it was three ledger days ago,
+     - the gap to the man directly above is always one good day's work,
+     - somebody else's single day is shown as proof it can be done (the biggest climb / the hardest day),
+     - the clock is in the header, counted off the LEDGER's last day exactly as the standings are.
+
+   Nothing here reports an absence. A state with nobody past 300 reads "the first prize here is unclaimed",
+   never "nobody managed it" - the page's own tone rule, which matters more in a broadcast than on a screen
+   only admins see.
+
+   Six languages' worth of copy sits in SC_T, keyed by string id, and each state carries the language its
+   operators read (SC_M.byState). English is on every state because the CIs read it. The strings are COPY,
+   not translation: "standing still now means going backwards" lands in Hindi as
+   "rukne ka matlab hai peechhe khisakna", which a literal rendering would not.
+
+   Rasterising follows the same route as the chart and week-card exports - an SVG string through an <img>
+   into a canvas - so it inherits that path's one constraint: WEBFONTS DO NOT LOAD inside a rasterised SVG.
+   Latin text falls back to the system UI font and every Indic script falls back to the system's own face
+   for that script (Nirmala UI on Windows, the Sangam/Kohinoor faces on Apple, Noto on Android), which is
+   why each script carries a full stack rather than a single family name. Line breaking therefore cannot be
+   left to the renderer: text is measured with a canvas 2D context in the SAME font stack and wrapped here,
+   so what is measured is what is drawn. */
+const SC = { W:1080, H:1920, PAD:46, SCALE:2 };
+const SC_SAF='#FF8B1F', SC_GRN='#1FAE43', SC_INK='#141310', SC_MED=['#C9962B','#9AA0A6','#B07444'];
+/* SYSTEM FONTS ONLY, on BOTH sides of the measurement. The page loads Noto Sans and IBM Plex Mono as
+   webfonts; a rasterised SVG cannot see either. Naming them here would mean measuring in one face and
+   drawing in another, and the drift shows up as words running into each other - every tspan carries its
+   own x, so an under-measured word does not push the next one along, it is overlapped by it. Each stack
+   therefore starts at what the OS already has for that script. */
+const SC_FF = {
+  latin:"'Helvetica Neue',Helvetica,Arial,'Segoe UI',Roboto,sans-serif",
+  deva :"'Nirmala UI','Kohinoor Devanagari','Devanagari Sangam MN','Noto Sans Devanagari',sans-serif",
+  guru :"'Nirmala UI','Gurmukhi MN','Gurmukhi Sangam MN','Noto Sans Gurmukhi',sans-serif",
+  telu :"'Nirmala UI','Kohinoor Telugu','Telugu MN','Telugu Sangam MN','Noto Sans Telugu',sans-serif",
+  gujr :"'Nirmala UI','Gujarati Sangam MN','Kohinoor Gujarati','Noto Sans Gujarati',sans-serif" };
+const SC_MONO="ui-monospace,Menlo,Consolas,'Roboto Mono',monospace";
+
+/* ---- measurement. One context, reused; the font string must match the SVG's exactly or the wrap is a
+   guess. Cached because a card wraps a few hundred fragments and each measureText is a layout. ---- */
+let _scCtx=null; const _scMemo={};
+function scWidth(t, weight, size, ff){
+  if(!_scCtx) _scCtx=document.createElement('canvas').getContext('2d');
+  const font=weight+' '+size+'px '+ff, k=font+'|'+t;
+  if(_scMemo[k]==null){ _scCtx.font=font; _scMemo[k]=_scCtx.measureText(t).width; }
+  return _scMemo[k];
+}
+const scEsc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+/* `<b>` and `<u>` in the dictionary are the only markup the copy carries: bold for the figures a reader
+   scans for, `<u>` for the accent colour on the two numbers a FOMO line turns on. Parsed into runs so the
+   wrapper can break a line in the middle of a styled fragment. */
+function scRuns(str){
+  const s=String(str), out=[]; let i=0, b=false, u=false;
+  s.replace(/<(\/?)([bu])>/g, (m,close,tag,at)=>{
+    if(at>i) out.push({t:s.slice(i,at), b:b, u:u});
+    if(tag==='b') b=!close; else u=!close;
+    i=at+m.length; return m;
+  });
+  if(i<s.length) out.push({t:s.slice(i), b:b, u:u});
+  return out.filter(r=>r.t.length);
+}
+/* Word wrap across runs. All six languages break on spaces at these sizes, and a fragment with no space
+   that still overflows is left long rather than chopped mid-syllable - which would misspell a name. */
+function scWrap(runs, maxW, size, weight, ff){
+  const lines=[]; let line=[], w=0;
+  runs.forEach(r=>{
+    r.t.split(/(\s+)/).forEach(p=>{
+      if(!p) return;
+      const isSp=/^\s+$/.test(p), pw=scWidth(p, r.b?800:weight, size, ff);
+      if(w+pw>maxW && line.length && !isSp){ lines.push(line); line=[]; w=0; }
+      if(!line.length && isSp) return;                 // no leading space on a fresh line
+      line.push({t:p, b:r.b, u:r.u, w:pw}); w+=pw;
+    });
+  });
+  if(line.length) lines.push(line);
+  return lines;
+}
+function scText(lines, x, y, size, weight, fill, ff, lineH, accent){
+  return lines.map((ln,i)=>{
+    let cx=x;
+    const spans=ln.map(s=>{ const sp='<tspan x="'+cx.toFixed(1)+'"'+(s.b?' font-weight="800"':'')+(s.u?' fill="'+(accent||'#D96A12')+'"':'')+'>'+scEsc(s.t)+'</tspan>'; cx+=s.w; return sp; }).join('');
+    return '<text y="'+(y+i*lineH).toFixed(1)+'" font-family="'+ff+'" font-size="'+size+'" font-weight="'+weight+'" fill="'+fill+'" xml:space="preserve">'+spans+'</text>';
+  }).join('');
+}
+/* One-line text that must not wrap (a name in a row, a figure): truncated at the measured width, because
+   a name running under the acres column is worse than a shortened one. */
+function scClip(t, maxW, size, weight, ff){
+  let s=String(t==null?'':t);
+  if(scWidth(s,weight,size,ff)<=maxW) return s;
+  while(s.length>1 && scWidth(s+'…',weight,size,ff)>maxW) s=s.slice(0,-1);
+  return s+'…';
+}
+const scOne=(t,x,y,size,weight,fill,ff,anchor)=>'<text x="'+x+'" y="'+y+'" font-family="'+ff+'" font-size="'+size+'" font-weight="'+weight+'" fill="'+fill+'"'+(anchor?' text-anchor="'+anchor+'"':'')+'>'+scEsc(t)+'</text>';
+const scRect=(x,y,w,h,fill,r)=>'<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'"'+(r?' rx="'+r+'"':'')+' fill="'+fill+'"/>';
+
+/* The Ashoka chakra behind the header - the programme is an Independence-Day one and the contest opens on
+   15 August, so the motif is the theme rather than decoration. Drawn, not embedded: it costs nothing. */
+function scChakra(cx,cy,r){
+  let sp=''; for(let a=0;a<360;a+=15){ const t=a*Math.PI/180;
+    sp+='<line x1="'+cx+'" y1="'+cy+'" x2="'+(cx+r*Math.cos(t)).toFixed(1)+'" y2="'+(cy+r*Math.sin(t)).toFixed(1)+'" stroke="rgba(150,185,245,.16)" stroke-width="1.2"/>'; }
+  return '<g><circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="rgba(150,185,245,.20)" stroke-width="2"/><circle cx="'+cx+'" cy="'+cy+'" r="'+(r*0.17).toFixed(1)+'" fill="none" stroke="rgba(150,185,245,.22)" stroke-width="2.4"/>'+sp+'</g>';
+}
+const scTri = y => scRect(0,y,SC.W/3,9,SC_SAF)+scRect(SC.W/3,y,SC.W/3,9,'#FFFFFF')+scRect(SC.W*2/3,y,SC.W/3,9,SC_GRN);
+
+/* --------------------------------------------------------------------------
+   The numbers. Everything the card says, derived once from the SAME standings the page renders, so the
+   image and the screen can never disagree about who is winning.
+
+   The three-day and seven-day comparisons are rebuilt by REPLAYING the ledger up to an earlier date - the
+   only honest way to say "three days ago it took 311 acres", and the same trick oplbStandings uses to
+   rebuild yesterday. They count LEDGER days, never calendar days: a sheet two days stale must not be able
+   to claim three days of movement it cannot see.
+-------------------------------------------------------------------------- */
+function scStats(gst){
+  const A=oplbA(), dates=A.dates||[];
+  if(!dates.length) return null;
+  const last=A.last, n=dates.length;
+  const dBack = k => dates[Math.max(0, n-1-k)];
+  const d3=dBack(3), d7=dBack(7);
+  const upto=(o,d)=>{ let s=0; for(const k in o.day) if(k<=d) s+=o.day[k]; return s; };
+  const scope = gst ? A.ops.filter(o=>o.st===gst) : A.ops;
+  if(!scope.length) return null;
+  const rankKey = gst?'stRank':'rank', deltaKey = gst?'stDelta':'delta', newKey = gst?'stIsNew':'isNew';
+  const sorted = scope.slice().sort((a,b)=>b.total-a.total);
+  const t3=o=>upto(o,d3), t7=o=>upto(o,d7), nth=(a,i)=>a.length>i?a[i]:0;
+  const totalsNow=sorted.map(o=>o.total), totals3=scope.map(t3).sort((a,b)=>b-a), totals7=scope.map(t7).sort((a,b)=>b-a);
+  // The gap to the man directly above, read on the board the reader is looking at.
+  sorted.forEach((o,i)=>{ o._gap = i? sorted[i-1].total-o.total : 0; o._above = i? sorted[i-1][rankKey] : null; });
+  const daysLeft = Math.max(0, Math.round((Date.parse(CONTEST.end+'T00:00:00Z') - Date.parse(last+'T00:00:00Z'))/864e5));
+  /* The climber is read among operators who were RANKED yesterday: a man appearing on the tab for the
+     first time has no placing to have climbed from, and printing him as the day's biggest jump would be
+     an artefact of the join rather than a day's work. */
+  const climbable = scope.filter(o=>!o[newKey] && (o[deltaKey]||0)>0);
+  const climber = climbable.length ? climbable.reduce((a,b)=>b[deltaKey]>a[deltaKey]?b:a) : null;
+  const worker  = scope.reduce((a,b)=>b.yday>a.yday?b:a, scope[0]);
+  const st = { gst:gst, dates:dates, last:last, prev:A.prev, daysLeft:daysLeft, sorted:sorted, top:sorted.slice(0,16),
+    ops:scope.length, total:scope.reduce((s,o)=>s+o.total,0),
+    past:scope.filter(o=>o.past).length, past3:scope.filter(o=>t3(o)>=CONTEST.bar).length,
+    cut3:nth(totalsNow,2), cut3_3:nth(totals3,2), cut10:nth(totalsNow,9), cut10_7:nth(totals7,9),
+    acresLast:scope.reduce((s,o)=>s+o.yday,0), activeLast:scope.filter(o=>o.yday>0).length,
+    acresLast3:scope.reduce((s,o)=>s+(o.total-t3(o)),0),
+    movedUp:scope.filter(o=>(o[deltaKey]||0)>0).length,
+    near:scope.filter(o=>!o.past && o.total>=CONTEST.bar-50).length,
+    climber:climber, worker:worker, rankKey:rankKey, deltaKey:deltaKey };
+  /* State scope also races the OTHER states. "3,039 acres behind Rajasthan" is the one line on a state
+     card that speaks to the group rather than to an individual, and it is a large part of why a state
+     board gets forwarded at all. */
+  if(gst){
+    const byState={}, pastBy={};
+    A.ops.forEach(o=>{ if(!o.st) return; byState[o.st]=(byState[o.st]||0)+o.total; if(o.past) pastBy[o.st]=(pastBy[o.st]||0)+1; });
+    const order=Object.keys(byState).sort((a,b)=>byState[b]-byState[a]), i=order.indexOf(gst);
+    st.pos=i+1; st.of=order.length;
+    st.aheadName = i>0 ? (STATE_NAMES[order[i-1]]||order[i-1]) : '';
+    st.aheadGap  = i>0 ? byState[order[i-1]]-byState[gst] : 0;
+    st.mostPast  = st.past>0 && order.every(s2=>(pastBy[s2]||0)<=st.past);
+  }
+  return st;
+}
+
+/* --------------------------------------------------------------------------
+   The card itself. Laid out top-down with a cursor, then the LEFTOVER height is split around the
+   single-fact strip near the bottom, so every language lands on exactly 1080x1920 with the footer flush -
+   Telugu and Gujarati run four to eight per cent taller than English at the same point size, and a card
+   that ends short leaves a pale band under the footer in every group it is forwarded to.
+
+   If the copy in some language ever grows past the frame, ROWS are dropped before anything else (10 -> 4),
+   because the podium, the rising cut-off and the prizes are the argument; ranks 9 and 10 are detail.
+-------------------------------------------------------------------------- */
+function scFill(s,o){ return String(s==null?'':s).replace(/\{(\w+)\}/g, (m,k)=> o&&o[k]!=null ? o[k] : m); }
+function scDate(d,lang){
+  const p=String(d).split('-'), mo=SC_M.month[lang]||SC_M.month.en, day=+p[2];
+  return SC_M.dateMonthFirst[lang] ? mo+' '+day : day+' '+mo;
+}
+const scStName = (code,lang) => (SC_M.states[lang] && SC_M.states[lang][STATE_NAMES[code]]) || STATE_NAMES[code] || code;
+
+function scCardSVG(gst, lang){
+  const S=scStats(gst); if(!S) return null;
+  const T=SC_T[lang]||SC_T.en, script=SC_M.script[lang]||'latin', ff=SC_FF[script], latin=script==='latin';
+  const L=(k,o)=>scFill(T[k],o), N=v=>fmt(Math.round(v));
+  const isSt=!!gst, W=SC.W, P=SC.PAD, IN=W-P*2;
+  const stName = isSt ? scStName(gst,lang) : '';
+  const ls = latin ? ' letter-spacing="2.4"' : '';
+  const caps = t => latin ? String(t).toUpperCase() : t;   // Latin small-caps; Indic scripts have no case
+  const tall = script==='telu' || script==='gujr';        // scripts whose ascenders/descenders need more leading
+  /* Rows carry the acres, the gap to the man above and the movement. A gap under one acre is a TIE, not a
+     distance - "0 ac behind #6" reads as a rounding bug to the man it is about. */
+  const gapTxt = o => o._above==null ? '' : (o._gap<1 ? L('level',{r:o._above}) : L('behind',{n:N(o._gap), r:o._above}));
+  const deltaTxt = o => { const d=o[S.deltaKey]; if(o[S.gst?'stIsNew':'isNew']) return {t:'NEW', c:'#4C7399'};
+    if(!d) return {t:'-', c:'#C4C0B7'}; return d>0 ? {t:'▲ '+d, c:'#159234'} : {t:'▼ '+(-d), c:'#DC3A2B'}; };
+  const spark = (o,x,y,w,h) => {                          // ten ledger days, scaled to the operator's own best
+    const days=S.dates.slice(-10), mx=Math.max.apply(null, days.map(d=>o.day[d]||0).concat([0])) || 1;
+    const g=3, bw=(w-g*(days.length-1))/days.length;
+    return days.map((d,i)=>{ const v=o.day[d]||0, bh=Math.max(2, v/mx*h);
+      return scRect(x+i*(bw+g), y+h-bh, bw, bh, (i===days.length-1&&v>0)?SC_SAF:'#D8D4CB', 1.5); }).join('');
+  };
+
+  /* ---- the copy, resolved before anything is measured ---- */
+  const headline = isSt
+    ? (S.past && S.mostPast ? L('hlStateTop',{n:S.past})
+      : S.past ? L('hlStateSome',{n:S.past}) : L('hlStateNone',{st:stName}))
+    : L('hlIndia',{n:S.past});
+  const kicker = isSt ? L('kickerState',{st:stName}) : T.kickerIndia;
+  const sub    = L('sub',{d:scDate(S.last,lang), n:S.daysLeft});
+  const fomoA  = isSt ? L('fomoStateA',{a:N(S.cut3_3), b:N(S.cut3), st:stName})
+                      : L('fomoIndiaA',{a:N(S.cut3_3), b:N(S.cut3)});
+  const fomoB  = isSt ? L('fomoStateB',{a:S.activeLast, b:S.ops, c:N(S.acresLast), st:stName})
+                      : L('fomoIndiaB',{a:N(S.cut10_7), b:N(S.cut10), c:S.movedUp});
+  const tiles = isSt
+    ? [[T.t_stacres, N(S.total), L('s_in3',{n:N(S.acresLast3)}), 1],
+       [T.t_past, String(S.past), S.past>S.past3 ? L('s_in3',{n:S.past-S.past3}) : '', 1],
+       [T.t_prizebar, N(S.cut3)+'|'+T.ac, S.cut3>S.cut3_3 ? L('s_in3',{n:N(S.cut3-S.cut3_3)}) : '', 1],
+       [T.t_strank, S.pos+'|'+L('s_of',{n:S.of}), S.aheadName?L('s_behindst',{n:N(S.aheadGap), st:scStName(scStCodeOf(S.aheadName),lang)}):'', 0]]
+    : [[T.t_past, String(S.past), S.past>S.past3 ? L('s_in3',{n:S.past-S.past3}) : '', 1],
+       [T.t_bar, N(S.cut3)+'|'+T.ac, S.cut3>S.cut3_3 ? L('s_in3',{n:N(S.cut3-S.cut3_3)}) : '', 1],
+       [T.t_yday, N(S.acresLast), L('s_out',{n:S.activeLast}), 0],
+       [T.t_left, String(S.daysLeft), T.s_close, 0]];
+  const mover = S.gst ? S.worker : (S.climber||S.worker);
+  const moverPrizeGap = Math.max(0, S.cut3 - (mover?mover.total:0));
+  const mv = !mover ? null : (S.gst
+    ? { l:L('mvStateL',{st:stName}), t:L('mvStateT',{name:titleCase(mover.name), n:N(mover.yday)}),
+        s:(mover[S.rankKey]<=3 ? L('mvStateHold',{r:mover[S.rankKey], t:N(mover.total)})
+                               : L('mvStateS',{r:mover[S.rankKey], t:N(mover.total), g:N(moverPrizeGap)})),
+        f:N(mover.yday), fl:T.mvStateF }
+    : { l:T.mvIndiaL, t:L('mvIndiaT',{name:titleCase(mover.name), n:N(mover.yday)}),
+        s:L('mvIndiaS',{n:mover.delta, r:mover.rank}), f:'+'+mover.delta, fl:T.mvIndiaF });
+  const cta = isSt
+    ? (S.top[3] ? L('ctaState',{n:N(S.top[3]._gap)}) : L('ctaIndia',{n:S.daysLeft, a:N(CONTEST.bar/Math.max(1,S.daysLeft))}))
+    : L('ctaIndia',{n:S.daysLeft, a:N(CONTEST.bar/Math.max(1,S.daysLeft))});
+  const legend = [ isSt?T.lgIndia:'', L('lgBars',{d:scDate(S.last,lang)}),
+                   isSt?'':L('lgArrow',{d:scDate(S.prev||S.last,lang)}),
+                   S.near?L('lgNear',{n:S.near}):'' ].filter(Boolean).slice(0,3);
+
+  /* ---- measured blocks ---- */
+  const hSize = latin?50:46, hLine = latin?56:(tall?64:60);
+  const hLines = scWrap(scRuns(headline), IN-150, hSize, 800, ff);   // 150 keeps the headline clear of the chakra
+  const subLines = scWrap(scRuns(sub), IN, 19, 400, ff);
+  const fSize = latin?28:(script==='telu'?26:27), fLine = latin?38:(tall?42:40);
+  const fA = scWrap(scRuns(fomoA), IN-62, fSize, 800, ff);
+  const fB = scWrap(scRuns(fomoB), IN-62, 17, 400, ff);
+  const ctaLines = scWrap(scRuns(cta), IN*0.58, 28, 800, ff);
+
+  const hdH = 30+22+16+15+14 + hLines.length*hLine + 10 + subLines.length*26 + 6;
+  const fomoH = 20 + fA.length*fLine + 10 + fB.length*25 + 16;
+  const ftH  = Math.max(96 + ctaLines.length*36 + 20, 96 + legend.length*24 + 20);
+  const secH = 40, podH = 240, mvH = mv?104:0, rowH = 74, tileH = 96;
+
+  const fixed = 9 + hdH + tileH + 22 + fomoH + secH + podH + secH + mvH + ftH + 9;
+  let rows = Math.max(4, Math.min(S.top.length-3, Math.floor((SC.H-fixed)/rowH)));
+  const slack = Math.max(0, SC.H - (fixed + rows*rowH));
+
+  /* ---- draw ---- */
+  let o='', y=0;
+  o+=scTri(y); y+=9;
+  // header
+  o+=scRect(0,y,W,hdH,SC_INK)+scChakra(W-78, y+46, 150);
+  let hy=y+30+18;
+  [0,1,2].forEach(i=>{ o+='<circle cx="'+(P+5+i*15)+'" cy="'+(hy-6)+'" r="4.5" fill="'+[SC_SAF,'#FFFFFF',SC_GRN][i]+'"/>'; });
+  o+=scOne(SC_M.prog[lang], P+50, hy, 22, 800, '#FFFFFF', ff);
+  hy+=30; o+='<text x="'+P+'" y="'+hy+'" font-family="'+ff+'" font-size="15" font-weight="700" fill="#F5A65B"'+(latin?' letter-spacing="2.6"':'')+'>'+scEsc(scClip(caps(kicker), IN-170, 15, 700, ff))+'</text>';
+  hy+=14+hSize*0.78;
+  o+=scText(hLines, P, hy, hSize, 800, '#FFFFFF', ff, hLine);
+  hy+=(hLines.length-1)*hLine+28;
+  o+=scText(subLines, P, hy, 19, 400, '#B6B1A8', ff, 26, '#FFFFFF');
+  y+=hdH;
+  // tiles
+  o+=scRect(0,y,W,tileH,'#FFFFFF')+scRect(0,y+tileH-1,W,1,'#E9E6DF');
+  tiles.forEach((t,i)=>{ const x=i*W/4;
+    if(i) o+=scRect(x,y+14,1,tileH-28,'#E9E6DF');
+    o+='<text x="'+(x+24)+'" y="'+(y+30)+'" font-family="'+ff+'" font-size="13" font-weight="700" fill="#9C988F"'+(latin?' letter-spacing=".6"':'')+'>'+scEsc(scClip(caps(t[0]), W/4-42, 13, 700, ff))+'</text>';
+    const parts=String(t[1]).split('|');
+    o+=scOne(parts[0], x+24, y+64, 35, 800, '#1B1A17', ff);
+    if(parts[1]) o+=scOne(parts[1], x+26+scWidth(parts[0],800,35,ff), y+64, 17, 600, '#9C988F', ff);
+    if(t[2]) o+=scOne(scClip(t[2], W/4-40, 14, t[3]?700:500, ff), x+24, y+84, 14, t[3]?700:500, t[3]?'#159234':'#6E6A62', ff);
+  });
+  y+=tileH+22;
+  // the line that does the work
+  o+='<rect x="'+P+'" y="'+y+'" width="'+IN+'" height="'+fomoH+'" rx="14" fill="#FFFFFF" stroke="#E9E6DF"/>'
+   + '<path d="M'+(P+7)+' '+y+' h-0.5 a7,7 0 0 0 -6.5,7 v'+(fomoH-14)+' a7,7 0 0 0 6.5,7 h0.5 z" fill="'+SC_SAF+'"/>';
+  o+=scText(fA, P+31, y+20+fSize*0.8, fSize, 800, '#1B1A17', ff, fLine);
+  o+=scText(fB, P+31, y+20+fA.length*fLine+10+16, 17, 400, '#6E6A62', ff, 25);
+  y+=fomoH;
+  // podium
+  o+=scSecLabel(caps(isSt?T.secPodState:T.secPodIndia), y, ff, ls); y+=secH;
+  const cw=(IN-28)/3;
+  S.top.slice(0,3).forEach((op,i)=>{
+    const x=P+i*(cw+14), col=SC_MED[i], d=deltaTxt(op);
+    o+='<rect x="'+x+'" y="'+y+'" width="'+cw+'" height="'+podH+'" rx="15" fill="#FFFFFF" stroke="#E9E6DF"/>'
+     + '<path d="M'+(x+15)+' '+y+' h'+(cw-30)+' a15,15 0 0 1 15,15 v-9 h-'+cw+' v9 a15,15 0 0 1 15,-15 z" fill="'+col+'"/>'
+     + scRect(x+1,y+1,cw-2,6,col,3);
+    o+='<circle cx="'+(x+38)+'" cy="'+(y+42)+'" r="20" fill="'+col+'"/>'+scOne(String(i+1), x+38, y+49, 19, 800, '#FFFFFF', ff, 'middle');
+    o+=scOne(d.t, x+cw-16, y+48, 16, 700, d.c, ff, 'end');
+    o+=scOne(scClip(titleCase(op.name), cw-32, 22, 700, ff), x+16, y+94, 22, 700, '#1B1A17', ff);
+    let mx2=x+16;
+    if(isSt){ const badge='#'+op.rank+' India', bw=scWidth(badge,700,13,SC_FF.latin)+14;
+      o+=scRect(mx2, y+102, bw, 21, '#F2F0EB', 6)+scOne(badge, mx2+7, y+117, 13, 700, '#807c73', SC_FF.latin); mx2+=bw+8; }
+    o+=scOne(scClip(isSt?(op.ci||'-'):(scStName(op.st,lang)+' · '+(op.ci||'-')), x+cw-16-mx2, 14, 400, ff), mx2, y+117, 14, 400, '#6E6A62', ff);
+    const av=N(op.total);
+    o+=scOne(av, x+16, y+162, 40, 800, '#1B1A17', SC_MONO)
+     + scOne(T.acres, x+22+scWidth(av,800,40,SC_MONO), y+162, 17, 600, '#9C988F', ff);
+    const gp = i===0 ? {t:L('leads',{n:N(S.top[0].total-(S.top[1]?S.top[1].total:0))}), c:'#159234'}
+                     : {t:gapTxt(op), c:'#D96A12'};
+    o+=scOne(scClip(gp.t, cw-32, 15, 700, ff), x+16, y+186, 15, 700, gp.c, ff);
+    o+=scRect(x+16, y+198, cw-32, 8, '#EFEDE7', 4)
+     + scRect(x+16, y+198, Math.max(4,(cw-32)*Math.min(1,op.total/CONTEST.bar)), 8, col, 4);
+    const note=op.past?T.won:L('togo',{n:N(CONTEST.bar-op.total)});
+    const roomy=scWidth(note,400,14,ff)<=cw-140;
+    o+=scOne(scClip(note, roomy?cw-140:cw-32, 14, 400, ff), x+16, y+228, 14, 400, '#6E6A62', ff);
+    if(roomy) o+=spark(op, x+cw-116, y+206, 100, 22);
+  });
+  y+=podH;
+  // the chasing pack
+  // The label names the range it actually drew: how many rows fit is decided above, per language.
+  o+=scSecLabel(caps((isSt?T.secRowsState:T.secRowsIndia)+' — '+scFill(T.range,{a:4,b:3+rows})), y, ff, ls); y+=secH;
+  S.top.slice(3,3+rows).forEach((op,i)=>{
+    const ry=y+i*rowH, d=deltaTxt(op);
+    if(i%2===0) o+=scRect(P,ry,IN,rowH,'#FFFFFF');
+    o+=scRect(P,ry+rowH-1,IN,1,'#EFEDE7');
+    o+=scOne(String(op[S.rankKey]), P+16, ry+44, 22, 700, '#9C988F', SC_MONO);
+    let nx=P+66;
+    const badge = isSt ? '#'+op.rank+' India' : '';
+    const nameW = 320-(badge?scWidth(badge,700,13,SC_FF.latin)+22:0);
+    const nm=scClip(titleCase(op.name), nameW, 21, 600, ff);
+    o+=scOne(nm, nx, ry+36, 21, 600, '#1B1A17', ff);
+    if(badge){ const bw=scWidth(badge,700,13,SC_FF.latin)+14, bx=nx+scWidth(nm,600,21,ff)+8;
+      o+=scRect(bx, ry+21, bw, 21, '#F2F0EB', 6)+scOne(badge, bx+7, ry+36, 13, 700, '#807c73', SC_FF.latin); }
+    o+=scOne(scClip(isSt?(op.ci||'-'):(scStName(op.st,lang)+' · '+(op.ci||'-')), 380, 14, 400, ff), nx, ry+58, 14, 400, '#8B877F', ff);
+    o+=spark(op, P+512, ry+22, 140, 30);
+    const unitW=scWidth(T.ac,600,14,ff), ax=W-P-58-unitW, av=N(op.total);
+    o+=scOne(av, ax, ry+38, 27, 800, '#1B1A17', SC_MONO, 'end')
+     + scOne(T.ac, ax+6, ry+38, 14, 600, '#9C988F', ff);
+    o+=scOne(scClip(gapTxt(op), 260, 14, 700, ff), ax+6+unitW, ry+58, 14, 700, '#D96A12', ff, 'end');
+    o+=scOne(d.t, W-P-8, ry+44, 16, 700, d.c, ff, 'end');
+  });
+  y+=rows*rowH+slack/2;
+  // one day's proof
+  if(mv){
+    o+='<rect x="'+P+'" y="'+y+'" width="'+IN+'" height="'+mvH+'" rx="14" fill="#FFF3E4" stroke="#F3DCC4"/>';
+    o+='<text x="'+(P+24)+'" y="'+(y+30)+'" font-family="'+ff+'" font-size="13" font-weight="800" fill="#B0762C"'+(latin?' letter-spacing="2"':'')+'>'+scEsc(scClip(caps(mv.l), IN-270, 13, 800, ff))+'</text>';
+    o+=scOne(scClip(mv.t, IN-260, 23, 800, ff), P+24, y+62, 23, 800, '#1B1A17', ff);
+    o+=scOne(scClip(mv.s, IN-260, 16, 400, ff), P+24, y+86, 16, 400, '#7A6A55', ff);
+    o+=scOne(mv.f, W-P-24, y+62, 46, 800, '#D96A12', SC_MONO, 'end');
+    o+=scOne(scClip(mv.fl, 230, 16, 400, ff), W-P-24, y+86, 16, 400, '#7A6A55', ff, 'end');
+    y+=mvH;
+  }
+  y+=slack/2;
+  // footer: the prizes, the one line to act on, and how to read the card
+  o+=scRect(0,y,W,ftH,SC_INK);
+  let px=P;
+  [T.pz1,T.pz2,T.pz3].forEach(p=>{ const runs=scRuns(p), wpx=runs.reduce((s,r)=>s+scWidth(r.t, r.b?800:400, 17, ff),0);
+    o+=scText([runs.map(r=>({t:r.t,b:r.b,u:r.b,w:scWidth(r.t,r.b?800:400,17,ff)}))], px, y+42, 17, 400, '#E7E4DE', ff, 0, SC_SAF);
+    px+=wpx+30; });
+  o+=scRect(P,y+64,IN,1,'#34322D');
+  o+=scText(ctaLines, P, y+104, 28, 800, '#FFFFFF', ff, 36);
+  legend.forEach((t,i)=>{ o+=scOne(scClip(t, IN*0.42, 14, 400, ff), W-P, y+96+i*24, 14, 400, '#8E8A82', ff, 'end'); });
+  y+=ftH;
+  o+=scTri(y);
+
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+SC.H+'" viewBox="0 0 '+W+' '+SC.H+'">'
+       + scRect(0,0,W,SC.H,'#FAF9F6') + o + '</svg>';
+}
+function scSecLabel(t,y,ff,ls){
+  return scRect(SC.PAD, y+18, 8, 4, SC_SAF, 2) + scRect(SC.PAD+11, y+18, 7, 4, '#D8D4CB', 2) + scRect(SC.PAD+21, y+18, 8, 4, SC_GRN, 2)
+       + '<text x="'+(SC.PAD+40)+'" y="'+(y+26)+'" font-family="'+ff+'" font-size="15" font-weight="700" fill="#9C988F"'+ls+'>'+scEsc(t)+'</text>';
+}
+const scStCodeOf = name => Object.keys(STATE_NAMES).filter(k=>STATE_NAMES[k]===name)[0] || '';
+
+/* Rasterise and hand it over. Same route as the chart export - SVG through an <img> into a canvas at 2x -
+   and the same failure handling: a card that cannot be drawn says so rather than downloading a blank. */
+function downloadShareCard(gst, lang){
+  const xml=scCardSVG(gst, lang);
+  if(!xml){ alert('The contest tab has no rows to build a card from yet.'); return; }
+  const img=new Image();
+  img.onload=()=>{
+    const cv=document.createElement('canvas'); cv.width=SC.W*SC.SCALE; cv.height=SC.H*SC.SCALE;
+    const ctx=cv.getContext('2d'); ctx.fillStyle='#FAF9F6'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.drawImage(img,0,0,cv.width,cv.height);
+    cv.toBlob(blob=>{ if(!blob){ console.error('share card: toBlob failed'); return; }
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+      a.download='Azadi-se-Pragati-tak_'+(gst?(STATE_NAMES[gst]||gst).replace(/\s+/g,'-'):'All-India')+'_'+lang.toUpperCase()+'_'+(oplbA().last||'').replace(/-/g,'')+'.png';
+      document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500);
+      track('share_card_download',{ scope:gst||'ALL', lang:lang });
+    },'image/png');
+  };
+  img.onerror=()=>{ console.error('share card: SVG rasterisation failed'); alert('Sorry - could not generate the image.'); };
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(xml);
+}
+/* Which languages a scope offers. English everywhere because the CIs read it; the state's own language
+   beside it because the operators do. An unlisted state falls back to English alone rather than guessing. */
+const scLangs = gst => (SC_M.byState[gst||''] || ['en']);
 /* ===================== Insights — the cross-tab summary =====================
    The one page that answers "how is the programme doing?" without a filter in sight, and the only view that reads
    all three tabs at once. Each tab answers exactly one question and is used for nothing else here:
@@ -6084,12 +6907,21 @@ function leaderBodyHTML(mob){
   const isCI = S.lbBoard==='ci';
   const segBtn = (v,t) => `<button data-act="lbboard" data-v="${v}" style="border:none;background:${(v==='ci')===isCI?'#fff':'transparent'};box-shadow:${(v==='ci')===isCI?'0 1px 2px rgba(27,26,23,.10)':'none'};color:${(v==='ci')===isCI?C.ink:'#9C988F'};font-family:'Noto Sans';font-size:12px;font-weight:${(v==='ci')===isCI?700:600};padding:0 ${mob?'11px':'14px'};height:26px;border-radius:6px;cursor:pointer;white-space:nowrap">${t}</button>`;
   const boardSel = `<div style="display:inline-flex;align-items:center;gap:2px;background:#F2F0EB;border-radius:8px;padding:3px">${segBtn('ops','Operators')}${segBtn('ci','Cluster Incharge')}</div>`;
+  /* The share image, one button per language this scope reads — English everywhere for the CIs, the
+     state's own language beside it for the operators (SC_M.byState). It is offered on the OPERATORS
+     board only: the card is the operator contest, and a download button sitting under the CI board would
+     be read as exporting the board on screen. Chromeless by design — the card carries its own scope from
+     `gst`, so what downloads is always what the reader is looking at. */
+  const cardBtns = isCI ? '' : `<div style="display:inline-flex;align-items:center;gap:6px">
+      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Share</span>
+      ${scLangs(gst).map(lg=>`<button data-act="lbcard" data-lang="${lg}" data-st="${gst}" title="Download these standings as an image in ${SC_M.label[lg]}, sized for WhatsApp" style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#46433d;font-family:'Noto Sans';font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">${DL_ICON} ${SC_M.label[lg]}</button>`).join('')}
+    </div>`;
   const header = `<div style="display:flex;align-items:${mob?'flex-start':'center'};gap:${mob?'9px':'14px'};flex-wrap:wrap">
       <div style="min-width:0">
         <div style="font-size:${mob?'14px':'15px'};font-weight:700">Operator contest</div>
         <div style="font-size:11px;color:#9C988F;margin-top:2px">${E(windowLine)}</div>
       </div>
-      <div style="flex:1"></div>${boardSel}${stSel}
+      <div style="flex:1"></div>${boardSel}${stSel}${cardBtns}
       <span style="font-size:10.5px;color:#9C988F">Leaderboard tab · ${OPLB.at||'—'} <button data-act="oplbretry" title="Reload" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>
     </div>`;
 
@@ -6891,6 +7723,7 @@ app.addEventListener('click', e=>{
     case 'snTrendWin': setState({snTrendWin:+el.dataset.win||30}); break;
     case 'dlChart': downloadChart(el.dataset.kind); break;
     case 'dlcard': downloadCard(el.dataset.id); track('week_card_export',{card:el.dataset.id}); break;
+    case 'lbcard': downloadShareCard(el.dataset.st||'', el.dataset.lang||'en'); break;
     case 'pmco': setState({pmCo:el.dataset.co}); track('product_company',{co:el.dataset.co}); break;
     case 'pmmeasure': setState({pmMeasure:el.dataset.m==='yday'?'yday':'ytd'}); break;
     case 'pmstate': setState({pmState:el.dataset.st}); break;   // drill from the state-breakdown row
