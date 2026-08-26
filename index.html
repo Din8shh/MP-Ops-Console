@@ -3960,6 +3960,443 @@ function downloadShareCard(gst, lang){
 /* Which languages a scope offers. English everywhere because the CIs read it; the state's own language
    beside it because the operators do. An unlisted state falls back to English alone rather than guessing. */
 const scLangs = gst => (SC_M.byState[gst||''] || ['en']);
+
+/* ===================== the promo poster - the contest as one 4:3 image =====================
+   A SECOND image off the same ledger, and a different argument from the share card. The card is the
+   STANDINGS: sixteen rows, the rising cut-off, the movement - it answers "where does everyone stand".
+   The poster answers the question an operator asks before he reads any of that: "what am I chasing,
+   and how long have I got". So it carries exactly three numbers and makes them large - the national
+   topper's acres, his own state topper's acres, and the top-3 bar - over a calendar that shows the
+   window closing.
+
+   1200x900 rather than the card's 1080x1920 because it is forwarded into a chat rather than opened:
+   a 4:3 frame shows UNCROPPED in a WhatsApp conversation preview, so the headline and the numbers land
+   without anyone tapping. Same six languages, same per-state routing (SC_M.byState).
+
+   EVERY FIGURE IS COMPUTED, none is written into the copy. The days-left count, the day the calendar
+   marks green, the toppers and the bar all come off `pcStats`, which reads the SAME standings the page
+   renders and the card is built from. A poster whose "5 days left" was typed in would keep saying five
+   on the last morning of the contest, in eight hundred phones, with the sheet on screen saying one.
+
+   It reuses the card's rasterising discipline wholesale, because it goes out the same way (SVG string
+   -> <img> -> canvas): SYSTEM FONTS ONLY, measured with the same stack they are drawn in, wrapped here
+   rather than by the renderer. The one addition is PC_FF, which appends the platform emoji faces to
+   each of the card's stacks - the copy is written with emoji and they must be measured, not just drawn.
+   Colour emoji do survive this path; webfonts still do not.
+-------------------------------------------------------------------------- */
+const PC = { W:1200, H:900, SCALE:2 };
+/* Bands, top to bottom. Fixed rather than flowed: the frame is a fixed 4:3 and every band has a job,
+   so a language whose copy runs long shortens its own text (scClip / scWrap) instead of pushing the
+   calendar off the bottom in Telugu only. */
+const PC_B = { hdr:0, hero:60, chase:250, mid:400, urg:680, trio:734, cta:794, end:900 };
+const PC_PAD = 22, PC_SPLIT = 730;                    // mid band: calendar left of the split, prizes right
+/* The card's stacks plus the platform emoji faces. Appended rather than edited into SC_FF because the
+   card measures against SC_FF and must keep doing so - a shared edit would move every tspan on it. */
+const PC_EMO = ",'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji'";
+const PC_FF = { latin:SC_FF.latin+PC_EMO, deva:SC_FF.deva+PC_EMO, guru:SC_FF.guru+PC_EMO,
+                telu:SC_FF.telu+PC_EMO, gujr:SC_FF.gujr+PC_EMO };
+const PC_MONO = SC_MONO;
+
+/* Centred equivalents of scText / scWrap. The card is a left-aligned column; the poster is centred in
+   its hero and its CTA, and centring has to happen HERE for the same reason wrapping does - every tspan
+   carries its own absolute x, so the renderer will not centre a line for us. */
+function pcLines(lines, cx, y, size, weight, fill, ff, lineH, accent){
+  return lines.map((ln,i)=>{
+    const tot=ln.reduce((s,p)=>s+p.w,0); let x=cx-tot/2;
+    const spans=ln.map(s=>{
+      const sp='<tspan x="'+x.toFixed(1)+'"'+(s.b?' font-weight="800"':'')+(s.u?' fill="'+(accent||'#FFD34D')+'"':'')+'>'+scEsc(s.t)+'</tspan>';
+      x+=s.w; return sp; }).join('');
+    return '<text y="'+(y+i*lineH).toFixed(1)+'" font-family="'+ff+'" font-size="'+size+'" font-weight="'+weight+'" fill="'+fill+'" xml:space="preserve">'+spans+'</text>';
+  }).join('');
+}
+const pcCT=(str,cx,y,maxW,size,weight,fill,ff,lineH,accent)=>
+  pcLines(scWrap(scRuns(str), maxW, size, weight, ff), cx, y, size, weight, fill, ff, lineH||size*1.24, accent);
+
+/* --------------------------------------------------------------------------
+   The three numbers, off the same standings everything else on the page reads.
+
+   `bar` is the top-3 cut-off IN THE READER'S SCOPE, which is the whole point of scoping the poster: a
+   Punjab operator is chasing Punjab's third place, not the national one. It is read as the Nth total
+   where N is CONTEST.topPerState, so re-sizing the state podium moves the poster with it.
+-------------------------------------------------------------------------- */
+function pcStats(gst){
+  const A=oplbA(), dates=A.dates||[];
+  if(!dates.length || !A.ops.length) return null;
+  const last=A.last;
+  const all=A.ops.slice().sort((a,b)=> b.total-a.total || (a.name<b.name?-1:1));
+  const scope = gst ? all.filter(o=>o.st===gst) : all;
+  const nth=(a,i)=> a.length>i ? a[i] : 0;
+  return {
+    gst, last, ops:scope.length,
+    // Ledger days, never calendar days: a sheet two days stale must not claim a shorter runway than it can see.
+    daysLeft: Math.max(0, Math.round((Date.parse(CONTEST.end+'T00:00:00Z') - Date.parse(last+'T00:00:00Z'))/864e5)),
+    india: A.india || all[0] || null,
+    second: all[1] || null,
+    /* The state topper is the second cell only when a state is actually in scope AND has somebody on the
+       tab. A state with no operators falls back to the national runner-up rather than printing an empty
+       podium - the page's tone rule: never report an absence. */
+    stTop: gst && scope.length ? scope[0] : null,
+    bar: nth(scope.map(o=>o.total), CONTEST.topPerState-1)
+  };
+}
+
+/* Copy, six languages, keyed by string id exactly as SC_T is. {n}/{st}/{mo}/{y}/{a}/{b} are filled by
+   scFill. As on the card these are COPY rather than translation - the Hindi CTA is "अब नहीं तो फिर कभी
+   नहीं", which is what the line actually is in a group, not a literal rendering of "now or never". */
+const PC_T = {
+ en:{ cnt:'ONLY {n} DAYS LEFT!', cnt0:'LAST DAY — TODAY!',
+  opp:'You can still become the <u>INDIA TOPPER</u>!',
+  head:'🔥 Don’t let the <u>TV</u> slip away!',
+  sub:'Every <b>extra acre</b> takes you closer to being India Topper.',
+  chaseHd:'What you are chasing', ac:'acres',
+  c1sub:'This is the number to beat',
+  c2labSt:'{st} topper', c2labIn:'2nd in India', c2sub:'{n} acres behind the topper',
+  c3lab:'The top-3 bar', c3sub:'Reach this and the prize is in play',
+  c3none:'The prize positions here are still unclaimed',
+  calhd:'{mo} {y} — <em>the race is still open</em>', today:'TODAY',
+  goneA:'The days gone', goneB:'are not coming back',
+  leftA:'The next {n} days', leftB:'can change everything',
+  leftA0:'Today is the last day', leftB0:'the board closes tonight',
+  przhd:'The prizes — <em>still unclaimed</em>',
+  pz1s:'1st in all India', pz2s:'Top operator in every state',
+  i1:'', i2:'', i3:'', i4:'', i5:'', i6:'',
+  urg:'The rankings change every single day!',
+  t1:'Spray more today', t2:'Climb the rank', t3:'Win the prize',
+  cta1a:'Now or ', cta1b:'never!',
+  cta2:'Don’t let the TV slip away — go and be the India Topper.',
+  dur:'Contest window — <b>{a} – {b}</b>' },
+
+ hi:{ cnt:'सिर्फ़ {n} दिन बाकी!', cnt0:'आख़िरी दिन — आज ही!',
+  opp:'<u>INDIA TOPPER</u> बनने का मौका अभी भी आपके पास है!',
+  head:'🔥 <u>TV</u> जीतने का मौका जाने न दें!',
+  sub:'हर <b>अतिरिक्त एकड़</b> आपको भारत टॉपर बनने के और करीब ले जा रहा है।',
+  chaseHd:'आप किसका पीछा कर रहे हैं', ac:'एकड़',
+  c1sub:'यही आँकड़ा आपको पार करना है',
+  c2labSt:'{st} का टॉपर', c2labIn:'देश में दूसरा स्थान', c2sub:'टॉपर से {n} एकड़ पीछे',
+  c3lab:'टॉप-3 की सीमा', c3sub:'यहाँ पहुँचे तो इनाम की दौड़ में',
+  c3none:'यहाँ के इनाम अब भी खाली हैं',
+  calhd:'{mo} {y} — <em>मुक़ाबला अभी बाकी है</em>', today:'आज',
+  goneA:'गुज़रे हुए दिन', goneB:'वापस नहीं आएंगे',
+  leftA:'आने वाले {n} दिन', leftB:'आपकी किस्मत बदल सकते हैं',
+  leftA0:'आज आख़िरी दिन है', leftB0:'आज रात बोर्ड बंद हो जाएगा',
+  przhd:'इनाम — <em>जो अब भी खुले हैं</em>',
+  pz1s:'पूरे भारत में पहला स्थान', pz2s:'हर राज्य के टॉप ऑपरेटर',
+  i1:'स्मार्टफ़ोन', i2:'एलईडी टीवी', i3:'एयर कूलर', i4:'वाटर प्यूरीफ़ायर', i5:'गैस चूल्हा', i6:'गीज़र',
+  urg:'रैंकिंग हर दिन बदल रही है!',
+  t1:'आज ज़्यादा स्प्रे करें', t2:'रैंक बढ़ाएं', t3:'इनाम जीतें',
+  cta1a:'अब नहीं तो ', cta1b:'फिर कभी नहीं!',
+  cta2:'TV जीतने का मौका जाने न दें — भारत टॉपर बनकर दिखाएं!',
+  dur:'प्रतियोगिता अवधि — <b>{a} – {b}</b>' },
+
+ pa:{ cnt:'ਸਿਰਫ਼ {n} ਦਿਨ ਬਾਕੀ!', cnt0:'ਆਖ਼ਰੀ ਦਿਨ — ਅੱਜ ਹੀ!',
+  opp:'<u>INDIA TOPPER</u> ਬਣਨ ਦਾ ਮੌਕਾ ਹਾਲੇ ਵੀ ਤੁਹਾਡੇ ਕੋਲ ਹੈ!',
+  head:'🔥 <u>TV</u> ਜਿੱਤਣ ਦਾ ਮੌਕਾ ਹੱਥੋਂ ਨਾ ਜਾਣ ਦਿਓ!',
+  sub:'ਹਰ <b>ਵਾਧੂ ਏਕੜ</b> ਤੁਹਾਨੂੰ ਭਾਰਤ ਟਾਪਰ ਬਣਨ ਦੇ ਹੋਰ ਨੇੜੇ ਲੈ ਜਾ ਰਿਹਾ ਹੈ।',
+  chaseHd:'ਤੁਸੀਂ ਕਿਸ ਦੇ ਪਿੱਛੇ ਹੋ', ac:'ਏਕੜ',
+  c1sub:'ਇਹੀ ਅੰਕੜਾ ਤੁਹਾਨੂੰ ਪਾਰ ਕਰਨਾ ਹੈ',
+  c2labSt:'{st} ਦਾ ਟਾਪਰ', c2labIn:'ਦੇਸ਼ ਵਿੱਚ ਦੂਜਾ ਸਥਾਨ', c2sub:'ਟਾਪਰ ਤੋਂ {n} ਏਕੜ ਪਿੱਛੇ',
+  c3lab:'ਟਾਪ-3 ਦੀ ਹੱਦ', c3sub:'ਇੱਥੇ ਪਹੁੰਚੇ ਤਾਂ ਇਨਾਮ ਦੀ ਦੌੜ ਵਿੱਚ',
+  c3none:'ਇੱਥੋਂ ਦੇ ਇਨਾਮ ਹਾਲੇ ਵੀ ਖਾਲੀ ਹਨ',
+  calhd:'{mo} {y} — <em>ਮੁਕਾਬਲਾ ਹਾਲੇ ਬਾਕੀ ਹੈ</em>', today:'ਅੱਜ',
+  goneA:'ਲੰਘੇ ਹੋਏ ਦਿਨ', goneB:'ਵਾਪਸ ਨਹੀਂ ਆਉਣਗੇ',
+  leftA:'ਆਉਣ ਵਾਲੇ {n} ਦਿਨ', leftB:'ਤੁਹਾਡੀ ਕਿਸਮਤ ਬਦਲ ਸਕਦੇ ਹਨ',
+  leftA0:'ਅੱਜ ਆਖ਼ਰੀ ਦਿਨ ਹੈ', leftB0:'ਅੱਜ ਰਾਤ ਬੋਰਡ ਬੰਦ ਹੋ ਜਾਵੇਗਾ',
+  przhd:'ਇਨਾਮ — <em>ਜੋ ਹਾਲੇ ਵੀ ਖੁੱਲ੍ਹੇ ਹਨ</em>',
+  pz1s:'ਪੂਰੇ ਭਾਰਤ ਵਿੱਚ ਪਹਿਲਾ ਸਥਾਨ', pz2s:'ਹਰ ਸੂਬੇ ਦੇ ਟਾਪ ਆਪਰੇਟਰ',
+  i1:'ਸਮਾਰਟਫ਼ੋਨ', i2:'ਐਲਈਡੀ ਟੀਵੀ', i3:'ਏਅਰ ਕੂਲਰ', i4:'ਵਾਟਰ ਪਿਊਰੀਫ਼ਾਇਰ', i5:'ਗੈਸ ਚੁੱਲ੍ਹਾ', i6:'ਗੀਜ਼ਰ',
+  urg:'ਰੈਂਕਿੰਗ ਹਰ ਰੋਜ਼ ਬਦਲ ਰਹੀ ਹੈ!',
+  t1:'ਅੱਜ ਵੱਧ ਸਪਰੇਅ ਕਰੋ', t2:'ਰੈਂਕ ਵਧਾਓ', t3:'ਇਨਾਮ ਜਿੱਤੋ',
+  cta1a:'ਹੁਣ ਨਹੀਂ ਤਾਂ ', cta1b:'ਫਿਰ ਕਦੇ ਨਹੀਂ!',
+  cta2:'TV ਜਿੱਤਣ ਦਾ ਮੌਕਾ ਨਾ ਗੁਆਓ — ਭਾਰਤ ਟਾਪਰ ਬਣ ਕੇ ਦਿਖਾਓ!',
+  dur:'ਮੁਕਾਬਲੇ ਦੀ ਮਿਆਦ — <b>{a} – {b}</b>' },
+
+ mr:{ cnt:'फक्त {n} दिवस बाकी!', cnt0:'शेवटचा दिवस — आजच!',
+  opp:'<u>INDIA TOPPER</u> होण्याची संधी अजूनही तुमच्याकडे आहे!',
+  head:'🔥 <u>TV</u> जिंकण्याची संधी हातची जाऊ देऊ नका!',
+  sub:'प्रत्येक <b>जादा एकर</b> तुम्हाला भारत टॉपर होण्याच्या आणखी जवळ नेत आहे.',
+  chaseHd:'तुम्ही कोणाचा पाठलाग करताय', ac:'एकर',
+  c1sub:'हाच आकडा तुम्हाला ओलांडायचा आहे',
+  c2labSt:'{st} चा टॉपर', c2labIn:'देशात दुसरा क्रमांक', c2sub:'टॉपरपेक्षा {n} एकर मागे',
+  c3lab:'टॉप-3 ची मर्यादा', c3sub:'इथवर पोहोचलात की बक्षिसाच्या शर्यतीत',
+  c3none:'इथली बक्षिसं अजूनही रिकामी आहेत',
+  calhd:'{mo} {y} — <em>स्पर्धा अजून बाकी आहे</em>', today:'आज',
+  goneA:'गेलेले दिवस', goneB:'परत येणार नाहीत',
+  leftA:'येणारे {n} दिवस', leftB:'तुमचं नशीब बदलू शकतात',
+  leftA0:'आज शेवटचा दिवस आहे', leftB0:'आज रात्री बोर्ड बंद होईल',
+  przhd:'बक्षिसं — <em>जी अजूनही खुली आहेत</em>',
+  pz1s:'संपूर्ण भारतात पहिला क्रमांक', pz2s:'प्रत्येक राज्यातील टॉप ऑपरेटर',
+  i1:'स्मार्टफोन', i2:'एलईडी टीव्ही', i3:'एअर कूलर', i4:'वॉटर प्युरिफायर', i5:'गॅस शेगडी', i6:'गिझर',
+  urg:'रँकिंग दररोज बदलत आहे!',
+  t1:'आज जास्त स्प्रे करा', t2:'रँक वाढवा', t3:'बक्षीस जिंका',
+  cta1a:'आत्ता नाही तर ', cta1b:'कधीच नाही!',
+  cta2:'TV जिंकण्याची संधी घालवू नका — भारत टॉपर होऊन दाखवा!',
+  dur:'स्पर्धा कालावधी — <b>{a} – {b}</b>' },
+
+ te:{ cnt:'కేవలం {n} రోజులే మిగిలాయి!', cnt0:'చివరి రోజు — ఈరోజే!',
+  opp:'<u>INDIA TOPPER</u> అయ్యే అవకాశం ఇంకా మీ చేతిలోనే ఉంది!',
+  head:'🔥 <u>TV</u> గెలిచే అవకాశాన్ని వదులుకోకండి!',
+  sub:'ప్రతి <b>అదనపు ఎకరం</b> మిమ్మల్ని ఇండియా టాపర్‌కు మరింత దగ్గర చేస్తుంది.',
+  chaseHd:'మీరు దేని కోసం పోటీ పడుతున్నారు', ac:'ఎకరాలు',
+  c1sub:'మీరు దాటాల్సిన లెక్క ఇదే',
+  c2labSt:'{st} టాపర్', c2labIn:'దేశంలో రెండో స్థానం', c2sub:'టాపర్ కంటే {n} ఎకరాలు వెనుక',
+  c3lab:'టాప్-3 గీత', c3sub:'ఇక్కడికి చేరితే బహుమతి పోటీలో',
+  c3none:'ఇక్కడి బహుమతులు ఇంకా ఖాళీగానే ఉన్నాయి',
+  calhd:'{mo} {y} — <em>పోటీ ఇంకా ముగియలేదు</em>', today:'ఈరోజు',
+  goneA:'గడిచిన రోజులు', goneB:'తిరిగి రావు',
+  leftA:'రాబోయే {n} రోజులు', leftB:'మీ తలరాతను మార్చగలవు',
+  leftA0:'ఈరోజే చివరి రోజు', leftB0:'ఈ రాత్రితో బోర్డు మూసివేత',
+  przhd:'బహుమతులు — <em>ఇంకా ఎవరూ గెలవలేదు</em>',
+  pz1s:'దేశం మొత్తంలో మొదటి స్థానం', pz2s:'ప్రతి రాష్ట్రంలో టాప్ ఆపరేటర్',
+  i1:'స్మార్ట్‌ఫోన్', i2:'ఎల్‌ఈడీ టీవీ', i3:'ఎయిర్ కూలర్', i4:'వాటర్ ప్యూరిఫయర్', i5:'గ్యాస్ స్టవ్', i6:'గీజర్',
+  urg:'ర్యాంకింగ్ ప్రతి రోజూ మారుతోంది!',
+  t1:'ఈరోజు ఎక్కువ స్ప్రే చేయండి', t2:'ర్యాంక్ పెంచుకోండి', t3:'బహుమతి గెలవండి',
+  cta1a:'ఇప్పుడు కాకపోతే ', cta1b:'ఇంకెప్పుడూ కాదు!',
+  cta2:'TV గెలిచే అవకాశం వదులుకోకండి — ఇండియా టాపర్‌గా నిలవండి!',
+  dur:'పోటీ కాలం — <b>{a} – {b}</b>' },
+
+ gu:{ cnt:'ફક્ત {n} દિવસ બાકી!', cnt0:'છેલ્લો દિવસ — આજે જ!',
+  opp:'<u>INDIA TOPPER</u> બનવાની તક હજી પણ તમારી પાસે છે!',
+  head:'🔥 <u>TV</u> જીતવાની તક જવા ન દો!',
+  sub:'દરેક <b>વધારાનો એકર</b> તમને ભારત ટોપર બનવાની વધુ નજીક લઈ જાય છે.',
+  chaseHd:'તમે કોની પાછળ દોડી રહ્યા છો', ac:'એકર',
+  c1sub:'આ જ આંકડો તમારે વટાવવાનો છે',
+  c2labSt:'{st} નો ટોપર', c2labIn:'દેશમાં બીજું સ્થાન', c2sub:'ટોપરથી {n} એકર પાછળ',
+  c3lab:'ટોપ-3 ની હદ', c3sub:'અહીં પહોંચ્યા તો ઇનામની દોડમાં',
+  c3none:'અહીંનાં ઇનામ હજી પણ ખાલી છે',
+  calhd:'{mo} {y} — <em>મુકાબલો હજી બાકી છે</em>', today:'આજે',
+  goneA:'વીતી ગયેલા દિવસો', goneB:'પાછા નહીં આવે',
+  leftA:'આવનારા {n} દિવસ', leftB:'તમારું નસીબ બદલી શકે છે',
+  leftA0:'આજે છેલ્લો દિવસ છે', leftB0:'આજ રાત્રે બોર્ડ બંધ થઈ જશે',
+  przhd:'ઇનામ — <em>જે હજી પણ ખુલ્લાં છે</em>',
+  pz1s:'સમગ્ર ભારતમાં પ્રથમ સ્થાન', pz2s:'દરેક રાજ્યના ટોપ ઓપરેટર',
+  i1:'સ્માર્ટફોન', i2:'એલઈડી ટીવી', i3:'એર કૂલર', i4:'વોટર પ્યુરિફાયર', i5:'ગેસ ચૂલો', i6:'ગીઝર',
+  urg:'રેન્કિંગ દરરોજ બદલાઈ રહી છે!',
+  t1:'આજે વધુ સ્પ્રે કરો', t2:'રેન્ક વધારો', t3:'ઇનામ જીતો',
+  cta1a:'હમણાં નહીં તો ', cta1b:'ક્યારેય નહીં!',
+  cta2:'TV જીતવાની તક જવા ન દો — ભારત ટોપર બનીને બતાવો!',
+  dur:'સ્પર્ધા અવધિ — <b>{a} – {b}</b>' }
+};
+
+/* One chase cell: label, the man, his acres. The NAME is clipped rather than wrapped - a name running
+   under the acres column reads as a different operator, and a shortened one does not. */
+function pcCell(x, y, w, h, lab, name, acres, sub, ff, accent, unit){
+  const px=16, iw=w-px*2, av=fmt(Math.round(acres));
+  let o = scRect(x, y, w, h, 'rgba(255,255,255,.055)', 14)
+        + '<rect x="'+(x+.9)+'" y="'+(y+.9)+'" width="'+(w-1.8)+'" height="'+(h-1.8)+'" rx="13.5" fill="none" stroke="'+accent+'" stroke-opacity=".55" stroke-width="1.8"/>'
+        + scRect(x+px, y+13, 4, 14, accent, 2)
+        + scOne(scClip(lab, iw-14, 11.5, 700, ff), x+px+11, y+24, 11.5, 700, accent, ff);
+  /* Two cells name a man; the third names a NUMBER. A blank name is that third case, and it promotes the
+     acres into the name's slot rather than leaving a hole where a person would be. */
+  if(name){
+    o += scOne(scClip(name, iw, 21, 800, ff), x+px, y+53, 21, 800, '#FFFFFF', ff)
+       + scOne(av, x+px, y+88, 31, 800, accent, PC_MONO)
+       + scOne(unit, x+px+scWidth(av,800,31,PC_MONO)+8, y+88, 14, 600, '#A8A296', ff)
+       + scOne(scClip(sub, iw, 12, 600, ff), x+px, y+106, 12, 600, '#A8A296', ff);
+  } else {
+    o += scOne(av, x+px, y+68, 38, 800, accent, PC_MONO)
+       + scOne(unit, x+px+scWidth(av,800,38,PC_MONO)+9, y+68, 16, 600, '#A8A296', ff)
+       + scOne(scClip(sub, iw, 12.5, 600, ff), x+px, y+94, 12.5, 600, '#A8A296', ff);
+  }
+  return o;
+}
+
+function scPosterSVG(gst, lang){
+  const S=pcStats(gst); if(!S) return null;
+  const T=PC_T[lang]||PC_T.en, script=SC_M.script[lang]||'latin', ff=PC_FF[script];
+  const L=(k,o)=>scFill(T[k],o), N=v=>fmt(Math.round(v));
+  const W=PC.W, B=PC_B, P=PC_PAD, last0=S.daysLeft<=0;
+  const GOLD='#FFC83D', GRN='#1FAE43', RED='#E8191F', SAF='#FF8B1F', VIO='#B79BFF';
+
+  let o='';
+  /* ---- defs: the gradients and the one stripe pattern. Drawn, not embedded - an <img>-rasterised SVG
+     cannot fetch anything, and everything here is cheap enough to describe. ---- */
+  o+='<defs>'
+   + '<radialGradient id="pcHero" cx="50%" cy="-18%" r="130%"><stop offset="0" stop-color="#FFC24A"/>'
+   + '<stop offset=".26" stop-color="#FF8A18"/><stop offset=".52" stop-color="#DD4E08"/>'
+   + '<stop offset=".80" stop-color="#7E2405"/><stop offset="1" stop-color="#3A1104"/></radialGradient>'
+   + '<linearGradient id="pcMid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#181309"/><stop offset="1" stop-color="#100C06"/></linearGradient>'
+   + '<linearGradient id="pcChase" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#12190F"/><stop offset="1" stop-color="#0B1310"/></linearGradient>'
+   + '<linearGradient id="pcGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4A3208"/><stop offset="1" stop-color="#291C06"/></linearGradient>'
+   + '<linearGradient id="pcRoy" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2E2540"/><stop offset="1" stop-color="#191327"/></linearGradient>'
+   + '<linearGradient id="pcToday" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2BE05C"/><stop offset="1" stop-color="#0E9E36"/></linearGradient>'
+   + '<linearGradient id="pcPill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF2B31"/><stop offset="1" stop-color="#B00D12"/></linearGradient>'
+   + '<radialGradient id="pcCta" cx="50%" cy="0%" r="150%"><stop offset="0" stop-color="#3E1102"/><stop offset=".6" stop-color="#1B0801"/><stop offset="1" stop-color="#100500"/></radialGradient>'
+   + '<pattern id="pcStripe" width="80" height="80" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">'
+   + '<rect width="80" height="80" fill="#E8191F"/><rect width="40" height="80" fill="#C11117"/></pattern>'
+   + '</defs>';
+
+  o+=scRect(0,0,W,PC.H,'#120E08');
+
+  /* ---- header: the brand, and the programme's own name in the reader's language ---- */
+  o+=scRect(0,B.hdr,W,B.hero-B.hdr,'#0A0703')
+   + scRect(0,B.hero-2,W,2,'rgba(255,255,255,.10)')
+   + scRect(P,14,32,32,'#0E7C2E',10)
+   + scOne('🌱', P+7, 37, 17, 400, '#EAFFEF', ff)
+   + scOne('nurture', P+42, 38, 22, 800, '#FFFFFF', PC_FF.latin)
+   + scOne('.farm', P+42+scWidth('nurture',800,22,PC_FF.latin), 38, 22, 800, '#8CF0A6', PC_FF.latin)
+   + scOne(scClip(SC_M.prog[lang]||SC_M.prog.en, 330, 13, 700, ff), W-P, 26, 13, 700, '#E6C79A', ff, 'end')
+   + scOne('SPRAY & WIN', W-P, 46, 17, 900, '#FFFFFF', PC_FF.latin, 'end');
+
+  /* ---- hero: the clock, the prize, the line. Centred, so every string is measured and placed here. ---- */
+  o+=scRect(0,B.hero,W,B.chase-B.hero,'url(#pcHero)')
+   + scRect(0,B.hero,W,B.chase-B.hero,'rgba(0,0,0,.16)');
+  const cx=W/2, pill = last0 ? L('cnt0') : L('cnt',{n:S.daysLeft});
+  const pw = scWidth('⏳ ',800,26,ff)+scWidth(pill,800,26,ff)+56;
+  o+=scRect(cx-pw/2, B.hero+16, pw, 50, 'url(#pcPill)', 25)
+   + '<rect x="'+(cx-pw/2+1.5)+'" y="'+(B.hero+17.5)+'" width="'+(pw-3)+'" height="47" rx="23.5" fill="none" stroke="#FFFFFF" stroke-opacity=".95" stroke-width="3"/>'
+   + scOne('⏳ '+pill, cx, B.hero+49, 26, 800, '#FFFFFF', ff, 'middle');
+  o+=pcCT('🏆 '+T.opp, cx, B.hero+90, W-140, 19, 700, '#FFF0CE', ff, 24, '#FFD34D');
+  o+=pcCT(T.head, cx, B.hero+128, W-120, 38, 800, '#FFFFFF', ff, 44, '#FFD34D');
+  o+=pcCT(T.sub, cx, B.hero+166, W-160, 17, 600, '#FFE9C6', ff, 22, '#8CF7A9');
+
+  /* ---- the chase band. THE reason this poster exists: three acre figures, named, at the size a phone
+     screenshot survives. Cell two is the reader's own state topper when a state is in scope, and the
+     national runner-up when it is not - both answer "who is directly above me". ---- */
+  o+=scRect(0,B.chase,W,B.mid-B.chase,'url(#pcChase)');
+  o+=scOne(T.chaseHd, P, B.chase+20, 12.5, 700, '#7E9A88', ff);
+  const cw=(W-P*2-20)/3, cy=B.chase+26, chh=B.mid-B.chase-36;
+  const ind=S.india, un=T.ac;
+  o+=pcCell(P, cy, cw, chh, 'INDIA TOPPER',
+        ind?ind.name:'—', ind?ind.total:0, T.c1sub, ff, GOLD, un);
+  const c2 = S.stTop || S.second;
+  const c2lab = S.stTop ? L('c2labSt',{st:scStName(gst,lang)}) : L('c2labIn');
+  const c2gap = (ind && c2) ? Math.max(0, ind.total-c2.total) : 0;
+  o+=pcCell(P+cw+10, cy, cw, chh, c2lab,
+        c2?c2.name:'—', c2?c2.total:0, L('c2sub',{n:N(c2gap)}), ff, VIO, un);
+  /* Fewer than three operators in scope means there IS no cut-off yet. The cell says the prizes are
+     unclaimed rather than printing a bar of zero, which would read as "zero acres is enough". */
+  const c3x=P+(cw+10)*2;
+  o+= S.bar>0
+    ? pcCell(c3x, cy, cw, chh, L('c3lab'), '', S.bar, L('c3sub'), ff, GRN, un)
+    : (scRect(c3x, cy, cw, chh, 'rgba(255,255,255,.055)', 14)
+       + '<rect x="'+(c3x+.9)+'" y="'+(cy+.9)+'" width="'+(cw-1.8)+'" height="'+(chh-1.8)+'" rx="13.5" fill="none" stroke="'+GRN+'" stroke-opacity=".55" stroke-width="1.8"/>'
+       + scRect(c3x+16, cy+13, 4, 14, GRN, 2)
+       + scOne(L('c3lab'), c3x+27, cy+24, 11.5, 700, GRN, ff)
+       + pcCT(L('c3none'), c3x+cw/2, cy+62, cw-40, 17, 700, '#C4FFD5', ff, 22));
+
+  /* ---- mid: the window on the left, the prizes on the right ---- */
+  o+=scRect(0,B.mid,W,B.urg-B.mid,'url(#pcMid)')
+   + scRect(PC_SPLIT,B.mid,2,B.urg-B.mid,'rgba(255,255,255,.10)');
+  const secHd=(x,y,txt,maxW)=> scRect(x,y-15,5,19,SAF,2)+scOne(scClip(txt,maxW,19,800,ff), x+13, y, 19, 800, '#FFFFFF', ff);
+  const yr=CONTEST.start.slice(0,4), mo=SC_M.month[lang]||SC_M.month.en;
+  // The <em> the copy carries is the card's own accent convention; strip it and colour the tail instead.
+  const calRaw=L('calhd',{mo:mo,y:yr}), calParts=calRaw.split(/<\/?em>/);
+  o+=secHd(P, B.mid+26, calParts[0], 400)
+   + scOne(scClip(calParts[1]||'', 300, 19, 800, ff), P+13+scWidth(calParts[0],800,19,ff), B.mid+26, 19, 800, GOLD, ff);
+
+  /* The calendar is generated from CONTEST, never from a literal - a window that moves month takes the
+     strip with it, and the tile that goes green is the LEDGER's last day, not the browser's clock. */
+  const days=[]; for(let t=Date.parse(CONTEST.start+'T00:00:00Z'); t<=Date.parse(CONTEST.end+'T00:00:00Z'); t+=864e5) days.push(new Date(t));
+  const gap=5, tw=(PC_SPLIT-P*2-gap*(days.length-1))/days.length, th=66, ty=B.mid+44;
+  const WD=['S','M','T','W','T','F','S'];
+  days.forEach((dt,i)=>{
+    const iso=dt.toISOString().slice(0,10), x=P+i*(tw+gap);
+    const gone=iso<S.last, now=iso===S.last;
+    if(now){
+      o+=scRect(x,ty,tw,th,'url(#pcToday)',9)
+       + '<rect x="'+(x+1.5)+'" y="'+(ty+1.5)+'" width="'+(tw-3)+'" height="'+(th-3)+'" rx="7.5" fill="none" stroke="#C9FFD8" stroke-width="3"/>'
+       + scOne(scClip(T.today, tw-4, 8, 800, ff), x+tw/2, ty+13, 8, 800, '#04310F', ff, 'middle')
+       + scOne(String(dt.getUTCDate()), x+tw/2, ty+40, 20, 800, '#04310F', PC_FF.latin, 'middle')
+       + scOne(WD[dt.getUTCDay()], x+tw/2, ty+55, 9, 700, '#04310F', PC_FF.latin, 'middle');
+    } else if(gone){
+      o+=scRect(x,ty,tw,th,'#2C1C18',9)
+       + '<rect x="'+(x+1)+'" y="'+(ty+1)+'" width="'+(tw-2)+'" height="'+(th-2)+'" rx="8" fill="none" stroke="'+RED+'" stroke-opacity=".42" stroke-width="2"/>'
+       + scOne(String(dt.getUTCDate()), x+tw/2, ty+37, 19, 800, '#A88079', PC_FF.latin, 'middle')
+       + scOne(WD[dt.getUTCDay()], x+tw/2, ty+52, 9, 700, '#8E6A64', PC_FF.latin, 'middle')
+       + '<g stroke="'+RED+'" stroke-opacity=".80" stroke-width="2.8" stroke-linecap="round">'
+       + '<line x1="'+(x+6)+'" y1="'+(ty+th/2-11)+'" x2="'+(x+tw-6)+'" y2="'+(ty+th/2+11)+'"/>'
+       + '<line x1="'+(x+6)+'" y1="'+(ty+th/2+11)+'" x2="'+(x+tw-6)+'" y2="'+(ty+th/2-11)+'"/></g>';
+    } else {
+      o+=scRect(x,ty,tw,th,'#241906',9)
+       + '<rect x="'+(x+1)+'" y="'+(ty+1)+'" width="'+(tw-2)+'" height="'+(th-2)+'" rx="8" fill="none" stroke="'+GOLD+'" stroke-width="2"/>'
+       + scOne(String(dt.getUTCDate()), x+tw/2, ty+37, 19, 800, '#FFD867', PC_FF.latin, 'middle')
+       + scOne(WD[dt.getUTCDay()], x+tw/2, ty+52, 9, 700, '#E0A63C', PC_FF.latin, 'middle');
+    }
+  });
+
+  const dly=ty+th+14, dlw=PC_SPLIT-P*2, dlh=52;
+  const dayBlock=(y,fill,stroke,mark,a,b,ca,cb)=>
+      scRect(P,y,dlw,dlh,fill,11)
+    + '<rect x="'+(P+1)+'" y="'+(y+1)+'" width="'+(dlw-2)+'" height="'+(dlh-2)+'" rx="10" fill="none" stroke="'+stroke+'" stroke-width="2"/>'
+    + scOne(mark, P+16, y+33, 19, 400, '#FFFFFF', ff)
+    + scOne(scClip(a, dlw-70, 17, 800, ff), P+50, y+24, 17, 800, ca, ff)
+    + scOne(scClip(b, dlw-70, 14, 600, ff), P+50, y+43, 14, 600, cb, ff);
+  o+=dayBlock(dly, 'rgba(232,25,31,.14)', 'rgba(232,25,31,.44)', '❌', L('goneA'), L('goneB'), '#FFE2E0', '#FFC9C6')
+   + dayBlock(dly+dlh+10, 'rgba(31,174,67,.16)', 'rgba(31,174,67,.52)', '✅',
+       last0?L('leftA0'):L('leftA',{n:S.daysLeft}), last0?L('leftB0'):L('leftB'), '#DFFFE9', '#C4FFD5');
+
+  const px0=PC_SPLIT+P, pxw=W-P-px0;
+  const przRaw=L('przhd'), przParts=przRaw.split(/<\/?em>/);
+  o+=secHd(px0, B.mid+26, przParts[0], 260)
+   + scOne(scClip(przParts[1]||'', 240, 19, 800, ff), px0+13+scWidth(przParts[0],800,19,ff), B.mid+26, 19, 800, GOLD, ff);
+  const prize=(y,grad,edge,em,name,sub,items,subs,ec)=>{
+    let s=scRect(px0,y,pxw,104,grad,13)
+        + '<rect x="'+(px0+1)+'" y="'+(y+1)+'" width="'+(pxw-2)+'" height="102" rx="12" fill="none" stroke="'+edge+'" stroke-width="2"/>'
+        + scOne(em, px0+14, y+30, 18, 400, '#FFFFFF', ff)
+        + scOne(name, px0+40, y+30, 18, 900, ec, PC_FF.latin)
+        + scOne(scClip(sub, pxw-190, 12, 700, ff), px0+pxw-14, y+30, 12, 700, '#D9C9A6', ff, 'end');
+    const cwd=(pxw-28-16)/3;
+    items.forEach((it,i)=>{
+      const x=px0+14+i*(cwd+8), has=!!subs[i];
+      s+=scRect(x,y+42,cwd,48,'rgba(0,0,0,.40)',10)
+       + '<rect x="'+(x+.75)+'" y="'+(y+42.75)+'" width="'+(cwd-1.5)+'" height="46.5" rx="9.25" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="1.5"/>'
+       + scOne(scClip(it, cwd-10, 13, 900, PC_FF.latin), x+cwd/2, y+(has?63:72), 13, 900, '#FFFFFF', PC_FF.latin, 'middle');
+      if(has) s+=scOne(scClip(subs[i], cwd-8, 11, 600, ff), x+cwd/2, y+80, 11, 600, '#B8A98A', ff, 'middle');
+    });
+    return s;
+  };
+  o+=prize(B.mid+44, 'url(#pcGold)', GOLD, '🥇', 'INDIA TOPPER', L('pz1s'),
+        ['SMARTPHONE','LED TV','AIR COOLER'], [T.i1,T.i2,T.i3], '#FFD65A')
+   + prize(B.mid+158, 'url(#pcRoy)', VIO, '👑', 'STATE TOPPER', L('pz2s'),
+        ['RO','GAS STOVE','GEYSER'], [T.i4,T.i5,T.i6], '#CBB8FF');
+
+  /* ---- the two strips ---- */
+  o+=scRect(0,B.urg,W,B.trio-B.urg,'url(#pcStripe)')
+   + scRect(0,B.urg,W,3,'rgba(255,255,255,.28)')
+   + scRect(0,B.trio-3,W,3,'rgba(0,0,0,.32)')
+   + scOne('⚡ '+L('urg'), cx, B.urg+35, 24, 800, '#FFFFFF', ff, 'middle');
+  o+=scRect(0,B.trio,W,B.cta-B.trio,'#0E0B06');
+  [[T.t1,'🚜','#FFB055'],[T.t2,'📈','#7CF09B'],[T.t3,'🏆','#FFD65A']].forEach((c,i)=>{
+    const tcx=W/6+(W/3)*i, tw2=scWidth(c[1]+' ',400,20,ff)+scWidth(c[0],800,17,ff);
+    o+=scOne(c[1], tcx-tw2/2, B.trio+38, 20, 400, '#FFFFFF', ff)
+     + scOne(scClip(c[0], W/3-70, 17, 800, ff), tcx-tw2/2+scWidth(c[1]+' ',400,20,ff), B.trio+38, 17, 800, c[2], ff);
+    if(i<2) o+=scRect(W/3*(i+1),B.trio+10,2,B.cta-B.trio-20,'rgba(255,255,255,.09)');
+  });
+
+  /* ---- the close, and the window it closes in ---- */
+  o+=scRect(0,B.cta,W,B.end-B.cta,'url(#pcCta)');
+  const a1=T.cta1a, a2=T.cta1b, aw=scWidth(a1,800,34,ff)+scWidth(a2,800,34,ff);
+  o+=scOne(a1, cx-aw/2, B.cta+40, 34, 800, '#FFFFFF', ff)
+   + scOne(a2, cx-aw/2+scWidth(a1,800,34,ff), B.cta+40, 34, 800, '#FF5A3C', ff);
+  o+=pcCT(T.cta2, cx, B.cta+64, W-120, 18, 800, '#FFD65A', ff, 22);
+  o+=pcCT('📅 '+L('dur',{a:scDate(CONTEST.start,lang), b:scDate(CONTEST.end,lang)+' '+CONTEST.end.slice(0,4)}),
+        cx, B.cta+86, W-120, 13, 600, '#D6C4A4', ff, 17, '#FF9C3C');
+  o+=scRect(cx-90,B.end-12,60,5,SAF,2)+scRect(cx-30,B.end-12,60,5,'#FFFFFF',2)+scRect(cx+30,B.end-12,60,5,GRN,2);
+
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+PC.H+'" viewBox="0 0 '+W+' '+PC.H+'">'+o+'</svg>';
+}
+
+/* Same route, same failure handling as the share card: a poster that cannot be drawn says so rather
+   than handing over a blank PNG. */
+function downloadPoster(gst, lang){
+  const xml=scPosterSVG(gst, lang);
+  if(!xml){ alert('The contest tab has no rows to build a poster from yet.'); return; }
+  const img=new Image();
+  img.onload=()=>{
+    const cv=document.createElement('canvas'); cv.width=PC.W*PC.SCALE; cv.height=PC.H*PC.SCALE;
+    const ctx=cv.getContext('2d'); ctx.fillStyle='#120E08'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.drawImage(img,0,0,cv.width,cv.height);
+    cv.toBlob(blob=>{ if(!blob){ console.error('poster: toBlob failed'); return; }
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+      a.download='Spray-and-Win_'+(gst?(STATE_NAMES[gst]||gst).replace(/\s+/g,'-'):'All-India')+'_'+lang.toUpperCase()+'_'+(oplbA().last||'').replace(/-/g,'')+'.png';
+      document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500);
+      track('poster_download',{ scope:gst||'ALL', lang:lang });
+    },'image/png');
+  };
+  img.onerror=()=>{ console.error('poster: SVG rasterisation failed'); alert('Sorry - could not generate the poster.'); };
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(xml);
+}
+
 /* ===================== Insights — the cross-tab summary =====================
    The one page that answers "how is the programme doing?" without a filter in sight, and the only view that reads
    all three tabs at once. Each tab answers exactly one question and is used for nothing else here:
@@ -6931,9 +7368,18 @@ function leaderBodyHTML(mob){
      board only: the card is the operator contest, and a download button sitting under the CI board would
      be read as exporting the board on screen. Chromeless by design — the card carries its own scope from
      `gst`, so what downloads is always what the reader is looking at. */
+  const dlBtn = (act,lg,tip) => `<button data-act="${act}" data-lang="${lg}" data-st="${gst}" title="${tip}" style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#46433d;font-family:'Noto Sans';font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">${DL_ICON} ${SC_M.label[lg]}</button>`;
+  const grpLbl = t => `<span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">${t}</span>`;
+  /* TWO images off one tab, and they are not the same argument. `Share` is the STANDINGS - the rows, the
+     rising cut-off, the movement. `Poster` is the 4:3 promo: three acre figures (the national topper, this
+     scope's own topper, the top-3 bar) over the closing calendar, sized to show uncropped in a WhatsApp
+     conversation. Both carry `gst`, so each downloads the scope the reader is looking at. */
   const cardBtns = isCI ? '' : `<div style="display:inline-flex;align-items:center;gap:6px">
-      <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Share</span>
-      ${scLangs(gst).map(lg=>`<button data-act="lbcard" data-lang="${lg}" data-st="${gst}" title="Download these standings as an image in ${SC_M.label[lg]}, sized for WhatsApp" style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#46433d;font-family:'Noto Sans';font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">${DL_ICON} ${SC_M.label[lg]}</button>`).join('')}
+      ${grpLbl('Share')}
+      ${scLangs(gst).map(lg=>dlBtn('lbcard',lg,`Download these standings as an image in ${SC_M.label[lg]}, sized for WhatsApp`)).join('')}
+      <span style="width:1px;height:20px;background:#E9E6DF;margin:0 3px"></span>
+      ${grpLbl('Poster')}
+      ${scLangs(gst).map(lg=>dlBtn('lbposter',lg,`Download the 4:3 Spray & Win poster in ${SC_M.label[lg]} — the toppers to beat, the bar and the days left`)).join('')}
     </div>`;
   const header = `<div style="display:flex;align-items:${mob?'flex-start':'center'};gap:${mob?'9px':'14px'};flex-wrap:wrap">
       <div style="min-width:0">
@@ -7743,6 +8189,7 @@ app.addEventListener('click', e=>{
     case 'dlChart': downloadChart(el.dataset.kind); break;
     case 'dlcard': downloadCard(el.dataset.id); track('week_card_export',{card:el.dataset.id}); break;
     case 'lbcard': downloadShareCard(el.dataset.st||'', el.dataset.lang||'en'); break;
+    case 'lbposter': downloadPoster(el.dataset.st||'', el.dataset.lang||'en'); break;
     case 'pmco': setState({pmCo:el.dataset.co}); track('product_company',{co:el.dataset.co}); break;
     case 'pmmeasure': setState({pmMeasure:el.dataset.m==='yday'?'yday':'ytd'}); break;
     case 'pmstate': setState({pmState:el.dataset.st}); break;   // drill from the state-breakdown row

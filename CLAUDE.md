@@ -460,6 +460,76 @@ would read as exporting the board on screen. Admin-only, because the Leaders vie
 `Azadi-se-Pragati-tak_<Scope>_<LANG>_<ledger date>.png`. Downloads are tracked as `share_card_download`
 with `{scope, lang}` — no operator identity leaves the page, same rule as every other event.
 
+
+## The promo poster — what you are chasing (Leaders → Poster)
+
+A **second** image off the same tab, sitting beside Share, and a **different argument**. The card is the
+STANDINGS — sixteen rows, the rising cut-off, the movement — and answers "where does everyone stand". The
+poster answers the question an operator asks before he reads any of that: **"what am I chasing, and how long
+have I got"**. It carries exactly three acre figures and makes them large.
+
+**1200×900 (4:3), rasterised at 2×**, not the card's 1080×1920, and the ratio is the whole point: a 4:3 frame
+shows **uncropped in a WhatsApp conversation preview**, so the numbers land without anyone tapping. Filename
+`Spray-and-Win_<Scope>_<LANG>_<ledger date>.png`; tracked as `poster_download` with `{scope, lang}`.
+
+### The chase band — the reason it exists
+Three cells, and cell two changes with the scope, which is the design:
+
+| | All-India card | State card |
+|---|---|---|
+| 1 | **INDIA TOPPER** — name + acres | same |
+| 2 | national **#2** — name + acres | **that state's topper** — name + acres |
+| 3 | the **top-3 bar** — acres only | **that state's own** bar |
+
+A Punjab operator must see Punjab's leader, not a national one he will never catch, and the bar he is actually
+being measured against. `pcStats` reads `bar` as the Nth total where **N is `CONTEST.topPerState`**, so
+re-sizing the state podium moves the poster with it. Cell three is the one cell with **no person in it**: a
+blank name promotes the acres into the name's slot rather than leaving a hole where a man would be.
+
+**Fewer than three operators in scope means there is no cut-off yet**, and the cell says the prizes are
+unclaimed rather than printing a bar of zero — which would read as "zero acres is enough". Same tone rule as
+everywhere else on this page: never report an absence.
+
+### Nothing is written into the copy
+The days-left count, the day the calendar marks green, the month header, the number of calendar tiles, the date
+footer and all three acre figures derive from `CONTEST` + the ledger's last day. **Days are LEDGER days, not
+calendar days** — the same rule the standings and the card follow, so a sheet two days stale cannot claim a
+runway it can't see. A poster whose "5 days left" had been typed in would still say five on the last morning of
+the contest, in eight hundred phones, with the sheet on screen saying one. Live at 25 Aug it reads
+"6 दिन बाकी" and greens the 25th, matching the standings exactly.
+
+`daysLeft <= 0` swaps the pill and the ✅ block for their last-day forms (`cnt0`, `leftA0`/`leftB0`) rather
+than printing "0 days left".
+
+### Same rasterising discipline as the card, plus one addition
+Same route (SVG string → `<img>` → canvas → `toBlob`), so the same constraint: **system fonts only, measured in
+the stack they are drawn in, wrapped here rather than by the renderer**. `PC_FF` appends the platform emoji
+faces (`Apple Color Emoji` / `Segoe UI Emoji` / `Noto Color Emoji`) to each of the card's stacks — the copy is
+written with emoji and they must be MEASURED, not just drawn. **Colour emoji do survive this path** (verified
+before the design relied on them); webfonts still do not. `PC_FF` is appended to rather than edited into
+`SC_FF`, because the card measures against `SC_FF` and a shared edit would move every tspan on it.
+
+`pcLines` / `pcCT` are the **centred** equivalents of `scText` / `scWrap` — the card is a left-aligned column,
+the poster is centred in its hero and CTA, and centring has to happen in the builder for the same reason
+wrapping does: every tspan carries its own absolute `x`.
+
+### Layout
+**Fixed bands** (`PC_B`), not a flowed cursor like the card. The frame is a fixed 4:3 and every band has a job,
+so a language whose copy runs long shortens its own text (`scClip` / `scWrap`) instead of pushing the calendar
+off the bottom in Telugu only. Adding a band means re-checking the sum against 900.
+
+### Languages
+`PC_T`, keyed by string id exactly as `SC_T` is, **six languages**, routed by the same `SC_M.byState`. They
+reuse `SC_M.prog` / `SC_M.month` / `scStName` / `scDate`, so the programme's name and the month never disagree
+between the two images. COPY, not translation — the Hindi CTA is "अब नहीं तो फिर कभी नहीं", which is what the
+line is in a group, not a literal rendering of "now or never". Operator names stay in the sheet's own Latin
+spelling, same rule and same reason as the card.
+
+### Scope and access
+Chromeless, scope from `gst`, operators board only, admin-only — identical to the card, for identical reasons.
+**The card was NOT replaced.** The two answer different questions and both are offered; if the Share group is
+ever dropped, that is a product call, not a cleanup.
+
 ## Access roles (the PIN gate)
 `GATE.ROLES` in index.html maps sha256(PIN) → a scope on **three axes**: org (`org` default + `allow` list),
 state (`states`, `switchStates`) and views (`views`). It is a soft client-side gate — the file says so, and the
