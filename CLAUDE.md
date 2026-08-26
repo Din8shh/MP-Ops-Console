@@ -501,6 +501,18 @@ the contest, in eight hundred phones, with the sheet on screen saying one. Live 
 `daysLeft <= 0` swaps the pill and the ✅ block for their last-day forms (`cnt0`, `leftA0`/`leftB0`) rather
 than printing "0 days left".
 
+**The green tile is the LEDGER's last day, and it must never be labelled "today".** It was, in the first
+build, and the contradiction is exactly what a reader spots first: on the morning of 26 Aug the tab ends at
+25 Aug, so the card greened the 25th and called it आज. The tile was right — the console runs a day behind and
+today's acres are not in the sheet yet — and the counts around it were right too, since `daysLeft` counts the
+days AFTER the last ledger day (26–31 = 6, which is why there are exactly six gold tiles beside a pill reading
+6). Only the word was wrong. It now reads `अब तक` / `LATEST` / `ਹੁਣ ਤੱਕ` / `आजवर` / `తాజా` / `છેલ્લે`, chosen
+short because the tile is ~35px wide and `scClip` would truncate anything longer.
+
+**The card also prints its own as-of date** (`asOf`, top-right of the chase band: "आँकड़े 25 अगस्त तक"). This
+matters more than the label: an image forwarded into a group outlives the screen it came from, so somebody
+opening it on the 28th has nothing else on the card telling them the standings are three days old.
+
 ### Same rasterising discipline as the card, plus one addition
 Same route (SVG string → `<img>` → canvas → `toBlob`), so the same constraint: **system fonts only, measured in
 the stack they are drawn in, wrapped here rather than by the renderer**. `PC_FF` appends the platform emoji
