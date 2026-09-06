@@ -854,7 +854,7 @@ function mppAgg(){
    volume sits in Madhya Pradesh. Reading it as "the product mix" would badly misstate the programme. */
 const TX_GID = '718502150';
 const TX_COL = { date:0, region:1, crop:2, brand:3, company:4, portfolio:5, acres:6 };
-const TX = { loading:false, loaded:false, error:false, at:'', rows:[] };
+const TX = { loading:false, loaded:false, error:false, at:'', rows:[], stamp:0 };  // stamp: the paste's fingerprint re-dates itself when this feed reloads
 function txUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${TX_GID}&t=${Date.now()}`; }
 function txBuild(rows){
   if(!rows.length) throw new Error('tx: no rows');
@@ -871,7 +871,7 @@ function txBuild(rows){
       port0: prodPortfolio(r[K.portfolio]), portfolio: prodPortfolio(r[K.portfolio]),   // see buildBrandPort
       acres: num(r[K.acres]) });
   }
-  TX.rows=out;
+  TX.rows=out; TX.stamp=Date.now();
 }
 async function loadTx(){
   if(TX.loading) return; TX.loading=true; TX.error=false; render();
@@ -937,61 +937,204 @@ function buildBrandPort(){
 }
 
 /* ================= product detail for ONE PASTED PERIOD (manual tab) =================
-   A hand-built tab covering ONE named period, added because neither product source could give a full product
+   A hand-built tab covering ONE pasted period, added because neither product source could give a full product
    picture: the summary tab has no dates, and the day-level tab carries only eight focus brands. This one is the
-   real mix — every product the programme scanned in its period, ~57% of the fleet's acres.
+   real mix — every product the programme scanned in its period, roughly half the fleet's acres.
 
-   It has no date column: the tab IS the period, pinned to WKP_PERIOD.
+   It has no date column: the tab IS the period.
 
-   THE WEEK REVIEW ALWAYS SHOWS IT (changed by request 2026-08-24). This tab is the programme's standing source
-   for per-product detail, so the Week page renders it whatever week is on screen instead of withholding it when
-   the dates do not line up. Withholding was the old rule and it cost the review its entire product mix the
-   moment a paste stopped being exactly seven days — which is what the 15–22 Aug paste is: the Sat–Fri review
-   week plus the following Saturday, EIGHT days, so the old equal-length gate refused it outright.
+   THE TAB NOW DATES AND NAMES ITSELF (2026-09-06). Everything below used to hang off WKP_PERIOD, a constant
+   somebody had to edit each time a paste landed — and when the 31 Aug – 5 Sep paste arrived against a constant
+   still reading 15–22 Aug, the Week review did the one thing this tab's whole design exists to prevent: it
+   titled the new acres with the old dates and divided them by the fleet's acres over a week they were not
+   sprayed in. Nothing on screen said so, because nothing on screen could know. So three sources are tried in
+   order, and the card says on its face which one dated it:
 
-   Showing it always is only honest because nothing is relabelled. A card built from a paste that is not the
-   review week is titled with the TAB'S OWN dates, takes its share against the fleet's acres on the TAB'S OWN
+     1. THE ACRES THEMSELVES (wkpFingerprint) — the tab shares its eight focus brands with the DATED day-level
+        tab, so the paste's period is the window of that feed whose per-brand sums equal the paste's. This is the
+        by-hand identification the repo has always prescribed for an unlabelled paste, run on every load instead
+        of once by a person. It is decisive when it lands: the 31 Aug paste matches 31 Aug – 5 Sep with an error
+        of ZERO acres across all seven shared brands, and the next-best window is out by 5.
+     2. THE TAB'S OWN NAME (wkpNamePeriod) — a fallback for a paste older than the day-level feed reaches. It is
+        second, not first, because the name is a label somebody typed: the live tab is named "Aug 31-Sep 4" over
+        a paste that runs to the 5th, so trusting it would drop a day.
+     3. WKP_PERIOD_PINNED — the old constant, kept as a last resort for a workbook that answers neither.
+
+   THE WEEK REVIEW ALWAYS SHOWS THIS TAB (2026-08-24). It is the programme's standing source for per-product
+   detail, so the Week page renders it whatever week is on screen instead of withholding it when the dates do not
+   line up. Showing it always is only honest because nothing is relabelled: a card built from a paste that is not
+   the review week is titled with the TAB'S OWN dates, takes its share against the fleet's acres on the TAB'S OWN
    days (wkpFleetAcres — never the review week's total, which would divide across two different windows), and
    carries wkpShiftNote naming both spans on its face, on screen and in the PNG.
 
    MONTH mode is unchanged and still gated (wkpIsPeriod → wkpMatch). A month card prints a vs-previous-month
-   column against a whole-month denominator, so it may only read this tab where the paste really IS that month;
-   an eight-day paste can never satisfy that test, and Month therefore stays on the day-level tab.
+   column against a whole-month denominator, so it may only read this tab where the paste really IS that month.
 
-   The period is not read off the tab name — that name is a label somebody typed. It is verified by matching the
-   tab's overlapping brands against the dated day-level tab across every window in range. Do that again if a
-   paste ever arrives unlabelled.
-
-   It is one tab holding one period at a time: when the next paste lands, change WKP_PERIOD (and the gid if it
-   moves) and nothing else. */
-const WKP_GID    = '1973671649';                                      // the workbook tab named "Aug 15-22"
-const WKP_PERIOD = { start:'2026-08-15', end:'2026-08-22' };          // the period this manual tab covers
-const WKP_COL  = { region:0, crop:1, product:2, company:3, acres:4 };
-const WKP = { loading:false, loaded:false, error:false, at:'', rows:[] };
+   One tab, one period at a time. Nothing here needs editing when the next paste lands — that is the point. */
+const WKP_GID = '1973671649';
+/* Last resort only: used when the day-level feed cannot reach the paste AND the tab's name cannot be read or
+   parsed. Everything real comes from wkpPeriod(). */
+const WKP_PERIOD_PINNED = { start:'2026-08-15', end:'2026-08-22' };
+const WKP = { loading:false, loaded:false, error:false, at:'', rows:[], stamp:0,
+              tabName:'', blocks:[], period:null, pStamp:'' };
 function wkpUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${WKP_GID}&t=${Date.now()}`; }
+/* A paste lands wherever the person pasting put it, so the columns are RESOLVED from the header rather than
+   pinned to A–E. Every run of region / crop / product / company / acres in the header row is a block, and the
+   leftmost one carrying rows is the paste. This is not hypothetical: the 31 Aug paste arrived in A–E with the
+   previous 15–22 Aug paste still sitting in Q–U — five columns of stale data one cell to the right of the live
+   ones, which a pinned column map would have read as the live block the moment the two swapped places. Every
+   block found is logged, so a second one is visible in the console rather than silent. */
+function wkpBlocks(header){
+  const h=(header||[]).map(x=>String(x||'').trim().toLowerCase()), out=[];
+  for(let i=0;i+4<h.length;i++)
+    if(/region|state/.test(h[i]) && /crop/.test(h[i+1]) && /(product|brand)/.test(h[i+2])
+       && /compan/.test(h[i+3]) && /(acre|scanned)/.test(h[i+4]))
+      out.push({ region:i, crop:i+1, product:i+2, company:i+3, acres:i+4 });
+  return out;
+}
 function wkpBuild(rows){
   if(!rows.length) throw new Error('product-detail tab: no rows');
-  const K=WKP_COL, out=[];
-  for(const r of rows.slice(1)){
-    if(!r || r.length<=K.acres) continue;
-    const region=String(r[K.region]||'').trim(); if(!region) continue;
-    const p=String(r[K.product]||'').trim(); if(!p) continue;
-    let comp=String(r[K.company]||'').trim().toUpperCase();
-    comp = comp==='SWAL' ? 'SWAL' : comp==='UPL' ? 'UPL' : null; if(!comp) continue;
-    out.push({ st: PROD_REGION[region.toUpperCase()] || 'OT', crop: titleCase(r[K.crop])||'—',
-      product: titleCase(p), key: p.toUpperCase().replace(/\s+/g,' '), company:comp, acres: num(r[K.acres]) });
-  }
-  WKP.rows=out;
+  const blocks=wkpBlocks(rows[0]);
+  if(!blocks.length) throw new Error('product-detail tab: no region/crop/product/company/acres columns in the header');
+  const read=K=>{
+    const out=[];
+    for(const r of rows.slice(1)){
+      if(!r || r.length<=K.acres) continue;
+      const region=String(r[K.region]||'').trim(); if(!region) continue;
+      const p=String(r[K.product]||'').trim(); if(!p) continue;
+      let comp=String(r[K.company]||'').trim().toUpperCase();
+      comp = comp==='SWAL' ? 'SWAL' : comp==='UPL' ? 'UPL' : null; if(!comp) continue;
+      out.push({ st: PROD_REGION[region.toUpperCase()] || 'OT', crop: titleCase(r[K.crop])||'—',
+        product: titleCase(p), key: p.toUpperCase().replace(/\s+/g,' '), company:comp, acres: num(r[K.acres]) });
+    }
+    return out;
+  };
+  const got=blocks.map(K=>({ col:K.region, rows:read(K) }));
+  WKP.blocks=got.map(b=>({ col:b.col, rows:b.rows.length, acres:Math.round(b.rows.reduce((s,r)=>s+r.acres,0)) }));
+  const live=got.find(b=>b.rows.length);
+  if(!live) throw new Error('product-detail tab: every block is empty');
+  WKP.rows=live.rows; WKP.stamp=Date.now(); WKP.period=null; WKP.pStamp='';
 }
-async function loadWkp(){
+async function loadWkp(force){
   if(WKP.loading) return; WKP.loading=true; WKP.error=false; render();
   try{
     const res=await fetch(wkpUrl()); if(!res.ok) throw new Error('HTTP '+res.status);
     wkpBuild(parseCSV(await res.text()));
     WKP.loaded=true; WKP.at=nowIST();
   }catch(e){ WKP.error=true; console.error('product-detail tab load failed:', e); }
-  finally{ WKP.loading=false; render(); }
+  finally{ WKP.loading=false; loadTabNames(force); render(); }
 }
+
+/* ---- the workbook's tab NAMES, which no CSV export carries ----
+   gviz returns rows and never the name of the tab they came from, which is why the tab's name used to live in a
+   comment in this file. The workbook's own htmlview page does carry it — it ships an `items.push({name:…, gid:…})`
+   list of every tab — and it answers CORS from this origin, so the console can read the real name at runtime.
+   It is a LABEL, never a source of truth about dates: see wkpNamePeriod. A failure here is not an error — the
+   period is dated from the acres anyway — so it warns and moves on rather than putting a red state on a card. */
+const TABS = { loading:false, loaded:false, error:false, byGid:{} };
+const tabUnesc = s => String(s).replace(/\\x([0-9a-f]{2})/gi,(_,h)=>String.fromCharCode(parseInt(h,16)))
+                               .replace(/\\u([0-9a-f]{4})/gi,(_,h)=>String.fromCharCode(parseInt(h,16)))
+                               .replace(/\\(.)/g,'$1');
+async function loadTabNames(force){
+  if(!CONFIG.sheetId || TABS.loading || (TABS.loaded && !force)) return;
+  TABS.loading=true; TABS.error=false;
+  try{
+    const res=await fetch(`https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/htmlview?t=${Date.now()}`);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const html=await res.text(), re=/name:\s*"((?:[^"\\]|\\.)*)"[^{}]*?gid:\s*"(-?\d+)"/g;
+    const by={}; let m;
+    while((m=re.exec(html))) by[m[2]]=tabUnesc(m[1]);
+    if(!Object.keys(by).length) throw new Error('the workbook page carried no tab list');
+    TABS.byGid=by; TABS.loaded=true;
+    const name=by[WKP_GID]||'';
+    if(name!==WKP.tabName){ WKP.tabName=name; WKP.pStamp=''; }
+    if(!name) console.warn('[MP-Ops] gid', WKP_GID, 'is not in the workbook any more — the product-detail tab may have been replaced rather than repasted.');
+  }catch(e){ TABS.error=true; console.warn('[MP-Ops] tab names unavailable; the period is dated from the acres instead:', e && e.message || e); }
+  finally{ TABS.loading=false; render(); }
+}
+
+/* ---- dating the paste from its own acres ----
+   The paste and the DATED day-level tab share the eight focus brands, so the paste's period is the window of
+   that feed whose per-brand sums equal the paste's. Sums are exact when the window is right — both sides are the
+   same numbers out of the same system — so the tolerance is there for rounding, not for wishful matching: 1% of
+   the shared brands' acres, floored at 2. Live that is 7.6 ac against a true error of 0, while the previous
+   paste (whose days the feed no longer reaches) is out by 351 and is correctly refused.
+   Ties go to the earliest and shortest window, which is the least the acres can be claimed to prove. */
+const WKP_FP_TOL = 0.01;
+function wkpFingerprint(){
+  if(!WKP.rows.length || !TX.loaded || !TX.rows.length) return null;
+  const want={}; WKP.rows.forEach(r=>{ want[r.key]=(want[r.key]||0)+r.acres; });
+  const byDay={}; TX.rows.forEach(r=>{ const d=byDay[r.d]||(byDay[r.d]={}); d[r.brandKey]=(d[r.brandKey]||0)+r.acres; });
+  const dates=Object.keys(byDay).sort();
+  if(!dates.length) return null;
+  const shared=Object.keys(want).filter(k=>dates.some(d=>byDay[d][k]!=null));
+  const target=shared.reduce((s,k)=>s+want[k],0);
+  if(shared.length<3 || target<100) return null;               // too little overlap to identify anything
+  const cum={}; shared.forEach(k=>{ let s=0; cum[k]=dates.map(d=>(s+=(byDay[d][k]||0))); });
+  let best=null;
+  for(let i=0;i<dates.length;i++) for(let j=i;j<dates.length;j++){
+    const cut=best?best.err:Infinity; let err=0;
+    for(const k of shared){ err+=Math.abs((cum[k][j]-(i?cum[k][i-1]:0))-want[k]); if(err>=cut) break; }
+    if(err<cut) best={ err, start:dates[i], end:dates[j] };
+  }
+  const tol=Math.max(2, target*WKP_FP_TOL);
+  return (best && best.err<=tol) ? { start:best.start, end:best.end, err:best.err, shared:shared.length, tol } : null;
+}
+/* ---- dating the paste from the tab's NAME ----
+   Second choice, and only ever reached when the day-level feed does not span the paste. The name is whatever
+   somebody typed on the tab: the live one reads "Aug 31-Sep 4" over a paste that runs to the 5th, which is
+   exactly why this is the fallback and not the primary. Accepts "Aug 31-Sep 4", "Aug 15-22", "31 Aug - 4 Sep"
+   and "to" in place of the dash; the year is inferred, since no name carries one — this year, unless that would
+   put the paste in the future, in which case last year. */
+const WKP_MON = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+function wkpNamePeriod(name){
+  const s=String(name||'').toLowerCase().replace(/[‐-―]/g,'-');
+  const mon=t=>{ const k=Object.keys(WKP_MON).find(m=>String(t||'').startsWith(m)); return k==null?null:WKP_MON[k]; };
+  let a=null,b=null,m;
+  if((m=s.match(/([a-z]{3,9})\s*(\d{1,2})\s*(?:-|to)\s*(?:([a-z]{3,9})\s*)?(\d{1,2})/))){
+    const ma=mon(m[1]), mb=m[3]?mon(m[3]):mon(m[1]);
+    if(ma!=null&&mb!=null){ a=[ma,+m[2]]; b=[mb,+m[4]]; }
+  } else if((m=s.match(/(\d{1,2})\s*([a-z]{3,9})\s*(?:-|to)\s*(\d{1,2})\s*([a-z]{3,9})/))){
+    const ma=mon(m[2]), mb=mon(m[4]);
+    if(ma!=null&&mb!=null){ a=[ma,+m[1]]; b=[mb,+m[3]]; }
+  }
+  if(!a||!b) return null;
+  const now=new Date(); let y=now.getFullYear();
+  let d0=new Date(y,a[0],a[1]);
+  if(d0.getTime()-now.getTime() > 45*864e5){ y-=1; d0=new Date(y,a[0],a[1]); }
+  const d1=new Date(y+(b[0]<a[0]?1:0), b[0], b[1]);
+  if(d0.getMonth()!==a[0]||d0.getDate()!==a[1]||d1.getMonth()!==b[0]||d1.getDate()!==b[1]) return null;  // 31 Sep
+  if(d1<d0) return null;
+  return { start:insISO(d0), end:insISO(d1) };
+}
+/* The period every card, note, denominator and gate reads. Memoised on the two tabs' load stamps plus the tab
+   name, because it is called once per rendered card and the fingerprint walks every window of the feed. */
+function wkpResolve(){
+  const stamp=`${WKP.stamp}|${TX.loaded?TX.stamp:0}|${WKP.tabName}`;
+  if(WKP.pStamp===stamp && WKP.period) return WKP.period;
+  const fp=wkpFingerprint(), nm=wkpNamePeriod(WKP.tabName);
+  const p = fp ? { ...fp, src:'acres' } : nm ? { ...nm, src:'name' } : { ...WKP_PERIOD_PINNED, src:'pinned' };
+  WKP.pStamp=stamp; WKP.period=p;
+  // Quiet until the dated feed has settled: before then the answer is only ever the fallback, no card is built on
+  // it (wkpDated), and logging it would put a line reading "datedBy: pinned" in front of anybody reading the
+  // console to find out how the paste was dated.
+  if(!wkpDated()) return p;
+  console.info('[MP-Ops] product-detail tab →', { tab: WKP.tabName||'(name unavailable)', gid: WKP_GID,
+    period: `${p.start} → ${p.end}`, datedBy: p.src, rows: WKP.rows.length,
+    acres: Math.round(WKP.rows.reduce((s,r)=>s+r.acres,0)), blocks: WKP.blocks,
+    fingerprintError: fp?Math.round(fp.err*100)/100:null, tabNameReadsAs: nm?`${nm.start} → ${nm.end}`:null });
+  if(fp && nm && (nm.start!==fp.start || nm.end!==fp.end))
+    console.warn(`[MP-Ops] the product-detail tab is NAMED "${WKP.tabName}" (${nm.start} → ${nm.end}) but its acres match ${fp.start} → ${fp.end}. The acres are being used; rename the tab if its name is the wrong one.`);
+  if(WKP.blocks.filter(b=>b.rows).length>1)
+    console.warn('[MP-Ops] the product-detail tab holds more than one block of data — the leftmost is being read and the rest ignored. Clear the old ones.', WKP.blocks);
+  return p;
+}
+const wkpPeriod = () => (WKP.rows.length ? wkpResolve() : (WKP.period || WKP_PERIOD_PINNED));
+/* A card built from this tab waits for the DATED feed to arrive or fail, not just for the tab itself: until then
+   the period is still the fallback, and rendering on it would flash the wrong dates — and the wrong denominator —
+   over the right acres for as long as the second fetch takes. Which is the whole failure this rework is about,
+   just compressed into half a second. */
+const wkpDated = () => WKP.loaded && (TX.loaded || TX.error);
 
 
 /* ===================== operator leaderboard — the contest tab =====================
@@ -2886,7 +3029,7 @@ function buildWeekExport(id){
       {label:'Product',key:'name'},{label:'Company',key:'co',weight:700},
       {label:'Acres',key:'ac',mono:true,align:'right'},{label:'Share',key:'share',mono:true,align:'right'},
     ],rows,y); out+=t.svg; y=t.y;
-    const n=exNote(wkpShiftNote(TP.mt,W),y); out+=n.svg; y=n.y;
+    const n=exNote([wkpShiftNote(TP.mt,W), wkpSourceNote()].filter(Boolean).join(' '),y); out+=n.svg; y=n.y;
     return exWrap(out,y+EX.PAD);
   }
 
@@ -2908,7 +3051,7 @@ function buildWeekExport(id){
       {label:'Herb',key:'h',mono:true,align:'right'},{label:'Ins',key:'i',mono:true,align:'right'},
       {label:'Fung',key:'f',mono:true,align:'right'},{label:'Other',key:'o',mono:true,align:'right'},
     ],rows,y); out+=t.svg; y=t.y;
-    const n=exNote(wkpShiftNote(SG.mt,W),y); out+=n.svg; y=n.y;
+    const n=exNote([wkpShiftNote(SG.mt,W), wkpSourceNote()].filter(Boolean).join(' '),y); out+=n.svg; y=n.y;
     return exWrap(out,y+EX.PAD);
   }
 
@@ -5018,9 +5161,10 @@ function insWeekAgg(A,back){
   return W;
 }
 const insISO = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-/* The manual product-detail tab has no dates — it IS one named period (WKP_PERIOD). wkpMatch is the STRICT test:
+/* The manual product-detail tab has no dates — it IS one period, resolved at load by wkpPeriod() (from the
+   acres where the dated feed reaches them, else the tab's name). wkpMatch is the STRICT test:
    a window may claim the paste as its own only when it is the SAME LENGTH and starts and ends within
-   WKP_SLACK_DAYS of it. Since the Week page started showing the tab unconditionally (see WKP_PERIOD above), the
+   WKP_SLACK_DAYS of it. Since the Week page started showing the tab unconditionally (see wkpPeriod above), the
    only caller of the strict test is MONTH — which is exactly the window it was written to guard, because a month
    card carries a vs-previous-month column and a whole-month denominator that a shorter paste cannot fill.
 
@@ -5037,13 +5181,17 @@ function wkpMatch(d0,d1){
   // comparing the raw instants makes a genuine one-day offset round to zero — and a shift that reports itself as
   // zero is exactly the silent relabelling this gate exists to prevent.
   const at=x=>new Date((typeof x==='string'?x:insISO(x))+'T00:00:00');
-  const a=at(WKP_PERIOD.start), b=at(WKP_PERIOD.end), p0=at(d0), p1=at(d1);
+  const P=wkpPeriod();
+  const a=at(P.start), b=at(P.end), p0=at(d0), p1=at(d1);
   if(wkpDayDiff(a,b)!==wkpDayDiff(p0,p1)) return null;              // same length only
   const s=wkpDayDiff(p0,a), e=wkpDayDiff(p1,b);                     // + = the tab runs later than the window
   if(Math.abs(s)>WKP_SLACK_DAYS || Math.abs(e)>WKP_SLACK_DAYS) return null;
   return { shift:s, exact:(s===0&&e===0) };
 }
-const wkpIsPeriod = (d0,d1) => !!wkpMatch(d0,d1);
+/* Month's gate. It waits for wkpDated() as well as matching, so the answer is never given against the fallback
+   period while the dated feed is still in flight — the render, the aggregate and the export must all agree on
+   which tab this month's products came from, and they only can if they ask the same settled question. */
+const wkpIsPeriod = (d0,d1) => wkpDated() && !!wkpMatch(d0,d1);
 /* The WEEK page's relation to the tab, which — unlike wkpIsPeriod — never refuses. Week reads this tab whatever
    week is on screen, so what it needs is not a yes/no but a description of how the two spans sit: `exact` when
    they coincide, `fits` when the paste is the same length and merely offset (the offset is then the whole story
@@ -5053,12 +5201,14 @@ function wkpRel(d0,d1){
   const m=wkpMatch(d0,d1);
   return m ? { ...m, fits:true } : { shift:null, exact:false, fits:false };
 }
-const wkpRangeLabel = () => `${insWeekLabel(new Date(WKP_PERIOD.start+'T00:00:00'))} – ${insWeekLabel(new Date(WKP_PERIOD.end+'T00:00:00'))}`;
+const wkpRangeLabel = () => { const P=wkpPeriod();
+  return `${insWeekLabel(new Date(P.start+'T00:00:00'))} – ${insWeekLabel(new Date(P.end+'T00:00:00'))}`; };
 const wkpDaysWord = n => Math.abs(n)===1 ? 'one day' : `${Math.abs(n)} days`;
 /* What an offset paste is, in one sentence — shown on the face of every card built from it, on screen and in the
    PNG, so the numbers are never read as the review week's own. Empty string when the paste sits on the week. */
 const wkpSpanWord = (a,b) => wkpDaysWord(wkpDayDiff(a,b)+1);
-const wkpTabSpanWord = () => wkpSpanWord(new Date(WKP_PERIOD.start+'T00:00:00'), new Date(WKP_PERIOD.end+'T00:00:00'));
+const wkpTabSpanWord = () => { const P=wkpPeriod();
+  return wkpSpanWord(new Date(P.start+'T00:00:00'), new Date(P.end+'T00:00:00')); };
 const wkpShiftNote = (mt,W) => (!mt || mt.exact || !W) ? '' : (mt.fits
   // Same seven days, one or two later. The offset IS the finding, so it is said as an offset.
   ? `The product tab covers ${wkpRangeLabel()}. This review week is ${insWeekLabel(W.d0)} – ${insWeekLabel(W.d1)}, `
@@ -5069,10 +5219,28 @@ const wkpShiftNote = (mt,W) => (!mt || mt.exact || !W) ? '' : (mt.fits
   : `The product tab covers ${wkpRangeLabel()} (${wkpTabSpanWord()}); this review week is `
     + `${insWeekLabel(W.d0)} – ${insWeekLabel(W.d1)} (${wkpSpanWord(W.d0,W.d1)}). Every figure on this card is the tab's `
     + `own period, measured against the fleet's acres over those days — not the review week's.`);
+/* Which tab these acres came from, what it is called today, and how its days were established — one line under
+   every card built from it, on screen and in the PNG.
+
+   It is here because the tab's name and the tab's contents can disagree, and both are visible to the reader: the
+   live tab is called "Aug 31-Sep 4" and holds acres through the 5th. Printing the name alone would carry that
+   error onto the card; printing only the dates would leave somebody who opens the workbook unable to tell which
+   tab the card came from. So the card says both and says which one it counted. It also means a paste dated by
+   the weaker sources — the tab's name, or the pinned constant — declares that on its face rather than looking
+   exactly like one identified from the acres. */
+function wkpSourceNote(){
+  const p=wkpPeriod(), tab=WKP.tabName?`the tab “${WKP.tabName}”`:'the product-detail tab';
+  const range=wkpRangeLabel();
+  return p.src==='acres'
+    ? `From ${tab}. It carries no dates of its own, so these acres were matched day by day against the dated product feed and identified as ${range}.`
+    : p.src==='name'
+    ? `From ${tab}, read as ${range} from the tab's own name — the dated product feed does not reach back this far, so the name is all there is to date it by.`
+    : `From ${tab}, read as ${range} — neither the dated feed nor the tab's name could place this paste, so the period recorded in the code is being used.`;
+}
 /* Fleet acres over the TAB'S OWN days, so an offset paste's share is measured against the days it actually
    covers. Identical to the window's own total when the paste is exact. Null if the period leaves the season. */
 function wkpFleetAcres(A){
-  const a=new Date(WKP_PERIOD.start+'T00:00:00'), b=new Date(WKP_PERIOD.end+'T00:00:00');
+  const P=wkpPeriod(), a=new Date(P.start+'T00:00:00'), b=new Date(P.end+'T00:00:00');
   const from=snakeOff(a.getMonth()+1,a.getDate()), to=snakeOff(b.getMonth()+1,b.getDate());
   if(from==null||to==null||to<from) return null;
   return insWeekSum(A.snCode, INS_CUR.key, from, to);
@@ -5435,8 +5603,9 @@ function insMonthAgg(A,back){
      vs-previous-month column is DROPPED on that path rather than printed as a column of dashes.
      Month keeps the strict gate even though WEEK now reads the tab unconditionally, and the asymmetry is the
      point: a week card can honestly print the tab's own dates over its own denominator, but a month card carries
-     a whole-month denominator and a vs-previous-month column that a shorter paste cannot fill. WKP_PERIOD is
-     currently the eight days 15–22 Aug 2026, so this branch is dormant and every month reads the day-level tab.
+     a whole-month denominator and a vs-previous-month column that a shorter paste cannot fill. The period is
+     resolved from the paste itself now (wkpPeriod), so this branch wakes on its own the day somebody pastes a
+     whole month — and stays dormant, as it is on the current six-day paste, for anything shorter.
    · Otherwise the day-level tab, which is the only *dated* product source and therefore the only one that can
      answer any other month — but it is narrow in both directions (a handful of focus brands, and only the days it
      holds), so that path says so on the card's face and divides by the fleet's acres on the covered days.
@@ -5909,14 +6078,14 @@ function insightsBodyHTML(mob){
     if(!TX.loaded && !TX.loading && !TX.error) setTimeout(loadTx,0);       // day-level products, for the focus trend
     const back=state.insMonthBack|0;
     const M=insMonthAgg(A, back);
-    // Where the manual product-detail tab IS this month it is the products source, so fetch it and the summary
-    // tab its segments are joined from. Gated on the month actually matching: every other month reads the
-    // day-level tab and these two fetches would buy nothing.
+    // Where the manual product-detail tab IS this month it is the products source. The tab now dates itself from
+    // its own acres, so it has to be READ before anyone can ask whether it is this month — the gate cannot also
+    // be the thing that decides whether to fetch it, or the branch could never wake once the period stopped
+    // being typed into the source. So the tab is always fetched here and only the CARD is gated; the summary tab
+    // its segments are joined from still waits for the gate, since nothing else on this page needs it.
+    if(!WKP.loaded && !WKP.loading && !WKP.error) setTimeout(loadWkp,0);
     const moWkp = !!M && wkpIsPeriod(M.d0,M.d1);
-    if(moWkp){
-      if(!WKP.loaded  && !WKP.loading  && !WKP.error ) setTimeout(loadWkp,0);
-      if(!PROD.loaded && !PROD.loading && !PROD.error) setTimeout(loadProduct,0);   // brand → portfolio, for segments
-    }
+    if(moWkp && !PROD.loaded && !PROD.loading && !PROD.error) setTimeout(loadProduct,0);   // brand → portfolio, for segments
     const canBack=!!insMonthWindow(back+1);           // false once the stepper reaches the season's first month
     const mLabel=M?M.title:'—';
     const stepper=`<div style="display:flex;align-items:center;gap:8px">
@@ -6264,14 +6433,14 @@ function insightsBodyHTML(mob){
     const prodWkDL = !!(TP && !TP.empty && TP.total);
     const chip = c => `<span style="display:inline-block;padding:1px 6px;border-radius:5px;font-size:9px;font-weight:700;letter-spacing:.03em;background:${c==='UPL'?C.softO:C.softG};color:${c==='UPL'?C.orangeD:C.greenD}">${c}</span>`;
     let prodWk='';
-    if(!WKP.loaded){
+    if(!wkpDated()){
       prodWk=card(`${cHead('What was sprayed this week','From the product-detail tab')}${waiting(WKP.error, WKP.error?'Could not load the product-detail tab.':'Loading the product-detail tab…','wkpretry')}`);
     } else if(!TP || TP.empty || !TP.total){
       prodWk=card(`${cHead('What was sprayed this week','From the product-detail tab')}${waiting(false,'No product acres recorded for this scope.','wkpretry')}`);
     } else {
       // Share is taken against the fleet's acres ON THE TAB'S OWN DAYS — an offset paste over the review week's
       // total would divide two different windows and print a number that is nobody's.
-      const pShift = TP.mt && !TP.mt.exact, pNote = wkpShiftNote(TP.mt,W);
+      const pShift = TP.mt && !TP.mt.exact, pNote = [wkpShiftNote(TP.mt,W), wkpSourceNote()].filter(Boolean).join(' ');
       const pFleet = TP.fleet;
       const share = pFleet ? TP.total/pFleet*100 : null;
       const pMax = TP.products.length ? TP.products[0].ac : 1;
@@ -6306,7 +6475,7 @@ function insightsBodyHTML(mob){
     const segWkDL = !!(SG && !SG.empty);
     const SEG_C={ Herbicide:C.green, Insecticide:C.orange, Fungicide:C.open, Other:'#B6B1A8' };
     let segCard='';
-    if(!WKP.loaded || !PROD.loaded){
+    if(!wkpDated() || !PROD.loaded){
       segCard=card(`${cHead('Kinds of product, by state','The product-detail tab, grouped into what each brand treats')}${waiting(WKP.error||PROD.error, (WKP.error||PROD.error)?'Could not load the product sheets.':'Loading product segments…','wkpretry')}`);
     } else if(!SG || SG.empty){
       segCard=card(`${cHead('Kinds of product, by state','The product-detail tab, grouped into what each brand treats')}${waiting(false,'No segment-classified product acres for this scope.','wkpretry')}`);
@@ -6326,7 +6495,7 @@ function insightsBodyHTML(mob){
           ${SEGL.map(k=>(mob&&k==='Other')?'':`<span style="font-family:'IBM Plex Mono';font-size:12.5px;text-align:right;color:${r[k]>0?C.ink:'#C9C4BA'};font-weight:${isTot?700:400}">${r.base?(r[k]/r.base*100).toFixed(0)+'%':'—'}</span>`).join('')}
         </div>`;
       const legend=`<div style="display:flex;gap:14px;flex-wrap:wrap;padding:11px 16px 4px">${SEGL.map(k=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#6E6A62"><span style="width:10px;height:10px;border-radius:3px;background:${SEG_C[k]}"></span>${k}</span>`).join('')}</div>`;
-      const sShift = SG.mt && !SG.mt.exact, sNote = wkpShiftNote(SG.mt,W);
+      const sShift = SG.mt && !SG.mt.exact, sNote = [wkpShiftNote(SG.mt,W), wkpSourceNote()].filter(Boolean).join(' ');
       segCard=card(`${cHead(`Product segments by state${sShift?`, ${E(wkpRangeLabel())}`:''} · ${E(A.gst?A.regionName:'all India')}`,
           'Share of each state’s product acres by segment, with its largest products and crops')}
         ${legend}
