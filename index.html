@@ -908,7 +908,6 @@ const PROD_OVERRIDE = {
   // These are the ONLY categories on the dashboard not traceable to a cell, so each one is a standing
   // request to fill that cell — delete the line the day the sheet carries the value.
   'SHENZI SC':      'Insecticide',
-  'IMIDAGOLD PLUS': 'Insecticide',
   'LANCER':         'Insecticide',
   'LINDSTAR':       'Insecticide',
   'TEWLIS':         'Insecticide',
@@ -916,6 +915,8 @@ const PROD_OVERRIDE = {
   // STARPEN (6 ac) and SUPERPHOS (2 ac) are blank everywhere and deliberately NOT overridden. They keep
   // falling into Other rather than being dropped from the base: excluding acres here is what once left the
   // segments card and the products table showing two different totals on one screen. Confirmed 2026-08-07.
+  // IMIDAGOLD PLUS joins them: it was Insecticide here until 2026-09-15, when the programme re-classed it as
+  // Other (307 ac in the August month tab). Removing the line is how "Other" is said — it is not a category.
 };
 const BRAND_PORT = {};   // brandKey → the brand's one category. Rebuilt whenever either product tab lands.
 function buildBrandPort(){
@@ -992,10 +993,12 @@ function wkpBlocks(header){
       out.push({ region:i, crop:i+1, product:i+2, company:i+3, acres:i+4 });
   return out;
 }
-function wkpBuild(rows){
-  if(!rows.length) throw new Error('product-detail tab: no rows');
+/* Shared by both pasted tabs — this one and the monthly one (MON, below). Same five columns, same block rule, so
+   one reader; each caller keeps its own state. */
+function pasteParse(rows, what){
+  if(!rows.length) throw new Error(what+': no rows');
   const blocks=wkpBlocks(rows[0]);
-  if(!blocks.length) throw new Error('product-detail tab: no region/crop/product/company/acres columns in the header');
+  if(!blocks.length) throw new Error(what+': no region/crop/product/company/acres columns in the header');
   const read=K=>{
     const out=[];
     for(const r of rows.slice(1)){
@@ -1010,10 +1013,14 @@ function wkpBuild(rows){
     return out;
   };
   const got=blocks.map(K=>({ col:K.region, rows:read(K) }));
-  WKP.blocks=got.map(b=>({ col:b.col, rows:b.rows.length, acres:Math.round(b.rows.reduce((s,r)=>s+r.acres,0)) }));
   const live=got.find(b=>b.rows.length);
-  if(!live) throw new Error('product-detail tab: every block is empty');
-  WKP.rows=live.rows; WKP.stamp=Date.now(); WKP.period=null; WKP.pStamp='';
+  if(!live) throw new Error(what+': every block is empty');
+  return { rows:live.rows,
+    blocks:got.map(b=>({ col:b.col, rows:b.rows.length, acres:Math.round(b.rows.reduce((s,r)=>s+r.acres,0)) })) };
+}
+function wkpBuild(rows){
+  const p=pasteParse(rows,'product-detail tab');
+  WKP.blocks=p.blocks; WKP.rows=p.rows; WKP.stamp=Date.now(); WKP.period=null; WKP.pStamp='';
 }
 async function loadWkp(force){
   if(WKP.loading) return; WKP.loading=true; WKP.error=false; render();
@@ -1049,6 +1056,9 @@ async function loadTabNames(force){
     const name=by[WKP_GID]||'';
     if(name!==WKP.tabName){ WKP.tabName=name; WKP.pStamp=''; }
     if(!name) console.warn('[MP-Ops] gid', WKP_GID, 'is not in the workbook any more — the product-detail tab may have been replaced rather than repasted.');
+    const mName=by[MON_GID]||'';
+    if(mName!==MON.tabName){ MON.tabName=mName; MON.pStamp=''; }
+    if(!mName) console.warn('[MP-Ops] gid', MON_GID, 'is not in the workbook any more — the monthly product tab may have been replaced rather than repasted.');
   }catch(e){ TABS.error=true; console.warn('[MP-Ops] tab names unavailable; the period is dated from the acres instead:', e && e.message || e); }
   finally{ TABS.loading=false; render(); }
 }
@@ -1135,6 +1145,107 @@ const wkpPeriod = () => (WKP.rows.length ? wkpResolve() : (WKP.period || WKP_PER
    over the right acres for as long as the second fetch takes. Which is the whole failure this rework is about,
    just compressed into half a second. */
 const wkpDated = () => WKP.loaded && (TX.loaded || TX.error);
+
+/* ================= product detail for ONE CALENDAR MONTH (manual tab, gid 395473267) =================
+   Added 2026-09-15. The programme pastes a whole month's product acres — every product, region × crop × product ×
+   company, the same five columns as the weekly paste above — into ONE tab, and overwrites it with the next month
+   when that month closes. It is the Month review's product source for whichever month it holds: the day-level tab
+   is a rolling ~25-day window of eight focus brands, so by the time a month is complete it covers a third of it.
+   First paste: "Aug Product data", 1,026 rows / 121 products / 100,696 ac in the seven states, 62% of the 163,502
+   ac the fleet sprayed in August — in line with the July paste's 57%.
+
+   THE MONTH COMES FROM THE TAB'S NAME, and nothing else can supply it. The tab has no date column, and unlike the
+   weekly paste it cannot be dated by fingerprint: the dated feed never spans a whole past month. So the name is
+   read ("Aug Product data" → the latest August that has begun), and the dated feed is used to CHECK it on
+   whatever days of that month it still holds (monCheck):
+     · the feed spans the whole month → the per-brand sums must be equal (within WKP_FP_TOL — same numbers out of
+       the same system, so the tolerance is for rounding only);
+     · the feed spans part of it → no brand in the tab may hold FEWER acres than the feed records on those days
+       alone, since a month cannot have sprayed less than a part of itself;
+     · the feed reaches none of it → unchecked, and the card says the name is all it was dated by.
+   A tab that CONTRADICTS the feed is not used — the card falls back and says why. That is the failure this guards
+   against: September pasted over August with the name left as "Aug Product data" would otherwise be printed as
+   August. RENAME THE TAB WITH EVERY PASTE; the check can only catch a stale name while the feed still overlaps.
+
+   No pinned fallback, deliberately. A constant month would go stale the day the tab is overwritten, and a month
+   the console cannot date is shown from the day-level tab instead, which names its own limits. */
+const MON_GID = '395473267';
+const MON = { loading:false, loaded:false, error:false, at:'', rows:[], stamp:0, tabName:'', blocks:[],
+              period:null, pStamp:'', logged:'' };
+function monUrl(){ return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${MON_GID}&t=${Date.now()}`; }
+async function loadMon(force){
+  if(MON.loading) return; MON.loading=true; MON.error=false; render();
+  try{
+    const res=await fetch(monUrl()); if(!res.ok) throw new Error('HTTP '+res.status);
+    const p=pasteParse(parseCSV(await res.text()),'monthly product tab');
+    MON.rows=p.rows; MON.blocks=p.blocks; MON.stamp=Date.now(); MON.period=null; MON.pStamp='';
+    MON.loaded=true; MON.at=nowIST();
+  }catch(e){ MON.error=true; console.error('monthly product tab load failed:', e); }
+  finally{ MON.loading=false; loadTabNames(force); render(); }
+}
+/* "Aug Product data" → August of the latest year in which August has begun, unless the name carries a year.
+   Full month names and three-letter forms only, so a word that merely starts like a month ("market") is not one. */
+const MON_RE = /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/;
+function monNameMonth(name){
+  const s=String(name||'').toLowerCase(), m=s.match(MON_RE);
+  if(!m) return null;
+  const mi=WKP_MON[m[1].slice(0,3)], yr=s.match(/\b(20\d\d)\b/), now=new Date();
+  const y = yr ? +yr[1] : (mi<=now.getMonth() ? now.getFullYear() : now.getFullYear()-1);
+  return { y, m:mi+1, start:insISO(new Date(y,mi,1)), end:insISO(new Date(y,mi+1,0)) };
+}
+function monCheck(P){
+  if(!TX.loaded || !TX.rows.length) return { status:'unchecked', days:0 };
+  const tab={}; MON.rows.forEach(r=>{ tab[r.key]=(tab[r.key]||0)+r.acres; });
+  const feed={}, days=new Set();
+  TX.rows.forEach(r=>{ if(r.d<P.start || r.d>P.end) return; days.add(r.d); feed[r.brandKey]=(feed[r.brandKey]||0)+r.acres; });
+  const shared=Object.keys(feed).filter(k=>tab[k]!=null);
+  const len=wkpDayDiff(new Date(P.start+'T00:00:00'), new Date(P.end+'T00:00:00'))+1;
+  if(!days.size || shared.length<3) return { status:'unchecked', days:days.size, len };
+  const full=days.size>=len, target=shared.reduce((s,k)=>s+tab[k],0), tol=Math.max(2, target*WKP_FP_TOL);
+  const err=shared.reduce((s,k)=>s+(full ? Math.abs(tab[k]-feed[k]) : Math.max(0, feed[k]-tab[k])),0);
+  return { status: err<=tol ? (full?'match':'consistent') : 'contradicts', days:days.size, len,
+    shared:shared.length, err:Math.round(err*100)/100, tol:Math.round(tol*100)/100 };
+}
+/* Settled = the tab, its name and the dated feed have all arrived or failed. Until then Month's product cards
+   wait rather than render the day-level fallback and flip half a second later — the same rule as wkpDated. */
+const monSettled = () => (MON.error || (MON.loaded && (TABS.loaded || TABS.error))) && (TX.loaded || TX.error);
+function monResolve(){
+  const stamp=`${MON.stamp}|${TX.loaded?TX.stamp:0}|${MON.tabName}`;
+  if(MON.pStamp!==stamp){ const P=monNameMonth(MON.tabName); MON.period=P?{ ...P, check:monCheck(P) }:null; MON.pStamp=stamp; }
+  const P=MON.period;
+  if(MON.loaded && monSettled() && MON.logged!==stamp){
+    MON.logged=stamp;
+    console.info('[MP-Ops] monthly product tab →', { tab: MON.tabName||'(name unavailable)', gid: MON_GID,
+      month: P?`${P.start} → ${P.end}`:null, check: P?P.check:null, rows: MON.rows.length,
+      acres: Math.round(MON.rows.reduce((s,r)=>s+r.acres,0)), blocks: MON.blocks });
+    if(!P) console.warn(`[MP-Ops] the monthly product tab is named "${MON.tabName}", which names no month — it is not being used. Put the month in the tab's name, e.g. "Sep Product data".`);
+    else if(P.check.status==='contradicts') console.warn(`[MP-Ops] the monthly product tab is NAMED for ${P.start.slice(0,7)} but its acres disagree with the dated product feed on that month's days — it is not being used. Was it re-pasted without being renamed?`, P.check);
+    if(MON.blocks.filter(b=>b.rows).length>1)
+      console.warn('[MP-Ops] the monthly product tab holds more than one block of data — the leftmost is being read and the rest ignored. Clear the old ones.', MON.blocks);
+  }
+  return P;
+}
+/* The tab's period when it is month M and may be used; null otherwise. monRefused is the one case worth saying
+   on the card: the tab names this very month and its acres say it is not. */
+function monFor(M){
+  if(!M || !MON.loaded || !monSettled()) return null;
+  const P=monResolve();
+  return (P && P.y===M.y && P.m===M.m && P.check.status!=='contradicts') ? P : null;
+}
+function monRefused(M){
+  if(!M || !MON.loaded || !monSettled()) return false;
+  const P=monResolve();
+  return !!(P && P.y===M.y && P.m===M.m && P.check.status==='contradicts');
+}
+function monSourceNote(M){
+  const P=monFor(M); if(!P) return '';
+  const c=P.check, head=`From the tab “${MON.tabName}”, which holds one month at a time and carries no dates, so its month is read from its name.`;
+  return head + (c.status==='match'
+    ? ` Its acres match the dated product feed brand for brand across the whole of ${M.name}.`
+    : c.status==='consistent'
+    ? ` The dated product feed still holds ${c.days} of ${M.name}’s ${c.len} days, and the tab’s acres are consistent with them.`
+    : ` The dated product feed no longer reaches ${M.name}, so the name is all there is to date it by.`);
+}
 
 
 /* ===================== operator leaderboard — the contest tab =====================
@@ -3167,7 +3278,7 @@ function buildMonthExport(id){
        exactly where a narrow tab gets taken for the whole product mix over the whole month. Both narrownesses
        (few brands, and only the days the feed holds) go in the subtitle, and the share is taken against the
        same denominator the page uses. */
-    const isW=MP.src==='wkp';
+    const isW=insMonthPaste(MP.src);
     const partial=!isW && MP.nDays<MP.span, denom=partial?MP.fleetOnDays:M.acres;
     const share=denom?`${(MP.total/denom*100).toFixed(0)}% of the ${fmt(denom)} ac sprayed`:'';
     const days=isW ? `${fmt(MP.products.length)} products, ${fmt(MP.crops.length)} crops`
@@ -3200,7 +3311,7 @@ function buildMonthExport(id){
 
   if(id==='mo-segments'){
     const MG=D.MG; if(!MG||MG.empty) return null;
-    const MPs=D.MP, segW=!!(MPs&&MPs.src==='wkp');
+    const MPs=D.MP, segW=!!(MPs&&insMonthPaste(MPs.src));
     const cov=(MPs&&!MPs.empty&&!segW&&MPs.nDays<MPs.span)?` · the ${MPs.nDays} days of ${M.name} the day-level tab covers`:'';
     const segSub=segW                                        // one unwrapped line — keep it inside the canvas
       ? `${sub} · share of each state’s product acres · segments from the summary tab, unmatched in Other`
@@ -5246,12 +5357,13 @@ function wkpFleetAcres(A){
   return insWeekSum(A.snCode, INS_CUR.key, from, to);
 }
 
-/* The product mix for whatever period the manual tab holds. Scope-aware, and shared by Week and Month — the
-   aggregation is the same in both; only the window that may claim it differs. */
-function wkpProducts(A){
+/* The product mix for whatever period a pasted tab holds — the weekly one or the monthly one (MON). Scope-aware,
+   and shared by Week and Month — the aggregation is the same in both; only the window that may claim it differs. */
+const wkpProducts = A => pasteProducts(WKP.rows, A);
+function pasteProducts(src, A){
   // Seven dashboard states only — matching the segments table, so the two cards report the same total.
   const scope=r=>r.st!=='OT' && (!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
-  const rows=WKP.rows.filter(scope);
+  const rows=src.filter(scope);
   if(!rows.length) return { empty:true };
   const roll=key=>{ const m={}; rows.forEach(r=>{ const k=key(r); m[k]=(m[k]||0)+r.acres; }); return m; };
   const meta={}; rows.forEach(r=>{ meta[r.key]=meta[r.key]||{ disp:r.product, company:r.company }; });
@@ -5288,11 +5400,12 @@ function insWeekProducts(A,W){
    however many later rows named it. On the July paste that was 5,510 ac of IRIS, sorted into Other while the same
    tab called it Herbicide. Match rate went 90% → 99% of the paste's acres when this changed. */
 const INS_SEGS = ['Herbicide','Insecticide','Fungicide'];
-function wkpSegments(A){
+const wkpSegments = A => pasteSegments(WKP.rows, A);
+function pasteSegments(src, A){
   const map=BRAND_PORT;
   const scope=r=>(!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
   const by={};
-  WKP.rows.filter(scope).forEach(r=>{
+  src.filter(scope).forEach(r=>{
     if(r.st==='OT') return;                                 // dashboard states only
     const seg=map[r.key]||'';   // the brand's decided category, or Other — nothing is dropped from the base
     const e=by[r.st]||(by[r.st]={ st:r.st, name:STATE_NAMES[r.st]||r.st, base:0, Herbicide:0, Insecticide:0, Fungicide:0, Other:0, prod:{}, crop:{} });
@@ -5595,8 +5708,11 @@ function insMonthAgg(A,back){
 }
 
 /* ===== products for the month =====
-   TWO possible sources, and the better one wins:
+   THREE possible sources, and the best one wins (insMonthSrc decides, once):
 
+   · The MONTHLY product tab (MON, gid 395473267), where it holds this month. The programme pastes each month's
+     full mix into it when the month closes; its month is read from its name and checked against the dated feed.
+     Same contract as the pasted weekly tab below — full mix, whole month, no previous month beside it.
    · The manual product-detail tab, WHERE IT IS THIS MONTH (wkpIsPeriod → the STRICT wkpMatch). It is the full
      product mix for the month, ~115 products against the day-level tab's eight, so where it applies it is not a
      close call. It carries no dates and no earlier month, so there is nothing to set each product against — the
@@ -5612,16 +5728,29 @@ function insMonthAgg(A,back){
 
    A card headed "products this month" reads as THE MIX over THE MONTH, so whichever source is in use has to be
    named and its limits stated; `src` carries that through to the render and the PNG export. */
+/* Which source month M's product cards read, decided ONCE so the products card, the segments card, the render's
+   loading state and the PNG export can never disagree: the monthly tab where it holds this month, else the
+   weekly paste where it happens to be this month, else the day-level tab. 'pending' while the monthly tab is
+   still being fetched or named — rendering the fallback then would flash the wrong source for half a second. */
+function insMonthSrc(M){
+  if(!M) return 'tx';
+  if(!monSettled()) return 'pending';
+  return monFor(M) ? 'mon' : wkpIsPeriod(M.d0,M.d1) ? 'wkp' : 'tx';
+}
+const insMonthPaste = src => src==='mon' || src==='wkp';
 function insMonthProducts(A,M){
   if(!M) return null;
-  if(wkpIsPeriod(M.d0,M.d1)){
-    if(!WKP.loaded) return null;
-    const P=wkpProducts(A);
+  const src=insMonthSrc(M);
+  if(src==='pending') return null;
+  if(insMonthPaste(src)){
+    if(src==='wkp' && !WKP.loaded) return null;
+    const P=src==='mon' ? pasteProducts(MON.rows, A) : wkpProducts(A);
     if(!P || P.empty) return P;
     // Shaped to the same contract the day-level path returns, so the render and the export need no second branch
     // for anything but the wording: the whole month is covered (nDays===span ⇒ not partial) and there is no
-    // previous month to compare against (prevTotal 0 ⇒ the vs-column drops).
-    return { ...P, src:'wkp', nDays:M.len, span:M.len, first:insISO(M.d0), last:insISO(M.d1),
+    // previous month to compare against (prevTotal 0 ⇒ the vs-column drops). The monthly tab holds ONE month at a
+    // time, so it has no previous month either.
+    return { ...P, src, nDays:M.len, span:M.len, first:insISO(M.d0), last:insISO(M.d1),
       fleetOnDays:M.acres, prevTotal:0, prevName:M.prevName,
       products:P.products.map(x=>({ ...x, prev:null, mom:null })) };
   }
@@ -5665,7 +5794,10 @@ function insMonthProducts(A,M){
    never heard of — falls into Other. Nothing is dropped from the base. Keep it that way. */
 function insMonthSegments(A,M){
   if(!M) return null;
-  if(wkpIsPeriod(M.d0,M.d1)) return (WKP.loaded && PROD.loaded) ? wkpSegments(A) : null;
+  const src=insMonthSrc(M);
+  if(src==='pending') return null;
+  if(src==='mon') return PROD.loaded ? pasteSegments(MON.rows, A) : null;
+  if(src==='wkp') return (WKP.loaded && PROD.loaded) ? wkpSegments(A) : null;
   if(!TX.loaded) return null;
   const scope=r=>r.st!=='OT' && (!A.gst||r.st===A.gst) && (!A.scoped || (A.og!=='Open' && r.company===A.og));
   const w=insMonthISO(M), by={};
@@ -6084,8 +6216,9 @@ function insightsBodyHTML(mob){
     // being typed into the source. So the tab is always fetched here and only the CARD is gated; the summary tab
     // its segments are joined from still waits for the gate, since nothing else on this page needs it.
     if(!WKP.loaded && !WKP.loading && !WKP.error) setTimeout(loadWkp,0);
-    const moWkp = !!M && wkpIsPeriod(M.d0,M.d1);
-    if(moWkp && !PROD.loaded && !PROD.loading && !PROD.error) setTimeout(loadProduct,0);   // brand → portfolio, for segments
+    if(!MON.loaded && !MON.loading && !MON.error) setTimeout(loadMon,0);   // the full product mix, one month at a time
+    const moSrc = insMonthSrc(M), moWkp = moSrc==='wkp', moMon = moSrc==='mon';
+    if(insMonthPaste(moSrc) && !PROD.loaded && !PROD.loading && !PROD.error) setTimeout(loadProduct,0);   // brand → portfolio, for segments
     const canBack=!!insMonthWindow(back+1);           // false once the stepper reaches the season's first month
     const mLabel=M?M.title:'—';
     const stepper=`<div style="display:flex;align-items:center;gap:8px">
@@ -6201,20 +6334,31 @@ function insightsBodyHTML(mob){
     // that applies: the pasted tab is the whole mix but has no month beside it to compare against; the day-level
     // tab is narrow in BOTH directions — few brands, and only the days it holds.
     const narrowNote = (partial,hasMom,MP,M) => `<div style="padding:11px 16px;border-top:1px solid #EFEDE7;font-size:11px;color:#9C988F;line-height:1.6">${
-      MP.src==='wkp'
+      MP.src==='mon'
+        ? `These are the whole month’s product acres — the full mix, not a selection of brands. ${E(monSourceNote(M))} Each product is shown at its size for the month; the tab holds no earlier month to set it against.`
+        : MP.src==='wkp'
         ? `These are the whole month’s product acres, pasted into the workbook as a single tab for ${E(wkpRangeLabel())} — the full mix, not a selection of brands. That tab carries no dates and holds only this one period, so each product is shown at its size for the month with no earlier month to set it against.`
-        : `The day-level tab is the only product source that records a date, so it is the only one that can be read by month — but it carries just the brands listed above, not the whole product mix.${partial?` It also holds only recent days: ${MP.nDays} of ${E(M.name)}’s ${MP.span} are in it, so these acres are that stretch of the month rather than all of it.`:''}${hasMom?'':` ${E(MP.prevName||'The previous month')} has no day-level records at all, so there is nothing to compare each brand against.`}`}</div>`;
-    const pSrcName = moWkp ? `Product detail for ${E(wkpRangeLabel())}` : 'Day-level product tab';
-    const pRetry   = moWkp ? 'wkpretry' : 'txretry';
+        : `The day-level tab is the only product source that records a date, so it is the only one that can be read by month — but it carries just the brands listed above, not the whole product mix.${partial?` It also holds only recent days: ${MP.nDays} of ${E(M.name)}’s ${MP.span} are in it, so these acres are that stretch of the month rather than all of it.`:''}${hasMom?'':` ${E(MP.prevName||'The previous month')} has no day-level records at all, so there is nothing to compare each brand against.`}${E(monElse)}`}</div>`;
+    /* On the day-level path, where the full mix for THIS month would be if it existed: the monthly tab holds one
+       month at a time, so a reader on any other month is told which one it holds — and a tab named for this month
+       whose acres contradict the dated feed is named as refused, never silently skipped. */
+    const monElse = (()=>{
+      if(moMon || !MON.loaded || !monSettled()) return '';
+      if(monRefused(M)) return ` The monthly product tab “${MON.tabName}” is named for ${M.name}, but its acres disagree with the day-level records for ${M.name}, so it is not being used here.`;
+      const P=monResolve();
+      return P ? ` The full product mix is kept one month at a time, in the tab “${MON.tabName}”, which currently holds ${INS_MON_FULL[P.m-1]} ${P.y}.` : '';
+    })();
+    const pSrcName = moMon ? `Monthly product tab “${E(MON.tabName)}”` : moWkp ? `Product detail for ${E(wkpRangeLabel())}` : 'Day-level product tab';
+    const pRetry   = moMon ? 'monretry' : moWkp ? 'wkpretry' : 'txretry';
     // Same rule as Week: a card that is only a message has nothing to redraw, so it gets no PNG button.
     const prodMoDL = !!(MP && !MP.empty && MP.total);
     let prodMo='';
-    if(moWkp ? !WKP.loaded : !TX.loaded){
-      const err = moWkp ? WKP.error : TX.error;
-      prodMo=card(`${cHead('What was sprayed this month',pSrcName)}${waiting(err, err?`Could not load the ${moWkp?'product-detail tab':'day-level product tab'}.`:`Loading ${moWkp?'the month’s product detail':'day-level products'}…`,pRetry)}`);
+    if(moSrc==='pending' || (moWkp ? !WKP.loaded : moMon ? false : !TX.loaded)){
+      const err = moSrc==='pending' ? false : moWkp ? WKP.error : TX.error;
+      prodMo=card(`${cHead('What was sprayed this month',pSrcName)}${waiting(err, err?`Could not load the ${moWkp?'product-detail tab':'day-level product tab'}.`:`Loading ${moSrc==='tx'?'day-level products':'the month’s product detail'}…`,pRetry)}`);
     } else if(!MP || MP.empty || !MP.total){
-      const rg=moWkp?'':insTxRange();
-      prodMo=card(`${cHead('What was sprayed this month',pSrcName)}${waiting(false,`No product rows for ${E(M.title)} in this scope.${rg?` The day-level tab currently holds ${E(rg)} only.`:''}`,pRetry)}`);
+      const rg=insMonthPaste(moSrc)?'':insTxRange();
+      prodMo=card(`${cHead('What was sprayed this month',pSrcName)}${waiting(false,`No product rows for ${E(M.title)} in this scope.${rg?` The day-level tab currently holds ${E(rg)} only.`:''}${E(monElse)}`,pRetry)}`);
     } else {
       /* Two independent narrownesses, and the card has to be straight about both. It covers only the brands the
          day-level tab carries (a handful), and only the DAYS that tab holds — measured live it was a rolling
@@ -6226,8 +6370,8 @@ function insightsBodyHTML(mob){
       const share = denom ? MP.total/denom*100 : null;
       const dayRange = MP.first ? `${insWeekLabel(new Date(MP.first+'T00:00:00'))} – ${insWeekLabel(new Date(MP.last+'T00:00:00'))}` : '';
       // "brands" is what the day-level tab holds — a chosen few. The pasted tab holds the mix, so it says products.
-      const pWord = MP.src==='wkp' ? 'products' : 'brands';
-      const coverLine = MP.src==='wkp'
+      const pWord = insMonthPaste(MP.src) ? 'products' : 'brands';
+      const coverLine = insMonthPaste(MP.src)
         ? `${fmt(MP.products.length)} products across ${fmt(MP.crops.length)} crops${share!=null?` · ${fmt(MP.total)} ac, ${share.toFixed(0)}% of the ${fmt(M.acres)} ac the fleet sprayed in ${E(M.name)}`:''}`
         : partial
         ? `${MP.nDays} of ${E(M.name)}’s ${MP.span} days have day-level records (${dayRange})${share!=null?` · ${fmt(MP.total)} ac, ${share.toFixed(0)}% of the ${fmt(denom)} ac the fleet sprayed on those days`:''}`
@@ -6292,12 +6436,12 @@ function insightsBodyHTML(mob){
       const legend=`<div style="display:flex;gap:14px;flex-wrap:wrap;padding:11px 16px 4px">${SEGL.map(k=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#6E6A62"><span style="width:10px;height:10px;border-radius:3px;background:${SEG_C[k]}"></span>${k}</span>`).join('')}</div>`;
       // Shares within this card are a share of ITSELF and so stay true whatever the feed covers — but the reader
       // still needs to know which days they describe, or "July" on the heading claims more than the tab holds.
-      const segCover = (MP && !MP.empty && MP.src!=='wkp' && MP.nDays<MP.span)
+      const segCover = (MP && !MP.empty && !insMonthPaste(MP.src) && MP.nDays<MP.span)
         ? ` · the ${MP.nDays} days of ${E(M.name)} the day-level tab covers` : '';
       // The pasted tab has no portfolio column of its own, so the segment is joined on from the product summary
       // tab. Saying so matters: a product that tab has never heard of sits in Other, and on this month's paste
       // that is a real share of the base rather than a rounding.
-      const segSub = MP && MP.src==='wkp'
+      const segSub = MP && insMonthPaste(MP.src)
         ? `Share of each state’s product acres by segment, with its largest products and crops · segments joined from the product summary tab, and whatever it does not carry sits in Other`
         : `Share of each state’s day-level product acres by segment, with its largest brands and crops${segCover}`;
       segMo=card(`${cHead(`Product segments by state · ${E(M.title)}`, segSub)}
@@ -8373,10 +8517,11 @@ app.addEventListener('click', e=>{
     case 'mpterr': setState({mpTerr:el.dataset.terr||''}); track('mpprod_territory',{terr:el.dataset.terr||'all'}); break;
     case 'txretry': TX.loaded=false; TX.error=false; loadTx(); break;
     case 'wkpretry': WKP.loaded=false; WKP.error=false; loadWkp(); break;
+    case 'monretry': MON.loaded=false; MON.error=false; loadMon(true); break;
     // Insights reads all three tabs, so its refresh reloads all three rather than just the machine sheet.
     case 'insrefresh': state.refreshing=true; render();
       SNAKE.loaded=false; SNAKE.error=false; PROD.loaded=false; PROD.error=false; TX.loaded=false; TX.error=false; WKP.loaded=false; WKP.error=false;
-      Promise.all([loadData(), loadSnake(), loadProduct(), loadTx(), loadWkp()]).finally(()=>{ state.refreshing=false; render(); }); break;
+      Promise.all([loadData(), loadSnake(), loadProduct(), loadTx(), loadWkp(), loadMon()]).finally(()=>{ state.refreshing=false; render(); }); break;
     // Drill a league row into that state's own Insights. Deliberately page-local: it re-scopes THIS page only and
     // leaves state.st (and therefore every other view's filter bar) exactly where the user left it.
     case 'insdrill': { const w=el.dataset.key; if(gateAllowsState(w)) setState({insSt:w}); break; }

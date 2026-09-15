@@ -135,7 +135,8 @@ designing anything on a column — several look usable and are not:
 | `scanned` per machine | 149/1,518 | **No** — too sparse for per-machine product mix |
 
 ## Workbook tabs (one sheet, `CONFIG.sheetId`)
-Eleven tabs; the app reads seven. Mapped by inspection — do not re-derive this.
+The app reads eight tabs. Mapped by inspection — do not re-derive this. (Tabs added since and not wired: `Sheet17`
+— a UPL → SWAL territory pairing — `Acres per mcn`, `Snake chart raw`, `User queries`, the Concerns write target.)
 
 | gid | What it is | Grain | History? | Used by |
 |---|---|---|---|---|
@@ -145,6 +146,7 @@ Eleven tabs; the app reads seven. Mapped by inspection — do not re-derive this
 | `123586424` | **Product Data MP** — the only product tab with a TERRITORY | territory × product × company, **MP only** | No (yesterday + MTD + YTD on the row) | MP products view |
 | `718502150` | Product day-level (`TX`) | **date** × region × crop × brand | Yes, but a ROLLING window — re-cut to 21 Aug – 6 Sep on 2026-09-06, where it used to run from 1 Jun | Week + Month → products, segments, focus-product trend; **and it is what dates the pasted tab** |
 | `1973671649` | Pasted product detail (`WKP`), tab named **"Aug 31-Sep 4"** | region × crop × product, ONE period — **31 Aug – 5 Sep 2026, six days**, established from the acres, not from that name | n/a — the tab IS the period | **Week** → products + segments, ALWAYS (Month only when the paste is a month, which this one is not) |
+| `395473267` | **Monthly product detail** (`MON`), tab named **"Aug Product data"** | region × crop × product, ONE calendar month — **1–31 Aug 2026**, 121 products / 100,696 ac in the seven states | n/a — the tab IS the month; **overwritten** with the next month when it closes | **Month** → products + segments, for whichever month it holds |
 | `1562411178` | **Operator leaderboard** — the 15–31 Aug contest ledger | **date** × operator, keyed on MOBILE | **Yes**, day by day inside the window | Leaders view, the India-rank badge everywhere |
 | `1199323704` | Richer machine feed (per-machine branded acres, lat/lon, ping) | 1 row/machine | No | **not wired** |
 | `1433754421` | Org roster (AM/CI/BM/TM/FO/retailer) | 1 row/machine | No | not wired |
@@ -802,6 +804,26 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   calendar month, so the ends would be part-weeks wearing a week's name, and Week mode already owns that word.
   Fixed date blocks also compare cleanly year over year — the same dates on both sides — and the short tail block
   is labelled with its own day count so a shorter bar is not read as a collapse.
+- **Month's products come FIRST from the MONTHLY tab (gid `395473267`, `MON`) — added 2026-09-15.** The programme
+  pastes each closed month's full product mix into ONE tab ("Aug Product data") and overwrites it with the next
+  month. `insMonthSrc(M)` picks the source ONCE — monthly tab → pasted weekly tab (if it happens to be the month) →
+  day-level tab — so products, segments, the loading state and the PNG can never disagree. The `mon` path uses the
+  same contract and wording as the `wkp` one below (full mix, whole month, vs-previous-month dropped).
+  · **The month is read from the TAB'S NAME** (`monNameMonth`: "Aug Product data" → the latest August that has
+    begun; a 4-digit year in the name wins). Nothing else can date it — the day-level feed never spans a whole past
+    month, so the weekly paste's fingerprint trick does not work here. **There is deliberately no pinned fallback**:
+    a constant month goes stale the day the tab is overwritten.
+  · **`monCheck` tests the name against the dated feed** on whatever days of that month it still holds: equal
+    per-brand sums if it spans the whole month; if only part, no brand may hold FEWER acres than the feed has on
+    those days alone. A tab that contradicts is **refused, and the card says so** rather than skipping silently.
+    Live on August: 11 of 31 days in the feed, 7 shared brands, `consistent`. The card names which of
+    match / consistent / unchecked applied (`monSourceNote`).
+  · **THE TAB MUST BE RENAMED WITH EVERY PASTE.** September pasted under "Aug Product data" is exactly what
+    `monCheck` exists to catch, and it can only catch it while the feed still overlaps August.
+  · Every load logs `[MP-Ops] monthly product tab → {tab, month, check, rows, acres, blocks}`. On the day-level path
+    the card also says which month the monthly tab currently holds, so a reader on July knows where August's mix is.
+  · August on screen: 100,696 ac, **62% of the 163,502 ac the fleet sprayed** (the July paste was 57%). The 80 ac
+    of Andaman / Karnataka / AP rows drop as `OT`, same as every product tab.
 - **Month's product cards read the PASTED tab where it is the selected month, and the day-level tab otherwise.**
   `insMonthProducts` / `insMonthSegments` both branch on `wkpIsPeriod(M.d0,M.d1)` and carry the choice through to
   the render and the PNG as `MP.src` (`'wkp'` | `'tx'`). Where the paste applies it is not a close call — for July
@@ -882,6 +904,8 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   such brands live today); and **`port0` holds the sheet's value and is never written to**, so re-running cannot
   feed a filled row back in as evidence. `PROD_OVERRIDE` is the last resort for a brand blank on *every* row of
   both tabs — five entries, supplied by the programme, each one a standing request to fix the sheet.
+  (`IMIDAGOLD PLUS` was a sixth, as Insecticide, until 2026-09-15, when the programme re-classed it as **Other** —
+  said by deleting its line, since Other is where anything uncategorised already lands. 307 ac on the August tab.)
   This also killed a real bug: `wkpSegments` used to build its own map **first-row-wins**, so a brand whose first
   summary row was blank mapped to Other however many later rows named it — 5,510 ac of IRIS on the July paste.
   The paste's match rate went 90% → 99%.
