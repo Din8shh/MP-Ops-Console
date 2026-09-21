@@ -135,13 +135,14 @@ designing anything on a column — several look usable and are not:
 | `scanned` per machine | 149/1,518 | **No** — too sparse for per-machine product mix |
 
 ## Workbook tabs (one sheet, `CONFIG.sheetId`)
-The app reads eight tabs. Mapped by inspection — do not re-derive this. (Tabs added since and not wired: `Sheet17`
-— a UPL → SWAL territory pairing — `Acres per mcn`, `Snake chart raw`, `User queries`, the Concerns write target.)
+The app reads nine tabs. Mapped by inspection — do not re-derive this. (Tabs added since and not wired: `Sheet17`
+— a UPL → SWAL territory pairing — `Snake chart raw`, `User queries`, the Concerns write target.)
 
 | gid | What it is | Grain | History? | Used by |
 |---|---|---|---|---|
 | `0` | Machine master (`Sheet1`) | 1 row/machine | **No** — overwritten daily | everything |
 | `603091795` | Cumulative "snake" | fiscal-day × state × 3 FY | **Yes**, 3 seasons | Cumulative view, Insights |
+| `962685797` | **Acres per mcn** — the snake tab's acres DECOMPOSED | **date** × state × 3 FY, each carrying machines-that-have-run + acres-each | **Yes**, 3 seasons — the third source with history | Cumulative view (the split + the two per-machine charts) |
 | `1039187695` | Product data (summary) | region × crop × brand | No (YTD + yesterday only) | Products view, Insights, segment join |
 | `123586424` | **Product Data MP** — the only product tab with a TERRITORY | territory × product × company, **MP only** | No (yesterday + MTD + YTD on the row) | MP products view |
 | `718502150` | Product day-level (`TX`) | **date** × region × crop × brand | Yes, but a ROLLING window — re-cut to 21 Aug – 6 Sep on 2026-09-06, where it used to run from 1 Jun | Week + Month → products, segments, focus-product trend; **and it is what dates the pasted tab** |
@@ -153,10 +154,11 @@ The app reads eight tabs. Mapped by inspection — do not re-derive this. (Tabs 
 | `266726831` | The Athena SQL behind the machine feed | — | — | reference only |
 | `1999606625` | Scratch, misaligned columns | — | — | unusable |
 
-The operator-leaderboard tab is the SECOND source with real history, and the only one carrying it *below*
-state level — which is what lets the Leaders page rebuild yesterday's standings and show movement.
+The operator-leaderboard tab is the only source carrying history *below* state level — which is what lets the
+Leaders page rebuild yesterday's standings and show movement. `Acres per mcn` is the third with real history, but
+like the snake tab it stops at state.
 
-**Apart from those two, no tab has history.** That single fact drives most of the Insights design: anything asking "what changed over time" below state level is not computable today.
+**Apart from those three, no tab has history.** That single fact drives most of the Insights design: anything asking "what changed over time" below state level is not computable today.
 
 ## Products view
 A self-contained page over the summary tab: a UPL-vs-SWAL head-to-head, three tiles, a brand leaderboard and a
@@ -543,6 +545,61 @@ spelling, same rule and same reason as the card.
 Chromeless, scope from `gst`, operators board only, admin-only — identical to the card, for identical reasons.
 **The card was NOT replaced.** The two answer different questions and both are offered; if the Share group is
 ever dropped, that is a product call, not a cleanup.
+
+## Acres per machine — the snake chart's other half (Cumulative view)
+Three cards under the cumulative and day-wise charts, off the `Acres per mcn` tab (gid `962685797`), sharing that
+page's State picker and From/To range. They exist because of one property, which is not an assumption:
+
+    cumulative acres  =  machines that have run  ×  acres each
+
+**Verified on every populated cell of the live tab** — 3,193 of them, 7 states × 3 fiscal years × 173 days
+(1 Apr → 20 Sep 2026) — against the snake tab, matching to the decimal on all of them. That identity is the whole
+point: the snake chart can say a season is behind, and only this can say whether that is because fewer machines are
+working or because each is covering less ground. The two call for opposite responses, and nothing else in the
+console separates them. Live at 20 Sep the national gap is −29,985 ac of which **−28,082 is per-machine output and
+only −1,903 is fleet size** — the fleet is the same size as last season (1,323 vs 1,329) and each machine is
+covering 21 fewer acres. MP is the mirror image: +48,306 ac bought with 216 extra machines while acres each fell
+430 → 316.
+
+- **A BLANK CARRIES THE PREVIOUS DATE'S VALUE, and that rule is exact rather than a convenience.** On all 315 blank
+  days that have a previous value, the snake tab's cumulative had not moved either — the sheet simply does not
+  rewrite a row on a day a state logged nothing. A blank BEFORE a season's first datum is a different claim (that
+  season had not started) and stays null, exactly as the snake chart leaves its lines null before they begin.
+- **The carry STOPS at the last day the tab carries** (`lastSeen`), and this was a real bug caught by the node
+  harness, never on screen. Carrying to 31 March drew every season flat across months the sheet has no opinion
+  about AND — because the split reads the right-hand edge — dated the card "as of 31 Mar" on a tab ending in
+  September. It also broke the reconcile check against the snake tab into 1,959 false alarms. Same failure
+  `snakeTrim` prevents on the cumulative chart, reached from the other direction: there a tail is trimmed, here it
+  is never grown. **A blank is "nothing changed"; no row at all is "the tab does not reach this day."**
+- **ALL-INDIA IS A RATIO OF SUMS, NEVER A MEAN OF RATIOS.** Averaging seven states' acres-per-machine weights
+  Telangana's 72 machines the same as MP's 391 — measured live, that reads 277.5 against the true 295.9, **6.2%
+  wrong**. The national figure is Σ(machines × acres each) ÷ Σmachines, which by the identity above is exactly the
+  snake tab's All-India cumulative over the national fleet.
+- **Acres per machine LEGITIMATELY FALLS** whenever machines join the denominator faster than acres arrive, so the
+  series is drawn plain — never trimmed, never monotonicity-checked. Only `mcn` is monotonic (it counts machines
+  that have EVER run this season). A dip is data, not a sheet error.
+- **The split has no residual, and the ordering is why.** `fleet = (machines now − machines then) × acres each THEN`
+  and `per-mcn = machines now × (acres each now − acres each then)` sum to the acre difference exactly. A symmetric
+  decomposition would leave an interaction term nobody can name. It reads at the right edge of the selected range,
+  on the last day BOTH seasons carry — the same convention the cumulative card's ahead/behind badge follows.
+- **Sign words flip with the sign**, per the standing rule: a scope that is ahead reads "what the season's **lead**
+  is made of" and its tiles tint green; behind reads "gap" and tints red. MP shows one of each, which is the point.
+- Every load logs `[MP-Ops] acres per machine → {…}` with the range it covers, blanks carried, and the reconcile
+  against the snake tab (`over10pct` should be 0; live worst is 0.34%, a snapshot-timing artefact on the current
+  season, since the two tabs are exported moments apart). **Read that line first if a per-machine figure looks
+  wrong** — a break there means one tab was regenerated and the other was not.
+- Columns resolve **by header name**, keyed on the two year digits plus which measure the header names, so a
+  reordered or renamed tab cannot silently file one year's numbers under another's. A season whose columns are
+  missing is absent and logged, never guessed.
+- **Both cards live in `snakeBodyHTML(mob)`, which desktop and mobile already share** — so the phone gets them with
+  no second branch, and the "adding a view means editing BOTH view chains" trap does not apply here. PNG export
+  follows the existing chart route (`apmper` / `apmmcn` kinds in `chartFilename` / `buildChartExportSVG`).
+- **It is NOT wired into Insights**, whose `Util %` and `Ac/run` are *daily rates over a 7-day mean* with no
+  last-season counterpart (the snake tab carries one machine column, current season only — cols 11–19 are empty).
+  This tab is the only thing that could make that split year-comparable, but its denominator is different
+  (machines that have run at any point this season, not that day), so putting both on one league table would give
+  it three machine counts and two adjacent columns both reading as "acres each". Deferred deliberately, not
+  overlooked.
 
 ## Access roles (the PIN gate)
 `GATE.ROLES` in index.html maps sha256(PIN) → a scope on **three axes**: org (`org` default + `allow` list),
