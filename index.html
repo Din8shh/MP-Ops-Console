@@ -60,11 +60,57 @@
     background:linear-gradient(135deg,#F5821F,#1FAE43);color:#fff;font-weight:700;font-size:13px;letter-spacing:.02em}
   @media (max-height:880px){ .railLogo{width:32px;height:32px;font-size:11px;margin-bottom:12px} }
   @media (max-height:780px){ .railConf{display:none} }
+  /* Keyboard focus is visible everywhere. Controls used to carry an inline outline:none, which removed the only
+     cue a keyboard / switch-access user has; those are gone and this is the one replacement. */
+  :focus-visible{outline:2px solid #1B1A17;outline-offset:2px}
+  /* Section and caption text on the phone. The label pattern (10px / 700 / .08em / uppercase / ink3) repeated
+     nine times across the phone builders; it is a class now so its size and ink change in ONE place. The phone
+     values live in the media query below. */
+  /* Stat bands go 2-up on a phone (see the three stat-band builders); with an odd tile count the last one spans. */
+  .statBand>:last-child:nth-child(odd){grid-column:1/-1}
+  .mLbl{font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase}
+  .mCap{font-size:11px;color:#9C988F}
+  /* Sheets slide up and fade in — but ONLY on the render in which they open. render() rebuilds the whole tree on
+     every state change, so an animation on the element would replay on each re-render (a select change inside
+     the filter sheet would make the sheet "open" again). mobileHTML adds .mSheetIn for that one render only. */
+  @keyframes mSheetUp{from{transform:translateY(28px);opacity:0}to{transform:none;opacity:1}}
+  @keyframes mScrimIn{from{opacity:0}to{opacity:1}}
+  @media (prefers-reduced-motion:no-preference){
+    .mSheetIn{animation:mSheetUp .2s cubic-bezier(.2,.7,.3,1)}
+    .mScrimIn{animation:mScrimIn .2s ease}
+  }
   /* Real phones: the mobile view drops its desktop preview bezel and runs full-bleed
      (see isPhone()/mobileHTML). Only viewport-level chrome is tuned here. */
-  @media (max-width:820px){
+  @media (max-width:820px), (max-height:500px) and (pointer:coarse){   /* = PHONE_MQ */
     ::-webkit-scrollbar{width:0;height:0}                 /* iOS/Android draw their own */
     button,a,[data-act]{-webkit-tap-highlight-color:rgba(0,0,0,.06)}
+    /* iOS Safari zooms the whole page when a field under 16px takes focus, and does not zoom back. Every
+       control sets its own size inline (12.5–15px), so only !important can win here — that is the one reason
+       it is used. The same rule covers the concern textarea and the PIN field. */
+    input,select,textarea{font-size:16px !important}
+    .mLbl{font-size:11px;color:#6E6A62}
+    .mCap{font-size:12px;color:#6E6A62}
+    /* ── Long-tail backstop for the SHARED chromeless builders (Insights, Leaders, Products, Cumulative,
+       Recap, MP products). Their ~230 micro-labels and ~60 small controls are written inline for the desktop
+       and are not worth forking one by one; the attribute selectors below raise them on a phone only.
+       !important is the point — the values being corrected are inline. The sizes mirror the table in the
+       mobile plan: nothing under 11px, nothing a finger cannot hit, and ink3 (2.9:1 on white) is lifted to
+       ink2 (5.4:1) for informative text. The C token values themselves are untouched. ── */
+    #app [style*="font-size:8px"],#app [style*="font-size:8.5px"],#app [style*="font-size:9px"],#app [style*="font-size:9.5px"],
+    #app [style*="font-size:10px"],#app [style*="font-size:10.5px"]{font-size:11px !important}
+    #app [style*="color:#9C988F"]{color:#6E6A62 !important}
+    #app svg text[fill="#9C988F"]{fill:#6E6A62}
+    #app button,#app select,#app input:not([type=checkbox]):not([type=radio]):not([type=range]),#app a[href^="tel:"]{min-height:44px}
+    #app button,#app a[href^="tel:"]{min-width:44px}
+    #app .insMore{min-height:44px;display:flex;align-items:center;justify-content:center}
+    /* A phone held sideways: the notch sits at the left/right edge, so the shell clears it, the weather banner
+       goes (it is a header the content has to scroll past, and there are ~300px of height to share), and the
+       bottom bar turns icon-beside-label so it is 44px rather than 60. */
+    .mShell{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  }
+  @media (max-height:500px) and (orientation:landscape) and (max-width:820px), (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+    .mWx{display:none !important}
+    .mNavItem{flex-direction:row !important;min-height:44px !important;gap:7px !important;padding:0 !important}
   }
 </style>
 <!-- ── Google Analytics 4 (usage tracking) ─────────────────────────────────────
@@ -100,7 +146,12 @@ let BASE = MP_BASE, COORDS = MP_COORDS;   // ACTIVE geometry — defaults to MP;
 const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#159234', open:'#4C7399', openD:'#3A5B7D', act:'#15A24A', idle:'#E0A008', brk:'#DC3A2B', ink:'#1B1A17', ink2:'#6E6A62', ink3:'#9C988F', line:'#E9E6DF', line2:'#F2F0EB', softO:'#FBEDDF', softG:'#E6F5EA', softB:'#EAF0F6', softR:'#FBEAE7', softA:'#FBF1DA' };
 // A real phone gets the mobile view automatically and renders it full-bleed (no preview bezel).
 // The same breakpoint drives both, so `device` and the chrome never disagree.
-const PHONE_MQ = '(max-width:820px)';
+// A phone held sideways is 932×430 — wider than 820px, so the width test alone dropped it onto the DESKTOP
+// layout, whose filter bar and KPI strip then filled the whole screen. The second clause catches a short,
+// touch-first viewport. `pointer:coarse` is what keeps a short desktop window (a laptop with the devtools
+// dock open) on the desktop layout. The same string is copied into the stylesheet's @media at the top of the
+// file — keep the two in step.
+const PHONE_MQ = '(max-width:820px), (max-height:500px) and (pointer:coarse)';
 const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
@@ -2190,7 +2241,18 @@ function applyGeo(key){ const g=GEO_CACHE[key]; if(!g) return false; BASE=g.BASE
 function geoKeyForState(){ if(state.st) return knownGeo(state.st)?state.st:'MP';
   const sts=[...new Set(ROWS.map(m=>m.st))]; if(sts.length>1) return '__india';
   const only=sts[0]||'MP'; return knownGeo(only)?only:'MP'; }
-function applyTransform(){ if(_g) _g.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`); }
+/* The viewBox is ~1000 units wide whatever size the box is drawn at, so on a 340px phone one map unit is a third
+   of a pixel: a label written as font-size 12 rendered at 4px, a 4.2-unit pin was a 3px dot, and a bubble 6 units
+   across was 2px — the map was drawn for a 900px desktop panel and merely shrunk. `mapK` is units per CSS pixel
+   (≈1.1 on the desktop panel, ≈3 on a phone); every mark that has to be READ or HIT is sized in px×k so it comes
+   out the same on both. Labels also carry data-fs (their size in px×k at scale 1) and are divided by the zoom in
+   applyTransform, so pinching in grows the geography but not the type. */
+function mapK(svg){ const w=svg&&svg.clientWidth, h=svg&&svg.clientHeight; if(!w||!h||!W||!H) return 1; return Math.max(1, 1/Math.min(w/W,h/H)); }
+function applyTransform(){
+  if(!_g) return;
+  _g.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`);
+  _g.querySelectorAll('[data-fs]').forEach(t=>t.setAttribute('font-size',(+t.dataset.fs/scale).toFixed(2)));
+}
 function mapHostEl(){ const svg=_g&&_g.ownerSVGElement; return svg&&svg.parentElement; }
 // While the map is locked it must NOT swallow touch — the mobile map sits inside a scrolling
 // page, so `touch-action:auto` lets a finger drag scroll it. Unlocked, we own the gesture.
@@ -2222,6 +2284,9 @@ function drawMap(hostId, metric){
   host.innerHTML='';
   const svg=document.createElementNS(NS,'svg'); svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width','100%'); svg.setAttribute('height','100%'); svg.style.display='block';
   const g=document.createElementNS(NS,'g'); svg.appendChild(g); host.appendChild(svg); _g=g;
+  const k=mapK(svg);            // map units per screen px — see mapK
+  const touch=k>1.5;            // a phone-sized box (the desktop panel sits at ≈1.1 and keeps its original sizes)
+  const touchK=touch?Math.min(2,k/1.2):1;       // bubbles grow with the phone, but not so far that 20 of them overlap
   applyTransform();
   const F=getF();
   const national = activeGeoKey==='__india';   // national map: features are STATES, group + drill by state
@@ -2252,15 +2317,18 @@ function drawMap(hostId, metric){
     Object.keys(byT).forEach(nm=>{ const c=coordsOf(nm); if(!c) return;
       const list=byT[nm], total=list.length, ran=list.filter(m=>m.acresY>0).length, rain=rainOfList(list,nm), ink=rainInk(rain), [cx,cy]=proj(c[0],c[1]);
       const label=(list[0].territory)||nm;
-      const mk=(y,size,weight,fam,txt)=>{ const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',y);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',fam);t.setAttribute('font-size',size);t.setAttribute('font-weight',weight);t.setAttribute('fill',ink); t.style.pointerEvents='none'; t.textContent=txt; g.appendChild(t); };
-      mk(cy-6.5,'9.5',600,"'Noto Sans',sans-serif",label);
-      mk(cy+6.5,'12.5',700,"'IBM Plex Mono',monospace",ran+'/'+total);
+      const mk=(y,size,weight,fam,txt)=>{ const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',y);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',fam);t.setAttribute('font-size',size);t.dataset.fs=size;t.setAttribute('font-weight',weight);t.setAttribute('fill',ink); t.style.pointerEvents='none'; t.textContent=txt; g.appendChild(t); };
+      // name ≈10.5px and the ran/total figure ≈12px on screen (never smaller than the desktop's own sizes)
+      const nameFs=touch?10.5*k:9.5, numFs=touch?12*k:12.5;
+      mk(cy-numFs*.5,nameFs,600,"'Noto Sans',sans-serif",label);
+      mk(cy+nameFs*.6,numFs,700,"'IBM Plex Mono',monospace",ran+'/'+total);
     });
     attachPanZoom(svg); drawLegend('weather'); return;
   }
   const val=(list)=>{ if(metric==='active')return list.filter(m=>acD(m)>0).length; if(metric==='acresY')return list.reduce((s,m)=>s+acD(m),0); return list.length; };
   let maxV=1; Object.values(byT).forEach(l=>maxV=Math.max(maxV,val(l)));
-  const rOf=v=>6+30*Math.sqrt(v/maxV);
+  const rOf=v=>(6+30*Math.sqrt(v/maxV))*touchK;
+  const numFs=touch?11*k:12;   // a bubble's figure renders at ≈11px on screen
   const wedge=(cx,cy,r,a0,a1,fill)=>{ const x0=cx+r*Math.cos(a0),y0=cy+r*Math.sin(a0),x1=cx+r*Math.cos(a1),y1=cy+r*Math.sin(a1),lg=(a1-a0)>Math.PI?1:0; const pa=document.createElementNS(NS,'path'); pa.setAttribute('d',`M${cx} ${cy}L${x0.toFixed(1)} ${y0.toFixed(1)}A${r} ${r} 0 ${lg} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}Z`); pa.setAttribute('fill',fill); return pa; };
   Object.keys(byT).sort((a,b)=>val(byT[b])-val(byT[a])).forEach(name=>{
     const list=byT[name], c=coordsOf(name); if(!c) return;
@@ -2284,7 +2352,13 @@ function drawMap(hostId, metric){
       else { let a0=-Math.PI/2; segs.forEach(([n,col])=>{ const a1=a0+2*Math.PI*(n/tot); grp.appendChild(wedge(cx,cy,r,a0,a1,col)); a0=a1; }); }
     }
     const stroke=document.createElementNS(NS,'circle'); stroke.setAttribute('cx',cx);stroke.setAttribute('cy',cy);stroke.setAttribute('r',r); stroke.setAttribute('fill','none'); stroke.setAttribute('stroke','#fff'); stroke.setAttribute('stroke-width','1.4'); grp.appendChild(stroke);
-    if(r>=15){ const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',cy);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',"'IBM Plex Mono',monospace");t.setAttribute('font-size','12');t.setAttribute('font-weight','600');t.setAttribute('fill','#fff'); t.style.pointerEvents='none'; t.textContent=metric==='acresY'?fmt(v):v; grp.appendChild(t); }
+    // A bubble is labelled only if its figure FITS inside it (≈0.62em a glyph); a label wider than the disc is
+    // worse than none, and the tap still drills in.
+    const figure = metric==='acresY'?fmt(v):String(v);
+    if(r>=15 && figure.length*0.62*numFs <= 2*r*0.86){ const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',cy);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',"'IBM Plex Mono',monospace");t.setAttribute('font-size',numFs);t.dataset.fs=numFs;t.setAttribute('font-weight','600');t.setAttribute('fill','#fff'); t.style.pointerEvents='none'; t.textContent=figure; grp.appendChild(t); }
+    // Hit area: ≥40px across however small the bubble is. Painted after the figure and BEFORE the next
+    // (smaller) bubble, so where two overlap the smaller one — drawn later — still wins the tap.
+    if(touch && r<20*k){ const hit=document.createElementNS(NS,'circle'); hit.setAttribute('cx',cx);hit.setAttribute('cy',cy);hit.setAttribute('r',20*k); hit.setAttribute('fill','transparent'); hit.style.pointerEvents='all'; grp.appendChild(hit); }
     const title=document.createElementNS(NS,'title'); title.textContent=`${name} — ${ro.deployed} machines · ${ro.Active} active · ${ro.Breakdown} down`; grp.appendChild(title);
     g.appendChild(grp);
   });
@@ -2308,6 +2382,8 @@ function drawPins(hostId){
   host.innerHTML='';
   const svg=document.createElementNS(NS,'svg'); svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width','100%'); svg.setAttribute('height','100%'); svg.style.display='block';
   const g=document.createElementNS(NS,'g'); svg.appendChild(g); host.appendChild(svg); _g=g;
+  const k=mapK(svg);                      // map units per screen px — see mapK
+  const touch=k>1.5, pinR=touch?3.2*k:4.2, pinRHover=touch?pinR*1.8:7.5, lblFs=touch?12*k:13, lk=lblFs/13;
   applyTransform();
   BASE.features.forEach(f=>{ const p=document.createElementNS(NS,'path'); p.setAttribute('d',pathOf(f.geometry)); p.setAttribute('fill','#F1EEE8'); p.setAttribute('stroke','#FFFFFF'); p.setAttribute('stroke-width','1'); g.appendChild(p); });
   const outline=document.createElementNS(NS,'path'); let od=''; BASE.features.forEach(f=>od+=pathOf(f.geometry)); outline.setAttribute('d',od); outline.setAttribute('fill','none'); outline.setAttribute('stroke','#DDD4C6'); outline.setAttribute('stroke-width','0.8'); g.appendChild(outline);
@@ -2316,14 +2392,14 @@ function drawPins(hostId){
   _pinMap={};
   const labelG=document.createElementNS(NS,'g'); labelG.style.pointerEvents='none'; labelG.style.opacity='0';
   const lbBg=document.createElementNS(NS,'rect'); lbBg.setAttribute('rx','4'); lbBg.setAttribute('fill','#1B1A17');
-  const lbTx=document.createElementNS(NS,'text'); lbTx.setAttribute('font-family',"'IBM Plex Mono',monospace"); lbTx.setAttribute('font-size','13'); lbTx.setAttribute('font-weight','600'); lbTx.setAttribute('fill','#fff'); lbTx.setAttribute('text-anchor','middle');
+  const lbTx=document.createElementNS(NS,'text'); lbTx.setAttribute('font-family',"'IBM Plex Mono',monospace"); lbTx.setAttribute('font-size',lblFs); lbTx.dataset.fs=lblFs; lbTx.setAttribute('font-weight','600'); lbTx.setAttribute('fill','#fff'); lbTx.setAttribute('text-anchor','middle');
   labelG.appendChild(lbBg); labelG.appendChild(lbTx);
-  const showLabel=(cx,cy,txt)=>{ lbTx.textContent=txt; lbTx.setAttribute('x',cx); lbTx.setAttribute('y',cy-13); const w=txt.length*8+14; lbBg.setAttribute('x',cx-w/2); lbBg.setAttribute('y',cy-26); lbBg.setAttribute('width',w); lbBg.setAttribute('height',18); labelG.style.opacity='1'; };
+  const showLabel=(cx,cy,txt)=>{ lbTx.textContent=txt; lbTx.setAttribute('x',cx); lbTx.setAttribute('y',cy-13*lk); const w=txt.length*8*lk+14*lk; lbBg.setAttribute('x',cx-w/2); lbBg.setAttribute('y',cy-26*lk); lbBg.setAttribute('width',w); lbBg.setAttribute('height',18*lk); lbBg.setAttribute('rx',4*lk); labelG.style.opacity='1'; };
   F.forEach(m=>{ const [cx,cy]=proj(m.lon,m.lat); const col= mode==='acres'? acresColor(acD(m)) : hcolor(hstate(m));
-    const c=document.createElementNS(NS,'circle'); c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r','4.2'); c.setAttribute('fill',col); c.setAttribute('fill-opacity','0.92'); c.setAttribute('stroke','#fff'); c.setAttribute('stroke-width','1'); c.style.cursor='pointer'; c.style.transition='r .1s';
+    const c=document.createElementNS(NS,'circle'); c.setAttribute('cx',cx);c.setAttribute('cy',cy);c.setAttribute('r',pinR); c.setAttribute('fill',col); c.setAttribute('fill-opacity','0.92'); c.setAttribute('stroke','#fff'); c.setAttribute('stroke-width',touch?0.35*k:1); c.style.cursor='pointer'; c.style.transition='r .1s';
     _pinMap[m.mc]={c,cx,cy};
-    const enter=()=>{ c.setAttribute('r','7.5'); c.setAttribute('stroke','#1B1A17'); c.setAttribute('stroke-width','1.6'); showLabel(cx,cy,m.mc); const row=document.querySelector('#machineTable [data-mc="'+CSS.escape(m.mc)+'"]'); if(row){ row.style.background='#FCF3E9'; } };
-    const leave=()=>{ c.setAttribute('r','4.2'); c.setAttribute('stroke','#fff'); c.setAttribute('stroke-width','1'); labelG.style.opacity='0'; const row=document.querySelector('#machineTable [data-mc="'+CSS.escape(m.mc)+'"]'); if(row){ row.style.background=''; } };
+    const enter=()=>{ c.setAttribute('r',pinRHover); c.setAttribute('stroke','#1B1A17'); c.setAttribute('stroke-width',touch?1.6*k/1.2:1.6); showLabel(cx,cy,m.mc); const row=document.querySelector('#machineTable [data-mc="'+CSS.escape(m.mc)+'"]'); if(row){ row.style.background='#FCF3E9'; } };
+    const leave=()=>{ c.setAttribute('r',pinR); c.setAttribute('stroke','#fff'); c.setAttribute('stroke-width',touch?0.35*k:1); labelG.style.opacity='0'; const row=document.querySelector('#machineTable [data-mc="'+CSS.escape(m.mc)+'"]'); if(row){ row.style.background=''; } };
     c.addEventListener('mouseenter',enter); c.addEventListener('mouseleave',leave);
     c.addEventListener('click',(e)=>{ e.stopPropagation(); setState({selected:m}); });
     const ti=document.createElementNS(NS,'title'); ti.textContent=`${m.mc} · ${m.opName} · ${hstate(m)} · ${acD(m)} ac ${dayShort()}`; c.appendChild(ti);
@@ -2331,6 +2407,24 @@ function drawPins(hostId){
   });
   g.appendChild(labelG);
   _pinLabel={labelG,showLabel};
+  /* Touch: a 7px dot is not a target. On a phone each pin gets an invisible 44px disc, and the tap goes to the
+     NEAREST pin inside it — not to whichever disc happens to be painted last, which is what overlapping discs
+     over ~400 pins would do. One tap opens the drawer (the label is a hover affordance; a second tap to
+     confirm would just be friction). The mouse path above is untouched. */
+  if(touch){
+    const hitR=22*k;
+    const hg=document.createElementNS(NS,'g');
+    F.forEach(m=>{ const pm=_pinMap[m.mc]; if(!pm) return; const h=document.createElementNS(NS,'circle'); h.setAttribute('cx',pm.cx);h.setAttribute('cy',pm.cy);h.setAttribute('r',hitR); h.setAttribute('fill','transparent'); h.style.pointerEvents='all'; h.dataset.hit='1'; hg.appendChild(h); });
+    g.appendChild(hg);
+    svg.addEventListener('click',e=>{
+      if(!e.target.dataset||!e.target.dataset.hit) return;
+      const pt=svg.createSVGPoint(); pt.x=e.clientX; pt.y=e.clientY;
+      const ctm=g.getScreenCTM(); if(!ctm) return; const p=pt.matrixTransform(ctm.inverse());
+      let best=null,bd=Infinity;
+      F.forEach(m=>{ const pm=_pinMap[m.mc]; if(!pm) return; const d=Math.hypot(pm.cx-p.x,pm.cy-p.y); if(d<bd){ bd=d; best=m; } });
+      if(best && bd<=hitR){ e.stopPropagation(); setState({selected:best}); }
+    });
+  }
   attachPanZoom(svg);
 }
 function highlightPin(mc,on){ const e=_pinMap&&_pinMap[mc]; if(!e)return; if(on){ e.c.setAttribute('r','7.5'); e.c.setAttribute('stroke','#1B1A17'); e.c.setAttribute('stroke-width','1.6'); if(_pinLabel)_pinLabel.showLabel(e.cx,e.cy,mc); } else { e.c.setAttribute('r','4.2'); e.c.setAttribute('stroke','#fff'); e.c.setAttribute('stroke-width','1'); if(_pinLabel)_pinLabel.labelG.style.opacity='0'; } }
@@ -2350,7 +2444,18 @@ function drawDrawerMap(){
 /* ============================= style helpers ============================= */
 // Rail buttons are styled by the .navbtn class, not inline — their size has to respond to viewport HEIGHT
 // (see the rail note in <style>), which an inline style cannot do.
-const seg = active => ({ border:'none',borderRadius:'6px',padding:'5px 11px',fontFamily:"'Noto Sans'",fontSize:'12px',fontWeight:active?600:500,cursor:'pointer', background:active?'#fff':'transparent', color:active?'#1B1A17':'#807c73', boxShadow:active?'0 1px 2px rgba(0,0,0,.08)':'none' });
+// `touch` = a finger, not a pointer: 44px tall (Apple HIG), so the 3px-padded track around it is ~50px.
+const seg = (active,touch) => ({ border:'none',borderRadius:'6px',padding:touch?'0 14px':'5px 11px',...(touch?{minHeight:'44px'}:{}),fontFamily:"'Noto Sans'",fontSize:touch?'13px':'12px',fontWeight:active?600:500,cursor:'pointer', background:active?'#fff':'transparent', color:active?'#1B1A17':'#807c73', boxShadow:active?'0 1px 2px rgba(0,0,0,.08)':'none' });
+// The little "refresh" text link every data page carries beside its as-of stamp. On a phone it is 15px tall —
+// unhittable — so there it becomes a 44px button with the refresh icon. `data-act` is unchanged either way.
+const refreshLink = (act,title,mob) => mob
+  ? `<button data-act="${act}" title="${title}" aria-label="${title}" style="display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 12px;margin-left:6px;border:1px solid #E9E6DF;border-radius:10px;background:#fff;color:#46433d;font-family:'Noto Sans';font-size:12.5px;font-weight:600;cursor:pointer;vertical-align:middle">${I.refresh('')}Refresh</button>`
+  : `<button data-act="${act}" title="${title}" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button>`;
+// The page-local scope select / date input every chromeless view carries. It was written out six times with a
+// 32px height and a 12.5px font — under a finger's size, and under the 16px at which iOS stops zooming the page
+// when it takes focus. One definition now; `mob` raises both. No `outline:none`: the global :focus-visible ring
+// is how a keyboard user sees where they are.
+const ctlSel = (mob,extra) => `height:${mob?44:32}px;border:1px solid #E9E6DF;border-radius:${mob?10:8}px;background:#fff;padding:0 ${mob?30:26}px 0 ${mob?12:11}px;font-family:'Noto Sans';font-size:${mob?16:12.5}px;color:#1B1A17;cursor:pointer${extra?';'+extra:''}`;
 const segM = (active,touch) => ({ flex:1, border:'none',borderRadius:'8px',padding:touch?'11px 0':'8px 0',fontFamily:"'Noto Sans'",fontSize:touch?'13px':'12px',fontWeight:active?600:500,cursor:'pointer', background:active?'#fff':'transparent', color:active?'#1B1A17':'#807c73', boxShadow:active?'0 1px 2px rgba(0,0,0,.08)':'none', textAlign:'center' });
 const chip = (active,color) => ({ display:'flex',alignItems:'center',gap:'5px',border:'1px solid '+(active?color:'#E9E6DF'),borderRadius:'8px',padding:'5px 10px',fontFamily:"'Noto Sans'",fontSize:'11.5px',fontWeight:active?600:500,cursor:'pointer', background:active?(color+'14'):'#fff', color:active?color:'#6E6A62' });
 
@@ -2722,6 +2827,9 @@ function vals(){
     return { mc:m.mc, org:m.org, opName:m.opName, opNum:m.opNum, geo:`${m.territory} · ${m.cluster}`,
       orgStyle:{display:'inline-flex',fontSize:'9px',fontWeight:700,padding:'1px 6px',borderRadius:'5px',background:orgSoft(m.org),color:orgInk(m.org)},
       dotStyle:{width:'9px',height:'9px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
+      // Health must not ride on the dot's colour alone (red/amber/green is exactly the pair a red-green reader
+      // cannot separate), so a machine that is down or idle carries the word beside its number.
+      hword: hs==='Breakdown'?'Down':hs==='Idle'?'Idle':'',
       acresLabel: acD(m)>0? fmt(acD(m))+' ac' : (m.breakdown?'down':'idle') }; });
 
   return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, rows, terrTable, wetTerr, amRows, bmRows, pendRows, pendCount:pendAll.length, machineTable, mobileList, d, wxDay:wxDayIdx(S.wxDay),
@@ -2764,7 +2872,7 @@ function topbarHTML(v){
     <div style="flex:1"></div>
     <div style="position:relative;width:300px;max-width:34vw">
       ${I.search}
-      <input id="searchInput" placeholder="Search machine no. or operator…" style="width:100%;height:36px;border:1px solid #E9E6DF;border-radius:9px;background:#FAF9F6;padding:0 12px 0 32px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;outline:none" />
+      <input id="searchInput" placeholder="Search machine no. or operator…" style="width:100%;height:36px;border:1px solid #E9E6DF;border-radius:9px;background:#FAF9F6;padding:0 12px 0 32px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;" />
     </div>
     <div style="display:flex;align-items:center;gap:9px;border-left:1px solid #E9E6DF;padding-left:16px">
       <span style="width:8px;height:8px;border-radius:50%;background:${v.statusDot};box-shadow:0 0 0 3px ${v.statusRing}"></span>
@@ -2776,7 +2884,7 @@ function topbarHTML(v){
 function optionsHTML(opts,cur){ return opts.map(o=>`<option value="${E(o.v)}"${o.v===cur?' selected':''}>${E(o.t)}</option>`).join(''); }
 function filterBarHTML(v){
   const S=state;
-  const selStyle="height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12px;color:#1B1A17;cursor:pointer;outline:none;max-width:168px";
+  const selStyle="height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12px;color:#1B1A17;cursor:pointer;;max-width:168px";
   return `<div style="flex-shrink:0;background:#FFFFFF;border-bottom:1px solid #E9E6DF;display:flex;align-items:center;gap:14px;padding:9px 22px;flex-wrap:wrap">
     <div style="display:flex;align-items:center;gap:7px">
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Org</span>
@@ -2830,11 +2938,20 @@ function kpiStripHTML(v){
     </div>`).join('')}
   </div>`;
 }
-// `big` = touch sizing (36px hit area, the ~44px-with-gap minimum once padding is counted).
-const zoomCtrlsFor = big => { const s=big?36:28; return `<div style="display:flex;gap:${big?6:4}px">
-  <button data-act="zoomout" style="width:${s}px;height:${s}px;border:1px solid #E9E6DF;border-radius:7px;background:#fff;cursor:pointer;font-size:${big?19:15}px;color:#6E6A62;line-height:1">−</button>
-  <button data-act="zoomin" style="width:${s}px;height:${s}px;border:1px solid #E9E6DF;border-radius:7px;background:#fff;cursor:pointer;font-size:${big?19:15}px;color:#6E6A62;line-height:1">+</button>
-  <button data-act="zoomreset" style="height:${s}px;padding:0 ${big?13:10}px;border:1px solid #E9E6DF;border-radius:7px;background:#fff;cursor:pointer;font-size:${big?12.5:11}px;color:#6E6A62">Reset</button>
+// `big` = touch sizing: 44px, the Apple HIG minimum (Material asks for 48dp).
+const zoomCtrlsFor = big => { const s=big?44:28; return `<div style="display:flex;gap:${big?6:4}px">
+  <button data-act="zoomout" aria-label="Zoom out" style="width:${s}px;height:${s}px;border:1px solid #E9E6DF;border-radius:7px;background:#fff;cursor:pointer;font-size:${big?19:15}px;color:#6E6A62;line-height:1">−</button>
+  <button data-act="zoomin" aria-label="Zoom in" style="width:${s}px;height:${s}px;border:1px solid #E9E6DF;border-radius:7px;background:#fff;cursor:pointer;font-size:${big?19:15}px;color:#6E6A62;line-height:1">+</button>
+  <button data-act="zoomreset" aria-label="Reset zoom" style="height:${s}px;padding:0 ${big?13:10}px;border:1px solid #E9E6DF;border-radius:7px;background:#fff;cursor:pointer;font-size:${big?12.5:11}px;color:#6E6A62">Reset</button>
+</div>`; };
+// The phone's variant: a vertical stack laid OVER the map's top-right corner rather than a row of its own above
+// it (which cost ~60px of a short screen). Three 44px buttons; "reset" is an icon here because there is no
+// room for the word and it carries an aria-label.
+const zoomOverlayFor = big => { const s=big?44:32; const b=`width:${s}px;height:${s}px;border:none;background:transparent;cursor:pointer;color:#46433d;display:flex;align-items:center;justify-content:center;font-size:${big?22:17}px;line-height:1;padding:0`;
+  return `<div style="position:absolute;top:8px;right:8px;z-index:2;display:flex;flex-direction:column;background:rgba(255,255,255,.94);border:1px solid #E9E6DF;border-radius:11px;box-shadow:0 1px 6px rgba(27,26,23,.12);overflow:hidden">
+  <button data-act="zoomin" aria-label="Zoom in" style="${b}">+</button>
+  <button data-act="zoomout" aria-label="Zoom out" style="${b};border-top:1px solid #EFEDE7">−</button>
+  <button data-act="zoomreset" aria-label="Reset zoom" style="${b};border-top:1px solid #EFEDE7"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
 </div>`; };
 const zoomCtrls = zoomCtrlsFor(false);
 const mt = m => css(seg(state.metric===m));
@@ -2938,7 +3055,7 @@ function tablesViewHTML(v){
 // badge and every other view stay anchored to yesterday.
 function wxDayStripHTML(cur,mob){
   const btn = i => { const on=i===cur, dt=wxDayDate(i);
-    return `<button data-act="wxday" data-day="${i}" style="${css({...seg(on),flex:'1',padding:mob?'6px 4px':'6px 10px',lineHeight:'1.25',textAlign:'center'})}">
+    return `<button data-act="wxday" data-day="${i}" style="${css({...seg(on),flex:'1',padding:mob?'6px 4px':'6px 10px',...(mob?{minHeight:'46px'}:{}),lineHeight:'1.25',textAlign:'center'})}">
       <span style="display:block;font-size:${mob?'11px':'11.5px'};pointer-events:none">${wxDayLabel(i)}</span>
       ${dt?`<span style="display:block;font-size:9.5px;font-weight:500;font-family:'IBM Plex Mono';color:${on?'#807c73':'#A9A49B'};pointer-events:none">${dt}</span>`:''}
     </button>`; };
@@ -3107,7 +3224,7 @@ function snakeBodyHTML(mob){
     return `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:60px 20px;text-align:center;color:#9C988F;font-size:13px">
       ${SNAKE.error?'⚠ ':''}${msg}${SNAKE.error?`<div style="margin-top:14px"><button data-act="snakeretry" style="padding:8px 16px;border:1px solid #E9E6DF;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Retry</button></div>`:''}</div>`;
   }
-  const sel="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none";
+  const sel=ctlSel(mob);
   const stateOpts=[{v:'ALL',t:'All India'},...['MP','MH','TG','GJ','RJ','PB','HR'].map(c=>({v:c,t:STATE_NAMES[c]}))];
   const ctrl=(label,id,opts,cur)=>`<div style="display:flex;align-items:center;gap:7px">
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">${label}</span>
@@ -3115,7 +3232,7 @@ function snakeBodyHTML(mob){
   // Day-level range: native date pickers over one representative fiscal cycle; value/min/max derive from offsets.
   const dateCtrl=(label,id,off)=>`<div style="display:flex;align-items:center;gap:7px">
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">${label}</span>
-      <input type="date" id="${id}" value="${snakeOffToDate(off)}" min="${snakeOffToDate(0)}" max="${snakeOffToDate(SNAKE_LEN-1)}" style="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 10px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;outline:none;cursor:pointer"></div>`;
+      <input type="date" id="${id}" value="${snakeOffToDate(off)}" min="${snakeOffToDate(0)}" max="${snakeOffToDate(SNAKE_LEN-1)}" style="${ctlSel(mob,'padding:0 10px')}"></div>`;
   // Legend totals + "ahead/behind last season" delta are all read at the RIGHT EDGE of the selected range,
   // so they stay consistent with the (range-clipped) chart the user is looking at.
   const fromOff=S.snFrom, toOff=S.snTo;   // already fiscal day-offsets
@@ -3139,13 +3256,13 @@ function snakeBodyHTML(mob){
       ${dateCtrl('From','snFromSel',S.snFrom)}
       ${dateCtrl('To','snToSel',S.snTo)}
       <div style="flex:1"></div>
-      <span style="font-size:10.5px;color:#9C988F">Cumulative sheet · ${SNAKE.at||'—'} <button data-act="snakeretry" title="Reload" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>
+      <span style="font-size:10.5px;color:#9C988F">Cumulative sheet · ${SNAKE.at||'—'} ${refreshLink('snakeretry','Reload',mob)}</span>
     </div>`;
   // ── Day-wise trend chart (separate card): daily acres compared across the 3 seasons on the same fiscal days,
   //    over a 10/15/30-day window anchored to today. Lines with per-day dots; independent of the From/To range. ──
   const win=[10,15,30].includes(S.snTrendWin)?S.snTrendWin:30;
   const trend=buildTrendSVG(code, win, mob);
-  const tag=w=>`<button data-act="snTrendWin" data-win="${w}" style="height:28px;padding:0 12px;border:1px solid ${win===w?'#1B1A17':'#E9E6DF'};border-radius:8px;background:${win===w?'#1B1A17':'#fff'};color:${win===w?'#fff':'#46433d'};font-family:'Noto Sans';font-size:12px;font-weight:600;cursor:pointer">${w} days</button>`;
+  const tag=w=>`<button data-act="snTrendWin" data-win="${w}" style="height:${mob?44:28}px;padding:0 12px;border:1px solid ${win===w?'#1B1A17':'#E9E6DF'};border-radius:8px;background:${win===w?'#1B1A17':'#fff'};color:${win===w?'#fff':'#46433d'};font-family:'Noto Sans';font-size:12px;font-weight:600;cursor:pointer">${w} days</button>`;
   // Legend shows each season's TOTAL acres over the window (the head-to-head number), current season boldest.
   const trendLegend = trend.series.map(s=>`<div style="display:flex;align-items:center;gap:8px">
       <span style="width:14px;height:${s.fy.cur?4:3}px;border-radius:2px;background:${s.fy.color};flex-shrink:0"></span>
@@ -3283,7 +3400,10 @@ function wireSnakeHover(){
     tip.style.display='block'; tip.style.left=Math.max(4,left)+'px'; tip.style.top='8px';
   };
   const leave=()=>{ guide.setAttribute('opacity','0'); tip.style.display='none'; };
-  host.onmousemove=move; host.onmouseleave=leave; host.ontouchmove=move; host.ontouchend=leave;
+  host.onmousemove=move; host.onmouseleave=leave;
+  // Touch: a TAP places the crosshair (touchstart) and a drag moves it; it stays until the next touch. It used
+  // to be dismissed on touchend, which made a plain tap flash the readout for a frame and drag-only.
+  host.ontouchstart=move; host.ontouchmove=move;
 }
 // Hover crosshair + readout for the day-wise trend. Snaps to the nearest day (index-based x) and lists every
 // season's acres on that fiscal day. Wired from paint() alongside wireSnakeHover().
@@ -3306,7 +3426,10 @@ function wireTrendHover(){
     tip.style.display='block'; tip.style.left=Math.max(4,left)+'px'; tip.style.top='8px';
   };
   const leave=()=>{ guide.setAttribute('opacity','0'); tip.style.display='none'; };
-  host.onmousemove=move; host.onmouseleave=leave; host.ontouchmove=move; host.ontouchend=leave;
+  host.onmousemove=move; host.onmouseleave=leave;
+  // Touch: a TAP places the crosshair (touchstart) and a drag moves it; it stays until the next touch. It used
+  // to be dismissed on touchend, which made a plain tap flash the readout for a frame and drag-only.
+  host.ontouchstart=move; host.ontouchmove=move;
 }
 
 
@@ -3332,7 +3455,10 @@ function wireApmHover(metric){
     tip.style.display='block'; tip.style.left=Math.max(4,left)+'px'; tip.style.top='8px';
   };
   const leave=()=>{ guide.setAttribute('opacity','0'); tip.style.display='none'; };
-  host.onmousemove=move; host.onmouseleave=leave; host.ontouchmove=move; host.ontouchend=leave;
+  host.onmousemove=move; host.onmouseleave=leave;
+  // Touch: a TAP places the crosshair (touchstart) and a drag moves it; it stays until the next touch. It used
+  // to be dismissed on touchend, which made a plain tap flash the readout for a frame and drag-only.
+  host.ontouchstart=move; host.ontouchmove=move;
 }
 
 /* ===================== chart → PNG export =====================
@@ -6547,7 +6673,7 @@ function insightsBodyHTML(mob){
     const opts=(cur,withNone)=>optionsHTML(
       (withNone?[{v:'none',t:'— none —'}]:[]).concat(T.options.map(o=>({v:o.key,t:`${o.disp} (${o.company})`}))),
       String(cur||(withNone?'none':'')));
-    const selCss2="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none;max-width:190px";
+    const selCss2=ctlSel(mob,'max-width:190px');
     const picker=`<div style="display:flex;align-items:center;gap:${mob?'8px':'12px'};flex-wrap:wrap;padding:12px 16px 4px">
         <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Combine</span>
         <div style="position:relative"><select id="insPaSel" style="${selCss2}">${opts(T.a,false)}</select>${I.caret}</div>
@@ -6589,14 +6715,14 @@ function insightsBodyHTML(mob){
 
   /* ---------- header ---------- */
   const src = `<span style="font-size:10.5px;color:#9C988F">Machines ${lastUpdated||'—'} · season ${SNAKE.at||'—'} · products ${PROD.at||'—'}
-      <button data-act="insrefresh" title="Reload all three tabs" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>`;
+      ${refreshLink('insrefresh','Reload all three tabs',mob)}</span>`;
   // State picker — page-local (writes state.insSt, never state.st), and only offered to a login the gate has
   // not already pinned to one state. Options are filtered by gateAllowsState so the list can't advertise a
   // state the user may not open.
   const canPick = !A.lock && gateCanSwitchStates();
   const stSel = canPick ? `<div style="display:flex;align-items:center;gap:7px">
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Scope</span>
-      <div style="position:relative"><select id="insStateSel" style="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none">${
+      <div style="position:relative"><select id="insStateSel" style="${ctlSel(mob)}">${
         optionsHTML([{v:'',t:'All India'},...INS_STATES.filter(gateAllowsState).map(c=>({v:c,t:STATE_NAMES[c]}))], A.gst)
       }</select>${I.caret}</div></div>` : '';
   const mode = ['yday','week','month'].includes(state.insMode) ? state.insMode : 'season';
@@ -6607,7 +6733,7 @@ function insightsBodyHTML(mob){
      modes, the mode switch CLEARS them (see the insmode handler).
      The officer list cascades off the chosen AM, matching the main filter bar's state → territory → AM chain, so
      the control can never offer a combination that selects nothing. */
-  const selCss = 'height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:\'Noto Sans\';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none;max-width:190px';
+  const selCss = ctlSel(mob,'max-width:190px');
   let peopleSel='';
   if(mode==='yday'){
     const rows=A.dep||[];
@@ -6624,7 +6750,7 @@ function insightsBodyHTML(mob){
               + one('insCoSel','Officer',[{v:'',t:coPick||amPick?'All':'All'},...cos.map(c=>({v:c,t:c}))],coPick);
   }
   const modeToggle = `<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">
-      ${[['season','Season'],['month','Month'],['week','Week'],['yday','Yesterday']].map(([k,t])=>`<button data-act="insmode" data-m="${k}" style="${css(seg(mode===k))}">${t}</button>`).join('')}</div>`;
+      ${[['season','Season'],['month','Month'],['week','Week'],['yday','Yesterday']].map(([k,t])=>`<button data-act="insmode" data-m="${k}" style="${css(seg(mode===k,mob))}">${t}</button>`).join('')}</div>`;
   const scopeName = A.gst?E(A.regionName):'Seven states';
   // Copy rule for this whole page: describe what the figure IS, never tell the reader what to do with it. The
   // page is read by whoever opens it, not narrated to a presenter — so "both measures moved" and not "worth
@@ -7475,22 +7601,22 @@ function productBodyHTML(mob){
   const emptyBox = t => `<div style="padding:34px 18px;text-align:center;color:#9C988F;font-size:12.5px">${t}</div>`;
 
   /* ---- controls ---- */
-  const sel="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none";
+  const sel=ctlSel(mob);
   const labeled=(lab,inner)=>`<div style="display:flex;align-items:center;gap:7px"><span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">${lab}</span>${inner}</div>`;
   const selCtrl=(id,opts,cur)=>`<div style="position:relative"><select id="${id}" style="${sel}">${optionsHTML(opts,String(cur))}</select>${I.caret}</div>`;
-  const coToggle=`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${['ALL','UPL','SWAL'].map(c=>`<button data-act="pmco" data-co="${c}" style="${css(seg(S.pmCo===c))}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`;
-  const measToggle=`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px"><button data-act="pmmeasure" data-m="ytd" style="${css(seg(S.pmMeasure==='ytd'))}">Total · YTD</button><button data-act="pmmeasure" data-m="yday" style="${css(seg(S.pmMeasure==='yday'))}">Yesterday</button></div>`;
+  const coToggle=`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${['ALL','UPL','SWAL'].map(c=>`<button data-act="pmco" data-co="${c}" style="${css(seg(S.pmCo===c,mob))}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`;
+  const measToggle=`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px"><button data-act="pmmeasure" data-m="ytd" style="${css(seg(S.pmMeasure==='ytd',mob))}">Total · YTD</button><button data-act="pmmeasure" data-m="yday" style="${css(seg(S.pmMeasure==='yday',mob))}">Yesterday</button></div>`;
   const header=`<div style="display:flex;align-items:center;gap:${mob?'9px':'14px'};flex-wrap:wrap">
       ${labeled('Company',coToggle)}${labeled('State',selCtrl('pmStateSel',A.stateOptions,S.pmState))}${labeled('Measure',measToggle)}
       <div style="flex:1"></div>
-      <span style="font-size:10.5px;color:#9C988F">Product data · ${PROD.at||'—'} <button data-act="productretry" title="Reload" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>
+      <span style="font-size:10.5px;color:#9C988F">Product data · ${PROD.at||'—'} ${refreshLink('productretry','Reload',mob)}</span>
     </div>`;
 
   /* ---- hero: UPL vs SWAL head-to-head (or single-company summary under a company drill) ---- */
   const coBlock=(x,tot)=>{ const share=tot?Math.round(x.meas/tot*100):0;
     return `<div style="flex:1;min-width:0">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><span style="width:11px;height:11px;border-radius:3px;background:${cc(x.company)}"></span><span style="font-size:13.5px;font-weight:700">${x.company}</span><span style="font-size:10.5px;color:#9C988F">${share}% share</span></div>
-      <div style="font-family:'IBM Plex Mono';font-size:27px;font-weight:700;line-height:1;color:${cInk(x.company)}">${fmt(x.meas)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> ac</span></div>
+      <div style="font-family:'IBM Plex Mono';font-size:${mob?'clamp(20px,5.6vw,27px)':'27px'};font-weight:700;line-height:1;white-space:nowrap;color:${cInk(x.company)}">${fmt(x.meas)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> ac</span></div>
       <div style="font-size:11px;color:#6E6A62;margin-top:8px">${fmt(x.nBrands)} products</div>
       <div style="font-size:11px;color:#9C988F;margin-top:3px">Top: <span style="color:#46433d;font-weight:600">${E(x.topBrand)}</span></div>
     </div>`; };
@@ -7512,10 +7638,10 @@ function productBodyHTML(mob){
   }
 
   /* ---- KPI stat row ---- */
-  const stat=(val,lab,ink)=>`<div style="flex:1 0 auto;min-width:130px;padding:13px 16px;border-right:1px solid #EFEDE7">
+  const stat=(val,lab,ink)=>`<div style="${mob?'min-width:0;background:#FBFAF8;padding:13px 16px':'flex:1 0 auto;min-width:130px;padding:13px 16px;border-right:1px solid #EFEDE7'}">
       <div style="font-family:'IBM Plex Mono';font-size:20px;font-weight:700;color:${ink||C.ink}">${val}</div>
       <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">${lab}</div></div>`;
-  const stats=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;display:flex;overflow-x:auto">
+  const stats=`<div class="statBand" style="${mob?'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:#E9E6DF;overflow:hidden':'background:#FBFAF8;display:flex;overflow-x:auto'};border:1px solid #E9E6DF;border-radius:14px">
       ${stat(fmt(A.totYtd),'Total acres · YTD')}${stat(fmt(A.totYday),'Sprayed yesterday')}${stat(fmt(A.nProducts),'Active products')}</div>`;
 
   /* ---- top products leaderboard ---- */
@@ -7591,25 +7717,26 @@ function mpprodBodyHTML(mob){
 
   /* ---- controls. The company toggle is ABSENT (not disabled) under a field login: the gate has already
           decided the scope, and a control with one reachable value is furniture. ---- */
-  const sel="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none";
+  const sel=ctlSel(mob);
   const labeled=(lab,inner)=>`<div style="display:flex;align-items:center;gap:7px"><span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">${lab}</span>${inner}</div>`;
-  const coToggle = A.lock ? '' : labeled('Company',`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${['ALL','UPL','SWAL'].map(c=>`<button data-act="mpco" data-co="${c}" style="${css(seg(S.mpCo===c))}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`);
+  const coToggle = A.lock ? '' : labeled('Company',`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${['ALL','UPL','SWAL'].map(c=>`<button data-act="mpco" data-co="${c}" style="${css(seg(S.mpCo===c,mob))}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`);
   const terrCtrl=labeled('Territory',`<div style="position:relative"><select id="mpTerrSel" style="${sel}">${optionsHTML(A.terrOptions,A.terr)}</select>${I.caret}</div>`);
-  const measToggle=labeled('Measure',`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${[['ytd','Season · YTD'],['mtd','This month · MTD'],['yday','Yesterday']].map(([k,t])=>`<button data-act="mpmeasure" data-m="${k}" style="${css(seg(S.mpMeasure===k))}">${t}</button>`).join('')}</div>`);
+  const measToggle=labeled('Measure',`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${[['ytd','Season · YTD'],['mtd','This month · MTD'],['yday','Yesterday']].map(([k,t])=>`<button data-act="mpmeasure" data-m="${k}" style="${css(seg(S.mpMeasure===k,mob))}">${t}</button>`).join('')}</div>`);
   const header=`<div style="display:flex;align-items:center;gap:${mob?'9px':'14px'};flex-wrap:wrap">
       ${coToggle}${terrCtrl}${measToggle}
       ${A.terr?`<button data-act="mpterr" data-terr="" style="border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;font-size:11.5px;font-weight:600;height:32px;padding:0 11px;cursor:pointer">Clear</button>`:''}
       <div style="flex:1"></div>
-      <span style="font-size:10.5px;color:#9C988F">${E(MPP_SHEET)} · ${MPP.at||'—'} <button data-act="mppretry" title="Reload" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>
+      <span style="font-size:10.5px;color:#9C988F">${E(MPP_SHEET)} · ${MPP.at||'—'} ${refreshLink('mppretry','Reload',mob)}</span>
     </div>`;
 
   /* ---- stat band: all three horizons at once, so the toggle never hides context ---- */
-  const stat=(val,lab,on)=>`<div style="flex:1 0 auto;min-width:132px;padding:13px 16px;border-right:1px solid #EFEDE7;${on?`box-shadow:inset 3px 0 0 ${C.ink}`:''}">
+  const tileCss = mob ? 'min-width:0;background:#FBFAF8;padding:13px 16px' : 'flex:1 0 auto;min-width:132px;padding:13px 16px';
+  const stat=(val,lab,on)=>`<div style="${tileCss};${mob?'':'border-right:1px solid #EFEDE7;'}${on?`box-shadow:inset 3px 0 0 ${C.ink}`:''}">
       <div style="font-family:'IBM Plex Mono';font-size:20px;font-weight:700;color:${C.ink}">${fmt(val)}<span style="font-size:11px;color:#B6B1A8;font-weight:500"> ac</span></div>
       <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase;margin-top:5px">${lab}</div></div>`;
-  const stats=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;display:flex;overflow-x:auto">
+  const stats=`<div class="statBand" style="${mob?'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:#E9E6DF;overflow:hidden':'background:#FBFAF8;display:flex;overflow-x:auto'};border:1px solid #E9E6DF;border-radius:14px">
       ${stat(A.yday,'Sprayed yesterday',A.key==='yday')}${stat(A.mtd,'This month · MTD',A.key==='mtd')}${stat(A.ytd,'Season · YTD',A.key==='ytd')}
-      <div style="flex:1 0 auto;min-width:132px;padding:13px 16px">
+      <div style="${tileCss}">
         ${A.terr
           // The territory count is an MP-wide figure and would read as a scoped one beside three scoped totals,
           // so under a territory pick this tile switches to that territory's product count instead.
@@ -7625,14 +7752,14 @@ function mpprodBodyHTML(mob){
     const x = A.lock==='UPL' ? A.up : A.sw;
     hero=card(`<div style="padding:16px 18px">
       <div style="font-size:13px;font-weight:700;margin-bottom:11px">${x.company} · ${A.terr?E(A.terr):'Madhya Pradesh'} <span style="font-weight:400;color:#9C988F">· ${measWord}</span></div>
-      <div style="font-family:'IBM Plex Mono';font-size:27px;font-weight:700;line-height:1;color:${cInk(x.company)}">${fmt(x.meas)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> ac</span></div>
+      <div style="font-family:'IBM Plex Mono';font-size:${mob?'clamp(20px,5.6vw,27px)':'27px'};font-weight:700;line-height:1;white-space:nowrap;color:${cInk(x.company)}">${fmt(x.meas)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> ac</span></div>
       <div style="font-size:11px;color:#6E6A62;margin-top:8px">${fmt(x.nBrands)} products${A.terr?'':` across ${fmt(A.terrs.length)} territories`}</div></div>`);
   } else {
     const tot=A.up.meas+A.sw.meas, uP=tot?A.up.meas/tot*100:50, sP=100-uP;
     const splitLabel=(pct,side)=> pct>=14 ? `<span style="position:absolute;${side}:10px;top:50%;transform:translateY(-50%);color:#fff;font-size:11px;font-weight:700;font-family:'IBM Plex Mono'">${Math.round(pct)}%</span>`:'';
     const coBlock=x=>`<div style="flex:1;min-width:0">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><span style="width:11px;height:11px;border-radius:3px;background:${cc(x.company)}"></span><span style="font-size:13.5px;font-weight:700">${x.company}</span><span style="font-size:10.5px;color:#9C988F">${tot?Math.round(x.meas/tot*100):0}% share</span></div>
-      <div style="font-family:'IBM Plex Mono';font-size:27px;font-weight:700;line-height:1;color:${cInk(x.company)}">${fmt(x.meas)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> ac</span></div>
+      <div style="font-family:'IBM Plex Mono';font-size:${mob?'clamp(20px,5.6vw,27px)':'27px'};font-weight:700;line-height:1;white-space:nowrap;color:${cInk(x.company)}">${fmt(x.meas)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> ac</span></div>
       <div style="font-size:11px;color:#6E6A62;margin-top:8px">${fmt(x.nBrands)} products</div></div>`;
     hero=card(`<div style="padding:16px 18px">
       <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:12px"><div style="font-size:13px;font-weight:700">UPL vs SWAL · ${A.terr?E(A.terr):'Madhya Pradesh'}</div><div style="font-size:11px;color:#9C988F">${measWord} · ${fmt(tot)} ac total</div></div>
@@ -7735,11 +7862,11 @@ function recapBodyHTML(mob){
   const narrative=`${fmt(ranY)} of ${fmt(deployed)} deployed machines ran across ${activeStates} states, spraying ${fmt(acresY)} acres.${topState?` <b style="color:#46433d">${E(topState.name)}</b> led with ${fmt(topState.acres)} ac.`:''}${pReady&&topProduct?` <b style="color:#46433d">${E(topProduct.disp)}</b> was the top product, <b style="color:#46433d">${E(topCrop.crop)}</b> the top crop.`:''}`;
 
   // ---- hero stat band ----
-  const stat=(val,lab,sub,ink)=>`<div style="flex:1 0 auto;min-width:${mob?'150px':'170px'};padding:15px 18px;border-right:1px solid #EFEDE7">
+  const stat=(val,lab,sub,ink)=>`<div style="${mob?'min-width:0;background:#FBFAF8;padding:14px 16px':'flex:1 0 auto;min-width:170px;padding:15px 18px;border-right:1px solid #EFEDE7'}">
       <div style="font-family:'IBM Plex Mono';font-size:26px;font-weight:700;line-height:1;color:${ink||C.ink}">${val}</div>
       <div style="font-size:11px;font-weight:600;color:#46433d;margin-top:7px">${lab}</div>
       <div style="font-size:10.5px;color:#9C988F;margin-top:2px">${sub}</div></div>`;
-  const band=`<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;display:flex;overflow-x:auto">
+  const band=`<div class="statBand" style="${mob?'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:#E9E6DF;overflow:hidden':'background:#FBFAF8;display:flex;overflow-x:auto'};border:1px solid #E9E6DF;border-radius:14px">
       ${stat(fmt(ranY),'Machines ran','of '+fmt(deployed)+' deployed',C.act)}
       ${stat(fmt(acresY),'Machine spray acres','yesterday')}
       ${stat(pReady?fmt(prodTotY):'—','Product-scanned acres',pReady?'yesterday · product tab':pLoad)}
@@ -7790,7 +7917,7 @@ function recapBodyHTML(mob){
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <div><div style="font-size:16px;font-weight:700;line-height:1.15">Yesterday · ${E(dstr)}</div><div style="font-size:11px;color:#9C988F;margin-top:2px">Daily recap · machines (Sheet1) + product spray (Product data)</div></div>
       <div style="flex:1"></div>
-      <span style="font-size:10.5px;color:#9C988F">Updated ${E(lastUpdated||'—')} IST <button data-act="refresh" title="Reload" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>
+      <span style="font-size:10.5px;color:#9C988F">Updated ${E(lastUpdated||'—')} IST ${refreshLink('refresh','Reload',mob)}</span>
     </div>
     <div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:13px 17px;font-size:13px;line-height:1.55;color:#6E6A62">${narrative}</div>
     ${band}
@@ -8085,27 +8212,35 @@ function leaderBodyHTML(mob){
   const canPick = !lock && gateCanSwitchStates();
   const stSel = canPick ? `<div style="display:flex;align-items:center;gap:7px">
       <span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Scope</span>
-      <div style="position:relative"><select id="lbStateSel" style="height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;padding:0 26px 0 11px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;cursor:pointer;outline:none">${
+      <div style="position:relative"><select id="lbStateSel" style="${ctlSel(mob)}">${
         optionsHTML([{v:'',t:'All India'},...INS_STATES.filter(gateAllowsState).map(c=>({v:c,t:STATE_NAMES[c]}))], gst)
       }</select>${I.caret}</div></div>` : '';
   /* One tab, two readings of it. The toggle is a control rather than a second rail view because the CI
      board IS the operator board re-grouped — same window, same acres, same fetch — and two rail entries
      would invite the two to be read as two contests. */
   const isCI = S.lbBoard==='ci';
-  const segBtn = (v,t) => `<button data-act="lbboard" data-v="${v}" style="border:none;background:${(v==='ci')===isCI?'#fff':'transparent'};box-shadow:${(v==='ci')===isCI?'0 1px 2px rgba(27,26,23,.10)':'none'};color:${(v==='ci')===isCI?C.ink:'#9C988F'};font-family:'Noto Sans';font-size:12px;font-weight:${(v==='ci')===isCI?700:600};padding:0 ${mob?'11px':'14px'};height:26px;border-radius:6px;cursor:pointer;white-space:nowrap">${t}</button>`;
+  const segBtn = (v,t) => `<button data-act="lbboard" data-v="${v}" style="border:none;background:${(v==='ci')===isCI?'#fff':'transparent'};box-shadow:${(v==='ci')===isCI?'0 1px 2px rgba(27,26,23,.10)':'none'};color:${(v==='ci')===isCI?C.ink:'#9C988F'};font-family:'Noto Sans';font-size:12px;font-weight:${(v==='ci')===isCI?700:600};padding:0 ${mob?'11px':'14px'};height:${mob?40:26}px;border-radius:6px;cursor:pointer;white-space:nowrap">${t}</button>`;
   const boardSel = `<div style="display:inline-flex;align-items:center;gap:2px;background:#F2F0EB;border-radius:8px;padding:3px">${segBtn('ops','Operators')}${segBtn('ci','Cluster Incharge')}</div>`;
   /* The share image, one button per language this scope reads — English everywhere for the CIs, the
      state's own language beside it for the operators (SC_M.byState). It is offered on the OPERATORS
      board only: the card is the operator contest, and a download button sitting under the CI board would
      be read as exporting the board on screen. Chromeless by design — the card carries its own scope from
      `gst`, so what downloads is always what the reader is looking at. */
-  const dlBtn = (act,lg,tip) => `<button data-act="${act}" data-lang="${lg}" data-st="${gst}" title="${tip}" style="display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#46433d;font-family:'Noto Sans';font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">${DL_ICON} ${SC_M.label[lg]}</button>`;
+  const dlBtn = (act,lg,tip) => `<button data-act="${act}" data-lang="${lg}" data-st="${gst}" title="${tip}" style="display:inline-flex;align-items:center;gap:6px;height:${mob?44:32}px;padding:0 14px;border:1px solid #E9E6DF;border-radius:${mob?10:8}px;background:#fff;color:#46433d;font-family:'Noto Sans';font-size:${mob?13:12}px;font-weight:600;cursor:pointer;white-space:nowrap">${DL_ICON} ${SC_M.label[lg]}</button>`;
   const grpLbl = t => `<span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">${t}</span>`;
   /* TWO images off one tab, and they are not the same argument. `Share` is the STANDINGS - the rows, the
      rising cut-off, the movement. `Poster` is the 4:3 promo: three acre figures (the national topper, this
      scope's own topper, the top-3 bar) over the closing calendar, sized to show uncropped in a WhatsApp
      conversation. Both carry `gst`, so each downloads the scope the reader is looking at. */
-  const cardBtns = isCI ? '' : `<div style="display:inline-flex;align-items:center;gap:6px">
+  // On a phone the Share and Poster buttons are two LABELLED rows rather than one 441px line: that line was wider
+  // than the screen, and the whole page could be dragged sideways because of it.
+  const cardRow = (label,act,tipFn) => `<div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+      <span class="mLbl" style="min-width:78px">${label}</span>
+      ${scLangs(gst).map(lg=>dlBtn(act,lg,tipFn(lg))).join('')}</div>`;
+  const cardBtns = isCI ? '' : mob ? `<div style="width:100%;display:flex;flex-direction:column;gap:8px">
+      ${cardRow('Share card','lbcard',lg=>`Download these standings as an image in ${SC_M.label[lg]}, sized for WhatsApp`)}
+      ${cardRow('Poster','lbposter',lg=>`Download the 4:3 Spray & Win poster in ${SC_M.label[lg]} — the toppers to beat, the bar and the days left`)}
+    </div>` : `<div style="display:inline-flex;align-items:center;gap:6px">
       ${grpLbl('Share')}
       ${scLangs(gst).map(lg=>dlBtn('lbcard',lg,`Download these standings as an image in ${SC_M.label[lg]}, sized for WhatsApp`)).join('')}
       <span style="width:1px;height:20px;background:#E9E6DF;margin:0 3px"></span>
@@ -8118,7 +8253,7 @@ function leaderBodyHTML(mob){
         <div style="font-size:11px;color:#9C988F;margin-top:2px">${E(windowLine)}</div>
       </div>
       <div style="flex:1"></div>${boardSel}${stSel}${cardBtns}
-      <span style="font-size:10.5px;color:#9C988F">Leaderboard tab · ${OPLB.at||'—'} <button data-act="oplbretry" title="Reload" style="border:none;background:none;color:#6E6A62;cursor:pointer;font-size:11px;text-decoration:underline;padding:0 0 0 4px">refresh</button></span>
+      <span style="font-size:10.5px;color:#9C988F">Leaderboard tab · ${OPLB.at||'—'} ${refreshLink('oplbretry','Reload',mob)}</span>
     </div>`;
 
   /* ---- the national prize: one operator, shown to every login regardless of state scope ---- */
@@ -8373,22 +8508,22 @@ function leaderBodyHTML(mob){
 }
 function leaderViewHTML(){ return leaderBodyHTML(false); }
 // Escalation contact row — shared by desktop drawer + mobile sheet. Optional roles hide when blank.
-function escRowHTML(label,name,mob,tel,phoneIcon,extra,optional){
+function escRowHTML(label,name,mob,tel,phoneIcon,extra,optional,big){
   const hasName=name&&String(name).trim(), hasMob=mob&&String(mob).trim();
   if(optional && !hasName && !hasMob && !extra) return '';
   return `<div style="display:flex;align-items:center;gap:11px;padding:12px 14px;border-bottom:1px solid #F2F0EB">
     <div style="flex:1;min-width:0"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.05em">${label}</div><div style="font-size:13px;font-weight:600;margin-top:2px">${E(hasName?name:'—')}</div>${hasMob?`<div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(mob)}</div>`:''}${extra||''}</div>
-    ${hasMob?`<a href="${E(tel)}" data-stop="1" style="width:34px;height:34px;border-radius:8px;background:#F2F0EB;color:#1B1A17;display:flex;align-items:center;justify-content:center;flex-shrink:0">${phoneIcon}</a>`:''}
+    ${hasMob?`<a href="${E(tel)}" data-stop="1" aria-label="Call ${E(hasName?name:label)}" style="width:${big?44:34}px;height:${big?44:34}px;border-radius:${big?11:8}px;background:#F2F0EB;color:#1B1A17;display:flex;align-items:center;justify-content:center;flex-shrink:0">${phoneIcon}</a>`:''}
   </div>`;
 }
-function escalationHTML(d, phoneIcon){
+function escalationHTML(d, phoneIcon, big){
   const locExtra = d.retailerLoc&&String(d.retailerLoc).trim() ? `<div style="font-size:11px;color:#9C988F;margin-top:3px">📍 ${E(d.retailerLoc)}</div>` : '';
-  return escRowHTML('Cluster Officer',d.coName,d.coMob,d.coTel,phoneIcon)
-    + escRowHTML('Area Manager',d.amName,d.amNum,d.amTel,phoneIcon)
-    + escRowHTML('Business Manager',d.bmName,d.bmMob,d.bmTel,phoneIcon,'',true)
-    + escRowHTML('Territory Manager',d.tmName,d.tmMob,d.tmTel,phoneIcon,'',true)
-    + escRowHTML('Field Officer',d.foName,d.foMob,d.foTel,phoneIcon,'',true)
-    + escRowHTML('Retailer',d.retailerName,d.retailerMob,d.retailerTel,phoneIcon,locExtra,true);
+  return escRowHTML('Cluster Officer',d.coName,d.coMob,d.coTel,phoneIcon,'',false,big)
+    + escRowHTML('Area Manager',d.amName,d.amNum,d.amTel,phoneIcon,'',false,big)
+    + escRowHTML('Business Manager',d.bmName,d.bmMob,d.bmTel,phoneIcon,'',true,big)
+    + escRowHTML('Territory Manager',d.tmName,d.tmMob,d.tmTel,phoneIcon,'',true,big)
+    + escRowHTML('Field Officer',d.foName,d.foMob,d.foTel,phoneIcon,'',true,big)
+    + escRowHTML('Retailer',d.retailerName,d.retailerMob,d.retailerTel,phoneIcon,locExtra,true,big);
 }
 function drawerHTML(v){
   const d=v.d; if(!d||!d.mc) return '';
@@ -8400,9 +8535,9 @@ function drawerHTML(v){
         <div style="font-family:'IBM Plex Mono';font-size:21px;font-weight:600;letter-spacing:-.01em">${E(d.mc)}</div>
         <div style="font-size:12px;color:#9C988F;margin-top:3px">${E(d.geo)}</div>
       </div>
-      <button data-act="close" style="width:32px;height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.close}</button>
+      <button data-act="close" aria-label="Close" style="width:32px;height:32px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.close}</button>
     </div>
-    <div style="flex:1;overflow:auto;padding:18px 22px">
+    <div data-scroll="ddrawer:${d.mc}" style="flex:1;overflow:auto;padding:18px 22px">
       <div style="display:flex;align-items:center;gap:12px;background:${d.sprayBg};border:1px solid ${d.sprayBorder};border-radius:12px;padding:12px 14px;margin-bottom:18px">
         <span style="font-size:22px">${d.sprayIcon}</span>
         <div style="flex:1"><div style="font-size:13px;font-weight:600;color:${d.sprayInk}">${E(d.sprayLabel)}</div><div style="font-size:11px;color:#6E6A62;margin-top:1px">${E(d.weatherLine)}</div></div>
@@ -8480,7 +8615,7 @@ function desktopHTML(v){
     ${railHTML()}
     <div style="flex:1;display:flex;flex-direction:column;min-width:0">
       ${topbarHTML(v)}${CHROMELESS.has(state.view)?'':filterBarHTML(v)}${CHROMELESS.has(state.view)?'':kpiStripHTML(v)}
-      <main style="flex:1;overflow:auto;position:relative;min-height:0">${contentHTML(v)}</main>
+      <main data-scroll="dmain:${state.view}" style="flex:1;overflow:auto;position:relative;min-height:0">${contentHTML(v)}</main>
       ${footnoteHTML(false)}
     </div>
     ${drawerHTML(v)}
@@ -8517,18 +8652,24 @@ const M_VIEWS = [
 const mViews = () => M_VIEWS.filter(x=>!roleHidesView(x.k));
 const M_PRIMARY = 4;                       // bottom bar holds 4 + "More"; the rest live in the sheet
 
-// Generic bottom sheet. `tall` sheets scroll internally and clear the home indicator.
-function mSheetHTML(title, inner, act){
-  return `<div data-act="${act}" style="position:absolute;inset:0;background:rgba(20,19,15,.4);z-index:20"></div>
-    <div style="position:absolute;left:0;right:0;bottom:0;max-height:88%;background:#fff;border-radius:22px 22px 0 0;z-index:21;display:flex;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,.2)">
-      <div style="padding:14px 18px 12px;border-bottom:1px solid #E9E6DF;flex-shrink:0">
-        <div style="width:38px;height:4px;border-radius:3px;background:#E0DCD3;margin:0 auto 12px"></div>
+// Generic bottom sheet. The body scrolls internally and clears the home indicator; an optional `footer` is a
+// STICKY bar under it (the filter sheet's primary action used to sit at the very bottom of a long form, below
+// the fold). It is a dialog: role + aria-modal + a name, the close button takes focus when the sheet opens
+// (render(), via data-autofocus), and the grab handle + header drag it down to dismiss (data-drag, wired once
+// on `app`). `.mSheetIn` is present on the render in which the sheet OPENS and no other — see _ovFresh.
+function mSheetHTML(title, inner, act, footer){
+  const inCls = _ovFresh ? ' mSheetIn' : '', scrim = _ovFresh ? ' mScrimIn' : '';
+  return `<div class="${scrim.trim()}" data-act="${act}" aria-hidden="true" style="position:absolute;inset:0;background:rgba(20,19,15,.4);z-index:20"></div>
+    <div class="${inCls.trim()}" role="dialog" aria-modal="true" aria-label="${E(title)}" data-sheetpanel="${act}" style="position:absolute;left:0;right:0;bottom:0;max-height:88%;background:#fff;border-radius:22px 22px 0 0;z-index:21;display:flex;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,.2)">
+      <div data-drag="1" style="padding:14px 18px 12px;border-bottom:1px solid #E9E6DF;flex-shrink:0;touch-action:none">
+        <div style="width:38px;height:4px;border-radius:3px;background:#D5D0C6;margin:0 auto 12px"></div>
         <div style="display:flex;align-items:center;gap:10px">
-          <div style="flex:1;font-size:15px;font-weight:700">${title}</div>
-          <button data-act="${act}" style="width:34px;height:34px;border:1px solid #E9E6DF;border-radius:9px;background:#fff;color:#6E6A62;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.closeS}</button>
+          <div style="flex:1;font-size:16px;font-weight:700">${title}</div>
+          <button data-act="${act}" data-autofocus="1" aria-label="Close" style="width:44px;height:44px;margin:-6px -8px -6px 0;border:1px solid #E9E6DF;border-radius:11px;background:#fff;color:#6E6A62;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.closeS}</button>
         </div>
       </div>
-      <div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:16px 18px calc(env(safe-area-inset-bottom) + 24px)">${inner}</div>
+      <div data-scroll="sheet:${title}" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:16px 18px ${footer?'16px':'calc(env(safe-area-inset-bottom) + 24px)'}">${inner}</div>
+      ${footer?`<div style="flex-shrink:0;border-top:1px solid #E9E6DF;background:#fff;padding:12px 18px calc(env(safe-area-inset-bottom) + 12px)">${footer}</div>`:''}
     </div>`;
 }
 
@@ -8536,47 +8677,53 @@ function mSheetHTML(title, inner, act){
 // change + input handlers pick these up with no extra wiring.
 function mFiltersHTML(v){
   const S=state;
-  const sel="width:100%;height:44px;border:1px solid #E9E6DF;border-radius:10px;background:#fff;padding:0 30px 0 12px;font-family:'Noto Sans';font-size:15px;color:#1B1A17;outline:none";
-  const lab=t=>`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin:0 0 7px">${t}</div>`;
-  const field=(inner)=>`<div style="position:relative;margin-bottom:10px">${inner}${I.caret}</div>`;
-  const segB=(o,t)=>`<button data-act="org" data-org="${o}" style="${css({...segM(S.org===o,true),borderRadius:'8px'})}">${t}</button>`;
-  const dayB=(d,t)=>`<button data-act="day" data-day="${d}" style="${css({...segM((d==='today')===(S.day==='today'),true),borderRadius:'8px'})}">${t}</button>`;
+  const sel="width:100%;height:46px;border:1px solid #D5D0C6;border-radius:10px;background:#fff;padding:0 30px 0 12px;font-family:'Noto Sans';font-size:16px;color:#1B1A17";
+  const lab=t=>`<div class="mLbl" style="margin:0 0 8px">${t}</div>`;
+  // Each select names itself. The option lists' own first entry is the PARENT's prompt ("— pick territory —"
+  // under Cluster, "— pick AM —" under Cluster officer — shared with the desktop bar, so left alone), which on
+  // its own told nobody what the field was.
+  const field=(label,inner)=>`<div style="position:relative;margin-bottom:12px"><div style="font-size:12px;font-weight:600;color:#6E6A62;margin:0 0 5px">${label}</div><div style="position:relative">${inner}${I.caret}</div></div>`;
+  const segB=(o,t)=>`<button data-act="org" data-org="${o}" style="${css({...segM(S.org===o,true),borderRadius:'8px',minHeight:'44px'})}">${t}</button>`;
+  const dayB=(d,t)=>`<button data-act="day" data-day="${d}" style="${css({...segM((d==='today')===(S.day==='today'),true),borderRadius:'8px',minHeight:'44px'})}">${t}</button>`;
   return `${lab('Search')}
-    <input id="searchInput" placeholder="Machine no. or operator…" value="${E(S.search)}" style="width:100%;height:44px;border:1px solid #E9E6DF;border-radius:10px;background:#FAF9F6;padding:0 13px;font-family:'Noto Sans';font-size:15px;color:#1B1A17;outline:none;margin-bottom:16px" />
+    <input id="searchInput" placeholder="Machine no. or operator…" value="${E(S.search)}" style="width:100%;height:46px;border:1px solid #D5D0C6;border-radius:10px;background:#FAF9F6;padding:0 13px;font-family:'Noto Sans';font-size:16px;color:#1B1A17;margin-bottom:18px" />
     ${lab('Org')}
-    <div style="display:flex;background:#F2F0EB;border-radius:10px;padding:3px;gap:2px;margin-bottom:16px">
+    <div style="display:flex;background:#F2F0EB;border-radius:10px;padding:3px;gap:2px;margin-bottom:18px">
       ${segB('Both','All')}${segB('UPL','UPL')}${segB('SWAL','SWAL')}${segB('Open','Open')}
     </div>
     ${lab('Day')}
-    <div style="display:flex;background:#F2F0EB;border-radius:10px;padding:3px;gap:2px;margin-bottom:16px">
+    <div style="display:flex;background:#F2F0EB;border-radius:10px;padding:3px;gap:2px;margin-bottom:18px">
       ${dayB('yday','Yesterday')}${dayB('today','Today')}
     </div>
-    ${(v.multiState && v.canSwitchStates)?lab('State')+field(`<select id="stSelect" style="${sel}">${optionsHTML(v.stOptions,S.st)}</select>`):''}
-    ${isAdmin()?`${lab('Geo')}
-      ${field(`<select id="terrSelect" style="${sel}">${optionsHTML(v.terrOptions,S.terr)}</select>`)}
-      ${field(`<select id="clusterSelect" style="${sel}">${optionsHTML(v.clusterOptions,S.cluster)}</select>`)}
+    ${(v.multiState && v.canSwitchStates)?lab('State')+field('State',`<select id="stSelect" style="${sel}">${optionsHTML(v.stOptions,S.st)}</select>`):''}
+    ${isAdmin()?`${lab('Geography')}
+      ${field('Territory',`<select id="terrSelect" style="${sel}">${optionsHTML(v.terrOptions,S.terr)}</select>`)}
+      ${field('Cluster',`<select id="clusterSelect" style="${sel}">${optionsHTML(v.clusterOptions,S.cluster)}</select>`)}
       <div style="height:6px"></div>${lab('Team')}
-      ${field(`<select id="amSelect" style="${sel}">${optionsHTML(v.amOptions,S.am)}</select>`)}
-      ${field(`<select id="coSelect" style="${sel}">${optionsHTML(v.coOptions,S.co)}</select>`)}`:''}
-    <div style="height:6px"></div>${lab('BM')}
-    ${field(`<select id="bmSelect" style="${sel}">${optionsHTML(v.bmOptions,S.bm)}</select>`)}
-    ${field(`<select id="tmSelect" style="${sel}"${S.bm?'':' disabled'}>${optionsHTML(v.tmOptions,S.tm)}</select>`)}
+      ${field('Area manager',`<select id="amSelect" style="${sel}">${optionsHTML(v.amOptions,S.am)}</select>`)}
+      ${field('Cluster officer',`<select id="coSelect" style="${sel}">${optionsHTML(v.coOptions,S.co)}</select>`)}`:''}
+    <div style="height:6px"></div>${lab('Business')}
+    ${field('Business manager',`<select id="bmSelect" style="${sel}">${optionsHTML(v.bmOptions,S.bm)}</select>`)}
+    ${field('Territory manager',`<select id="tmSelect" style="${sel}"${S.bm?'':' disabled'}>${optionsHTML(v.tmOptions,S.tm)}</select>`)}
     <div style="height:6px"></div>${lab('Health')}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
       ${[['Active',C.act,'#15A24A'],['Idle',C.idle,'#E0A008'],['Breakdown',C.brk,'#DC3A2B']].map(([h,c,dot])=>
-        `<button data-act="health" data-h="${h}" style="${css({...chip(S.health.includes(h),c),padding:'10px 14px',fontSize:'13px'})}"><span style="width:8px;height:8px;border-radius:50%;background:${dot}"></span>${h}</button>`).join('')}
+        `<button data-act="health" data-h="${h}" aria-pressed="${S.health.includes(h)}" style="${css({...chip(S.health.includes(h),c),padding:'0 14px',minHeight:'44px',fontSize:'14px'})}"><span style="width:9px;height:9px;border-radius:50%;background:${dot}"></span>${h}</button>`).join('')}
     </div>
-    <div style="display:flex;gap:9px">
-      ${v.anyFilter?`<button data-act="clear" style="flex:1;height:46px;border:1px solid #E9E6DF;border-radius:10px;background:#fff;color:#6E6A62;font-size:14px;font-weight:600;cursor:pointer">Clear filters</button>`:''}
-      <button data-act="sheetclose" style="flex:1;height:46px;border:none;border-radius:10px;background:#1B1A17;color:#fff;font-size:14px;font-weight:600;cursor:pointer">Show ${fmt(v.pinCount)} machines</button>
-    </div>
-    <button data-act="download" style="width:100%;height:44px;margin-top:10px;border:1px solid #E9E6DF;border-radius:10px;background:#fff;color:#6E6A62;font-size:13.5px;font-weight:600;cursor:pointer">⤓ Download CSV · ${state.view==='pending'?v.pendCount:v.pinCount}</button>`;
+    <button data-act="download" style="width:100%;height:46px;border:1px solid #E9E6DF;border-radius:10px;background:#fff;color:#46433d;font-size:14px;font-weight:600;cursor:pointer">⤓ Download CSV · ${state.view==='pending'?v.pendCount:v.pinCount}</button>`;
+}
+// The primary action lives in the sheet's sticky footer so it is on screen however long the form is.
+function mFiltersFooterHTML(v){
+  return `<div style="display:flex;gap:9px">
+      ${v.anyFilter?`<button data-act="clear" style="flex:1;height:48px;border:1px solid #D5D0C6;border-radius:11px;background:#fff;color:#46433d;font-size:14.5px;font-weight:600;cursor:pointer">Clear filters</button>`:''}
+      <button data-act="sheetclose" style="flex:${v.anyFilter?1.4:1};height:48px;border:none;border-radius:11px;background:#1B1A17;color:#fff;font-size:14.5px;font-weight:600;cursor:pointer">Show ${fmt(v.pinCount)} machines</button>
+    </div>`;
 }
 
 function mMoreHTML(){
   const rest=mViews().slice(M_PRIMARY);
-  return rest.map(x=>`<button data-act="view" data-view="${x.k}" style="width:100%;display:flex;align-items:center;gap:13px;padding:15px 4px;background:none;border:none;border-bottom:1px solid #F2F0EB;cursor:pointer;text-align:left;color:${state.view===x.k?'#1B1A17':'#46433d'}">
-      <span style="color:${state.view===x.k?'#1B1A17':'#9C988F'};display:flex">${x.icon()}</span>
+  return rest.map(x=>`<button data-act="view" data-view="${x.k}" style="width:100%;display:flex;align-items:center;gap:13px;padding:15px 4px;min-height:52px;background:none;border:none;border-bottom:1px solid #F2F0EB;cursor:pointer;text-align:left;color:${state.view===x.k?'#1B1A17':'#46433d'}"${state.view===x.k?' aria-current="page"':''}>
+      <span style="color:${state.view===x.k?'#1B1A17':'#6E6A62'};display:flex">${x.icon()}</span>
       <span style="flex:1;font-size:15px;font-weight:${state.view===x.k?700:500}">${x.label}</span>
     </button>`).join('');
 }
@@ -8584,8 +8731,8 @@ function mMoreHTML(){
 function mBottomNavHTML(){
   const all=mViews(), prim=all.slice(0,M_PRIMARY), hasMore=all.length>M_PRIMARY;
   const restActive=all.slice(M_PRIMARY).some(x=>x.k===state.view);
-  const item=(active,inner,attrs)=>`<button ${attrs} style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:7px 0 0;background:none;border:none;cursor:pointer;color:${active?'#1B1A17':'#9C988F'};font-size:9.5px;font-weight:${active?700:500};min-height:52px">${inner}</button>`;
-  return `<nav style="flex-shrink:0;background:#fff;border-top:1px solid #E9E6DF;display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:9">
+  const item=(active,inner,attrs)=>`<button class="mNavItem" ${attrs}${active?' aria-current="page"':''} style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:7px 0 0;background:none;border:none;cursor:pointer;color:${active?'#1B1A17':'#6E6A62'};font-size:11px;font-weight:${active?700:500};min-height:56px">${inner}</button>`;
+  return `<nav aria-label="Views" style="flex-shrink:0;background:#fff;border-top:1px solid #E9E6DF;display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:9">
     ${prim.map(x=>item(state.view===x.k, `${x.icon()}<span>${x.label}</span>`, `data-act="view" data-view="${x.k}"`)).join('')}
     ${hasMore?item(restActive, `${I.more}<span>More</span>`, `data-act="sheet" data-sheet="more"`):''}
   </nav>`;
@@ -8593,27 +8740,32 @@ function mBottomNavHTML(){
 
 // One hierarchy row (territory / AM / BM / pending) as a card. Indent becomes a left rule + inset
 // so the Territory → Cluster → Machine nesting still reads at 390px.
+// The expander is a real 44×44 target with an SVG chevron that turns when open. It was the sheet's own
+// "▸" glyph at 9–10px, which read as a stray dot, and nothing told a screen reader the row was expandable.
+// `r.chev` is '▸' collapsed, '▾' expanded and '' for a leaf — only the state is read from it.
 function mHierCardHTML(r, opts){
   const depth = Math.min(3, Math.round(parseInt(r.indent||'0',10)/20));
   const inset = depth*13;
   const clickable = r.click ? rowDataAttrs(r.click) : '';
-  const stat = (label,val,ink) => `<div style="min-width:0"><div style="font-size:9px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">${label}</div><div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;margin-top:2px;${ink?'color:'+ink:''}">${val}</div></div>`;
-  return `<div ${clickable} style="background:#fff;border:1px solid #E9E6DF;border-left:${depth?`3px solid ${depth===1?'#E0DCD3':'#EFEDE7'}`:'1px solid #E9E6DF'};border-radius:12px;padding:12px 13px;margin:0 0 8px ${inset}px;${r.click?'cursor:pointer':''}">
+  const expandable = !!r.chev, open = r.chev==='▾';
+  const stat = (label,val,ink) => `<div style="min-width:0"><div style="font-size:11px;font-weight:600;letter-spacing:.04em;color:#6E6A62;text-transform:uppercase">${label}</div><div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:600;margin-top:2px;${ink?'color:'+ink:''}">${val}</div></div>`;
+  const chev = expandable ? `<span aria-hidden="true" style="width:44px;height:44px;margin:-8px -10px -8px 0;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#6E6A62"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .15s;transform:rotate(${open?90:0}deg)"><path d="M9 6l6 6-6 6"/></svg></span>` : '';
+  return `<div ${clickable}${expandable?` role="button" tabindex="0" aria-expanded="${open}"`:''} style="background:#fff;border:1px solid #E9E6DF;border-left:${depth?`3px solid ${depth===1?'#D5D0C6':'#E4E0D8'}`:'1px solid #E9E6DF'};border-radius:12px;padding:12px 13px;margin:0 0 8px ${inset}px;content-visibility:auto;contain-intrinsic-size:auto 140px;${r.click?'cursor:pointer':''}">
     <div style="display:flex;align-items:center;gap:8px;min-width:0">
-      ${r.chev?`<span style="${css(r.chevStyle)}">${r.chev}</span>`:''}
       ${r.role?`<span style="${css(r.roleStyle)}">${E(r.role)}</span>`:''}
       <span style="${css(r.dotStyle)}"></span>
       <div style="flex:1;min-width:0">
         <div style="${css({...r.nameStyle,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'})}">${E(r.name)}</div>
         ${r.sub?`<div style="display:flex;align-items:center;gap:6px;min-width:0"><span style="${css({...r.subStyle,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'})}">${E(r.sub)}</span>${r.rank||''}</div>`:''}
       </div>
-      ${r.contact?`<a href="${E(r.callTel)}" data-stop="1" style="${css({...r.callStyle,width:'34px',height:'34px',flexShrink:0})}">${I.phoneS}</a>`:''}
+      ${r.contact?`<a href="${E(r.callTel)}" data-stop="1" aria-label="Call ${E(r.name)}" style="${css({...r.callStyle,width:'44px',height:'44px',borderRadius:'11px',flexShrink:0,margin:'-6px 0'})}">${I.phoneS}</a>`:''}
+      ${chev}
     </div>
     ${opts&&opts.pending
       ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:11px">
-           ${stat('Pending', E(r.count), r.count?'#3A5B7D':'#C4BFB5')}
-           ${r.org?`<div><div style="font-size:9px;font-weight:600;letter-spacing:.05em;color:#9C988F;text-transform:uppercase">Org</div><div style="margin-top:3px"><span style="${css(r.orgStyle)}">${E(r.org)}</span></div></div>`:stat('Org mix', E(r.mix)||'—')}
-         </div>${r.org?'':''}`
+           ${stat('Pending', E(r.count), r.count?'#3A5B7D':'#8A857B')}
+           ${r.org?`<div><div style="font-size:11px;font-weight:600;letter-spacing:.04em;color:#6E6A62;text-transform:uppercase">Org</div><div style="margin-top:3px"><span style="${css(r.orgStyle)}">${E(r.org)}</span></div></div>`:stat('Org mix', E(r.mix)||'—')}
+         </div>`
       : `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:11px">
            ${stat('Deployed', E(r.deployed))}${stat('Acres '+dayShort(), E(r.ranY))}${stat('Operators', E(r.opMap))}
          </div>
@@ -8623,17 +8775,17 @@ function mHierCardHTML(r, opts){
          </div>
          <div style="display:flex;align-items:center;gap:9px;margin-top:9px">
            <div style="flex:1;height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="${css(r.paceBarStyle)}"></span></div>
-           <span style="font-family:'IBM Plex Mono';font-size:11px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span>
+           <span style="font-family:'IBM Plex Mono';font-size:12px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span>
          </div>
-         ${opts&&opts.adm?`<div style="display:flex;gap:14px;margin-top:9px;font-size:10.5px;color:#9C988F">
+         ${opts&&opts.adm?`<div style="display:flex;gap:14px;margin-top:9px;font-size:12px;color:#6E6A62">
            <span>IoT y'day <b style="font-family:'IBM Plex Mono';color:#D96A12">${E(r.iotRanY)}</b></span>
            <span>Pinged <b style="font-family:'IBM Plex Mono';color:${r.pingInk||'#46433d'}">${E(r.pingLabel)}</b></span>
          </div>`:''}`}
   </div>`;
 }
 
-const mSectionTitle = (t,sub) => `<div style="margin:0 0 9px"><div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">${t}</div>${sub?`<div style="font-size:11px;color:#9C988F;margin-top:3px">${sub}</div>`:''}</div>`;
-const mEmpty = t => `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:30px 18px;text-align:center;color:#9C988F;font-size:12.5px">${t}</div>`;
+const mSectionTitle = (t,sub) => `<div style="margin:0 0 9px"><div class="mLbl">${t}</div>${sub?`<div class="mCap" style="margin-top:3px">${sub}</div>`:''}</div>`;
+const mEmpty = t => `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:30px 18px;text-align:center;color:#6E6A62;font-size:13px">${t}</div>`;
 
 function mobileHTML(v){
   const S=state;
@@ -8641,12 +8793,16 @@ function mobileHTML(v){
   // On a real phone the app IS the viewport: no bezel/notch, safe-area padding, viewport-sized
   // maps. On desktop the same markup keeps the 392x840 handset frame so the layout is previewable.
   const ph=isPhone();
-  const zc=zoomCtrlsFor(ph);
+  const zc=zoomOverlayFor(ph);
+  // The map box takes the MAP's own aspect (W:H of the projected bounds) instead of a fixed viewport fraction:
+  // the old 50vh box held a 291×227 map with ~40% of it empty. max-height keeps a tall state (Rajasthan) from
+  // pushing everything below it off the first screen.
+  const mapBox = fb => (ph && W && H) ? `aspect-ratio:${W}/${H};max-height:60vh` : `height:${fb}px`;
   let body='';
   if(S.view==='map'){
     body=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:10px;margin-bottom:6px">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:8px">${zc}</div>
-      <div id="mMapHost" style="width:100%;height:${ph?'min(50vh,420px)':'300px'};background:#FBFAF8;border-radius:8px;overflow:hidden;cursor:default"></div>
+      <div style="position:relative">
+      <div id="mMapHost" style="width:100%;${mapBox(300)};background:#FBFAF8;border-radius:8px;overflow:hidden;cursor:default"></div>${zc}</div>
       <div style="display:flex;align-items:center;gap:13px;padding:10px 4px 2px;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#F5821F"></span><span style="font-size:11px;color:#6E6A62">UPL</span></div>
         <div style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:50%;background:#1FAE43"></span><span style="font-size:11px;color:#6E6A62">SWAL</span></div>
@@ -8665,9 +8821,9 @@ function mobileHTML(v){
           <div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px;flex:1">
             <button data-act="pinmode" data-mode="health" style="${css(segM(S.pinMode==='health',ph))}">Health</button>
             <button data-act="pinmode" data-mode="acres" style="${css(segM(S.pinMode==='acres',ph))}">Acres ${dayShort()}</button>
-          </div>${zc}
+          </div>
         </div>
-        <div id="mPinHost" style="width:100%;height:${ph?'min(42vh,360px)':'280px'};background:#FBFAF8;border-radius:8px;overflow:hidden;cursor:default"></div>
+        <div style="position:relative"><div id="mPinHost" style="width:100%;${mapBox(280)};background:#FBFAF8;border-radius:8px;overflow:hidden;cursor:default"></div>${zc}</div>
         <div style="display:flex;gap:12px;flex-wrap:wrap;padding:9px 4px 2px">
           ${S.pinMode==='health'
             ? [['Active',C.act,v.tot.Active],['Idle',C.idle,v.tot.Idle],['Breakdown',C.brk,v.tot.Breakdown]].map(([l,c,n])=>`<span style="display:flex;align-items:center;gap:5px;font-size:11px;color:#6E6A62"><span style="width:9px;height:9px;border-radius:50%;background:${c}"></span>${l} <b style="font-family:'IBM Plex Mono'">${fmt(n)}</b></span>`).join('')
@@ -8678,13 +8834,13 @@ function mobileHTML(v){
       ${v.mobileList.length ? v.mobileList.map(m=>`<div data-act="open" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:11px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:${ph?'14px 13px':'12px 13px'};margin-bottom:8px;cursor:pointer">
         <span style="${css(m.dotStyle)}"></span>
         <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600">${E(m.mc)}</span><span style="${css(m.orgStyle)}">${E(m.org)}</span></div>
-          <div style="display:flex;align-items:center;gap:6px;min-width:0;margin-top:2px"><span style="font-size:11px;color:#9C988F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.opName)} · ${E(m.geo)}</span>${opRankChip(m.opNum,'s')}</div>
+          <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(m.mc)}</span><span style="${css(m.orgStyle)}">${E(m.org)}</span>${m.hword?`<span style="font-size:11px;font-weight:700;color:#46433d">${m.hword}</span>`:''}</div>
+          <div style="display:flex;align-items:center;gap:6px;min-width:0;margin-top:2px"><span class="mCap" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.opName)} · ${E(m.geo)}</span>${opRankChip(m.opNum,'s')}</div>
         </div>
-        <span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(m.acresLabel)}</span>
+        <span style="font-family:'IBM Plex Mono';font-size:12.5px;color:#46433d;white-space:nowrap">${E(m.acresLabel)}</span>
       </div>`).join('') : mEmpty('No machines match these filters.')}
       ${v.mListShown < v.mListCount
-        ? `<button data-act="loadmore" style="width:100%;height:46px;margin-top:4px;border:1px solid #E9E6DF;border-radius:11px;background:#fff;color:#6E6A62;font-size:13.5px;font-weight:600;cursor:pointer">Load more · showing ${fmt(v.mListShown)} of ${fmt(v.mListCount)}</button>`
+        ? `<button data-act="loadmore" style="width:100%;height:48px;margin-top:4px;border:1px solid #D5D0C6;border-radius:11px;background:#fff;color:#46433d;font-size:14px;font-weight:600;cursor:pointer">Load more · showing ${fmt(v.mListShown)} of ${fmt(v.mListCount)}</button>`
         : (v.mListCount>MLIST_PAGE?`<div style="text-align:center;font-size:11px;color:#9C988F;padding:6px 0 2px">All ${fmt(v.mListCount)} shown</div>`:'')}`;
   } else if(S.view==='am'){
     body = mSectionTitle(`Area Managers · ${v.amCount}`, 'Tap to expand Cluster Officer → Machine')
@@ -8720,8 +8876,8 @@ function mobileHTML(v){
     // served Weather for 'mpprod' until this branch was added. Adding a view means editing BOTH chains.
     body=`<div style="margin-bottom:10px">${wxDayStripHTML(v.wxDay,true)}</div>
       <div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:10px;margin-bottom:12px">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:#6E6A62">${wxDayPhrase(v.wxDay)}</span>${zc}</div>
-        <div id="mwMapHost" style="width:100%;height:${ph?'min(44vh,380px)':'260px'};background:#FBFAF8;border-radius:8px;overflow:hidden;cursor:default"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px"><span style="font-size:12px;font-weight:600;color:#6E6A62">${wxDayPhrase(v.wxDay)}</span></div>
+        <div style="position:relative"><div id="mwMapHost" style="width:100%;${mapBox(260)};background:#FBFAF8;border-radius:8px;overflow:hidden;cursor:default"></div>${zc}</div>
         <div style="padding:9px 4px 2px"><div style="display:flex;gap:4px">${RAIN_BUCKETS.map(b=>`<div style="flex:1;height:10px;background:${b.c};border-radius:3px"></div>`).join('')}</div><div style="display:flex;justify-content:space-between;font-size:10px;color:#9C988F;margin-top:4px"><span>Dry</span><span>number = ran / total</span><span>20+ mm</span></div></div>
       </div>
       <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:8px">Territories by rainfall</div>
@@ -8732,31 +8888,31 @@ function mobileHTML(v){
         <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;color:#3A6FA0">${E(w.rain)} mm</span>
       </div>`).join('')}`;
   }
-  const sheet = (d&&d.mc) ? `<div data-act="close" style="position:absolute;inset:0;background:rgba(20,19,15,.4);z-index:10"></div>
-    <div style="position:absolute;left:0;right:0;bottom:0;height:92%;background:#fff;border-radius:24px 24px 0 0;z-index:11;display:flex;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,.2)">
-      <div style="padding:16px 18px 14px;border-bottom:1px solid #E9E6DF">
-        <div style="width:38px;height:4px;border-radius:3px;background:#E0DCD3;margin:0 auto 14px"></div>
+  const sheet = (d&&d.mc) ? `<div class="${_ovFresh?'mScrimIn':''}" data-act="close" aria-hidden="true" style="position:absolute;inset:0;background:rgba(20,19,15,.4);z-index:10"></div>
+    <div class="${_ovFresh?'mSheetIn':''}" role="dialog" aria-modal="true" aria-label="Machine ${E(d.mc)}" data-sheetpanel="close" style="position:absolute;left:0;right:0;bottom:0;height:92%;background:#fff;border-radius:24px 24px 0 0;z-index:11;display:flex;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,.2)">
+      <div data-drag="1" style="padding:16px 18px 14px;border-bottom:1px solid #E9E6DF;touch-action:none">
+        <div style="width:38px;height:4px;border-radius:3px;background:#D5D0C6;margin:0 auto 14px"></div>
         <div style="display:flex;align-items:flex-start;gap:10px">
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="${css(d.orgStyle)}">${E(d.org)}</span><span style="${css(d.healthStyle)}"><span style="${css(d.healthDot)}"></span>${E(d.health)}</span></div>
             <div style="font-family:'IBM Plex Mono';font-size:19px;font-weight:600">${E(d.mc)}</div>
-            <div style="font-size:11.5px;color:#9C988F;margin-top:2px">${E(d.geo)}</div>
+            <div class="mCap" style="font-size:12px;margin-top:2px">${E(d.geo)}</div>
           </div>
-          <button data-act="close" style="width:${ph?36:30}px;height:${ph?36:30}px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.closeS}</button>
+          <button data-act="close" data-autofocus="1" aria-label="Close" style="width:${ph?44:30}px;height:${ph?44:30}px;margin:${ph?'-6px -8px -6px 0':'0'};border:1px solid #E9E6DF;border-radius:${ph?11:8}px;background:#fff;color:#6E6A62;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.closeS}</button>
         </div>
       </div>
-      <div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:16px 18px ${ph?'calc(env(safe-area-inset-bottom) + 26px)':'22px'}">
+      <div data-scroll="drawer:${d.mc}" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:16px 18px ${ph?'calc(env(safe-area-inset-bottom) + 26px)':'22px'}">
         <div style="display:flex;align-items:center;gap:11px;background:${d.sprayBg};border:1px solid ${d.sprayBorder};border-radius:12px;padding:11px 13px;margin-bottom:16px">
           <span style="font-size:20px">${d.sprayIcon}</span>
           <div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:${d.sprayInk}">${E(d.sprayLabel)}</div><div style="font-size:11px;color:#6E6A62">${E(d.weatherLine)}</div></div>
         </div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Operator</div>
+        <div class="mLbl" style="margin-bottom:9px">Operator</div>
         <div style="display:flex;align-items:center;gap:11px;margin-bottom:16px">
           <div style="width:38px;height:38px;border-radius:50%;background:#F2F0EB;display:flex;align-items:center;justify-content:center;font-weight:600;color:#6E6A62;flex-shrink:0">${E(d.opInitial)}</div>
           <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${E(d.opName)}<span style="${css(d.opTagStyle)}">${E(d.opTag)}</span>${opRankChip(d.opNum,'s')}</div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(d.opNum)}</div></div>
-          <a href="${E(d.opTel)}" data-stop="1" style="${css(d.callStyle)}">${I.phone}</a>
+          <a href="${E(d.opTel)}" data-stop="1" aria-label="Call ${E(d.opName)}" style="${css({...d.callStyle,width:'44px',height:'44px',borderRadius:'11px'})}">${I.phone}</a>
         </div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Acreage funnel</div>
+        <div class="mLbl" style="margin-bottom:9px">Acreage funnel</div>
         <div style="margin-bottom:16px">
           ${d.funnel.map(f=>`<div style="display:grid;grid-template-columns:68px 1fr 46px;align-items:center;gap:9px;margin-bottom:8px">
             <span style="font-size:11px;color:#6E6A62">${E(f.label)}</span>
@@ -8764,24 +8920,24 @@ function mobileHTML(v){
             <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;text-align:right">${E(f.value)}</span>
           </div>`).join('')}
         </div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Products sprayed</div>
+        <div class="mLbl" style="margin-bottom:9px">Products sprayed</div>
         <div style="margin-bottom:16px">
           ${d.products.map(p=>`<div style="display:grid;grid-template-columns:1fr 46px;align-items:center;gap:9px;margin-bottom:8px">
             <div style="min-width:0"><div style="font-size:12px;font-weight:500;margin-bottom:5px">${E(p.product)}</div><span style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden;display:block"><span style="${css(p.barStyle)}"></span></span></div>
             <span style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;text-align:right">${E(p.acres)}</span>
           </div>`).join('')}
         </div>
-        ${v.adm?`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Connectivity · IoT</div>
+        ${v.adm?`<div class="mLbl" style="margin-bottom:9px">Connectivity · IoT</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:16px">
           <div style="border:1px solid #E9E6DF;border-radius:10px;padding:9px 11px"><div style="font-size:9.5px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Pinged y'day</div><div style="font-size:13px;font-weight:700;margin-top:2px;color:${d.pingInk}">${E(d.pingLabel)}</div></div>
           <div style="border:1px solid #E9E6DF;border-radius:10px;padding:9px 11px"><div style="font-size:9.5px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">IoT acres y'day</div><div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700;margin-top:2px;color:#D96A12">${E(d.iotAcresY)}</div></div>
           <div style="border:1px solid #E9E6DF;border-radius:10px;padding:9px 11px"><div style="font-size:9.5px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Last ping date</div><div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:600;margin-top:2px">${E(d.lastPing)}</div></div>
           <div style="border:1px solid #E9E6DF;border-radius:10px;padding:9px 11px"><div style="font-size:9.5px;color:#9C988F;text-transform:uppercase;letter-spacing:.04em">Days since ping</div><div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700;margin-top:2px">${E(d.daysSincePing)}</div></div>
-        </div>`:`<div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Connectivity</div>
+        </div>`:`<div class="mLbl" style="margin-bottom:9px">Connectivity</div>
         <div style="display:flex;align-items:center;justify-content:space-between;border:1px solid #E9E6DF;border-radius:10px;padding:10px 13px;margin-bottom:16px"><div style="font-size:11.5px;color:#6E6A62">Machine pinged yesterday</div><div style="font-size:13.5px;font-weight:700;color:${d.pingInk}">${E(d.pingLabel)}</div></div>`}
-        <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Location · Escalation</div>
+        <div class="mLbl" style="margin-bottom:9px">Location · Escalation</div>
         <div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;margin-bottom:12px">${E(d.coords)}</div>
-        <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">${escalationHTML(d, I.phoneS)}</div>
+        <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">${escalationHTML(d, I.phoneS, true)}</div>
       </div>
     </div>` : '';
   const outer = ph
@@ -8793,39 +8949,51 @@ function mobileHTML(v){
   // The notch cut-out and the "switch to desktop" button are preview-frame affordances: a real
   // phone has its own notch, and the desktop layout is a fixed 100vh grid it cannot usefully show.
   const notch = ph ? '' : `<div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:118px;height:25px;background:#15140F;border-radius:0 0 16px 16px;z-index:8"></div>`;
-  const toDesktop = ph ? '' : `<button data-act="device" title="Desktop" style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;display:flex;align-items:center;justify-content:center;cursor:pointer">${I.desktop}</button>`;
+  const toDesktop = ph ? '' : `<button data-act="device" title="Desktop" aria-label="Switch to desktop layout" style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;display:flex;align-items:center;justify-content:center;cursor:pointer">${I.desktop}</button>`;
   const nFilt = activeFilterCount();
-  const filterBtn = `<button data-act="sheet" data-sheet="filters" title="Filters" style="position:relative;height:34px;padding:0 11px;display:flex;align-items:center;gap:6px;border:1px solid ${nFilt?'#1B1A17':'#E9E6DF'};border-radius:9px;background:${nFilt?'#1B1A17':'#fff'};color:${nFilt?'#fff':'#6E6A62'};font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">
+  const filterBtn = `<button data-act="sheet" data-sheet="filters" title="Filters" aria-label="Filters${nFilt?`, ${nFilt} active`:''}" style="position:relative;min-width:44px;height:44px;padding:0 11px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid ${nFilt?'#1B1A17':'#E9E6DF'};border-radius:11px;background:${nFilt?'#1B1A17':'#fff'};color:${nFilt?'#fff':'#6E6A62'};font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0">
     ${I.filter}${nFilt?`<span style="font-family:'IBM Plex Mono'">${nFilt}</span>`:''}
   </button>`;
+  const nav = mViews().find(x=>x.k===S.view);
+  const chromeless = CHROMELESS.has(S.view);
+  // A chromeless page keeps its OWN scope (insSt / lbSt / pmState / snState / mpTerr) and the machine filter
+  // bar does not reach it, so the header names that scope — not the fleet filter's state, which on an
+  // All-India Insights page used to read "GJ Operations". Fleet views keep the project's own title.
+  const headTitle = chromeless && nav ? `${nav.label} · ${mPageScope(S.view)}` : curProject().mHead(v.scopeLabel);
   return `<div style="${outer}">
-    <div style="${shell}">
+    <div class="mShell" style="${shell}">
       ${notch}
       <div style="padding:${ph?'calc(env(safe-area-inset-top) + 12px) 16px 12px':'30px 18px 12px'};background:#fff;border-bottom:1px solid #E9E6DF;flex-shrink:0">
         <div style="display:flex;align-items:center;gap:9px">
-          <div style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10.5px;letter-spacing:.02em;color:#fff;flex-shrink:0">UPL</div>
-          <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(curProject().mHead(v.scopeLabel))}</div><div style="font-size:10px;color:#9C988F">${E(curProject().mSub)}</div></div>
-          <div style="display:flex;align-items:center;gap:6px;${ph?'':'margin-right:4px'}"><span style="width:7px;height:7px;border-radius:50%;background:${v.statusDot};flex-shrink:0"></span><span style="font-size:10.5px;font-weight:600;color:#6E6A62">${E(v.statusTime)}</span></div>
+          <div style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;letter-spacing:.02em;color:#fff;flex-shrink:0" aria-hidden="true">UPL</div>
+          <div style="flex:1;min-width:0"><h1 style="margin:0;font-size:14px;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(headTitle)}</h1><div class="mCap">${E(curProject().mSub)}</div></div>
+          <!-- the status stamp doubles as the refresh control: it is the thing you look at when the numbers seem old -->
+          <button data-act="refresh" aria-label="Refresh data, last updated ${E(v.statusTime)}" style="display:flex;align-items:center;gap:6px;min-width:44px;height:44px;padding:0 6px;border:none;background:none;cursor:pointer;flex-shrink:0;${ph?'':'margin-right:4px'}">${S.refreshing?I.refresh('animation:spin 1s linear infinite;color:#6E6A62'):`<span style="width:8px;height:8px;border-radius:50%;background:${v.statusDot};flex-shrink:0"></span>`}<span style="font-size:12px;font-weight:600;color:#46433d">${E(v.statusTime)}</span></button>
           ${filterBtn}${toDesktop}
         </div>
       </div>
       <!-- phone: no padding-top on the scroller — sticky offsets resolve against the padding box,
            so a top pad would pin the tab bar below the edge and leak rows through the gap. -->
-      <div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:${ph?'0':'14px'} 16px ${ph?'calc(env(safe-area-inset-bottom) + 28px)':'24px'}">
+      <div data-scroll="main:${S.view}" style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:${ph?'0':'14px'} 16px ${ph?'calc(env(safe-area-inset-bottom) + 28px)':'24px'}">
+        <!-- a tablet-width phone layout would stretch single-column cards to 736px; the column is capped and centred -->
+        <div style="max-width:680px;margin:0 auto">
         ${pwaBannerHTML(ph)}
-        ${CHROMELESS.has(S.view)?`<div style="height:${ph?'14px':'0'}"></div>`:`<div style="display:flex;align-items:center;gap:11px;background:${v.mobileWeather.bg};border:1px solid ${v.mobileWeather.border};border-radius:14px;padding:12px 14px;${ph?'margin:14px 0 14px':'margin-bottom:14px'}">
+        ${chromeless?`<div style="height:${ph?'14px':'0'}"></div>`:`<div class="mWx" style="display:flex;align-items:center;gap:11px;background:${v.mobileWeather.bg};border:1px solid ${v.mobileWeather.border};border-radius:14px;padding:12px 14px;${ph?'margin:14px 0 14px':'margin-bottom:14px'}">
           <span style="font-size:22px">${v.mobileWeather.icon}</span>
-          <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:${v.mobileWeather.ink}">${E(v.mobileWeather.label)}</div><div style="font-size:11px;color:#6E6A62;margin-top:1px">${E(v.mobileWeather.line)}</div></div>
+          <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:${v.mobileWeather.ink}">${E(v.mobileWeather.label)}</div><div style="font-size:12px;color:#6E6A62;margin-top:1px">${E(v.mobileWeather.line)}</div></div>
         </div>
-        <div style="display:flex;gap:9px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:3px;margin-bottom:14px">
-          ${v.kpis.map(k=>`<div style="flex-shrink:0;min-width:84px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px"><div style="${css(k.valStyle)}">${E(k.value)}</div><div style="font-size:9px;font-weight:600;letter-spacing:.04em;color:#9C988F;text-transform:uppercase;margin-top:4px;white-space:nowrap">${E(k.label)}</div></div>`).join('')}
+        <!-- 15 tiles in ~1,466px: this strip is the one deliberate horizontal scroller. Tiles snap to the left edge
+             and the right edge fades, so it reads as "more this way" rather than a tile cut through a number. -->
+        <div style="display:flex;gap:9px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;padding:0 28px 3px 0;margin-bottom:14px;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)">
+          ${v.kpis.map(k=>`<div style="flex-shrink:0;scroll-snap-align:start;min-width:92px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px"><div style="${css(k.valStyle)}">${E(k.value)}</div><div style="font-size:11px;font-weight:600;letter-spacing:.03em;color:#6E6A62;text-transform:uppercase;margin-top:4px;white-space:nowrap">${E(k.label)}</div></div>`).join('')}
         </div>`}
         ${body}
         ${footnoteHTML(true)}
+        </div>
       </div>
       ${mBottomNavHTML()}
       ${sheet}
-      ${S.sheet==='filters' ? mSheetHTML('Filters', mFiltersHTML(v), 'sheetclose') : ''}
+      ${S.sheet==='filters' ? mSheetHTML('Filters', mFiltersHTML(v), 'sheetclose', mFiltersFooterHTML(v)) : ''}
       ${S.sheet==='more'    ? mSheetHTML('More views', mMoreHTML(), 'sheetclose') : ''}
     </div>
   </div>`;
@@ -8834,21 +9002,71 @@ function mobileHTML(v){
 /* ============================= render / events ============================= */
 const app=document.getElementById('app');
 let _lastFsig=null;
+// Which overlay (drawer / sheet) was up on the PREVIOUS render. An overlay is "fresh" only on the render that
+// opens it: that is the one render that plays the slide-up and takes focus. Animating the element
+// unconditionally would replay on every re-render, and a select changed inside the filter sheet re-renders
+// the whole tree — the sheet would appear to open again under the user's thumb.
+let _ovKey='', _ovFresh=false;
+// The scope a chromeless page is showing, for the phone header. Each page owns its own (the gate's lock wins,
+// exactly as in insAgg / leaderBodyHTML); none of them reads state.st.
+function mPageScope(view){
+  const nm=c=>c?(STATE_NAMES[c]||c):'All India', lock=gateDefaultState();
+  const pick=k=>(state[k]&&gateAllowsState(state[k]))?state[k]:'';
+  switch(view){
+    case 'insights': return nm(lock||pick('insSt'));
+    case 'leader':   return nm(lock||pick('lbSt'));
+    case 'product':  return state.pmState&&state.pmState!=='ALL' ? nm(state.pmState) : 'All India';
+    case 'snake':    return state.snState&&state.snState!=='ALL' ? nm(state.snState) : 'All India';
+    case 'mpprod':   return state.mpTerr || 'Madhya Pradesh';
+    default:         return nm(lock);
+  }
+}
 function render(){
   // keep every device off tabs their role no longer exposes — the phone carries all of them now
   if(roleHidesView(state.view)) state.view='map';
   // Any change to the filter set restarts the mobile list's paging, so "Load more" can't leave a
   // stale offset applied to a freshly-filtered (and possibly much shorter) result set.
   const S0=state, fsig=[S0.org,S0.st,S0.terr,S0.cluster,S0.am,S0.co,S0.bm,S0.tm,S0.health.join(','),S0.search].join('|');
-  if(fsig!==_lastFsig){ _lastFsig=fsig; state.listLimit=MLIST_PAGE; }
+  const fsigChanged = fsig!==_lastFsig;
+  if(fsigChanged){ _lastFsig=fsig; state.listLimit=MLIST_PAGE; }
+  // SCROLL SURVIVES A RE-RENDER. app.innerHTML is replaced wholesale, so every scroll container is rebuilt at
+  // scrollTop 0 — which is how a tap on "expand", "Load more" or a filter select used to throw the reader back
+  // to the top. Each container carries data-scroll="<key>"; positions are read here and written back below,
+  // BEFORE paint() (map hosts have fixed heights, so the layout is already final). A key that no longer
+  // exists (a different view, a different machine, a closed sheet) simply starts at the top. The one
+  // deliberate reset: a changed filter set means different content under the same key, so the page scrollers
+  // (main:/dmain:) start over — the filter sheet's own scroller is a different key and keeps its place.
+  const _scr={}; app.querySelectorAll('[data-scroll]').forEach(el=>{ if(el.scrollTop>0) _scr[el.dataset.scroll]=el.scrollTop; });
   const ae=document.activeElement; const focusId=ae&&ae.id; const selStart=ae&&ae.selectionStart;
+  const ovKey = state.device==='mobile' ? (state.selected?'d:'+state.selected.mc:'')+(state.sheet?'s:'+state.sheet:'') : '';
+  _ovFresh = !!ovKey && ovKey!==_ovKey; _ovKey=ovKey;
   const v=vals();
   app.innerHTML = state.device==='mobile' ? mobileHTML(v) : desktopHTML(v);
+  app.querySelectorAll('[data-scroll]').forEach(el=>{
+    const k=el.dataset.scroll;
+    if(_scr[k]==null) return;
+    if(fsigChanged && (k.startsWith('main:')||k.startsWith('dmain:'))) return;
+    el.scrollTop=_scr[k];
+  });
   // restore inputs/selects + focus
   const si=document.getElementById('searchInput'); if(si){ si.value=state.search; }
   if(focusId){ const el=document.getElementById(focusId); if(el){ el.focus(); if(selStart!=null&&el.setSelectionRange){ try{el.setSelectionRange(selStart,selStart);}catch(_){ } } } }
+  // A dialog that has just opened takes focus (its close button), so a screen reader lands inside it and a
+  // keyboard / switch user is not left on the control behind the scrim.
+  if(_ovFresh){ const f=app.querySelector('[data-autofocus]'); if(f) try{ f.focus({preventScroll:true}); }catch(_){ } }
   helpSync();   // the concern button lives on document.body, outside this innerHTML swap — see the HELP block
   paint();
+}
+/* The phone's charts are drawn into a 400-unit-wide viewBox (the `mob?400:980` in each builder) and shown ~340px
+   wide, so an axis label written as font-size 9.5 renders at ~8px. They are raised here ×1.25 (→ ~10–11px) rather
+   than in each builder, which keeps every chart's own relative sizing; `data-ts` makes it once per SVG, since
+   paint() also runs on a resize without rebuilding the markup. Only the phone-width charts match the selector —
+   the 1000-unit maps and the exports do not. */
+function scaleChartText(){
+  app.querySelectorAll('svg[viewBox^="0 0 400 "]:not([data-ts])').forEach(svg=>{
+    svg.dataset.ts='1';
+    svg.querySelectorAll('text').forEach(t=>{ const f=parseFloat(t.getAttribute('font-size')); if(f&&f<12) t.setAttribute('font-size',(f*1.25).toFixed(1)); });
+  });
 }
 function paint(){
   const S=state, mob=S.device==='mobile';
@@ -8858,6 +9076,7 @@ function paint(){
     if(GEO_CACHE[needKey]) applyGeo(needKey);
     else { ensureGeo(needKey).then(g=>{ if(g){ applyGeo(needKey); render(); } }); return; }   // lazy-load then repaint
   }
+  if(mob) scaleChartText();
   try{
     if(S.view==='map') drawMap(mob?'mMapHost':'mapHost', S.metric);
     else if(S.view==='weather') drawMap(mob?'mwMapHost':'wMapHost', 'weather');
@@ -8867,7 +9086,62 @@ function paint(){
     if(!mob && S.selected) drawDrawerMap();
   }catch(err){ console.error('paint failed:', err); }
 }
-function setState(patch){ if(typeof patch==='function') patch=patch(state); Object.assign(state, patch); render(); }
+/* ───── Android back button / history ─────
+   An installed PWA has no browser chrome: the hardware back button is the only "close" the phone has, and with
+   no history entries it exits the app — from inside an open drawer, a filter sheet or a drilled view alike.
+   So an overlay or a view change pushes one entry, and Back undoes exactly one step. `_hist` mirrors the
+   entries WE pushed ('ov' = a drawer/sheet, 'view' = a tab change); its length is the history index, which each
+   entry also carries as {mo:1,n}. A step closed by a TAP (not by Back) has to take its entry off again:
+   history.go(-k) does that, and `_popIgnore` makes the popstate it raises do nothing but resync. Phone only —
+   the desktop layout has no overlays to close and its Back button should simply leave the page. */
+const _hist=[], _viewStack=[]; let _popIgnore=false, _popping=false;
+const _ovDepth = s => (s.selected?1:0)+(s.sheet?1:0);
+function histPush(type){ _hist.push(type); try{ history.pushState({mo:1,n:_hist.length},''); }catch(_){ } }
+function histSync(b){
+  if(state.device!=='mobile' || _popping) return;
+  const depth=_ovDepth(state), viewMoved=state.view!==b.view;
+  if(depth>b.depth){ for(let i=b.depth;i<depth;i++) histPush('ov'); }
+  else if(depth<b.depth){
+    const k=b.depth-depth;
+    if(viewMoved && _hist[_hist.length-1]==='ov'){
+      // A tab picked from the More sheet closes the sheet AND changes the view in one step. Turn the sheet's
+      // entry into the view's rather than going back and pushing — go() is asynchronous and a push issued
+      // straight after it would land before the traversal does.
+      _hist[_hist.length-1]='view'; _viewStack.push(b.view);
+      try{ history.replaceState({mo:1,n:_hist.length},''); }catch(_){ }
+      return;
+    }
+    let tail=0; while(tail<k && _hist[_hist.length-1-tail]==='ov') tail++;
+    if(tail){ _popIgnore=true; try{ history.go(-tail); }catch(_){ _popIgnore=false; } }
+  }
+  if(viewMoved && depth>=b.depth){ _viewStack.push(b.view); histPush('view'); }
+}
+window.addEventListener('popstate', e=>{
+  const target=(e.state&&e.state.mo)?e.state.n:0;
+  if(_popIgnore){ _popIgnore=false; _hist.length=Math.min(_hist.length,target); return; }
+  if(target>_hist.length){ while(_hist.length<target) _hist.push('ov'); return; }   // a forward step: nothing to undo
+  _popping=true;
+  try{
+    while(_hist.length>target){
+      const t=_hist.pop();
+      if(state.device!=='mobile') continue;
+      if(t==='ov'){
+        if(state.selected) state.selected=null; else if(state.sheet) state.sheet=null;
+      } else {
+        const prev=_viewStack.pop();
+        if(prev && !roleHidesView(prev)){ mapLocked=true; scale=1; tx=0; ty=0; state.view=prev; state.sheet=null; }
+      }
+    }
+    render();
+  } finally { _popping=false; }
+});
+function setState(patch){
+  const before={view:state.view, depth:_ovDepth(state)};
+  if(typeof patch==='function') patch=patch(state);
+  Object.assign(state, patch);
+  histSync(before);
+  render();
+}
 
 app.addEventListener('input', e=>{ if(e.target.id==='searchInput') setState({search:e.target.value}); });
 app.addEventListener('change', e=>{
@@ -8897,7 +9171,11 @@ app.addEventListener('click', e=>{
   const el=e.target.closest('[data-act]'); if(!el) return;
   const act=el.dataset.act;
   switch(act){
-    case 'view': if(gateExpired()){ gateLock(); break; } mapLocked=true; scale=1; tx=0; ty=0; setState({view:el.dataset.view, sheet:null}); trackView(el.dataset.view); break;
+    case 'view': if(gateExpired()){ gateLock(); break; }
+      // Tab-bar convention: tapping the tab you are already on scrolls it back to the top, and does nothing else.
+      if(state.device==='mobile' && !state.sheet && el.dataset.view===state.view){
+        const m=app.querySelector('[data-scroll^="main:"]'); if(m) m.scrollTo({top:0,behavior:'smooth'}); break; }
+      mapLocked=true; scale=1; tx=0; ty=0; setState({view:el.dataset.view, sheet:null}); trackView(el.dataset.view); break;
     // The phone now carries every view the role allows, so switching device no longer has to
     // bounce the user back to the map.
     case 'device': mapLocked=true; scale=1; tx=0; ty=0; setState(s=>({device: s.device==='mobile'?'desktop':'mobile', selected:null, sheet:null})); break;
@@ -8971,7 +9249,42 @@ app.addEventListener('click', e=>{
 // machine table row <-> pin cross-highlight
 app.addEventListener('mouseover', e=>{ const row=e.target.closest('#machineTable [data-mc]'); if(row){ highlightPin(row.dataset.mc,true); } });
 app.addEventListener('mouseout', e=>{ const row=e.target.closest('#machineTable [data-mc]'); if(row){ highlightPin(row.dataset.mc,false); } });
-document.addEventListener('keydown', e=>{ if(e.key==='Escape'&&state.selected) setState({selected:null}); });
+document.addEventListener('keydown', e=>{
+  if(e.key!=='Escape') return;
+  if(state.selected) setState({selected:null}); else if(state.sheet) setState({sheet:null});
+});
+// An expandable card is a div with role="button": give it the keyboard behaviour a button has.
+app.addEventListener('keydown', e=>{
+  if((e.key==='Enter'||e.key===' ') && e.target.matches && e.target.matches('[role="button"][data-act]')){ e.preventDefault(); e.target.click(); }
+});
+/* Swipe a sheet or the machine drawer down to dismiss. One delegated set of handlers on `app` (the DOM under it
+   is rebuilt on every render, so nothing can be attached to the handle itself). The drag starts on the grab
+   handle / header only — never on the scrolling body, which would fight its scroll — and `touch-action:none`
+   on that strip stops the browser claiming the gesture. Past 80px, or a quick flick (>0.5px/ms), it closes
+   through the same setState the close button uses (so history stays in step); otherwise it springs back. */
+let _drag=null;
+app.addEventListener('pointerdown', e=>{
+  const h=e.target.closest('[data-drag]'); if(!h||e.target.closest('button,a,input,select,textarea')) return;
+  const panel=h.closest('[data-sheetpanel]'); if(!panel) return;
+  _drag={panel, id:e.pointerId, y0:e.clientY, t0:performance.now(), dy:0, act:panel.dataset.sheetpanel};
+  try{ h.setPointerCapture(e.pointerId); }catch(_){ }
+  panel.style.transition='none'; panel.style.animation='none';
+});
+app.addEventListener('pointermove', e=>{
+  if(!_drag||e.pointerId!==_drag.id||!_drag.panel.isConnected) return;
+  _drag.dy=Math.max(0,e.clientY-_drag.y0);
+  _drag.panel.style.transform=`translateY(${_drag.dy}px)`;
+});
+const _endDrag=e=>{
+  const d=_drag; if(!d||e.pointerId!==d.id) return; _drag=null;
+  if(!d.panel.isConnected) return;
+  const v=d.dy/Math.max(1,performance.now()-d.t0);
+  if(e.type!=='pointercancel' && (d.dy>80 || (v>0.5&&d.dy>12))){
+    if(d.act==='close') setState({selected:null}); else setState({sheet:null});
+  } else { d.panel.style.transition='transform .18s ease'; d.panel.style.transform=''; }
+};
+app.addEventListener('pointerup', _endDrag);
+app.addEventListener('pointercancel', _endDrag);
 
 // Viewport changes. Crossing the phone breakpoint (rotation, window resize, tablet split view)
 // re-picks the layout — driven off the media query rather than `resize`, because the query fires
@@ -9189,7 +9502,16 @@ function helpMount(){
   st.textContent=`#helpFab{transition:transform .14s,box-shadow .14s}#helpFab:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(217,106,18,.34)}
     #helpOv select:focus,#helpOv textarea:focus{border-color:#D96A12}
     #helpOv button[disabled]{opacity:.45;cursor:not-allowed}
-    @keyframes helpIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}`;
+    @keyframes helpIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+    /* the phone's own minimums (this form lives outside #app, so the main stylesheet's backstop does not reach it;
+       the 16px field size does — it is not scoped to #app) */
+    @media (max-width:820px),(max-height:500px) and (pointer:coarse){
+      #helpFab{min-height:48px}
+      #helpX{width:44px!important;height:44px!important}
+      #helpSend{min-height:48px}
+      #helpOv select,#helpOv textarea{min-height:46px}
+      #helpDerived,#helpCount{font-size:12px!important;color:#6E6A62!important}
+    }`;
   document.head.appendChild(st);
 
   const fab=document.createElement('button');
@@ -9438,17 +9760,20 @@ async function pwaInstall(){
   render();
 }
 function pwaBannerHTML(ph){
-  const strip=(bg,bd,inner)=>`<div style="display:flex;align-items:center;gap:10px;background:${bg};border:1px solid ${bd};border-radius:12px;padding:10px 12px;margin:${ph?'12px 0 0':'0 0 12px'}">${inner}</div>`;
+  const strip=(bg,bd,inner)=>`<div style="display:flex;align-items:center;gap:10px;background:${bg};border:1px solid ${bd};border-radius:12px;padding:8px 12px;min-height:52px;margin:${ph?'12px 0 0':'0 0 12px'}">${inner}</div>`;
   let out='';
   if(!PWA.online) out+=strip('#FBF1DA','#F0DDB0',`<span style="width:8px;height:8px;border-radius:50%;background:#E0A008;flex-shrink:0"></span>
     <div style="flex:1;font-size:12px;color:#5C4A12;line-height:1.35"><b>You're offline.</b> Showing the last data this phone loaded${lastUpdated?` (${E(lastUpdated)} IST)`:''}.</div>`);
-  const offer = ph && !PWA.standalone && !PWA.dismissed && (PWA.prompt || PWA.ios);
+  // The offer used to sit at the top of EVERY view until dismissed — ~100px of every page. It is shown on the
+  // landing view only; the dismissal persists as before. (The offline strip is different: it is information
+  // about the data on screen, so it stays on every view.)
+  const offer = ph && state.view==='map' && !PWA.standalone && !PWA.dismissed && (PWA.prompt || PWA.ios);
   if(offer) out+=strip('#FFFFFF','#E9E6DF',`<img src="icons/icon-192.png" alt="" width="30" height="30" style="border-radius:8px;flex-shrink:0">
     <div style="flex:1;min-width:0;font-size:12px;color:#46433d;line-height:1.35">${PWA.prompt
       ? '<b>Install the console</b> — opens from your home screen, works without signal.'
       : '<b>Add to Home Screen</b> — tap <b>Share</b> <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M8 11H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-2"/></svg> then <b>Add to Home Screen</b>.'}</div>
     ${PWA.prompt?`<button data-act="pwainstall" style="flex-shrink:0;padding:8px 12px;border:none;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Install</button>`:''}
-    <button data-act="pwadismiss" aria-label="Dismiss" style="flex-shrink:0;width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#9C988F;display:flex;align-items:center;justify-content:center;cursor:pointer">${I.closeS}</button>`);
+    <button data-act="pwadismiss" aria-label="Dismiss" style="flex-shrink:0;width:44px;height:44px;margin:-8px -8px -8px 0;border:none;background:none;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;display:flex;align-items:center;justify-content:center;pointer-events:none">${I.closeS}</span></button>`);
   return out;
 }
 

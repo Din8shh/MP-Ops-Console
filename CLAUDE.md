@@ -43,6 +43,64 @@ Territory→Cluster→Machine behaves identically on both.
   Load-more button. `render()` resets it whenever the filter signature changes, so a stale offset is
   never applied to a freshly-filtered (shorter) set.
 
+### Phone standards (the mobile audit, 2026-10-13 — `docs/mobile-plan.md`)
+The phone layout was audited against Apple HIG / Material 3 / WCAG 2.2 and brought up to these rules. Each is
+the non-obvious one a later edit would otherwise quietly break:
+
+- **Scroll position survives a re-render (`data-scroll`).** `render()` swaps `app.innerHTML`, which rebuilt every
+  scroller at 0 — so expanding a card, "Load more" or a filter select threw the reader to the top. Each scroll
+  container carries `data-scroll="<key>"` (`main:<view>`, `dmain:<view>`, `drawer:<mc>`, `ddrawer:<mc>`,
+  `sheet:<title>`); `render()` reads them before the swap and writes them back before `paint()`. **A changed
+  filter signature (`fsig`) is the one deliberate reset, and only for the page scrollers** — the filter sheet's
+  own scroller keeps its place while you pick. A new scroll container needs a key or it will snap to the top.
+  Tapping the tab you are already on scrolls it to the top and does not re-render.
+- **Back is a close, not an exit (`histSync` / `popstate`).** An installed PWA has no chrome; the hardware back
+  button used to quit the app from inside a drawer. Opening an overlay or changing view pushes one history
+  entry (`_hist`, phone only); Back undoes one step. A step closed by a TAP removes its own entry with
+  `history.go(-n)` + `_popIgnore`. **A tab picked from the More sheet closes the sheet AND changes the view in
+  one setState, so it `replaceState`s the sheet's entry into a view entry** — go() is async and a push straight
+  after it would land first. Anything that closes an overlay must go through `setState`, or history drifts.
+- **Landscape phones are phones.** `PHONE_MQ` is `(max-width:820px), (max-height:500px) and (pointer:coarse)`;
+  the same string is copied into the stylesheet's first `@media`. At 932×430 the width test alone gave the
+  desktop layout, whose filter bar and KPI strip filled the screen. Landscape then hides the weather banner
+  (`.mWx`), turns the bottom bar icon-beside-label (44px) and pads the shell by the left/right safe-area insets.
+- **Minimums on a phone: 44px targets, 16px fields, 11px text.** `ctlSel(mob)`, `seg(active, touch)`,
+  `zoomOverlayFor`, `refreshLink` and the sheet / drawer / call buttons carry them explicitly. **The shared
+  chromeless builders (Insights, Leaders, Products, Cumulative, Recap, MP products) are corrected by an
+  attribute-selector backstop in the phone `@media`** (`[style*="font-size:9px"]` → 11px, `min-height:44px` on
+  buttons / selects) rather than forked six ways — which also means a *new* inline `font-size` under 11px
+  there is quietly raised, and a new control needs no per-site work. `input,select,textarea{font-size:16px
+  !important}` is the one `!important` justified by every control sizing itself inline; it stops iOS zooming the
+  page on focus, and it reaches the concern form and PIN field because it is not scoped to `#app`.
+- **ink2 for small text.** `#9C988F` (ink3) is 2.9:1 on white; the phone `@media` lifts any inline
+  `color:#9C988F` (and SVG text with that fill) to `#6E6A62`. **The `C` token values are untouched** — only
+  which ink a piece of text wears changes. Use ink3 for disabled / decorative text only. The repeated label
+  patterns are the classes `.mLbl` / `.mCap`.
+- **Maps are drawn for a 1000-unit viewBox, so marks are sized in px × k.** `mapK(svg)` is map units per screen
+  pixel (≈1.1 on the desktop panel, ≈3 on a phone). Above k=1.5 (`touch`) labels, pins and bubbles are sized
+  `px*k`, a 44px hit area is added (an invisible disc per pin; the tap goes to the **nearest** pin, not the
+  last-painted disc), and labels carry `data-fs` so `applyTransform` divides them by the zoom. A bubble's
+  figure is shown only if it FITS. The desktop panel keeps its original sizes. The phone map box takes the
+  map's own aspect (`aspect-ratio: W/H`, `max-height:60vh`); zoom controls overlay its corner.
+- **Charts:** the phone's 400-unit charts are raised ×1.25 in `scaleChartText()` (once per SVG, `data-ts`),
+  and a tap places the crosshair (`touchstart`) and leaves it there.
+- **Animate only on open (`_ovFresh`).** `render()` rebuilds the whole tree on every state change, so an
+  animation on a sheet would replay each time a select inside it changed. `_ovKey` records the overlay of the
+  previous render; `.mSheetIn` / `.mScrimIn` are emitted only on the render in which it OPENS, and the same
+  flag is what moves focus to the dialog's close button. All animation sits inside
+  `prefers-reduced-motion:no-preference`.
+- **Sheets are dialogs.** `role="dialog" aria-modal`, a sticky footer (the filter sheet's "Show N machines"),
+  swipe-down dismissal on the grab handle / header only (`data-drag`, delegated on `app`, `touch-action:none`
+  there so it never fights the body's scroll), Escape closes drawer then sheet.
+- **A chromeless page's header names its OWN scope** (`mPageScope`), not the fleet filter's state — "Insights ·
+  All India", not "GJ Operations". The status stamp in the header is the refresh button. The PWA install offer
+  shows on the Map only; the offline strip stays on every view.
+- **Not testable in the preview browser:** the landscape `pointer:coarse` clause (the emulator does not set a
+  coarse pointer at ≥768px). The `max-width:820px` form of the same rules is, and is what was exercised.
+- **Local testing trap:** the app registers `sw.js` on `127.0.0.1`/`localhost`, and inside the desktop app's
+  preview pane the worker's own fetches fail, after which it serves its stale precache — you will be reading
+  yesterday's `index.html`. `navigator.serviceWorker.getRegistrations()` → `unregister()` right after load.
+
 **The desktop rail sizes itself off viewport HEIGHT, and that is load-bearing.** An admin carries twelve
 buttons — **thirteen under MP**, where the MP products view joins them; measured after that addition, all
 thirteen still fit unscrolled at a 620px viewport (clamped to 27px each) and the list starts scrolling around
