@@ -77,11 +77,18 @@ the non-obvious one a later edit would otherwise quietly break:
   which ink a piece of text wears changes. Use ink3 for disabled / decorative text only. The repeated label
   patterns are the classes `.mLbl` / `.mCap`.
 - **Maps are drawn for a 1000-unit viewBox, so marks are sized in px × k.** `mapK(svg)` is map units per screen
-  pixel (≈1.1 on the desktop panel, ≈3 on a phone). Above k=1.5 (`touch`) labels, pins and bubbles are sized
+  pixel (≈1.1 on the desktop panel, ≈3 on a phone). Under `mapTouch()` labels, pins and bubbles are sized
   `px*k`, a 44px hit area is added (an invisible disc per pin; the tap goes to the **nearest** pin, not the
   last-painted disc), and labels carry `data-fs` so `applyTransform` divides them by the zoom. A bubble's
-  figure is shown only if it FITS. The desktop panel keeps its original sizes. The phone map box takes the
-  map's own aspect (`aspect-ratio: W/H`, `max-height:60vh`); zoom controls overlay its corner.
+  figure is shown only if it FITS. The phone map box takes the map's own aspect (`aspect-ratio: W/H`,
+  `max-height:60vh`); zoom controls overlay its corner.
+  **Touch is decided by the INPUT, never by k.** `mapTouch()` is the phone layout or a `(hover:none)` device. The
+  first build keyed it on `k>1.5`, which a ~1024px desktop window also crosses: hit discs then covered the pins
+  and the mouse lost its hover labels and pin↔table highlight. A mouse always keeps the original marks.
+  **Weather labels are decluttered (`wxDeclutter`).** At a readable size the clustered western-MP districts
+  printed over each other. Biggest fleet first, a label is drawn whole, as its ran/total figure alone, or not at
+  all; it re-runs on every zoom (positions × zoom, sizes fixed), so pinching into a crowded patch brings its
+  labels back. A hidden label's district stays tappable and is listed under the map.
 - **Charts:** the phone's 400-unit charts are raised ×1.25 in `scaleChartText()` (once per SVG, `data-ts`),
   and a tap places the crosshair (`touchstart`) and leaves it there.
 - **Animate only on open (`_ovFresh`).** `render()` rebuilds the whole tree on every state change, so an

@@ -2248,10 +2248,44 @@ function geoKeyForState(){ if(state.st) return knownGeo(state.st)?state.st:'MP';
    out the same on both. Labels also carry data-fs (their size in px×k at scale 1) and are divided by the zoom in
    applyTransform, so pinching in grows the geography but not the type. */
 function mapK(svg){ const w=svg&&svg.clientWidth, h=svg&&svg.clientHeight; if(!w||!h||!W||!H) return 1; return Math.max(1, 1/Math.min(w/W,h/H)); }
+/* Touch sizing (bigger marks, invisible hit discs, tap-to-open pins) is decided by the INPUT, not by how squeezed
+   the map is. The first build keyed it on k>1.5, and a desktop window ~1024px wide crosses that: 461 transparent
+   discs then sat over the pins and swallowed the mouse, so hover labels and the pin↔table highlight died under a
+   pointer. The phone layout (including the desktop's phone preview) and any device whose primary input cannot
+   hover (a tablet on the desktop layout) get touch sizing; everything with a mouse keeps the original marks. */
+const mapTouch = () => state.device==='mobile' || window.matchMedia('(hover:none)').matches;
+// The weather map's territory labels, kept so a zoom can re-run the declutter (see wxDeclutter). null on any
+// other map.
+let _wxLbl=null;
+/* Weather labels collide in clustered districts (western MP holds Ratlam, Ujjain, Indore, Dewas, Dhar within a few
+   phone pixels), and at a readable size they printed over each other. Greedy declutter, biggest fleet first: a
+   label is drawn whole if its box is clear, as its ran/total figure alone if only that fits, and not at all
+   otherwise — the district stays tappable and is listed in "Territories by rainfall" below the map. Boxes are in
+   map units at scale 1 (positions × zoom, sizes fixed, since applyTransform holds the type at one screen size),
+   so pinching into a crowded patch brings its labels back. */
+function wxDeclutter(){
+  const L=_wxLbl; if(!L) return;
+  const s=scale, pad=L.pad, kept=[];
+  const clear=r=>!kept.some(o=>r.x0<o.x1&&r.x1>o.x0&&r.y0<o.y1&&r.y1>o.y0);
+  const rect=(x,y,w,yTop,yBot)=>({x0:x-w/2-pad,x1:x+w/2+pad,y0:y+yTop-pad,y1:y+yBot+pad});
+  L.items.forEach(it=>{
+    const X=it.cx*s, Y=it.cy*s;
+    const full=rect(X,Y,Math.max(it.wName,it.wNum),it.dyName-it.nameFs*.6,it.dyNum+it.numFs*.6);
+    const num=rect(X,Y,it.wNum,it.dyNum-it.numFs*.6,it.dyNum+it.numFs*.6);
+    let showName=false, showNum=false;
+    if(clear(full)){ kept.push(full); showName=showNum=true; }
+    else if(clear(num)){ kept.push(num); showNum=true; }
+    it.name.style.display=showName?'':'none';
+    it.num.style.display=showNum?'':'none';
+  });
+}
 function applyTransform(){
   if(!_g) return;
   _g.setAttribute('transform',`translate(${tx} ${ty}) scale(${scale})`);
   _g.querySelectorAll('[data-fs]').forEach(t=>t.setAttribute('font-size',(+t.dataset.fs/scale).toFixed(2)));
+  // A two-line label's offsets shrink with its type, or zooming in would pull the name and figure apart.
+  _g.querySelectorAll('[data-dy]').forEach(t=>t.setAttribute('y',(+t.dataset.cy + +t.dataset.dy/scale).toFixed(2)));
+  if(_wxLbl) wxDeclutter();
 }
 function mapHostEl(){ const svg=_g&&_g.ownerSVGElement; return svg&&svg.parentElement; }
 // While the map is locked it must NOT swallow touch — the mobile map sits inside a scrolling
@@ -2284,9 +2318,10 @@ function drawMap(hostId, metric){
   host.innerHTML='';
   const svg=document.createElementNS(NS,'svg'); svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width','100%'); svg.setAttribute('height','100%'); svg.style.display='block';
   const g=document.createElementNS(NS,'g'); svg.appendChild(g); host.appendChild(svg); _g=g;
+  _wxLbl=null;
   const k=mapK(svg);            // map units per screen px — see mapK
-  const touch=k>1.5;            // a phone-sized box (the desktop panel sits at ≈1.1 and keeps its original sizes)
-  const touchK=touch?Math.min(2,k/1.2):1;       // bubbles grow with the phone, but not so far that 20 of them overlap
+  const touch=mapTouch();       // a finger, not a mouse — see mapTouch
+  const touchK=touch?Math.max(1,Math.min(2,k/1.2)):1;   // bubbles grow with the phone, but not so far that 20 of them overlap
   applyTransform();
   const F=getF();
   const national = activeGeoKey==='__india';   // national map: features are STATES, group + drill by state
@@ -2314,21 +2349,28 @@ function drawMap(hostId, metric){
     g.appendChild(p);
   });
   if(isW){
+    // name ≈10.5px and the ran/total figure ≈12px on screen (never smaller than the desktop's own sizes)
+    const nameFs=touch?Math.max(9.5,10.5*k):9.5, numFs=touch?Math.max(12.5,12*k):12.5;
+    const items=[];
     Object.keys(byT).forEach(nm=>{ const c=coordsOf(nm); if(!c) return;
       const list=byT[nm], total=list.length, ran=list.filter(m=>m.acresY>0).length, rain=rainOfList(list,nm), ink=rainInk(rain), [cx,cy]=proj(c[0],c[1]);
-      const label=(list[0].territory)||nm;
-      const mk=(y,size,weight,fam,txt)=>{ const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',y);t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',fam);t.setAttribute('font-size',size);t.dataset.fs=size;t.setAttribute('font-weight',weight);t.setAttribute('fill',ink); t.style.pointerEvents='none'; t.textContent=txt; g.appendChild(t); };
-      // name ≈10.5px and the ran/total figure ≈12px on screen (never smaller than the desktop's own sizes)
-      const nameFs=touch?10.5*k:9.5, numFs=touch?12*k:12.5;
-      mk(cy-numFs*.5,nameFs,600,"'Noto Sans',sans-serif",label);
-      mk(cy+nameFs*.6,numFs,700,"'IBM Plex Mono',monospace",ran+'/'+total);
+      const label=(list[0].territory)||nm, fig=ran+'/'+total;
+      const mk=(dy,size,weight,fam,txt)=>{ const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',cy+dy);t.dataset.cy=cy;t.dataset.dy=dy;t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',fam);t.setAttribute('font-size',size);t.dataset.fs=size;t.setAttribute('font-weight',weight);t.setAttribute('fill',ink); t.style.pointerEvents='none'; t.textContent=txt; g.appendChild(t); return t; };
+      const dyName=-numFs*.5, dyNum=nameFs*.6;
+      items.push({ total, cx, cy, nameFs, numFs, dyName, dyNum,
+        wName: label.length*0.56*nameFs, wNum: fig.length*0.62*numFs,      // ≈ glyph advance of Noto Sans 600 / Plex Mono
+        name: mk(dyName,nameFs,600,"'Noto Sans',sans-serif",label),
+        num:  mk(dyNum,numFs,700,"'IBM Plex Mono',monospace",fig) });
     });
+    items.sort((a,b)=>b.total-a.total);
+    _wxLbl={ items, pad: 2*k };
+    wxDeclutter();
     attachPanZoom(svg); drawLegend('weather'); return;
   }
   const val=(list)=>{ if(metric==='active')return list.filter(m=>acD(m)>0).length; if(metric==='acresY')return list.reduce((s,m)=>s+acD(m),0); return list.length; };
   let maxV=1; Object.values(byT).forEach(l=>maxV=Math.max(maxV,val(l)));
   const rOf=v=>(6+30*Math.sqrt(v/maxV))*touchK;
-  const numFs=touch?11*k:12;   // a bubble's figure renders at ≈11px on screen
+  const numFs=touch?Math.max(12,11*k):12;   // a bubble's figure renders at ≈11px on screen
   const wedge=(cx,cy,r,a0,a1,fill)=>{ const x0=cx+r*Math.cos(a0),y0=cy+r*Math.sin(a0),x1=cx+r*Math.cos(a1),y1=cy+r*Math.sin(a1),lg=(a1-a0)>Math.PI?1:0; const pa=document.createElementNS(NS,'path'); pa.setAttribute('d',`M${cx} ${cy}L${x0.toFixed(1)} ${y0.toFixed(1)}A${r} ${r} 0 ${lg} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}Z`); pa.setAttribute('fill',fill); return pa; };
   Object.keys(byT).sort((a,b)=>val(byT[b])-val(byT[a])).forEach(name=>{
     const list=byT[name], c=coordsOf(name); if(!c) return;
@@ -2383,7 +2425,8 @@ function drawPins(hostId){
   const svg=document.createElementNS(NS,'svg'); svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width','100%'); svg.setAttribute('height','100%'); svg.style.display='block';
   const g=document.createElementNS(NS,'g'); svg.appendChild(g); host.appendChild(svg); _g=g;
   const k=mapK(svg);                      // map units per screen px — see mapK
-  const touch=k>1.5, pinR=touch?3.2*k:4.2, pinRHover=touch?pinR*1.8:7.5, lblFs=touch?12*k:13, lk=lblFs/13;
+  _wxLbl=null;
+  const touch=mapTouch(), pinR=touch?Math.max(4.2,3.2*k):4.2, pinRHover=touch?pinR*1.8:7.5, lblFs=touch?Math.max(13,12*k):13, lk=lblFs/13;   // see mapTouch
   applyTransform();
   BASE.features.forEach(f=>{ const p=document.createElementNS(NS,'path'); p.setAttribute('d',pathOf(f.geometry)); p.setAttribute('fill','#F1EEE8'); p.setAttribute('stroke','#FFFFFF'); p.setAttribute('stroke-width','1'); g.appendChild(p); });
   const outline=document.createElementNS(NS,'path'); let od=''; BASE.features.forEach(f=>od+=pathOf(f.geometry)); outline.setAttribute('d',od); outline.setAttribute('fill','none'); outline.setAttribute('stroke','#DDD4C6'); outline.setAttribute('stroke-width','0.8'); g.appendChild(outline);
@@ -2830,7 +2873,9 @@ function vals(){
       // Health must not ride on the dot's colour alone (red/amber/green is exactly the pair a red-green reader
       // cannot separate), so a machine that is down or idle carries the word beside its number.
       hword: hs==='Breakdown'?'Down':hs==='Idle'?'Idle':'',
-      acresLabel: acD(m)>0? fmt(acD(m))+' ac' : (m.breakdown?'down':'idle') }; });
+      // The right-hand column is acres only. It used to print "idle"/"down" when there were none, which repeated
+      // the hword beside the number ("Idle … idle"); the state is said once, by the word, and this says 0 ac.
+      acresLabel: acD(m)>0? fmt(acD(m))+' ac' : '0 ac' }; });
 
   return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, rows, terrTable, wetTerr, amRows, bmRows, pendRows, pendCount:pendAll.length, machineTable, mobileList, d, wxDay:wxDayIdx(S.wxDay),
     multiState, stOptions, stName:(S.st?(STATE_NAMES[S.st]||S.st):''), canSwitchStates:gateCanSwitchStates(),
