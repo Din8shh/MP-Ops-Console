@@ -13,6 +13,10 @@ HTML/CSS/JS + inline-SVG maps. Same deploy shape as `din8shh.github.io/MP-map-vi
   every view consumes. Used as the demo/fallback dataset.
 - `mapdata.js` — `export const BASE` (MP district GeoJSON) + `COORDS` (territory
   centroids). Reused directly for map geometry.
+- `wheat-demo.js` — 235 **DUMMY** rows (`export const WHEAT_DEMO`, HR + PB) for the Wheat North project while its
+  sheet tab does not exist. Invented names/numbers/acres, generated once; same object shape as `machines.js`.
+- `manifest.webmanifest`, `sw.js`, `icons/` — the PWA (see **PWA** below). `icons/icon.svg` is the source; the PNGs
+  were rasterised from it with macOS `qlmanage -t` + `sips` (no ImageMagick here).
 
 ## Layout / responsive
 `state.device` picks `desktopHTML` vs `mobileHTML`; it is seeded from — and re-synced on every
@@ -611,6 +615,12 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | `admin` | All / UPL / SWAL / Open | all, switchable | all of them |
 | `lead` (leadership) | All / UPL / SWAL | all, switchable | Products, Cumulative, MP products |
 | `upl` / `swal` × 7 states | one, forced | one, locked | MP products (the two **MP** logins only) |
+| **Wheat** `admin` (`wh-admin`, 4040) | All / UPL / SWAL / Open | HR + PB, switchable | every Wheat view |
+| **Wheat** `wstate` × HR / PB (4811 / 4711) | All / UPL / SWAL | one, locked | Territory, AMs, FOs, Retailers |
+| **Wheat** `wsales` × HR / PB (4822 / 4722) | All / UPL / SWAL | one, locked | **placeholder** = the state PIN's; to be decided |
+
+The Wheat rows carry `project:'wheat'`; see **Projects** below. The Kharif admin (0088) does NOT see Wheat, and
+the Wheat admin does not see Kharif — "separated by PIN" is the requirement.
 
 Map, Machine locations, Weather and Business managers are the **baseline every login gets**; `GATED_VIEWS` lists
 the rest, and `roleHidesView` grants one only if the role is admin or names it in `views`. Putting the grant on
@@ -630,6 +640,65 @@ note above.) A state-locked role handed either one would
 read its way straight out of its scope — if that is ever wanted, gate those two pickers first (Insights already
 shows the pattern: filter the options by `gateAllowsState` and render the picker only when
 `gateCanSwitchStates()`).
+
+## Projects — Kharif and Wheat North (picked by PIN)
+One console, two programmes. `PROJECTS` (next to `CONFIG`) holds one entry per programme, and each
+`GATE.ROLES` row names its `project` (absent = `kharif`). `curProject()` is read at RUNTIME only, because the
+gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab: the same machines as Kharif, with
+some added and some not carried over, on a new tab of the SAME workbook that does not exist yet.
+
+- **Data is per project.** `liveUrl()` reads the project's `gid`; Kharif keeps `CONFIG.sheetName` byte-for-byte.
+  A blank `gid` runs on the project's `demo` rows. **To take Wheat live, set `PROJECTS.wheat.gid` to the new
+  tab's gid.** If its columns are Sheet1's, nothing else changes. `states` is the outer scope: `loadData()` drops
+  any row outside it, whatever the tab holds. `fullDeploy` replaced the global `FULL_DEPLOY`. Wheat has none,
+  because not every machine is in that programme, so the `Deployed status` flag counts there. The acres override
+  still applies. `MP_PLAN` is added only under Kharif. **The first build leaked it: the Wheat Plan KPI read
+  735 instead of 235.**
+- **View gating has three layers, in order.** First, `projectHidesView` runs at the top of `roleHidesView`, so
+  it binds admin too. A project with a `views` list sees only those. Kharif, with no list, sees everything
+  except a view another project claims in `only` (Wheat's `fo` / `retailer`). Then come the existing scope test
+  and role test. Every Kharif-tab view (Insights, Cumulative, Products, MP products, Leaders, Yesterday) is
+  therefore unreachable under Wheat, by the rail, the phone bar and `render()`'s bounce guard alike.
+- **Kharif's side tabs stay Kharif's (`kharifTabs`).** Wheat never fetches the operator contest, and
+  `opRank` returns null outside Kharif. Without that, a Wheat operator who also drove in Kharif would wear his
+  Kharif `#N India` badge on a Wheat screen.
+- **Switching project RELOADS the page** (`gateSave`). This covers a Wheat PIN typed at a Kharif re-prompt and the
+  reverse. `ROWS`, weather, the contest and the side-tab caches are all module state holding the old project's
+  data. A reload is the one reset that cannot miss one of them, and `gateRestore` then boots straight into the
+  new project.
+- Header, title, the State control's all-scope label (`allLabel`: "North · HR + PB") and the GA `page_title` /
+  `project` property come from the project. The PIN card stays generic because the project is unknown until
+  the PIN is entered. The concern button stays Kharif-only: it keys on `upl`/`swal`, and its tab is Kharif's.
+- **Field officers (`fo`) and Retailers (`retailer`) — TENTATIVE, the spec is not final.** Both are trees built
+  in `vals()` (`grpRow` / `mcRow`) in the SAME row shape as the AM/BM trees. They render through
+  `hierTableHTML`, which am/bm now share too since the two were verified identical, and through `mHierCardHTML`
+  on the phone. An FO and a retailer are each keyed on their **mobile**, with the name as the fallback, the
+  identity rule operators already follow. Both view chains carry them (`contentHTML` + an explicit `mobileHTML`
+  branch).
+
+## PWA
+The console installs to the home screen and opens with no signal. It is one app for every project; the PIN
+picks the project. `sw.js` is **network-first for everything**, and that is deliberate. Cache-first would need
+a cache-version bump on every push to `main`, or phones would keep running a stale `index.html` for days. With
+network-first, a push is live on the next online open, with no version to remember.
+
+- **SHELL** (same origin: html, js modules, every state's geometry, icons) is pre-cached on install.
+- **DATA** (every Google Sheets tab + Open-Meteo) is keyed with the **`t=` cache-buster removed**, otherwise no
+  offline request would ever match. An offline answer carries `X-SW-Cached-At`, and `loadData()` turns that into
+  `dataMode='offline'`, an amber dot reading "Offline · data as of …". The last real data is shown and **never
+  passed off as live**. Weather is cached for the same reason; without it the app shows simulated rain under a
+  Live badge. A non-OK response (429, 500) is returned as-is, never swapped for the cache.
+- The page side lives in `PWA` / `pwaBannerHTML` / `pwaInstall`. The install offer is a dismissible strip at
+  the top of the phone scroller, **not** in the More sheet: a field login has four views and so no More
+  button. Android gets a real Install button (`beforeinstallprompt`); iOS gets the Share → Add to Home Screen
+  line. Neither shows when running installed. Going offline shows a strip; coming back online re-fetches at once.
+- `apple-mobile-web-app-status-bar-style` is `default`, not `black-translucent`. The phone header is white, and
+  translucent would put white status-bar text on it.
+- **Privacy trade-off:** the DATA cache keeps the sheet, phone numbers included, on the device after the PIN
+  expires. That is what offline means, and the gate was always soft. If that is ever unacceptable, clear
+  `ops-data-v1` in `gateLock()`, at the cost of offline access.
+- The worker runs on https and localhost only. A cache entry can be checked from the console with
+  `caches.open('ops-data-v1')`.
 
 ## Raise a concern (the only WRITE path in the app)
 A floating button for **field logins only** (`upl`/`swal`) → a small form → one appended row on the workbook's

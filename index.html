@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>India Operations Dashboard</title>
 <meta name="description" content="Live ops-control console for the UPL 1+1=11 Kharif farm-mechanisation programme across India.">
+<!-- PWA: installable to the home screen, opens offline (sw.js). One app for every project — the PIN picks it. -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#FFFFFF">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Ops Console">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -83,6 +92,7 @@
 
 <script type="module">
 import { MACHINES as MACHINES_MOCK } from './machines.js';
+import { WHEAT_DEMO } from './wheat-demo.js';
 import { BASE as MP_BASE, COORDS as MP_COORDS } from './mapdata.js';
 let BASE = MP_BASE, COORDS = MP_COORDS;   // ACTIVE geometry — defaults to MP; swapped per active state (Phase 4)
 
@@ -166,7 +176,7 @@ const fmt = n => Math.round(n).toLocaleString('en-IN');
    names or phone numbers. */
 const GA_ON = () => typeof window.gtag==='function' && window.GA_ID && window.GA_ID!=='G-XXXXXXX';
 function track(name, params){ if(GA_ON()){ try{ window.gtag('event', name, params||{}); }catch(_){ } } }
-function trackView(view){ track('page_view', { page_title:'MP Ops · '+view, view_name:view, role:(GATE.cur&&GATE.cur.role)||'', org:state.org, mp_state:state.st||'all' }); }
+function trackView(view){ track('page_view', { page_title:curProject().short+' · '+view, project:curProject().id, view_name:view, role:(GATE.cur&&GATE.cur.role)||'', org:state.org, mp_state:state.st||'all' }); }
 
 /* ============================= data layer ============================= */
 // ⬇️ Point this at the NEW per-machine sheet. Two options:
@@ -178,6 +188,38 @@ const CONFIG = { csvUrl:'', sheetId:'1YFZD6RoccFJulCMyZB0jF0Z7ZoRU-8YaAMr6as8MTB
 // Independent of the per-machine data; fetched on demand for the admin-only Cumulative view. Uses gid (the tab's
 // numeric id) rather than a name so a tab rename doesn't silently fall back to Sheet1.
 const SNAKE_GID = '603091795';
+/* ----------------------------- projects (picked by PIN) -----------------------------
+   One console, two programmes. The PIN decides which: every GATE.ROLES row carries `project` (absent = kharif),
+   and nothing a project shows may come from another's data. `curProject()` is read at RUNTIME — never at module
+   load — because the gate is what sets it.
+   · `gid`        the project's machine tab (one row per machine, Sheet1's columns). Blank = run on `demo`.
+                  Kharif keeps reading CONFIG.sheetName, so its path is byte-for-byte unchanged.
+   · `states`     rows outside these are dropped at load — the data, not the PIN, is the outer scope.
+   · `fullDeploy` states whose rows all count as deployed (see the deployed-flag note in CLAUDE.md). Wheat has
+                  none: some of its machines are not in this programme, so the `Deployed status` flag counts.
+   · `views`      null = every view (Kharif, today's behaviour). A list = only these, ahead of any role grant —
+                  projectHidesView() runs first in roleHidesView(), so it binds admin too.
+   · `only`       views that exist for THIS project alone (Wheat's FO / Retailer pages); hidden everywhere else.
+   · `kharifTabs` the side tabs (operator contest, snake, products …) belong to Kharif ONLY. Wheat skips the
+                  contest fetch and opRankChip prints nothing there, or a wheat operator would wear his Kharif rank. */
+const PROJECTS = {
+  kharif: { id:'kharif', title:'India Operations Dashboard', short:'India Ops', allLabel:'All India',
+            gid:'', demo:MACHINES_MOCK, states:null, fullDeploy:['MP','PB','HR','RJ'], views:null, kharifTabs:true,
+            // header copy: `sc` is the scope label (state code, 'India', or the sole state) — see vals().scopeLabel
+            head:sc=>`${sc} Operations Dashboard`, sub:'1+1=11 Kharif Programme · Farm Mechanisation Services',
+            mHead:sc=>`${sc} Operations`, mSub:'1+1=11 Kharif · AFS' },
+  wheat:  { id:'wheat', title:'Wheat Spray Operations — North', short:'Wheat North', allLabel:'North · HR + PB',
+            gid:'' /* ← the wheat machine tab's gid, once it exists in the workbook. Blank = dummy data. */,
+            demo:WHEAT_DEMO, states:['HR','PB'], fullDeploy:[],
+            views:['map','tables','machines','weather','am','bm','pending','fo','retailer'], only:['fo','retailer'], kharifTabs:false,
+            head:sc=>`Wheat Spray Operations · ${sc==='India'?'North':sc}`, sub:'Wheat Spray Programme · Haryana + Punjab',
+            mHead:sc=>`Wheat Spray · ${sc==='India'?'North':sc}`, mSub:'Wheat North · AFS' },
+};
+const curProject = () => PROJECTS[(GATE.cur && GATE.cur.project) || 'kharif'];
+// A project with a `views` list sees only those. One without (Kharif) sees everything EXCEPT a view another project
+// claims as its `only` — so a project-specific page never surfaces in a programme it was not built for.
+const projectHidesView = v => { const P=curProject();
+  return P.views ? !P.views.includes(v) : Object.values(PROJECTS).some(q=>q!==P && (q.only||[]).includes(v)); };
 // Phase-5 staging override (localhost ONLY): repoint the data source at a COPY sheet for multi-state testing
 // without ever committing a non-live id. Committed CONFIG always keeps the LIVE sheet, so nothing needs reverting
 // at cutover and production is unaffected (this block is inert off localhost). Usage:
@@ -227,8 +269,9 @@ const canonTerr = s => { s=String(s||'').trim(); return TERR_CANON[s.toLowerCase
 // Multi-state: canonicalise a free-text state value (code or name, any casing/punctuation) to a 2-letter code.
 // Blank → 'MP' so the single-state MP sheet (no State column yet) behaves exactly as before.
 const STATE_NAMES = { MP:'Madhya Pradesh', MH:'Maharashtra', TG:'Telangana', GJ:'Gujarat', RJ:'Rajasthan', PB:'Punjab', HR:'Haryana' };
-// States where every sheet row counts as deployed regardless of the "Deployed status" column (their sheets list all machines as deployed).
-const FULL_DEPLOY = new Set(['MP','PB','HR','RJ']);
+// States where every sheet row counts as deployed regardless of the "Deployed status" column (their sheets list all
+// machines as deployed). Per PROJECT: Kharif's MP/PB/HR/RJ; Wheat has none.
+const fullDeploy = st => curProject().fullDeploy.includes(st);
 const STATE_ALIAS = { mp:'MP', madhyapradesh:'MP', mh:'MH', maharashtra:'MH', tg:'TG', ts:'TG', telangana:'TG', gj:'GJ', guj:'GJ', gujarat:'GJ', rj:'RJ', raj:'RJ', rajasthan:'RJ', pb:'PB', pun:'PB', punjab:'PB', hr:'HR', har:'HR', haryana:'HR' };
 function canonState(v){ const raw=String(v||'').trim(); if(!raw) return 'MP'; const k=raw.toLowerCase().replace(/[^a-z]/g,''); return STATE_ALIAS[k] || (STATE_NAMES[raw.toUpperCase()]?raw.toUpperCase():raw); }
 const ensureSt = rows => (rows.forEach(m=>{ if(!m.st) m.st=canonState(m.state); }), rows); // demo/mock rows lack st → default MP
@@ -249,10 +292,13 @@ let ALL_ROWS = MACHINES_MOCK;    // deployed + not-yet-deployed (plan) — drive
 // Every dataset flows through here: ALL_ROWS keeps the full set, ROWS is the deployed subset (mock rows lack a
 // `deployed` flag → treated as deployed so demo/fallback behaves exactly as before).
 function applyRows(rows){ ALL_ROWS=rows; ROWS=rows.filter(m=>m.deployed!==0); }
-let dataMode = 'demo';      // 'demo' | 'live' | 'error'
+let dataMode = 'demo';      // 'demo' | 'live' | 'offline' (last real data, served by sw.js) | 'error'
 let lastUpdated = '';
+function istTime(ms){ try{ return new Date(ms).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'}); }catch(_){ return new Date(ms).toLocaleString(); } }
 function nowIST(){ try{ return new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'}); }catch(_){ return new Date().toLocaleTimeString(); } }
 function liveUrl(){
+  const P=curProject();
+  if(P.id!=='kharif') return (CONFIG.sheetId && P.gid) ? `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${P.gid}&t=${Date.now()}` : '';
   if(CONFIG.csvUrl) return CONFIG.csvUrl + (CONFIG.csvUrl.includes('?')?'&':'?') + 't=' + Date.now();
   if(CONFIG.sheetId) return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(CONFIG.sheetName)}&t=${Date.now()}`;
   return '';
@@ -362,8 +408,8 @@ function rowsToMachines(grid){
     const worked = achieved>0 || mtd>0 || acresY>0 || acresT>0 || iotAcresY>0;
     const flagged = txt(g(col.dep)).trim().toLowerCase()==='yes';
     const known = !!STATE_NAMES[st];
-    const deployed = FULL_DEPLOY.has(st) ? 1 : (flagged || (worked && known)) ? 1 : 0;
-    if(!FULL_DEPLOY.has(st) && !flagged && worked){
+    const deployed = fullDeploy(st) ? 1 : (flagged || (worked && known)) ? 1 : 0;
+    if(!fullDeploy(st) && !flagged && worked){
       if(known){ depFlips++; depFlipAc+=achieved; }
       else { orphans++; orphanAc+=achieved; orphanSt[st]=(orphanSt[st]||0)+achieved; }
     }
@@ -468,14 +514,20 @@ function canonicalizeByMobile(rows){
 // first load (no geometry yet) — loadWeather re-runs it the moment the district files arrive.
 const hygiene = rows => { canonicalizeNames(canonicalizeByMobile(ensureSt(rows))); alignTerritories(rows); return rows; };
 async function loadData(){
-  const url=liveUrl();
-  if(!url){ dataMode='demo'; applyRows(hygiene(MACHINES_MOCK)); lastUpdated=nowIST(); render(); loadWeather(); return; }
+  const url=liveUrl(), P=curProject();
+  // The project's state list is the outer scope: a row outside it never reaches a view, whatever the tab holds.
+  const scoped = rows => P.states ? rows.filter(m=>P.states.includes(m.st)) : rows;
+  const demo = () => scoped(hygiene(P.demo.map(m=>({...m}))));
+  if(!url){ dataMode='demo'; applyRows(demo()); lastUpdated=nowIST(); render(); loadWeather(); return; }
   try{
     const res=await fetch(url); if(!res.ok) throw new Error('HTTP '+res.status);
     const machines=rowsToMachines(parseCSV(await res.text()));
     if(!machines.length) throw new Error('no rows parsed');
-    applyRows(hygiene(machines)); dataMode='live'; lastUpdated=nowIST(); render(); loadWeather();
-  }catch(e){ applyRows(hygiene(MACHINES_MOCK)); dataMode='error'; lastUpdated=nowIST(); render(); loadWeather(); console.error('CSV load failed:', e); }
+    // A response the service worker answered from its cache (offline) carries the time it was fetched. It is the
+    // last REAL data, so it is used — but labelled, never passed off as live (see sw.js).
+    const cachedAt=res.headers.get('x-sw-cached-at');
+    applyRows(scoped(hygiene(machines))); dataMode=cachedAt?'offline':'live'; lastUpdated=cachedAt?istTime(+cachedAt):nowIST(); render(); loadWeather();
+  }catch(e){ applyRows(demo()); dataMode='error'; lastUpdated=nowIST(); render(); loadWeather(); console.error('CSV load failed:', e); }
 }
 
 /* ===================== cumulative "snake chart" data =====================
@@ -1700,6 +1752,7 @@ function oplbA(){
    an invented placing would be worse than none.
 -------------------------------------------------------------------------- */
 function opRank(numOrMob){
+  if(!curProject().kharifTabs) return null;   // the contest is a Kharif tab: no other project's operator carries its rank
   if(!OPLB.loaded) return null;
   const k = oplbMob(numOrMob); if(!k) return null;
   const A = oplbA();
@@ -1829,7 +1882,7 @@ function getF(){
 // ---- Plan (deployed + not-yet-deployed) ----------------------------------------
 // MP is a special case: its plan is a fixed programme target (not derivable from the sheet, which shows every MP
 // row as already deployed). Other states derive plan from ALL_ROWS (deployed + pending), incl. Open machines.
-const MP_PLAN = { UPL:270, SWAL:230 };   // MP total = 500
+const MP_PLAN = { UPL:270, SWAL:230 };   // MP total = 500 — a KHARIF programme constant; never added under another project
 // Rows in the current scope (state/geo/team filters, incl. search) but NOT org/health — org is split out for the
 // per-org Plan number, health is a deployed-only concept. Used by both the Plan KPI and the Pending view.
 function planScope(rows){
@@ -1854,7 +1907,7 @@ function planTotals(){
   let upl=0, swal=0, open=0;
   planScope(ALL_ROWS).forEach(m=>{ if(m.st==='MP') return;
     if(m.org==='UPL') upl++; else if(m.org==='SWAL') swal++; else open++; });
-  if((!S.st || S.st==='MP') && !subActive){ upl+=MP_PLAN.UPL; swal+=MP_PLAN.SWAL; }
+  if(curProject().id==='kharif' && (!S.st || S.st==='MP') && !subActive){ upl+=MP_PLAN.UPL; swal+=MP_PLAN.SWAL; }
   return { upl, swal, open, total:upl+swal+open };
 }
 function isAdmin(){ return !!(GATE.cur && GATE.cur.role==='admin'); }
@@ -1867,8 +1920,11 @@ function isAdmin(){ return !!(GATE.cur && GATE.cur.role==='admin'); }
 // 'mpprod' is the exception to that constraint rather than a breach of it: its tab holds Madhya Pradesh and
 // nothing else, and it renders NO state picker, so it cannot widen anybody's scope. It is safe to grant to a
 // state-locked MP login, and is granted to exactly those two plus leadership.
-const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod'];
+const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer'];
 function roleHidesView(view){
+  // The PROJECT is the outer gate and runs first, so it binds admin too: a Wheat login never sees a Kharif-tab
+  // view, and the Wheat-only views never appear under Kharif.
+  if(projectHidesView(view)) return true;
   if(!GATED_VIEWS.includes(view)) return false;
   // The MP product summary reads a Madhya-Pradesh-only tab, so it is offered only while the ACTIVE STATE SCOPE
   // is MP — not at All India, and not under another state. This is a scope test, not a role test, and it runs
@@ -2315,6 +2371,10 @@ const I = {
   // MP products by territory: parcelled ground with one cell broken out — products grouped inside territories.
   // Deliberately unlike the Products flask, since the two sit next to each other in the rail.
   mpprod:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"/><path d="M14 17.25h6.5M17.25 14v6.5"/></svg>',
+  // Field officer: a person with a clipboard line beside him — the man on the ground, not a manager (AM/BM icons).
+  fo:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="7" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M17 8h4M17 12h4M17 16h3"/></svg>',
+  // Retailer: a shopfront with an awning.
+  retailer:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 10v10h16V10"/><path d="M3 10 5 4h14l2 6c0 1.4-1.3 2.2-2.6 2.2S16 11.4 16 10c0 1.4-1.1 2.2-2.4 2.2h-.2C12.1 12.2 12 11.4 12 10c0 1.4-.1 2.2-1.4 2.2h-.2C9.1 12.2 8 11.4 8 10c0 1.4-1.1 2.2-2.4 2.2S3 11.4 3 10Z"/><path d="M10 20v-5h4v5"/></svg>',
   mobile:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/></svg>',
   more:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>',
   filter:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 5h18M6 12h12M10 19h4"/></svg>',
@@ -2338,7 +2398,7 @@ function vals(){
   // With single-state MP data this is false, so every branch below falls through to the original behaviour.
   const allStates=[...new Set(ROWS.map(m=>m.st))];
   const multiState=allStates.length>1;
-  const stOptions=[{v:'',t:'All India'},...allStates.slice().sort().map(c=>({v:c,t:STATE_NAMES[c]||c}))];
+  const stOptions=[{v:'',t:curProject().allLabel},...allStates.slice().sort().map(c=>({v:c,t:STATE_NAMES[c]||c}))];
   // When a state is selected, every filter dropdown lists only that state's territories/AMs/COs/BMs/TMs.
   // Geo lists use deployed ROWS (clean district names); team lists use ALL_ROWS so managers with only pending
   // (not-yet-deployed) machines still appear. All-India (no state) keeps the full, cross-state lists.
@@ -2539,6 +2599,46 @@ function vals(){
     }
   });
 
+  // Field officer + Retailer views (Wheat North; TENTATIVE — the spec is not final). Same row shape and grid as the
+  // AM/BM trees above, so the desktop table and the phone's mHierCardHTML render them with no new markup. A field
+  // officer is keyed on his MOBILE (name as the fallback), the identity rule operators already follow — two FOs
+  // who share a name must not merge, one FO typed two ways must. Display name is the dominant spelling.
+  const subS={fontSize:'10.5px',color:'#9C988F',marginTop:'1px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'250px'};
+  const grpRow=(key,depth,role,chip,name,sub,list,contact)=>{ const r=roll(list), exp=!!S.expanded[key];
+    return { click:{act:'exp',key}, indent:(depth*20)+'px',
+      rowStyle:{...grid5am,padding:(depth?'10px':'12px')+' 18px',borderTop:'1px solid '+['#F2F0EB','#F4F2EE','#F6F4F0'][depth],cursor:'pointer',background:exp?(depth?'#FCFBF9':'#FBFAF8'):'#fff'},
+      chev:exp?'▾':'▸', chevStyle:{fontSize:depth?'9px':'10px',color:depth?'#C4BFB5':'#B6B1A8',width:'12px'}, role, roleStyle:chip, dotStyle:{display:'none'},
+      name, nameStyle:depth?{fontSize:'12.5px',fontWeight:600,color:'#46433d',whiteSpace:'nowrap'}:{fontSize:'13.5px',fontWeight:600,whiteSpace:'nowrap'}, sub, subStyle:depth?subS:{fontSize:'11px',color:'#9C988F',marginTop:'1px'},
+      deployed:r.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(r), opMap:opMapLabel(r),
+      contact:contact||'', callTel:'tel:'+(contact||''), callStyle:callBtn, _exp:exp }; };
+  const mcRow=(m,depth,sub)=>{ const hs=hstate(m), p=pctOf(m);
+    return { click:{act:'open',mc:m.mc}, indent:(depth*20)+'px',
+      rowStyle:{...grid5am,padding:'8px 18px',borderTop:'1px solid #F6F4F0',cursor:'pointer',background:'#fff'},
+      chev:'', chevStyle:{width:'12px'}, role:'', roleStyle:{display:'none'}, dotStyle:{width:'7px',height:'7px',borderRadius:'50%',background:hcolor(hs),flexShrink:0,display:'block'},
+      name:m.mc, nameStyle:{fontFamily:"'IBM Plex Mono'",fontSize:'12px',fontWeight:500,whiteSpace:'nowrap'}, sub, rank:opRankChip(m.opNum,'s'), subStyle:subS,
+      deployed:m.org, orgBarStyle:{display:'none'}, orgUStyle:{display:'none'},orgSStyle:{display:'none'},orgOStyle:{display:'none'},
+      mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
+      paceBarStyle:{display:'block',height:'100%',width:Math.min(100,100*p)+'%',background:C.act}, acresLabel:`${fmt(m.achieved)} / ${fmt(m.target)}`, ranY:fmt(acD(m)), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk),
+      contact:m.opNum, callTel:'tel:'+m.opNum, callStyle:callBtn }; };
+  const groupBy=(list,keyOf)=>{ const g={}; list.forEach(m=>{ (g[keyOf(m)] ||= []).push(m); }); return Object.entries(g).sort((a,b)=>b[1].length-a[1].length||a[0].localeCompare(b[0])); };
+  const retKey=m=>phoneKey(m.retailerMob)||('n:'+(m.retailerName||'Unassigned'));
+  const foRows=[], foGroups=groupBy(F, m=>phoneKey(m.foMob)||('n:'+(m.foName||'Unassigned')));
+  foGroups.forEach(([k,list])=>{
+    const key='fo:'+k, rets=groupBy(list,retKey), terrs=[...new Set(list.map(m=>m.territory))];
+    const row=grpRow(key,0,'FO',roleChip(C.softO,C.orangeD),dominantName(list,'foName')||'Unassigned',`${rets.length} retailer${rets.length===1?'':'s'} · ${terrs.join(', ')}`,list,list[0].foMob);
+    foRows.push(row); if(!row._exp) return;
+    rets.forEach(([rk,rl])=>{
+      const r2=grpRow(key+'|ret:'+rk,1,'RET',roleChip('#EFEAF9','#6A5AC4'),dominantName(rl,'retailerName')||'Unassigned',rl[0].retailerLoc||rl[0].territory,rl,rl[0].retailerMob);
+      foRows.push(r2); if(r2._exp) rl.forEach(m=>foRows.push(mcRow(m,2,m.opName+' · '+m.territory)));
+    });
+  });
+  const retRows=[], retGroups=groupBy(F,retKey);
+  retGroups.forEach(([k,list])=>{
+    const key='ret:'+k, fo=dominantName(list,'foName');
+    const row=grpRow(key,0,'RET',roleChip('#EFEAF9','#6A5AC4'),dominantName(list,'retailerName')||'Unassigned',[list[0].retailerLoc||list[0].territory, fo&&('FO · '+fo)].filter(Boolean).join(' · '),list,list[0].retailerMob);
+    retRows.push(row); if(row._exp) list.forEach(m=>retRows.push(mcRow(m,1,m.opName+' · '+m.territory)));
+  });
+
   // Pending Deployment view (admin) — not-yet-deployed machines grouped AM → Cluster Officer → Machine.
   // Sourced from ALL_ROWS (the pending rows never enter ROWS/F, so they stay out of every other view). Full-deployment
   // states (MP/PB/HR/RJ) have no pending rows (all their sheet rows are treated as deployed), so this view is empty for them.
@@ -2627,12 +2727,12 @@ function vals(){
   return { tot, kpis, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, rows, terrTable, wetTerr, amRows, bmRows, pendRows, pendCount:pendAll.length, machineTable, mobileList, d, wxDay:wxDayIdx(S.wxDay),
     multiState, stOptions, stName:(S.st?(STATE_NAMES[S.st]||S.st):''), canSwitchStates:gateCanSwitchStates(),
     scopeLabel:(S.st ? S.st : (multiState ? 'India' : (allStates[0]||'MP'))),  // header/title scope: state code when scoped, 'India' for multi-state all-India, sole state when single-state
-    anyFilter, amCount:amKeys.length, bmCount:bmKeys.length, pinCount:F.length, mListCount:F.length, mListShown:mobileList.length,
+    anyFilter, amCount:amKeys.length, bmCount:bmKeys.length, foRows, retRows, foCount:foGroups.length, retCount:retGroups.length, pinCount:F.length, mListCount:F.length, mListShown:mobileList.length,
     pinB10:fmt(F.filter(m=>acD(m)>10).length), pinB5:fmt(F.filter(m=>acD(m)>=5&&acD(m)<=10).length), pinB1:fmt(F.filter(m=>acD(m)>=1&&acD(m)<5).length), pinB0:fmt(F.filter(m=>acD(m)<1).length),
     freshCount:`${fmt(tot.deployed)} machines${anyFilter?' (filtered)':''}`, mobileWeather,
-    statusDot: dataMode==='live'?'#15A24A':dataMode==='error'?'#DC3A2B':'#9aa3b1',
-    statusRing: dataMode==='live'?'rgba(21,162,74,.16)':dataMode==='error'?'rgba(220,58,43,.16)':'rgba(0,0,0,.06)',
-    statusLabel: dataMode==='live'?('Live · '+(lastUpdated||'')+' IST') : dataMode==='error'?'Sheet unreachable — demo data' : 'Demo data · add your sheet',
+    statusDot: dataMode==='live'?'#15A24A':dataMode==='offline'?'#E0A008':dataMode==='error'?'#DC3A2B':'#9aa3b1',
+    statusRing: dataMode==='live'?'rgba(21,162,74,.16)':dataMode==='offline'?'rgba(224,160,8,.18)':dataMode==='error'?'rgba(220,58,43,.16)':'rgba(0,0,0,.06)',
+    statusLabel: dataMode==='live'?('Live · '+(lastUpdated||'')+' IST') : dataMode==='offline'?('Offline · data as of '+(lastUpdated||'')+' IST') : dataMode==='error'?'Sheet unreachable — demo data' : (curProject().id==='kharif'?'Demo data · add your sheet':'Dummy data · sheet tab not added yet'),
     statusTime: lastUpdated||'09:42' };
 }
 
@@ -2642,14 +2742,14 @@ const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" 
 // keys and mean nothing to a reader hunting for the cumulative chart.
 const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machine locations', weather:'Weather',
   am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Yesterday', leader:'Leaders',
-  product:'Products', mpprod:'MP products by territory', snake:'Cumulative acres' };
+  product:'Products', mpprod:'MP products by territory', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers' };
 
 function railHTML(){
   const v=state.view;
   return `<aside style="width:74px;flex-shrink:0;background:#1B1A17;display:flex;flex-direction:column;align-items:center;padding:16px 0;overflow:hidden">
     <div class="railLogo">UPL</div>
     <nav class="railNav">
-      ${roleHidesView('insights')?'':navBtn('insights',I.insights,v==='insights')}${navBtn('map',I.map,v==='map')}${roleHidesView('tables')?'':navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${roleHidesView('am')?'':navBtn('am',I.am,v==='am')}${navBtn('bm',I.bm,v==='bm')}${roleHidesView('pending')?'':navBtn('pending',I.pending,v==='pending')}${roleHidesView('recap')?'':navBtn('recap',I.recap,v==='recap')}${roleHidesView('leader')?'':navBtn('leader',I.leader,v==='leader')}${roleHidesView('product')?'':navBtn('product',I.product,v==='product')}${roleHidesView('mpprod')?'':navBtn('mpprod',I.mpprod,v==='mpprod')}${roleHidesView('snake')?'':navBtn('snake',I.snake,v==='snake')}
+      ${roleHidesView('insights')?'':navBtn('insights',I.insights,v==='insights')}${navBtn('map',I.map,v==='map')}${roleHidesView('tables')?'':navBtn('tables',I.tables,v==='tables')}${navBtn('machines',I.machines,v==='machines')}${navBtn('weather',I.weather,v==='weather')}${roleHidesView('am')?'':navBtn('am',I.am,v==='am')}${navBtn('bm',I.bm,v==='bm')}${roleHidesView('fo')?'':navBtn('fo',I.fo,v==='fo')}${roleHidesView('retailer')?'':navBtn('retailer',I.retailer,v==='retailer')}${roleHidesView('pending')?'':navBtn('pending',I.pending,v==='pending')}${roleHidesView('recap')?'':navBtn('recap',I.recap,v==='recap')}${roleHidesView('leader')?'':navBtn('leader',I.leader,v==='leader')}${roleHidesView('product')?'':navBtn('product',I.product,v==='product')}${roleHidesView('mpprod')?'':navBtn('mpprod',I.mpprod,v==='mpprod')}${roleHidesView('snake')?'':navBtn('snake',I.snake,v==='snake')}
     </nav>
     <button data-act="device" title="Mobile view" class="navbtn" style="margin:6px 0 0">${I.mobile}</button>
     <div class="railConf" style="writing-mode:vertical-rl;flex-shrink:0;font-size:8.5px;letter-spacing:.14em;color:#6b675f;margin-top:14px;text-transform:uppercase">Confidential</div>
@@ -2658,8 +2758,8 @@ function railHTML(){
 function topbarHTML(v){
   return `<header style="height:58px;flex-shrink:0;background:#FFFFFF;border-bottom:1px solid #E9E6DF;display:flex;align-items:center;gap:18px;padding:0 22px">
     <div style="min-width:0">
-      <div style="font-size:14.5px;font-weight:700;letter-spacing:-.01em;line-height:1.1">${v.scopeLabel} Operations Dashboard</div>
-      <div style="font-size:11px;color:#9C988F;margin-top:1px">1+1=11 Kharif Programme · Farm Mechanisation Services</div>
+      <div style="font-size:14.5px;font-weight:700;letter-spacing:-.01em;line-height:1.1">${E(curProject().head(v.scopeLabel))}</div>
+      <div style="font-size:11px;color:#9C988F;margin-top:1px">${E(curProject().sub)}</div>
     </div>
     <div style="flex:1"></div>
     <div style="position:relative;width:300px;max-width:34vw">
@@ -7816,19 +7916,21 @@ function machinesViewHTML(v){
     </div>
   </section>`;
 }
-function amViewHTML(v){
+// One table, four trees: Area managers, Business managers, Field officers and Retailers all render the same
+// row objects (built in vals()) through this. `title`/`hint` head the card, `col` names the first column.
+function hierTableHTML(v, title, hint, col, rows){
   return `<section style="padding:18px 22px">
     <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
       <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div style="font-size:13px;font-weight:700">Area Managers <span style="font-weight:400;color:#9C988F">· ${v.amCount} AMs · expand to Cluster Officer → Machine</span></div>
+        <div style="font-size:13px;font-weight:700">${title} <span style="font-weight:400;color:#9C988F">· ${hint}</span></div>
         ${downloadBtnHTML(v)}
       </div>
       <div style="overflow-x:auto"><div style="min-width:${v.adm?'1240px':'1120px'}">
         <div style="display:grid;grid-template-columns:${v.adm?'320px 110px 132px 1fr 78px 84px 74px 84px 150px':'330px 120px 150px 1fr 84px 96px 168px'};gap:14px;padding:10px 18px;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">
-          <div>AM · Cluster Officer · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div style="text-align:right">Acres ${dayShort()}</div>${v.adm?`<div style="text-align:right">IoT ac y'day</div><div style="text-align:right">Pinged</div>`:''}<div style="text-align:right">Operators</div><div>Contact</div>
+          <div>${col}</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div style="text-align:right">Acres ${dayShort()}</div>${v.adm?`<div style="text-align:right">IoT ac y'day</div><div style="text-align:right">Pinged</div>`:''}<div style="text-align:right">Operators</div><div>Contact</div>
         </div>
         <div style="max-height:calc(100vh - 300px);overflow:auto">
-          ${v.amRows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
+          ${rows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
             <div style="display:flex;align-items:center;gap:9px;min-width:0;padding-left:${r.indent}">
               <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.roleStyle)}">${E(r.role)}</span><span style="${css(r.dotStyle)}"></span>
               <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="display:flex;align-items:center;gap:6px;min-width:0"><span style="${css(r.subStyle)}">${E(r.sub)}</span>${r.rank||''}</div></div>
@@ -7846,36 +7948,10 @@ function amViewHTML(v){
     </div>
   </section>`;
 }
-function bmViewHTML(v){
-  return `<section style="padding:18px 22px">
-    <div style="background:#FFFFFF;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden">
-      <div style="padding:13px 18px;border-bottom:1px solid #E9E6DF;background:#FBFAF8;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div style="font-size:13px;font-weight:700">Business Managers <span style="font-weight:400;color:#9C988F">· ${v.bmCount} BMs · expand to Territory Manager → Retailer → Machine</span></div>
-        ${downloadBtnHTML(v)}
-      </div>
-      <div style="overflow-x:auto"><div style="min-width:${v.adm?'1240px':'1120px'}">
-        <div style="display:grid;grid-template-columns:${v.adm?'320px 110px 132px 1fr 78px 84px 74px 84px 150px':'330px 120px 150px 1fr 84px 96px 168px'};gap:14px;padding:10px 18px;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.06em;color:#9C988F;text-transform:uppercase">
-          <div>BM · TM · Retailer · Machine</div><div>Deployed</div><div>Health mix</div><div>Acres funnel</div><div style="text-align:right">Acres ${dayShort()}</div>${v.adm?`<div style="text-align:right">IoT ac y'day</div><div style="text-align:right">Pinged</div>`:''}<div style="text-align:right">Operators</div><div>Contact</div>
-        </div>
-        <div style="max-height:calc(100vh - 300px);overflow:auto">
-          ${v.bmRows.map(r=>`<div ${rowDataAttrs(r.click)} style="${css(r.rowStyle)}">
-            <div style="display:flex;align-items:center;gap:9px;min-width:0;padding-left:${r.indent}">
-              <span style="${css(r.chevStyle)}">${r.chev}</span><span style="${css(r.roleStyle)}">${E(r.role)}</span><span style="${css(r.dotStyle)}"></span>
-              <div style="min-width:0"><div style="${css(r.nameStyle)}">${E(r.name)}</div><div style="display:flex;align-items:center;gap:6px;min-width:0"><span style="${css(r.subStyle)}">${E(r.sub)}</span>${r.rank||''}</div></div>
-            </div>
-            <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(r.deployed)}</span><span style="${css(r.orgBarStyle)}"><span style="${css(r.orgUStyle)}"></span><span style="${css(r.orgSStyle)}"></span><span style="${css(r.orgOStyle)}"></span></span></div>
-            <div><div style="display:flex;height:7px;border-radius:4px;overflow:hidden;background:#F2F0EB;width:120px"><span style="${css(r.mixAStyle)}"></span><span style="${css(r.mixIStyle)}"></span><span style="${css(r.mixBStyle)}"></span></div><div style="${css(r.mixLabelStyle)}">${E(r.mixLabel)}</div></div>
-            <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;max-width:200px"><div style="height:7px;border-radius:4px;background:#F2F0EB;overflow:hidden"><span style="${css(r.paceBarStyle)}"></span></div></div><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;white-space:nowrap">${E(r.acresLabel)}</span></div>
-            <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${E(r.ranY)}</div>
-            ${v.adm?`<div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right;color:#D96A12">${E(r.iotRanY)}</div><div style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right;color:${r.pingInk||'#46433d'}">${E(r.pingLabel)}</div>`:''}
-            <div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:500;text-align:right;color:#6E6A62">${E(r.opMap)}</div>
-            <div style="display:flex;align-items:center;gap:9px"><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(r.contact)}</span><a href="${E(r.callTel)}" data-stop="1" style="${css(r.callStyle)}">${I.phoneS}</a></div>
-          </div>`).join('')}
-        </div>
-      </div></div>
-    </div>
-  </section>`;
-}
+function amViewHTML(v){ return hierTableHTML(v,'Area Managers',`${v.amCount} AMs · expand to Cluster Officer → Machine`,'AM · Cluster Officer · Machine',v.amRows); }
+function bmViewHTML(v){ return hierTableHTML(v,'Business Managers',`${v.bmCount} BMs · expand to Territory Manager → Retailer → Machine`,'BM · TM · Retailer · Machine',v.bmRows); }
+function foViewHTML(v){ return hierTableHTML(v,'Field Officers',`${v.foCount} FOs · expand to Retailer → Machine`,'FO · Retailer · Machine',v.foRows); }
+function retViewHTML(v){ return hierTableHTML(v,'Retailers',`${v.retCount} retailers · expand to Machine`,'Retailer · Machine',v.retRows); }
 function pendViewHTML(v){
   const grid={display:'grid',gridTemplateColumns:'1fr 120px 220px 130px 150px',gap:'14px',alignItems:'center'};
   const empty = !v.pendRows.length;
@@ -8380,6 +8456,8 @@ function contentHTML(v){
     case 'machines': return machinesViewHTML(v);
     case 'am': return amViewHTML(v);
     case 'bm': return bmViewHTML(v);
+    case 'fo': return foViewHTML(v);
+    case 'retailer': return retViewHTML(v);
     case 'pending': return pendViewHTML(v);
     case 'leader': return leaderViewHTML();
     case 'snake': return snakeViewHTML(v);
@@ -8427,6 +8505,8 @@ const M_VIEWS = [
   { k:'insights', label:'Insights',  icon:()=>I.insights },
   { k:'am',       label:'AMs',       icon:()=>I.am },
   { k:'bm',       label:'BMs',       icon:()=>I.bm },
+  { k:'fo',       label:'FOs',       icon:()=>I.fo },
+  { k:'retailer', label:'Retailers', icon:()=>I.retailer },
   { k:'pending',  label:'Pending',   icon:()=>I.pending },
   { k:'leader',   label:'Leaders',   icon:()=>I.leader },
   { k:'recap',    label:'Yesterday', icon:()=>I.recap },
@@ -8609,6 +8689,12 @@ function mobileHTML(v){
   } else if(S.view==='am'){
     body = mSectionTitle(`Area Managers · ${v.amCount}`, 'Tap to expand Cluster Officer → Machine')
          + (v.amRows.length ? v.amRows.map(r=>mHierCardHTML(r,{adm:v.adm})).join('') : mEmpty('No area managers match these filters.'));
+  } else if(S.view==='fo'){
+    body = mSectionTitle(`Field Officers · ${v.foCount}`, 'Tap to expand Retailer → Machine')
+         + (v.foRows.length ? v.foRows.map(r=>mHierCardHTML(r,{adm:v.adm})).join('') : mEmpty('No field officers match these filters.'));
+  } else if(S.view==='retailer'){
+    body = mSectionTitle(`Retailers · ${v.retCount}`, 'Tap to expand to machines')
+         + (v.retRows.length ? v.retRows.map(r=>mHierCardHTML(r,{adm:v.adm})).join('') : mEmpty('No retailers match these filters.'));
   } else if(S.view==='bm'){
     body = mSectionTitle(`Business Managers · ${v.bmCount}`, 'Tap to expand TM → Retailer → Machine')
          + (v.bmRows.length ? v.bmRows.map(r=>mHierCardHTML(r,{adm:v.adm})).join('') : mEmpty('No business managers match these filters.'));
@@ -8718,7 +8804,7 @@ function mobileHTML(v){
       <div style="padding:${ph?'calc(env(safe-area-inset-top) + 12px) 16px 12px':'30px 18px 12px'};background:#fff;border-bottom:1px solid #E9E6DF;flex-shrink:0">
         <div style="display:flex;align-items:center;gap:9px">
           <div style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10.5px;letter-spacing:.02em;color:#fff;flex-shrink:0">UPL</div>
-          <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.scopeLabel} Operations</div><div style="font-size:10px;color:#9C988F">1+1=11 Kharif · AFS</div></div>
+          <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(curProject().mHead(v.scopeLabel))}</div><div style="font-size:10px;color:#9C988F">${E(curProject().mSub)}</div></div>
           <div style="display:flex;align-items:center;gap:6px;${ph?'':'margin-right:4px'}"><span style="width:7px;height:7px;border-radius:50%;background:${v.statusDot};flex-shrink:0"></span><span style="font-size:10.5px;font-weight:600;color:#6E6A62">${E(v.statusTime)}</span></div>
           ${filterBtn}${toDesktop}
         </div>
@@ -8726,6 +8812,7 @@ function mobileHTML(v){
       <!-- phone: no padding-top on the scroller — sticky offsets resolve against the padding box,
            so a top pad would pin the tab bar below the edge and leak rows through the gap. -->
       <div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:${ph?'0':'14px'} 16px ${ph?'calc(env(safe-area-inset-bottom) + 28px)':'24px'}">
+        ${pwaBannerHTML(ph)}
         ${CHROMELESS.has(S.view)?`<div style="height:${ph?'14px':'0'}"></div>`:`<div style="display:flex;align-items:center;gap:11px;background:${v.mobileWeather.bg};border:1px solid ${v.mobileWeather.border};border-radius:14px;padding:12px 14px;${ph?'margin:14px 0 14px':'margin-bottom:14px'}">
           <span style="font-size:22px">${v.mobileWeather.icon}</span>
           <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:${v.mobileWeather.ink}">${E(v.mobileWeather.label)}</div><div style="font-size:11px;color:#6E6A62;margin-top:1px">${E(v.mobileWeather.line)}</div></div>
@@ -8816,6 +8903,8 @@ app.addEventListener('click', e=>{
     case 'device': mapLocked=true; scale=1; tx=0; ty=0; setState(s=>({device: s.device==='mobile'?'desktop':'mobile', selected:null, sheet:null})); break;
     case 'sheet': setState({sheet:el.dataset.sheet}); break;
     case 'sheetclose': setState({sheet:null}); break;
+    case 'pwainstall': pwaInstall(); break;
+    case 'pwadismiss': PWA.dismissed=true; try{ localStorage.setItem(PWA.KEY,'1'); }catch(_){ } render(); break;
     case 'loadmore': setState(s=>({listLimit:s.listLimit+MLIST_PAGE})); break;
     case 'org': { const want=el.dataset.org; if(gateAllows(want)){ setState({org:want, bm:'', tm:''}); } else { gateShow(()=>setState({org: gateAllows(want)?want:gateDefaultOrg(), bm:'', tm:''}), `Enter PIN for ${want} access`, true); } break; }
     case 'metric': setState({metric:el.dataset.metric}); break;
@@ -8946,6 +9035,17 @@ const GATE = {
     'd21753641f9e08316066324cd594c29bc8c130011556c81b219158f27dcc5910': { id:'pb-swal', role:'swal', org:'SWAL', allow:['SWAL'], states:['PB'], switchStates:false, label:'Punjab · SWAL' }, // 7722
     'baac73fe7ac34ea95c0dc218d0ff6f9605bc71a4d8e10ffdfb6af1c5e184d93a': { id:'hr-upl',  role:'upl',  org:'UPL',  allow:['UPL'],  states:['HR'], switchStates:false, label:'Haryana · UPL'  }, // 8811
     'cacbfe2218b27664f163dd5445e6ece2d1089db253993f20cdfc28b2db972198': { id:'hr-swal', role:'swal', org:'SWAL', allow:['SWAL'], states:['HR'], switchStates:false, label:'Haryana · SWAL' }, // 8822
+    // ── Wheat Spray Operations — North (project:'wheat'). A separate programme on the same workbook: these PINs
+    // never see a Kharif row, and the Kharif PINs above never see a wheat one (curProject() / projectHidesView()).
+    // The admin is role 'admin' so the Plan KPI, Pending and admin columns work INSIDE the project; states '*'
+    // here means "every state the project's data holds", which loadData() has already cut to HR + PB.
+    'b411746bdf09bde7f1fe70ddc8fa57241a0cb79d14d6e9c27e598635ca7dae4d': { id:'wh-admin', project:'wheat', role:'admin', org:'Both', allow:['Both','UPL','SWAL','Open'], states:['*'], switchStates:true, label:'Wheat North · Admin' }, // 4040
+    'de650d61f5bd166a91f8ccec3158297db18b9d50eaedca238cd29dc3a214a916': { id:'wh-pb', project:'wheat', role:'wstate', org:'Both', allow:['Both','UPL','SWAL'], states:['PB'], switchStates:false, views:['tables','am','fo','retailer'], label:'Wheat North · Punjab' }, // 4711
+    '459ef54b95078ec14162ab65a269e9179f14488554e29475504b3b25b2f17cb1': { id:'wh-hr', project:'wheat', role:'wstate', org:'Both', allow:['Both','UPL','SWAL'], states:['HR'], switchStates:false, views:['tables','am','fo','retailer'], label:'Wheat North · Haryana' }, // 4811
+    // External SALES teams, one per state. What they see is not decided yet: `views` is a PLACEHOLDER mirroring the
+    // state PIN, and narrowing it is this one list (the baseline Map / Machines / Weather / BMs always remain).
+    'e807be55a1a69fc2e397a015cb10ff4fea21a5ea450d122a5bb2e0228667d5c1': { id:'wh-pb-sales', project:'wheat', role:'wsales', org:'Both', allow:['Both','UPL','SWAL'], states:['PB'], switchStates:false, views:['tables','am','fo','retailer'], label:'Wheat North · Punjab sales' }, // 4722
+    'd95936051b112558c270fd675137155155c74b8f0721fde9007b53d40cedba2b': { id:'wh-hr-sales', project:'wheat', role:'wsales', org:'Both', allow:['Both','UPL','SWAL'], states:['HR'], switchStates:false, views:['tables','am','fo','retailer'], label:'Wheat North · Haryana sales' }, // 4822
   },
   cur:null, timer:null,
 };
@@ -8957,8 +9057,13 @@ function gateAllowsState(code){ return GATE.cur ? (GATE.cur.states.includes('*')
 function gateDefaultState(){ return GATE.cur ? (GATE.cur.states[0]==='*' ? '' : GATE.cur.states[0]) : ''; }
 function gateCanSwitchStates(){ return GATE.cur ? !!GATE.cur.switchStates : false; }
 function gateArmTimer(ms){ clearTimeout(GATE.timer); GATE.timer=setTimeout(gateLock, Math.max(0,ms)); }
-function gateSave(r){ GATE.cur=r; try{ sessionStorage.setItem(GATE.SKEY, JSON.stringify({id:r.id, at:Date.now()})); }catch(_){ } gateArmTimer(GATE.TTL_MS);
-  if(GA_ON()){ try{ window.gtag('set','user_properties',{ role:r.role, org:r.org, mp_state:(r.states||[]).join(','), team:r.label, team_id:r.id }); }catch(_){ } track('login',{ role:r.role, role_id:r.id, team:r.label }); } }
+// Switching PROJECT mid-session (a Wheat PIN typed into a Kharif session, or the reverse, at the 30-min re-lock or an
+// out-of-scope re-prompt) RELOADS rather than re-rendering: ROWS, weather, the contest and every side-tab cache are
+// module state holding the old project's data, and a reload is the one reset that cannot miss one of them.
+// gateRestore() then boots straight into the new project from sessionStorage.
+function gateSave(r){ const was=GATE.cur && (GATE.cur.project||'kharif'); GATE.cur=r; try{ sessionStorage.setItem(GATE.SKEY, JSON.stringify({id:r.id, at:Date.now()})); }catch(_){ } gateArmTimer(GATE.TTL_MS);
+  if(GA_ON()){ try{ window.gtag('set','user_properties',{ project:r.project||'kharif', role:r.role, org:r.org, mp_state:(r.states||[]).join(','), team:r.label, team_id:r.id }); }catch(_){ } track('login',{ role:r.role, role_id:r.id, team:r.label }); }
+  if(_booted && was && was!==(r.project||'kharif')) location.reload(); }
 function gateRead(){ try{ return JSON.parse(sessionStorage.getItem(GATE.SKEY)||'null'); }catch(_){ return null; } }
 function gateExpired(){ const o=gateRead(); return !o||!o.id||(Date.now()-(o.at||0))>=GATE.TTL_MS; }
 function gateRestore(){ const o=gateRead(); if(!o||!o.id) return false; const age=Date.now()-(o.at||0); if(age>=GATE.TTL_MS) return false; const f=Object.values(GATE.ROLES).find(r=>r.id===o.id); if(!f) return false; GATE.cur=f; gateArmTimer(GATE.TTL_MS-age); return true; }
@@ -9305,11 +9410,54 @@ async function helpSend(){
   }
 }
 
+/* ============================= PWA (install + offline) =============================
+   sw.js makes the console installable and lets it open with no signal; this is the page's half.
+   · The worker is registered on https / localhost only (a service worker cannot run anywhere else).
+   · Install is OFFERED on a real phone only, as one dismissible strip at the top of the scroller — not in the
+     "More" sheet, because a field login has four views and therefore no More button at all. Android/Chrome
+     gets a real Install button (the captured `beforeinstallprompt`); iOS has no such API, so it gets the
+     one-line Share → Add to Home Screen instruction. Neither shows once running installed (standalone).
+   · Offline is SAID, not just survived: a strip names it, and the status badge reads "Offline · data as of …"
+     off the cached sheet's own fetch time (loadData + sw.js). Coming back online re-fetches at once. */
+const PWA = {
+  KEY:'mpoc_install_dismiss', prompt:null, online:navigator.onLine!==false,
+  standalone: (()=>{ try{ return matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; }catch(_){ return false; } })(),
+  ios: /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1),
+  dismissed: (()=>{ try{ return localStorage.getItem('mpoc_install_dismiss')==='1'; }catch(_){ return false; } })(),
+};
+if('serviceWorker' in navigator && (location.protocol==='https:' || ['localhost','127.0.0.1'].includes(location.hostname)))
+  navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('[MP-Ops] service worker not registered →', err));
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); PWA.prompt=e; if(_booted) render(); });
+window.addEventListener('appinstalled', ()=>{ PWA.prompt=null; PWA.standalone=true; track('pwa_installed',{ project:curProject().id }); if(_booted) render(); });
+window.addEventListener('online',  ()=>{ PWA.online=true;  if(_booted){ render(); loadData(); } });
+window.addEventListener('offline', ()=>{ PWA.online=false; if(_booted) render(); });
+async function pwaInstall(){
+  const p=PWA.prompt; if(!p) return;
+  PWA.prompt=null; p.prompt();
+  try{ const r=await p.userChoice; track('pwa_install_prompt',{ outcome:r&&r.outcome }); }catch(_){ }
+  render();
+}
+function pwaBannerHTML(ph){
+  const strip=(bg,bd,inner)=>`<div style="display:flex;align-items:center;gap:10px;background:${bg};border:1px solid ${bd};border-radius:12px;padding:10px 12px;margin:${ph?'12px 0 0':'0 0 12px'}">${inner}</div>`;
+  let out='';
+  if(!PWA.online) out+=strip('#FBF1DA','#F0DDB0',`<span style="width:8px;height:8px;border-radius:50%;background:#E0A008;flex-shrink:0"></span>
+    <div style="flex:1;font-size:12px;color:#5C4A12;line-height:1.35"><b>You're offline.</b> Showing the last data this phone loaded${lastUpdated?` (${E(lastUpdated)} IST)`:''}.</div>`);
+  const offer = ph && !PWA.standalone && !PWA.dismissed && (PWA.prompt || PWA.ios);
+  if(offer) out+=strip('#FFFFFF','#E9E6DF',`<img src="icons/icon-192.png" alt="" width="30" height="30" style="border-radius:8px;flex-shrink:0">
+    <div style="flex:1;min-width:0;font-size:12px;color:#46433d;line-height:1.35">${PWA.prompt
+      ? '<b>Install the console</b> — opens from your home screen, works without signal.'
+      : '<b>Add to Home Screen</b> — tap <b>Share</b> <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M8 11H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-2"/></svg> then <b>Add to Home Screen</b>.'}</div>
+    ${PWA.prompt?`<button data-act="pwainstall" style="flex-shrink:0;padding:8px 12px;border:none;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Install</button>`:''}
+    <button data-act="pwadismiss" aria-label="Dismiss" style="flex-shrink:0;width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#9C988F;display:flex;align-items:center;justify-content:center;cursor:pointer">${I.closeS}</button>`);
+  return out;
+}
+
 /* ============================= mount ============================= */
 let _booted=false;
 function bootApp(){
   if(_booted){ if(!gateAllows(state.org)) state.org=gateDefaultOrg(); if(!gateAllowsState(state.st)) state.st=gateDefaultState(); render(); return; }
   _booted=true;
+  document.title=curProject().title;
   helpMount();
   state.org=gateDefaultOrg();
   state.st=gateDefaultState();   // scoped UPL/SWAL land locked on their state; admin lands on all-India ('')
@@ -9320,8 +9468,10 @@ function bootApp(){
   // The contest tab is fetched at BOOT now, not on first sight of the Leaders page: the operator's India
   // rank is printed beside him across the console (drawer, phone sheet, machine table), so the standings
   // have to exist before any of those render. It refreshes on the same clock as the machine sheet.
-  loadOplb();
-  if(CONFIG.refreshMinutes>0) setInterval(()=>{ loadData(); loadOplb(); }, CONFIG.refreshMinutes*60000);
+  // Kharif only — the contest tab is that programme's, and no other project's operator may wear its rank.
+  const side=curProject().kharifTabs;
+  if(side) loadOplb();
+  if(CONFIG.refreshMinutes>0) setInterval(()=>{ loadData(); if(side) loadOplb(); }, CONFIG.refreshMinutes*60000);
 }
 if(gateRestore()) bootApp(); else gateShow(()=>bootApp());
 </script>
