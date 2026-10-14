@@ -15,6 +15,7 @@ HTML/CSS/JS + inline-SVG maps. Same deploy shape as `din8shh.github.io/MP-map-vi
   centroids). Reused directly for map geometry.
 - `wheat-demo.js` — 235 **DUMMY** rows (`export const WHEAT_DEMO`, HR + PB) for the Wheat North project while its
   sheet tab does not exist. Invented names/numbers/acres, generated once; same object shape as `machines.js`.
+  **No longer shown while Wheat is in its planning stage** (`PROJECTS.wheat.plan`, below); kept for the machine phase.
 - `manifest.webmanifest`, `sw.js`, `icons/` — the PWA (see **PWA** below). `icons/icon.svg` is the source; the PNGs
   were rasterised from it with macOS `qlmanage -t` + `sips` (no ImageMagick here).
 
@@ -736,6 +737,26 @@ some added and some not carried over, on a new tab of the SAME workbook that doe
 - Header, title, the State control's all-scope label (`allLabel`: "North · HR + PB") and the GA `page_title` /
   `project` property come from the project. The PIN card stays generic because the project is unknown until
   the PIN is entered. The concern button stays Kharif-only: it keys on `upl`/`swal`, and its tab is Kharif's.
+- **PLANNING STAGE (2026-10-14): Wheat runs on its retailer PLAN, not on machine rows.** `PROJECTS.wheat.plan` points
+  at the programme's OWN workbook (`1NCrNwwTf0fSNDEMvM6s0Y00XsXSP0uNiTos2BG1Hqm0`, not `CONFIG.sheetId`) and its two
+  raw tabs — `PB - Raw Working Sheet` (gid `916215567`) and `HR - Raw Working Sheet` (gid `177705638`). While `plan` is
+  set, `loadData()` applies **zero machine rows** (the dummy rows never reach a screen beside real plan figures),
+  skips weather, and `loadWPlan()` fills `WPLAN`. The project's only view is **`wplan` — Retailer plan**
+  (chromeless; `home:'wplan'` is where `render()`'s bounce guard and boot land, since there is no map), and the rail /
+  phone bar hide every baseline view through `roleHidesView`. It is not in `GATED_VIEWS`, so every Wheat login has it;
+  a state-locked login gets no state picker.
+  · Each raw tab has **two blocks**: A:R one row per PARTY (retailer), T:AA one row per MACHINE. Only the party block is
+    read, by header name with FIRST match (the machine block repeats `Organization/Zone` and `Party Name`). Fields:
+    zone → company (`SWAL …` = SWAL, `AF …` = UPL — verified against the per-company Plan tabs), territory, party
+    name / mobile / location, **Planned Mcs**, TM name / mobile, FO name / mobile.
+  · **Deliberately NOT read yet (by request): machine numbers, handover status, sub-retailers** — "machines finalised /
+    handed over" comes later. **Placement acres are not shown either**: on a planning screen an acre figure reads as
+    acres sprayed. The `PB/RJ` column (40 PB parties marked RJ) is not read; its meaning was not confirmed.
+  · Live 2026-10-14: **PB 128 retailers / 198 machines (UPL 91 · SWAL 107), HR 84 / 191 (UPL 81 · SWAL 110)** — equal to
+    the four `… UPL/SWAL Plan` tabs' Total rows, which are lookups over the raw tabs and are not read. HR names a TM on
+    15 of 84 retailers and an FO on none; the page prints "not assigned yet", not a blank. `Hissar` folds into `Hisar`
+    (`WPLAN_TERR`). Every load logs `[MP-Ops] wheat plan → {PB:{…}, HR:{…}}`.
+  · **Leaving the planning stage:** delete `plan` + `home`, restore the commented `views` list, set `gid`.
 - **Field officers (`fo`) and Retailers (`retailer`) — TENTATIVE, the spec is not final.** Both are trees built
   in `vals()` (`grpRow` / `mcRow`) in the SAME row shape as the AM/BM trees. They render through
   `hierTableHTML`, which am/bm now share too since the two were verified identical, and through `mHierCardHTML`
