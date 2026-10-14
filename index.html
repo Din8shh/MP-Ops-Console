@@ -155,7 +155,7 @@ const PHONE_MQ = '(max-width:820px), (max-height:500px) and (pointer:coarse)';
 const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
-  wpSt:'', wpOrg:'ALL', wpTerr:'', wpQ:'',   // Wheat Retailer plan page — page-local scope
+  wpSt:'', wpOrg:'ALL', wpZone:'', wpTerr:'', wpQ:'',   // Wheat Retailer plan page — page-local scope
   // Cumulative (snake) view: its own independent scope — region + a day-level fiscal range stored as offsets
   // (0 = Apr 1 … 364 = Mar 31). NOT tied to the machine filter bar. snTo defaults to today's fiscal offset
   // (set once SNAKE helpers exist — see snakeTodayOff), so the range always seeds to season-to-date, not FY end.
@@ -7809,7 +7809,7 @@ function productBodyHTML(mob){
 /* ===================== Wheat North — Retailer plan page =====================
    The planning-stage page: every retailer on the two raw working sheets, with the machines planned for him, his
    Territory Manager and his Field Officer. Chromeless — its own State / Company / Territory / search controls,
-   page-local (wpSt / wpOrg / wpTerr / wpQ), with the gate's state lock and org lock winning exactly as on every
+   page-local (wpSt / wpOrg / wpZone / wpTerr / wpQ — zone cascades into territory), with the gate's state lock and org lock winning exactly as on every
    other page. Grouped by territory, biggest plan first. A TM or FO the sheet does not name yet reads
    "not assigned yet" — on 2026-10-14 that is most of Haryana — rather than a blank that looks like a load fault. */
 function wplanAgg(){
@@ -7819,17 +7819,21 @@ function wplanAgg(){
   const st = lockSt || (stOpts.includes(S.wpSt)?S.wpSt:'');
   const org = lockOrg || (['UPL','SWAL'].includes(S.wpOrg)?S.wpOrg:'ALL');
   const inSt = WPLAN.rows.filter(r=>(!st||r.st===st) && gateAllowsState(r.st));
-  const terrs=[...new Set(inSt.map(r=>r.territory))].sort((a,b)=>a.localeCompare(b));
+  // Organisation zone ("AF Bathinda", "SWAL Karnal", …) is company-specific, so its options follow the company
+  // toggle, and territory options follow the zone. Each stale pick falls back to All rather than emptying the page.
+  const zones=[...new Set(inSt.filter(r=>org==='ALL'||r.org===org).map(r=>r.zone).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const zone = zones.includes(S.wpZone) ? S.wpZone : '';
+  const terrs=[...new Set(inSt.filter(r=>!zone||r.zone===zone).map(r=>r.territory))].sort((a,b)=>a.localeCompare(b));
   const terr = terrs.includes(S.wpTerr) ? S.wpTerr : '';   // a stale pick can never empty the page
   const q=String(S.wpQ||'').trim().toLowerCase();
-  const rows = inSt.filter(r=>(org==='ALL'||r.org===org) && (!terr||r.territory===terr)
+  const rows = inSt.filter(r=>(org==='ALL'||r.org===org) && (!zone||r.zone===zone) && (!terr||r.territory===terr)
     && (!q || [r.party,r.location,r.partyMob,r.tmName,r.tmMob,r.foName,r.foMob,r.territory].some(x=>String(x||'').toLowerCase().includes(q))));
   const sum=(l,f)=>l.filter(f||(()=>true)).reduce((a,x)=>a+x.planned,0);
   const groups={}; rows.forEach(r=>{ const k=r.st+'|'+r.territory; (groups[k]||(groups[k]={st:r.st,territory:r.territory,list:[]})).list.push(r); });
   const acSum=l=>l.reduce((a,x)=>a+(x.acres||0),0);
   const grp=Object.values(groups).map(g=>({ ...g, planned:sum(g.list), acres:acSum(g.list), acMissing:g.list.filter(x=>x.acres==null).length, list:g.list.sort((a,b)=>b.planned-a.planned||a.party.localeCompare(b.party)) }))
     .sort((a,b)=>b.planned-a.planned||a.territory.localeCompare(b.territory));
-  return { st, org, terr, q, lockSt, lockOrg, stOpts, terrs, rows, grp,
+  return { st, org, zone, zones, terr, q, lockSt, lockOrg, stOpts, terrs, rows, grp,
     planned:sum(rows), acres:acSum(rows), withAcres:rows.filter(r=>r.acres!=null).length, upl:sum(rows,r=>r.org==='UPL'), swal:sum(rows,r=>r.org==='SWAL'), open:sum(rows,r=>r.org==='Open'),
     withTM:rows.filter(r=>r.tmName).length, withFO:rows.filter(r=>r.foName).length,
     nTM:new Set(rows.filter(r=>r.tmName).map(r=>r.tmMob||r.tmName)).size, nFO:new Set(rows.filter(r=>r.foName).map(r=>r.foMob||r.foName)).size };
@@ -7863,18 +7867,19 @@ function wplanBodyHTML(mob){
     : `<div style="display:flex;align-items:center;gap:7px"><span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">${lab}</span>${inner}</div>`;
   const stCtrl = A.lockSt || A.stOpts.length<2 ? '' : labeled('State',`<div style="position:relative"><select id="wpStSel" style="${sel}${mob?';width:100%':''}">${optionsHTML([{v:'',t:P.allLabel}].concat(A.stOpts.map(c=>({v:c,t:STATE_NAMES[c]||c}))),A.st)}</select>${I.caret}</div>`);
   const coCtrl = A.lockOrg ? '' : labeled('Company',`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${['ALL','UPL','SWAL'].map(c=>`<button data-act="wporg" data-org="${c}" style="${css(seg(A.org===c,mob))}${mob?';flex:1':''}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`, true);
-  const terrCtrl = labeled('Territory',`<div style="position:relative"><select id="wpTerrSel" style="${sel}${mob?';width:100%':''}">${optionsHTML([{v:'',t:'All territories'}].concat(A.terrs.map(t=>({v:t,t}))),A.terr)}</select>${I.caret}</div>`);
+  const zoneCtrl = labeled('Org zone',`<div style="position:relative"><select id="wpZoneSel" style="${sel}${mob?';width:100%':''}">${optionsHTML([{v:'',t:'All zones'}].concat(A.zones.map(z=>({v:z,t:z}))),A.zone)}</select>${I.caret}</div>`);
+  const terrCtrl = labeled('Territory',`<div style="position:relative"><select id="wpTerrSel" style="${sel}${mob?';width:100%':''}">${optionsHTML([{v:'',t:'All territories'}].concat(A.terrs.map(t=>({v:t,t}))),A.terr)}</select>${I.caret}</div>`, true);
   const search = `<input id="wpSearch" type="search" placeholder="Search retailer, TM, FO, mobile" value="${E(S.wpQ||'')}" style="height:${mob?44:32}px;border:1px solid #E9E6DF;border-radius:${mob?10:8}px;padding:0 11px;font-family:'Noto Sans';font-size:${mob?16:12.5}px;${mob?'width:100%;box-sizing:border-box':'width:230px'}">`;
-  const narrowed = (A.terr||A.q||(!A.lockOrg&&A.org!=='ALL'));
+  const narrowed = (A.zone||A.terr||A.q||(!A.lockOrg&&A.org!=='ALL'));
   const csvBtn=`<button data-act="wpcsv" title="Download the ${A.rows.length} retailers shown as CSV" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;height:${mob?44:32}px;padding:0 13px;background:#1B1A17;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">⤓ CSV · ${fmt(A.rows.length)}</button>`;
   const clearBtn = narrowed?`<button data-act="wpclear" style="border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;font-size:11.5px;font-weight:600;height:${mob?44:32}px;padding:0 11px;cursor:pointer">Clear</button>`:'';
   const stamp=`<span style="font-size:10.5px;color:#6E6A62">Raw working sheets · ${E(WPLAN.at||'—')} ${refreshLink('wpretry','Reload',mob)}</span>`;
   const header = mob
     ? `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 10px">
-        ${stCtrl}${terrCtrl}${coCtrl}<div style="grid-column:1/-1">${search}</div>
+        ${stCtrl}${zoneCtrl}${terrCtrl}${coCtrl}<div style="grid-column:1/-1">${search}</div>
         <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap">${csvBtn}${clearBtn}<span style="flex:1"></span>${stamp}</div></div>`
     : `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-      ${stCtrl}${coCtrl}${terrCtrl}${search}${clearBtn}
+      ${stCtrl}${coCtrl}${zoneCtrl}${terrCtrl}${search}${clearBtn}
       <div style="flex:1"></div>${csvBtn}${stamp}</div>`;
   const tileCss = mob ? 'min-width:0;background:#FBFAF8;padding:13px 16px' : 'flex:1 0 auto;min-width:132px;padding:13px 16px;border-right:1px solid #EFEDE7';
   const stat=(val,lab,sub,ink,span)=>`<div style="${tileCss}${span?';grid-column:1/-1':''}">
@@ -7884,7 +7889,7 @@ function wplanBodyHTML(mob){
   const stats=`<div style="${mob?'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:#E9E6DF;overflow:hidden':'background:#FBFAF8;display:flex;overflow-x:auto'};border:1px solid #E9E6DF;border-radius:14px;margin-top:14px">
       ${stat(fmt(A.planned),'Machines planned',`${fmt(A.rows.length)} retailers · ${fmt(A.grp.length)} territories`,null,mob)}
       ${stat(fmt(A.acres)+'<span style="font-size:11px;color:#B6B1A8;font-weight:500"> ac</span>','Acres planned', A.withAcres<A.rows.length ? `${fmt(A.withAcres)} of ${fmt(A.rows.length)} retailers have a figure` : 'placement plan, not acres sprayed',null,mob)}
-      ${A.org==='ALL'?stat(fmt(A.upl),'UPL machines',null,C.orangeD)+stat(fmt(A.swal),'SWAL machines',null,C.greenD):''}
+      ${A.org==='ALL'&&!A.zone?stat(fmt(A.upl),'UPL machines',null,C.orangeD)+stat(fmt(A.swal),'SWAL machines',null,C.greenD):''}
       ${stat(frac(A.withTM,A.rows.length),'Retailers with a TM',`${fmt(A.nTM)} territory managers`)}
       ${stat(frac(A.withFO,A.rows.length),'Retailers with an FO',`${fmt(A.nFO)} field officers`)}
     </div>`;
@@ -9409,7 +9414,8 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='snToSel'){ const t=snakeDateToOff(e.target.value); if(t!=null) setState({snTo:t, snFrom:Math.min(t,state.snFrom)}); }
   else if(e.target.id==='pmStateSel') setState({pmState:e.target.value});
   else if(e.target.id==='mpTerrSel') setState({mpTerr:e.target.value});
-  else if(e.target.id==='wpStSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({wpSt:w, wpTerr:''}); }   // page-local
+  else if(e.target.id==='wpStSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({wpSt:w, wpZone:'', wpTerr:''}); }   // page-local
+  else if(e.target.id==='wpZoneSel') setState({wpZone:e.target.value, wpTerr:''});
   else if(e.target.id==='wpTerrSel') setState({wpTerr:e.target.value});
   else if(e.target.id==='lbStateSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({lbSt:w, lbAll:false}); }   // page-local; never touches state.st
   else if(e.target.id==='insStateSel') setState({insSt:e.target.value, insAm:'', insCo:''});   // page-local; never touches state.st
@@ -9474,7 +9480,7 @@ app.addEventListener('click', e=>{
     case 'mppretry': MPP.loaded=false; MPP.error=false; loadMPProduct(); break;
     case 'mpco': setState({mpCo:el.dataset.co}); track('mpprod_company',{co:el.dataset.co}); break;
     case 'wporg': setState({wpOrg:el.dataset.org}); break;
-    case 'wpclear': setState({wpOrg:'ALL', wpTerr:'', wpQ:''}); break;
+    case 'wpclear': setState({wpOrg:'ALL', wpZone:'', wpTerr:'', wpQ:''}); break;
     case 'wpretry': loadWPlan(); break;
     case 'wpcsv': wplanCSV(); track('wplan_csv',{ st:state.wpSt||'all' }); break;
     case 'mpmeasure': setState({mpMeasure:el.dataset.m}); track('mpprod_measure',{m:el.dataset.m}); break;

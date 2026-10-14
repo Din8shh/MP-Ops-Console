@@ -756,7 +756,8 @@ some added and some not carried over, on a new tab of the SAME workbook that doe
   · Live 2026-10-14: **PB 128 retailers / 198 machines (UPL 91 · SWAL 107), HR 84 / 191 (UPL 81 · SWAL 110)** — equal to
     the four `… UPL/SWAL Plan` tabs' Total rows, which are lookups over the raw tabs and are not read. HR names a TM on
     15 of 84 retailers and an FO on none; the page prints "not assigned yet", not a blank. `Hissar` folds into `Hisar`
-    (`WPLAN_TERR`). Every load logs `[MP-Ops] wheat plan → {PB:{…}, HR:{…}}`.
+    (`WPLAN_TERR`). Filters: State · Company · **Org zone** (the sheet's `Organization/Zone`, e.g. `SWAL Karnal`; its
+    options follow the company toggle and it cascades into Territory) · Territory · search. Every load logs `[MP-Ops] wheat plan → {PB:{…}, HR:{…}}`.
   · **Leaving the planning stage:** delete `plan` + `home`, restore the commented `views` list, set `gid`.
 - **Field officers (`fo`) and Retailers (`retailer`) — TENTATIVE, the spec is not final.** Both are trees built
   in `vals()` (`grpRow` / `mcRow`) in the SAME row shape as the AM/BM trees. They render through
