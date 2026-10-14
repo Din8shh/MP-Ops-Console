@@ -750,8 +750,9 @@ some added and some not carried over, on a new tab of the SAME workbook that doe
     zone → company (`SWAL …` = SWAL, `AF …` = UPL — verified against the per-company Plan tabs), territory, party
     name / mobile / location, **Planned Mcs**, TM name / mobile, FO name / mobile.
   · **Deliberately NOT read yet (by request): machine numbers, handover status, sub-retailers** — "machines finalised /
-    handed over" comes later. **Placement acres are not shown either**: on a planning screen an acre figure reads as
-    acres sprayed. The `PB/RJ` column (40 PB parties marked RJ) is not read; its meaning was not confirmed.
+    handed over" comes later. **Placement acres ARE shown (added 2026-10-14 by request) as "Acres planned"**, labelled as
+    the placement plan and never as acres sprayed; a blank cell is `null` → "not entered", not 0. Live: PB UPL 99,450 /
+    PB SWAL 67,700 / HR UPL 74,875 / **HR SWAL 0 of 53 entered** — total 2,42,025 ac, and the tile says how many retailers have a figure. The `PB/RJ` column (40 PB parties marked RJ) is not read; its meaning was not confirmed.
   · Live 2026-10-14: **PB 128 retailers / 198 machines (UPL 91 · SWAL 107), HR 84 / 191 (UPL 81 · SWAL 110)** — equal to
     the four `… UPL/SWAL Plan` tabs' Total rows, which are lookups over the raw tabs and are not read. HR names a TM on
     15 of 84 retailers and an FO on none; the page prints "not assigned yet", not a blank. `Hissar` folds into `Hisar`

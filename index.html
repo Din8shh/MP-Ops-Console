@@ -612,7 +612,7 @@ function wplanBuild(st, rows){
   const col=(...ps)=>{ for(const p of ps){ const i=h.findIndex(p); if(i>=0) return i; } return -1; };
   const C={ zone:col(x=>x.endsWith('organization/zone')||x.includes('zone')), terr:col(x=>x==='territory'),
     party:col(x=>x.includes('party name')), mob:col(x=>x.startsWith('party mob')), loc:col(x=>x==='location'),
-    planned:col(x=>x.includes('planned')), tm:col(x=>x==='tm name'), tmMob:col(x=>x.startsWith('tm mob')),
+    planned:col(x=>x.includes('planned')), acres:col(x=>x==='placement'||x.includes('placement')), tm:col(x=>x==='tm name'), tmMob:col(x=>x.startsWith('tm mob')),
     fo:col(x=>x==='fo name'), foMob:col(x=>x.startsWith('fo mob')) };
   const miss=Object.keys(C).filter(k=>C[k]<0 && ['zone','terr','party','planned'].includes(k));
   if(miss.length) throw new Error(st+' plan tab: missing column(s) '+miss.join(', '));
@@ -627,6 +627,7 @@ function wplanBuild(st, rows){
       territory: WPLAN_TERR[terr0.toLowerCase()] || terr0 || 'No territory',
       party: titleCase(party), partyMob: ph(g(r,'mob')), location: titleCase(g(r,'loc')),
       planned: Math.max(0, Math.round(num(g(r,'planned')))),
+      acres: g(r,'acres') ? Math.max(0, num(g(r,'acres'))) : null,   // PLACEMENT acres = the plan's acres. null = not entered (all of HR SWAL on 2026-10-14)
       tmName: titleCase(g(r,'tm')), tmMob: ph(g(r,'tmMob')), foName: titleCase(g(r,'fo')), foMob: ph(g(r,'foMob')) });
   }
   return out;
@@ -647,7 +648,7 @@ async function loadWPlan(){
     WPLAN.rows=rows; WPLAN.loaded=true;
     WPLAN.log={}; P.plan.tabs.forEach(t=>{ const r=rows.filter(x=>x.st===t.st), sum=f=>r.filter(f).reduce((a,x)=>a+x.planned,0);
       WPLAN.log[t.st]={ retailers:r.length, planned:sum(()=>true), upl:sum(x=>x.org==='UPL'), swal:sum(x=>x.org==='SWAL'),
-        open:sum(x=>x.org==='Open'), withTM:r.filter(x=>x.tmName).length, withFO:r.filter(x=>x.foName).length }; });
+        open:sum(x=>x.org==='Open'), acres:r.reduce((a,x)=>a+(x.acres||0),0), withAcres:r.filter(x=>x.acres!=null).length, withTM:r.filter(x=>x.tmName).length, withFO:r.filter(x=>x.foName).length }; });
     console.info('[MP-Ops] wheat plan →', WPLAN.log);
     dataMode=cachedAt?'offline':'live'; lastUpdated=cachedAt?istTime(cachedAt):nowIST(); WPLAN.at=lastUpdated;
   }catch(e){ WPLAN.error=true; dataMode='error'; lastUpdated=nowIST(); console.error('wheat plan load failed:', e); }
@@ -7825,17 +7826,18 @@ function wplanAgg(){
     && (!q || [r.party,r.location,r.partyMob,r.tmName,r.tmMob,r.foName,r.foMob,r.territory].some(x=>String(x||'').toLowerCase().includes(q))));
   const sum=(l,f)=>l.filter(f||(()=>true)).reduce((a,x)=>a+x.planned,0);
   const groups={}; rows.forEach(r=>{ const k=r.st+'|'+r.territory; (groups[k]||(groups[k]={st:r.st,territory:r.territory,list:[]})).list.push(r); });
-  const grp=Object.values(groups).map(g=>({ ...g, planned:sum(g.list), list:g.list.sort((a,b)=>b.planned-a.planned||a.party.localeCompare(b.party)) }))
+  const acSum=l=>l.reduce((a,x)=>a+(x.acres||0),0);
+  const grp=Object.values(groups).map(g=>({ ...g, planned:sum(g.list), acres:acSum(g.list), acMissing:g.list.filter(x=>x.acres==null).length, list:g.list.sort((a,b)=>b.planned-a.planned||a.party.localeCompare(b.party)) }))
     .sort((a,b)=>b.planned-a.planned||a.territory.localeCompare(b.territory));
   return { st, org, terr, q, lockSt, lockOrg, stOpts, terrs, rows, grp,
-    planned:sum(rows), upl:sum(rows,r=>r.org==='UPL'), swal:sum(rows,r=>r.org==='SWAL'), open:sum(rows,r=>r.org==='Open'),
+    planned:sum(rows), acres:acSum(rows), withAcres:rows.filter(r=>r.acres!=null).length, upl:sum(rows,r=>r.org==='UPL'), swal:sum(rows,r=>r.org==='SWAL'), open:sum(rows,r=>r.org==='Open'),
     withTM:rows.filter(r=>r.tmName).length, withFO:rows.filter(r=>r.foName).length,
     nTM:new Set(rows.filter(r=>r.tmName).map(r=>r.tmMob||r.tmName)).size, nFO:new Set(rows.filter(r=>r.foName).map(r=>r.foMob||r.foName)).size };
 }
 function wplanCSV(){
   const A=wplanAgg();
-  const head=['State','Territory','Company','Zone','Retailer','Retailer mobile','Location','Machines planned','TM name','TM mobile','FO name','FO mobile'];
-  const lines=[head.join(',')].concat(A.grp.flatMap(g=>g.list).map(r=>[r.st,r.territory,r.org,r.zone,r.party,r.partyMob,r.location,r.planned,r.tmName,r.tmMob,r.foName,r.foMob].map(csvCell).join(',')));
+  const head=['State','Territory','Company','Zone','Retailer','Retailer mobile','Location','Machines planned','Acres planned','TM name','TM mobile','FO name','FO mobile'];
+  const lines=[head.join(',')].concat(A.grp.flatMap(g=>g.list).map(r=>[r.st,r.territory,r.org,r.zone,r.party,r.partyMob,r.location,r.planned,r.acres==null?'':r.acres,r.tmName,r.tmMob,r.foName,r.foMob].map(csvCell).join(',')));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_retailer-plan_${A.st||'HR-PB'}_${new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
@@ -7852,6 +7854,7 @@ function wplanBodyHTML(mob){
   const cInk = c => c==='UPL'?C.orangeD:c==='SWAL'?C.greenD:'#46433d';
   const chip = c => `<span style="display:inline-block;padding:1px 7px;border-radius:5px;font-size:9.5px;font-weight:700;letter-spacing:.03em;background:${c==='UPL'?C.softO:c==='SWAL'?C.softG:'#F2F0EB'};color:${cInk(c)}">${c}</span>`;
   const tel = m => m ? `<a href="tel:${m}" style="font-family:'IBM Plex Mono';font-size:11px;color:#6E6A62;text-decoration:none">${m}</a>` : '';
+  const acTxt = r => r.acres==null ? `<span style="font-family:'Noto Sans';font-size:11px;color:#9C988F;font-style:italic">not entered</span>` : fmt(r.acres);
   const none = `<span style="font-size:11px;color:#9C988F;font-style:italic">not assigned yet</span>`;
   const person = (n,m) => n ? `<div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(n)}</div>${tel(m)}` : none;
   const sel=ctlSel(mob);
@@ -7880,6 +7883,7 @@ function wplanBodyHTML(mob){
   const frac=(n,d)=>`${fmt(n)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> / ${fmt(d)}</span>`;
   const stats=`<div style="${mob?'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:#E9E6DF;overflow:hidden':'background:#FBFAF8;display:flex;overflow-x:auto'};border:1px solid #E9E6DF;border-radius:14px;margin-top:14px">
       ${stat(fmt(A.planned),'Machines planned',`${fmt(A.rows.length)} retailers · ${fmt(A.grp.length)} territories`,null,mob)}
+      ${stat(fmt(A.acres)+'<span style="font-size:11px;color:#B6B1A8;font-weight:500"> ac</span>','Acres planned', A.withAcres<A.rows.length ? `${fmt(A.withAcres)} of ${fmt(A.rows.length)} retailers have a figure` : 'placement plan, not acres sprayed',null,mob)}
       ${A.org==='ALL'?stat(fmt(A.upl),'UPL machines',null,C.orangeD)+stat(fmt(A.swal),'SWAL machines',null,C.greenD):''}
       ${stat(frac(A.withTM,A.rows.length),'Retailers with a TM',`${fmt(A.nTM)} territory managers`)}
       ${stat(frac(A.withFO,A.rows.length),'Retailers with an FO',`${fmt(A.nFO)} field officers`)}
@@ -7889,31 +7893,32 @@ function wplanBodyHTML(mob){
   if(!A.rows.length) list=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:40px 18px;text-align:center;color:#6E6A62;font-size:12.5px">No retailers match these filters.</div>`;
   else if(mob){
     list = A.grp.map(g=>`<div style="margin-top:16px">
-      <div style="display:flex;align-items:baseline;gap:8px;padding:0 2px 7px"><span style="font-size:14px;font-weight:700">${E(g.territory)}</span>${showSt?`<span class="mCap">${E(STATE_NAMES[g.st]||g.st)}</span>`:''}<span style="flex:1"></span><span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700">${fmt(g.planned)}</span><span class="mCap">planned · ${g.list.length} ret.</span></div>
+      <div style="display:flex;align-items:baseline;gap:8px;padding:0 2px 7px"><span style="font-size:14px;font-weight:700">${E(g.territory)}</span>${showSt?`<span class="mCap">${E(STATE_NAMES[g.st]||g.st)}</span>`:''}<span style="flex:1"></span><span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700">${fmt(g.planned)}</span><span class="mCap">mc · ${g.acMissing===g.list.length?'':fmt(g.acres)+' ac · '}${g.list.length} ret.</span></div>
       ${g.list.map(r=>`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:12px 13px;margin-bottom:8px">
         <div style="display:flex;align-items:flex-start;gap:10px">
           <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:7px"><span style="font-size:13.5px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(r.party)}</span>${chip(r.org)}</div>
             <div class="mCap" style="margin-top:2px">${E(r.location||'')}${r.location&&r.partyMob?' · ':''}${tel(r.partyMob)}</div></div>
-          <div style="text-align:right;flex-shrink:0"><div style="font-family:'IBM Plex Mono';font-size:18px;font-weight:700;line-height:1">${fmt(r.planned)}</div><div class="mCap">machines</div></div>
+          <div style="text-align:right;flex-shrink:0"><div style="font-family:'IBM Plex Mono';font-size:18px;font-weight:700;line-height:1">${fmt(r.planned)}</div><div class="mCap">machines</div><div class="mCap" style="margin-top:3px">${r.acres==null?'acres not entered':fmt(r.acres)+' ac plan'}</div></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;padding-top:9px;border-top:1px solid #F4F2EE">
           <div style="min-width:0"><div class="mLbl" style="font-size:10px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase;margin-bottom:2px">TM</div>${person(r.tmName,r.tmMob)}</div>
           <div style="min-width:0"><div class="mLbl" style="font-size:10px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase;margin-bottom:2px">FO</div>${person(r.foName,r.foMob)}</div>
         </div></div>`).join('')}</div>`).join('');
   } else {
-    const cols='minmax(180px,1.6fr) 52px 70px minmax(140px,1fr) minmax(140px,1fr)';
-    const th=`<div style="display:grid;grid-template-columns:${cols};gap:14px;padding:9px 16px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.08em;color:#6E6A62;text-transform:uppercase;position:sticky;top:0;z-index:1"><span>Territory · Retailer</span><span>Co.</span><span style="text-align:right">Planned</span><span>Territory manager</span><span>Field officer</span></div>`;
+    const cols='minmax(170px,1.6fr) 52px 64px 84px minmax(130px,1fr) minmax(130px,1fr)';
+    const th=`<div style="display:grid;grid-template-columns:${cols};gap:14px;padding:9px 16px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.08em;color:#6E6A62;text-transform:uppercase;position:sticky;top:0;z-index:1"><span>Territory · Retailer</span><span>Co.</span><span style="text-align:right">Machines</span><span style="text-align:right">Acres plan</span><span>Territory manager</span><span>Field officer</span></div>`;
     const body=A.grp.map(g=>`<div style="display:grid;grid-template-columns:${cols};gap:14px;padding:10px 16px;background:#F6F5F2;border-top:1px solid #E9E6DF;align-items:baseline">
         <span style="font-size:13px;font-weight:700">${E(g.territory)}${showSt?` <span style="font-size:11px;font-weight:500;color:#6E6A62">· ${E(STATE_NAMES[g.st]||g.st)}</span>`:''} <span style="font-size:11px;font-weight:500;color:#6E6A62">· ${g.list.length} retailer${g.list.length===1?'':'s'}</span></span>
-        <span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700;text-align:right">${fmt(g.planned)}</span><span></span><span></span></div>`
+        <span></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700;text-align:right">${fmt(g.planned)}</span><span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700;text-align:right" title="${g.acMissing?g.acMissing+' retailer(s) without a figure':''}">${g.acMissing===g.list.length?'—':fmt(g.acres)}</span><span></span><span></span></div>`
       + g.list.map(r=>`<div style="display:grid;grid-template-columns:${cols};gap:14px;padding:9px 16px 9px 30px;border-top:1px solid #F4F2EE;align-items:center">
         <div style="min-width:0"><div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${E(r.party)}">${E(r.party)}</div><div style="font-size:11px;color:#6E6A62">${E(r.location||'')}${r.location&&r.partyMob?' · ':''}${tel(r.partyMob)}</div></div>
         <span>${chip(r.org)}</span>
         <span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${fmt(r.planned)}</span>
+        <span style="font-family:'IBM Plex Mono';font-size:12.5px;text-align:right;color:#46433d">${acTxt(r)}</span>
         <div style="min-width:0">${person(r.tmName,r.tmMob)}</div>
         <div style="min-width:0">${person(r.foName,r.foMob)}</div></div>`).join('')).join('');
     list=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;margin-top:14px">
-      <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7"><div style="font-size:13px;font-weight:700">Retailer-wise machine plan</div><div style="font-size:11px;color:#6E6A62;margin-top:2px">FY 2026-27 · by territory, largest plan first · machine numbers and handover are not shown at the planning stage</div></div>
+      <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7"><div style="font-size:13px;font-weight:700">Retailer-wise machine plan</div><div style="font-size:11px;color:#6E6A62;margin-top:2px">FY 2026-27 · by territory, largest plan first · acres are the placement plan, not acres sprayed · machine numbers and handover are not shown at the planning stage</div></div>
       ${th}${body}</div>`;
   }
   return header + stats + list;
