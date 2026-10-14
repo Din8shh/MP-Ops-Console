@@ -671,6 +671,8 @@ covering 21 fewer acres. MP is the mirror image: +48,306 ac bought with 216 extr
   overlooked.
 
 ## Access roles (the PIN gate)
+**Log out** is one `data-act="logout"` → `gateLock()` (the same path as the 30-minute re-lock), on the desktop rail beside the phone button and in the phone header after the filter button. It is in the header rather than the More sheet because a field login has four views and so no More button.
+
 `GATE.ROLES` in index.html maps sha256(PIN) → a scope on **three axes**: org (`org` default + `allow` list),
 state (`states`, `switchStates`) and views (`views`). It is a soft client-side gate — the file says so, and the
 plaintext PIN sits in a trailing comment on each row by convention. Three shapes exist:
