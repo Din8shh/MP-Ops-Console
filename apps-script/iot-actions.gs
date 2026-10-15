@@ -30,6 +30,7 @@ var MAX_FIELD = 160;                     // every other field
 var RATE_MAX  = 40;                      // rows per rolling minute, all users
 var RATE_KEY  = 'mpops_iot_rate';
 var KINDS     = ['Potential tamper', 'At risk'];
+var MAX_CASES = 80;                      // cases one save may cover (one machine's open gaps)
 
 var COLUMNS = [
   ['Timestamp', 'ts'],
@@ -57,16 +58,20 @@ function doPost(e) {
 
     if (body.token !== TOKEN)                      return json({ ok: false, error: 'bad_token' });
     if (KINDS.indexOf(clean(body.kind)) < 0)       return json({ ok: false, error: 'bad_kind' });
-    if (!clean(body.caseId) || !clean(body.action)) return json({ ok: false, error: 'missing_fields' });
+    // One save covers every open case of ONE machine, so `cases` is a list of {id, date}; a lone `caseId` is
+    // still accepted. One row is written per case, so each case keeps its own status.
+    var cases = (Object.prototype.toString.call(body.cases) === '[object Array]' ? body.cases : [{ id: body.caseId, date: body.caseDate }])
+      .map(function (c) { return { id: cap(clean(c && c.id), MAX_FIELD), date: cap(clean(c && c.date), MAX_FIELD) }; })
+      .filter(function (c) { return c.id; });
+    if (!cases.length || !clean(body.action))       return json({ ok: false, error: 'missing_fields' });
+    if (cases.length > MAX_CASES)                   return json({ ok: false, error: 'too_many_cases' });
     if (!underRateLimit())                         return json({ ok: false, error: 'rate_limited' });
 
     var ts = Utilities.formatDate(new Date(), 'Asia/Kolkata', 'yyyy-MM-dd HH:mm:ss');
-    var row = {
+    var base = {
       ts:       ts,
       kind:     clean(body.kind),
-      caseId:   cap(clean(body.caseId),   MAX_FIELD),
       machine:  cap(clean(body.machine),  MAX_FIELD),
-      caseDate: cap(clean(body.caseDate), MAX_FIELD),
       state:    cap(clean(body.state),    MAX_FIELD),
       action:   cap(clean(body.action),   MAX_FIELD),
       status:   clean(body.status) === 'Closed' ? 'Closed' : 'Open',
@@ -79,11 +84,16 @@ function doPost(e) {
     if (!lock.tryLock(10000)) return json({ ok: false, error: 'busy' });
     try {
       var sh = ensureTab();
-      sh.appendRow(COLUMNS.map(function (c) { return safeCell(row[c[1]]); }));
+      var rows = cases.map(function (k) {
+        var row = {}; for (var f in base) row[f] = base[f];
+        row.caseId = k.id; row.caseDate = k.date;
+        return COLUMNS.map(function (c) { return safeCell(row[c[1]]); });
+      });
+      sh.getRange(sh.getLastRow() + 1, 1, rows.length, COLUMNS.length).setValues(rows);
     } finally {
       lock.releaseLock();
     }
-    return json({ ok: true, ts: ts });
+    return json({ ok: true, ts: ts, rows: cases.length });
   } catch (err) {
     return json({ ok: false, error: String(err && err.message || err) });
   }

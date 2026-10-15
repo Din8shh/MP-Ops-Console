@@ -156,7 +156,7 @@ const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpZone:'', wpTerr:'', wpQ:'',   // Wheat Retailer plan page — page-local scope
-  iotSt:'', iotQ:'', itFrom:'', itTo:'', iotAct:'all', iotLimit:60,   // IoT pages — page-local, shared by the three of them
+  iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60,   // IoT pages — page-local, shared by the three of them
   // Cumulative (snake) view: its own independent scope — region + a day-level fiscal range stored as offsets
   // (0 = Apr 1 … 364 = Mar 31). NOT tied to the machine filter bar. snTo defaults to today's fiscal offset
   // (set once SNAKE helpers exist — see snakeTodayOff), so the range always seeds to season-to-date, not FY end.
@@ -8091,7 +8091,7 @@ async function loadIoT(){
   finally{ IOT.loading=false; render(); }
 }
 
-/* ---- scope + aggregates. Page-local (iotSt / iotQ / itFrom / itTo / iotAct), shared by the three IoT pages, so
+/* ---- scope + aggregates. Page-local (iotSt / iotQ / itFrom / itTo / iotQueue), shared by the three IoT pages, so
    a technician's picks follow him between tabs. The gate's state LOCK wins, exactly as on every other page. */
 const iotLast   = id => { const l=IOT.actions[id]; return l&&l.length ? l[l.length-1] : null; };
 const iotState  = id => { const a=iotLast(id); return !a ? 'new' : a.status==='Closed' ? 'closed' : 'open'; };
@@ -8111,25 +8111,6 @@ function iotRange(list){
   const dflt = iotAddDays(to,-6) < minD ? minD : iotAddDays(to,-6);   // default: the last 7 days the tab carries
   const from = state.itFrom && state.itFrom>=minD && state.itFrom<=to ? state.itFrom : dflt;
   return { minD, maxD, from, to };
-}
-function iotTamperAgg(){
-  const sc=iotScope(), q=String(state.iotQ||'').trim().toLowerCase(), act=['new','open','closed'].includes(state.iotAct)?state.iotAct:'all';
-  const inSt=IOT.tamper.filter(r=>iotInScope(r,sc)), R=iotRange(inSt);
-  const inRange=inSt.filter(r=>r.day>=R.from && r.day<=R.to);
-  const rep={}; inRange.forEach(r=>{ rep[r.mc]=(rep[r.mc]||0)+1; });
-  const rows=inRange.filter(r=>(act==='all'||iotState(r.id)===act) && iotMatch(r,q)).sort((a,b)=>b.at.localeCompare(a.at));
-  const n=s=>inRange.filter(r=>iotState(r.id)===s).length;
-  return { ...sc, ...R, q, act, rows, rep, cases:inRange.length, machines:Object.keys(rep).length,
-    repeat:Object.values(rep).filter(v=>v>=3).length, actioned:inRange.length-n('new'), closed:n('closed'), days:new Set(inRange.map(r=>r.day)).size };
-}
-function iotRiskAgg(){
-  const sc=iotScope(), q=String(state.iotQ||'').trim().toLowerCase(), act=['new','open','closed'].includes(state.iotAct)?state.iotAct:'all';
-  const inSt=IOT.risk.filter(r=>iotInScope(r,sc));
-  const rows=inSt.filter(r=>(act==='all'||iotState(r.id)===act) && iotMatch(r,q)).sort((a,b)=>(b.km||0)-(a.km||0));
-  const km=inSt.map(r=>r.km||0), mins=inSt.map(r=>r.mins||0).sort((a,b)=>a-b);
-  const n=s=>inSt.filter(r=>iotState(r.id)===s).length;
-  return { ...sc, q, act, rows, cases:inSt.length, machines:new Set(inSt.map(r=>r.mc)).size, km:km.reduce((a,b)=>a+b,0), maxKm:Math.max(0,...km),
-    medMins:mins.length?mins[Math.floor(mins.length/2)]:0, noOp:inSt.filter(r=>!r.op).length, actioned:inSt.length-n('new'), closed:n('closed') };
 }
 // The IoT head's view: one row per technician (from the mapping tab), with a line per state under him. States
 // carrying cases that no technician is mapped to are listed under "No technician mapped" rather than vanishing.
@@ -8156,43 +8137,26 @@ const iotMins = m => m==null ? '—' : m<60 ? `${Math.round(m)}m` : `${Math.floo
 const iotKm = k => k==null ? '—' : (k>=10 ? fmt(k) : (Math.round(k*10)/10).toLocaleString('en-IN'));
 // Google's universal Maps URL: opens the Maps APP on a phone, the website on a desktop.
 const iotMapHref = l => `https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lon}`;
-function iotMapLink(l, label, mob){
-  if(!l) return `<span style="font-size:11px;color:#9C988F;font-style:italic">no location</span>`;
-  return `<a href="${iotMapHref(l)}" target="_blank" rel="noopener" data-maplink="1" title="${l.lat.toFixed(5)}, ${l.lon.toFixed(5)}" style="display:inline-flex;align-items:center;gap:5px;${mob?'min-height:44px;padding:0 12px;border:1px solid #E9E6DF;border-radius:10px;background:#fff;':''}color:#1B6FD1;font-size:12px;font-weight:600;text-decoration:none;white-space:nowrap"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>${E(label)}</a>`;
-}
 const iotTel = (m,mob) => m ? `<a href="tel:${m}" style="font-family:'IBM Plex Mono';font-size:11px;color:#6E6A62;text-decoration:none${mob?';display:inline-block;padding:4px 0':''}">${m}</a>` : '';
-const iotWho = (n,m,mob,miss) => n||m ? `<div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${E(n)}">${E(n||'—')}</div>${iotTel(m,mob)}` : `<span style="font-size:11px;color:#9C988F;font-style:italic">${miss||'not mapped'}</span>`;
-function iotChip(id){
-  const s=iotState(id), a=iotLast(id);
-  const [bg,ink,txt] = s==='closed' ? ['#E6F5EA','#15803D','Closed'] : s==='open' ? ['#FBF1DA','#8A6A12','Open'] : ['#F2F0EB','#6E6A62','No action yet'];
-  return `<span title="${a?E(a.action+(a.remark?' — '+a.remark:'')+' · '+a.by+' · '+a.ts):''}" style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:700;background:${bg};color:${ink};white-space:nowrap">${txt}</span>`;
-}
-const iotActBtn = (id,mob) => IOT_W.url ? `<button data-act="iotact" data-case="${E(id)}" style="min-height:${mob?44:28}px;padding:0 ${mob?14:10}px;border:1px solid #E9E6DF;border-radius:${mob?10:7}px;background:#fff;color:#1B1A17;font-size:${mob?13:11.5}px;font-weight:600;cursor:pointer;white-space:nowrap">${iotLast(id)?'Update':'Record action'}</button>` : '';
-const iotRepBadge = n => n>1 ? `<span title="${n} potential tamper cases on this machine in the selected range" style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:5px;font-family:'IBM Plex Mono';font-size:10px;font-weight:700;background:${n>=3?'#FBEAE7':'#F2F0EB'};color:${n>=3?'#B42318':'#6E6A62'}">×${n}</span>` : '';
 
+// The team overview's controls (the technician pages carry their own, mobile-first: iotTechHTML).
 function iotControls(view, A, mob){
   const S=state, sel=ctlSel(mob);
   const labeled=(lab,inner,span)=>mob
     ? `<div style="display:flex;flex-direction:column;gap:5px;min-width:0${span?';grid-column:1/-1':''}"><span style="font-size:11px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase">${lab}</span>${inner}</div>`
     : `<div style="display:flex;align-items:center;gap:7px"><span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">${lab}</span>${inner}</div>`;
-  const stCtrl = A.lockSt || A.stOpts.length<2 ? '' : labeled('State',`<div style="position:relative"><select id="iotStSel" style="${sel}${mob?';width:100%':''}">${optionsHTML([{v:'',t:isAdmin()?'All states':'All my states'}].concat(A.stOpts.map(c=>({v:c,t:iotStName(c)}))),A.st)}</select>${I.caret}</div>`);
-  const dated = view!=='iotrisk';
+  const stCtrl = A.lockSt || A.stOpts.length<2 ? '' : labeled('State',`<div style="position:relative"><select id="iotStSel" style="${sel}${mob?';width:100%':''}">${optionsHTML([{v:'',t:isAdmin()?'All states':'All my states'}].concat(A.stOpts.map(c=>({v:c,t:iotStName(c)}))),A.st)}</select>${I.caret}</div>`, true);
   const dIn=(id,v)=>`<input id="${id}" type="date" value="${E(v)}" min="${E(A.minD)}" max="${E(A.maxD)}" style="height:${mob?44:32}px;border:1px solid #E9E6DF;border-radius:${mob?10:8}px;padding:0 9px;font-family:'Noto Sans';font-size:${mob?16:12.5}px;color:#1B1A17;background:#fff;${mob?'width:100%;box-sizing:border-box':''}">`;
-  const quick = dated ? [['Latest day',A.maxD,A.maxD],['7 days',iotAddDays(A.maxD,-6)<A.minD?A.minD:iotAddDays(A.maxD,-6),A.maxD],['All',A.minD,A.maxD]]
-    .map(([t,f,to])=>`<button data-act="iotrange" data-from="${f}" data-to="${to}" style="${css(seg(A.from===f&&A.to===to,mob))}${mob?';flex:1':''}">${t}</button>`).join('') : '';
-  const dateCtrl = dated ? (mob
-      ? labeled('Potential tamper date',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${dIn('iotFrom',A.from)}${dIn('iotTo',A.to)}</div><div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px;margin-top:6px">${quick}</div>`, true)
-      : labeled('Date',`${dIn('iotFrom',A.from)}<span style="color:#9C988F">–</span>${dIn('iotTo',A.to)}<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${quick}</div>`)) : '';
-  const actCtrl = view==='iotteam' ? '' : labeled('Action',`<div style="position:relative"><select id="iotActSel" style="${sel}${mob?';width:100%':''}">${optionsHTML([{v:'all',t:'All cases'},{v:'new',t:'No action yet'},{v:'open',t:'Open'},{v:'closed',t:'Closed'}],A.act)}</select>${I.caret}</div>`);
-  const search = view==='iotteam' ? '' : `<input id="iotSearch" type="search" placeholder="Search machine, operator, CI, mobile" value="${E(S.iotQ||'')}" style="height:${mob?44:32}px;border:1px solid #E9E6DF;border-radius:${mob?10:8}px;padding:0 11px;font-family:'Noto Sans';font-size:${mob?16:12.5}px;${mob?'width:100%;box-sizing:border-box':'width:240px'}">`;
-  const narrowed = A.q || (A.act&&A.act!=='all') || (dated && (S.itFrom||S.itTo));
-  const clearBtn = narrowed ? `<button data-act="iotclear" style="border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;font-size:11.5px;font-weight:600;height:${mob?44:32}px;padding:0 11px;cursor:pointer">Clear</button>` : '';
-  const csvBtn = view==='iotteam' ? '' : `<button data-act="iotcsv" title="Download the ${A.rows.length} cases shown as CSV" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;height:${mob?44:32}px;padding:0 13px;background:#1B1A17;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">⤓ CSV · ${fmt(A.rows.length)}</button>`;
+  const d7=iotAddDays(A.maxD,-6)<A.minD?A.minD:iotAddDays(A.maxD,-6);
+  const quick=[['Latest day',A.maxD,A.maxD],['7 days',d7,A.maxD],['All',A.minD,A.maxD]]
+    .map(([t,f,to])=>`<button data-act="iotrange" data-from="${f}" data-to="${to}" style="${css(seg(A.from===f&&A.to===to,mob))}${mob?';flex:1':''}">${t}</button>`).join('');
+  const dateCtrl = mob
+    ? labeled('Potential tamper dates',`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${dIn('iotFrom',A.from)}${dIn('iotTo',A.to)}</div><div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px;margin-top:6px">${quick}</div>`, true)
+    : labeled('Dates',`${dIn('iotFrom',A.from)}<span style="color:#9C988F">–</span>${dIn('iotTo',A.to)}<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${quick}</div>`);
   const stamp = `<span style="font-size:10.5px;color:#6E6A62">IoT sheet · ${E(IOT.at||'—')} ${refreshLink('iotretry','Reload',mob)}</span>`;
   return mob
-    ? `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 10px;margin-top:12px">${stCtrl?`<div style="grid-column:1/-1">${stCtrl}</div>`:''}${dateCtrl}${actCtrl?`<div style="grid-column:1/-1">${actCtrl}</div>`:''}${search?`<div style="grid-column:1/-1">${search}</div>`:''}
-        <div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap">${csvBtn}${clearBtn}<span style="flex:1"></span>${stamp}</div></div>`
-    : `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">${stCtrl}${dateCtrl}${actCtrl}${search}${clearBtn}<div style="flex:1"></div>${csvBtn}${stamp}</div>`;
+    ? `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 10px;margin-top:12px">${stCtrl}${dateCtrl}<div style="grid-column:1/-1">${stamp}</div></div>`
+    : `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">${stCtrl}${dateCtrl}<div style="flex:1"></div>${stamp}</div>`;
 }
 function iotStats(tiles, mob){
   const tileCss = mob ? 'min-width:0;background:#FBFAF8;padding:13px 16px' : 'flex:1 0 auto;min-width:140px;padding:13px 16px;border-right:1px solid #EFEDE7';
@@ -8202,116 +8166,9 @@ function iotStats(tiles, mob){
 }
 const iotFrac = (n,d) => `${fmt(n)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> / ${fmt(d)}</span>`;
 const iotEmpty = t => `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:40px 18px;text-align:center;color:#6E6A62;font-size:12.5px;margin-top:14px">${t}</div>`;
-function iotMoreBtn(shown,total,mob){
-  return shown<total ? `<div style="text-align:center;margin-top:12px"><button data-act="iotmore" style="min-height:${mob?44:32}px;padding:0 18px;border:1px solid #E9E6DF;border-radius:10px;background:#fff;color:#1B1A17;font-size:12.5px;font-weight:600;cursor:pointer">Show more · ${fmt(shown)} of ${fmt(total)}</button></div>` : '';
-}
 const iotWriteNote = () => IOT_W.url ? '' : `<div style="margin-top:10px;font-size:11.5px;color:#8A6A12;background:#FBF1DA;padding:8px 12px;border-radius:9px">Read-only for now. Recording an action switches on once the write endpoint is deployed from the IoT workbook.</div>`;
 
-function iotTamperHTML(mob){
-  const A=iotTamperAgg(), showSt=!A.st, lim=state.iotLimit||IOT_PAGE, shown=A.rows.slice(0,mob?lim:Math.max(lim,400));
-  const rangeTxt = A.from===A.to ? iotDayTxt(A.from) : `${iotShortDay(A.from)} – ${iotDayTxt(A.to)}`;
-  const stats = iotStats([
-    [fmt(A.cases),'Potential tamper cases',`${rangeTxt} · ${A.days} day${A.days===1?'':'s'}`],
-    [fmt(A.machines),'Machines',`${fmt(A.repeat)} with 3 or more cases`, A.repeat?'#B42318':null],
-    [iotFrac(A.actioned,A.cases),'Cases actioned',`${fmt(A.closed)} closed`],
-  ], mob);
-  const note = `<div style="font-size:11px;color:#6E6A62;margin-top:10px;line-height:1.5">A <b>potential</b> tamper case is a gap in the device's pings. It is a lead to check, not proof of tampering. The date is the last ping before the gap. The map opens where the machine came back online.</div>`;
-  let list;
-  if(!A.rows.length) list=iotEmpty(A.cases ? 'No cases match these filters.' : `No potential tamper cases in ${rangeTxt}.`);
-  else {
-    const byDay=[]; shown.forEach(r=>{ const g=byDay[byDay.length-1]; if(g&&g.day===r.day) g.list.push(r); else byDay.push({day:r.day,list:[r]}); });
-    const dayN={}; A.rows.forEach(r=>{ dayN[r.day]=(dayN[r.day]||0)+1; });
-    if(mob){
-      list = byDay.map(g=>`<div style="margin-top:16px"><div style="display:flex;align-items:baseline;gap:8px;padding:0 2px 7px"><span style="font-size:14px;font-weight:700">${iotDayTxt(g.day)}</span><span style="flex:1"></span><span class="mCap">${fmt(dayN[g.day])} case${dayN[g.day]===1?'':'s'}</span></div>
-        ${g.list.map(r=>`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:12px 13px;margin-bottom:8px">
-          <div style="display:flex;align-items:flex-start;gap:10px">
-            <div style="flex:1;min-width:0"><div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${E(r.mc)}${iotRepBadge(A.rep[r.mc])}</div>
-              <div class="mCap" style="margin-top:3px">${showSt?E(iotStName(r.st))+' · ':''}last ping ${iotTime(r.at)} · back ${r.back.slice(0,10)!==r.day?iotShortDay(r.back.slice(0,10))+' ':''}${iotTime(r.back)}</div></div>
-            ${iotChip(r.id)}
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
-            <div><div class="mLbl" style="font-size:10px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase">Gap</div><div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${r.gap==null?'—':r.gap+' h'}</div></div>
-            <div><div class="mLbl" style="font-size:10px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase">Moved</div><div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${iotKm(r.km)} km</div></div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;padding-top:9px;border-top:1px solid #F4F2EE">
-            <div style="min-width:0"><div class="mLbl" style="font-size:10px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase;margin-bottom:2px">Operator</div>${iotWho(r.op,r.opMob,true)}</div>
-            <div style="min-width:0"><div class="mLbl" style="font-size:10px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase;margin-bottom:2px">CI</div>${iotWho(r.ci,r.ciMob,true)}</div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">${iotMapLink(r.loc,'Go to machine location',true)}${iotActBtn(r.id,true)}</div>
-        </div>`).join('')}</div>`).join('') + iotMoreBtn(shown.length,A.rows.length,true);
-    } else {
-      const cols=`118px 76px 96px 50px 64px 112px minmax(130px,1fr) minmax(130px,1fr)${showSt?' 104px':''} ${IOT_W.url?'190px':'100px'}`;
-      const th=`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:9px 16px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.08em;color:#6E6A62;text-transform:uppercase;position:sticky;top:0;z-index:1"><span>Machine</span><span>Last ping</span><span>Back online</span><span style="text-align:right">Gap</span><span style="text-align:right">Moved</span><span>Location</span><span>Operator</span><span>CI</span>${showSt?'<span>State</span>':''}<span>Action</span></div>`;
-      const body=byDay.map(g=>`<div style="padding:9px 16px;background:#F6F5F2;border-top:1px solid #E9E6DF;font-size:12.5px;font-weight:700">${iotDayTxt(g.day)} <span style="font-weight:500;color:#6E6A62">· ${fmt(dayN[g.day])} case${dayN[g.day]===1?'':'s'}</span></div>`
-        + g.list.map(r=>`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:8px 16px;border-top:1px solid #F4F2EE;align-items:center">
-          <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700;white-space:nowrap">${E(r.mc)}${iotRepBadge(A.rep[r.mc])}</span>
-          <span style="font-family:'IBM Plex Mono';font-size:12px">${iotTime(r.at)}</span>
-          <span style="font-family:'IBM Plex Mono';font-size:12px;color:#46433d">${r.back.slice(0,10)!==r.day?`<span style="font-family:'Noto Sans';font-size:11px;color:#6E6A62">${iotShortDay(r.back.slice(0,10))}</span> `:''}${iotTime(r.back)}</span>
-          <span style="font-family:'IBM Plex Mono';font-size:12px;text-align:right">${r.gap==null?'—':r.gap+' h'}</span>
-          <span style="font-family:'IBM Plex Mono';font-size:12px;text-align:right">${iotKm(r.km)} km</span>
-          <span>${iotMapLink(r.loc,'Open in Maps',false)}</span>
-          <div style="min-width:0">${iotWho(r.op,r.opMob,false)}</div>
-          <div style="min-width:0">${iotWho(r.ci,r.ciMob,false)}</div>
-          ${showSt?`<span style="font-size:12px">${E(iotStName(r.st))}</span>`:''}
-          <span style="display:flex;align-items:center;gap:7px">${iotChip(r.id)}${iotActBtn(r.id,false)}</span></div>`).join('')).join('');
-      list=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;margin-top:14px">
-        <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7"><div style="font-size:13px;font-weight:700">Potential tamper cases, by date</div><div style="font-size:11px;color:#6E6A62;margin-top:2px">${rangeTxt} · newest first · ×N = cases on that machine in this range</div></div>
-        <div style="overflow-x:auto"><div style="min-width:${IOT_MINW}px">${th}${body}</div></div></div>` + iotMoreBtn(shown.length,A.rows.length,false);
-    }
-  }
-  return iotControls('iottamper',A,mob) + stats + note + iotWriteNote() + list;
-}
 
-function iotRiskHTML(mob){
-  const A=iotRiskAgg(), showSt=!A.st, lim=state.iotLimit||IOT_PAGE, shown=A.rows.slice(0,mob?lim:Math.max(lim,400));
-  const stats = iotStats([
-    [fmt(A.machines),'At risk machines',`${fmt(A.cases)} zero-voltage outage${A.cases===1?'':'s'}`, A.machines?'#B42318':null],
-    [iotKm(A.km)+'<span style="font-size:11px;color:#B6B1A8;font-weight:500"> km</span>','Travelled during outages',`longest ${iotKm(A.maxKm)} km`],
-    [iotMins(A.medMins),'Typical outage','median duration'],
-    [iotFrac(A.actioned,A.cases),'Cases actioned',`${fmt(A.closed)} closed`],
-  ], mob);
-  const note = `<div style="font-size:11px;color:#6E6A62;margin-top:10px;line-height:1.5">Machines that kept moving while the IoT device read <b>zero voltage</b>. This is the sheet's current list, so it has no date. Distance is from where the outage started to where the device last reported. The map opens at that end point.</div>`;
-  let list;
-  if(!A.rows.length) list=iotEmpty(A.cases ? 'No machines match these filters.' : 'No machines are at risk in this scope right now.');
-  else if(mob){
-    list = shown.map(r=>`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:12px 13px;margin-top:10px">
-      <div style="display:flex;align-items:flex-start;gap:10px">
-        <div style="flex:1;min-width:0"><div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${E(r.mc)}</div>
-          <div style="margin-top:4px"><span style="display:inline-block;padding:2px 7px;border-radius:6px;font-size:10.5px;font-weight:700;background:#FBEAE7;color:#B42318">${E(r.status||'At risk')}</span>${showSt?` <span class="mCap">${E(iotStName(r.st))}</span>`:''}</div></div>
-        <div style="text-align:right;flex-shrink:0"><div style="font-family:'IBM Plex Mono';font-size:18px;font-weight:700;line-height:1">${iotKm(r.km)}</div><div class="mCap">km travelled</div></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">
-        <div><div class="mLbl" style="font-size:10px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase">Outage</div><div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${iotMins(r.mins)}</div></div>
-        <div><div class="mLbl" style="font-size:10px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase">Pings</div><div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${r.pings==null?'—':fmt(r.pings)}</div></div>
-        <div><div class="mLbl" style="font-size:10px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase">Action</div>${iotChip(r.id)}</div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;padding-top:9px;border-top:1px solid #F4F2EE">
-        <div style="min-width:0"><div class="mLbl" style="font-size:10px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase;margin-bottom:2px">Operator</div>${iotWho(r.op,r.opMob,true)}</div>
-        <div style="min-width:0"><div class="mLbl" style="font-size:10px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase;margin-bottom:2px">CI</div>${iotWho(r.ci,r.ciMob,true)}</div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">${iotMapLink(r.end,'Go to end location',true)}${r.start?iotMapLink(r.start,'Start',true):''}${iotActBtn(r.id,true)}</div>
-    </div>`).join('') + iotMoreBtn(shown.length,A.rows.length,true);
-  } else {
-    const cols=`118px 150px 72px 58px 84px 120px 70px minmax(130px,1fr) minmax(130px,1fr)${showSt?' 104px':''} ${IOT_W.url?'190px':'100px'}`;
-    const th=`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:9px 16px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.08em;color:#6E6A62;text-transform:uppercase;position:sticky;top:0;z-index:1"><span>Machine</span><span>Status</span><span style="text-align:right">Outage</span><span style="text-align:right">Pings</span><span style="text-align:right">Travelled</span><span>End location</span><span>Start</span><span>Operator</span><span>CI</span>${showSt?'<span>State</span>':''}<span>Action</span></div>`;
-    const body=shown.map(r=>`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:9px 16px;border-top:1px solid #F4F2EE;align-items:center">
-      <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700">${E(r.mc)}</span>
-      <span><span style="display:inline-block;padding:2px 7px;border-radius:6px;font-size:10.5px;font-weight:700;background:#FBEAE7;color:#B42318;white-space:nowrap">${E(r.status||'At risk')}</span></span>
-      <span style="font-family:'IBM Plex Mono';font-size:12px;text-align:right">${iotMins(r.mins)}</span>
-      <span style="font-family:'IBM Plex Mono';font-size:12px;text-align:right;color:#46433d">${r.pings==null?'—':fmt(r.pings)}</span>
-      <span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700;text-align:right">${iotKm(r.km)} km</span>
-      <span>${iotMapLink(r.end,'Open in Maps',false)}</span>
-      <span>${r.start?iotMapLink(r.start,'Start',false):''}</span>
-      <div style="min-width:0">${iotWho(r.op,r.opMob,false)}</div>
-      <div style="min-width:0">${iotWho(r.ci,r.ciMob,false)}</div>
-      ${showSt?`<span style="font-size:12px">${E(iotStName(r.st))}</span>`:''}
-      <span style="display:flex;align-items:center;gap:7px">${iotChip(r.id)}${iotActBtn(r.id,false)}</span></div>`).join('');
-    list=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;margin-top:14px">
-      <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7"><div style="font-size:13px;font-weight:700">At risk machines</div><div style="font-size:11px;color:#6E6A62;margin-top:2px">Furthest travelled first · ${fmt(A.noOp)} without an operator on the sheet</div></div>
-      <div style="overflow-x:auto"><div style="min-width:${IOT_MINW}px">${th}${body}</div></div></div>` + iotMoreBtn(shown.length,A.rows.length,false);
-  }
-  return iotControls('iotrisk',A,mob) + stats + note + iotWriteNote() + list;
-}
 
 function iotTeamHTML(mob){
   const A=iotTeamAgg();
@@ -8356,6 +8213,275 @@ function iotTeamHTML(mob){
   return iotControls('iotteam',{...A,rows:[]},mob) + stats + head + iotWriteNote() + list;
 }
 
+/* ---- technician pages (Potential tamper, At risk): MOBILE-FIRST, redesigned 2026-10-15 ----
+   Designed for one person on a phone in the field, whose three jobs are: what do I look at next, get there (or ring
+   somebody), and say what I did. Everything follows from that:
+   · The unit is the MACHINE, not the ping gap. One machine logged 30 gaps in a fortnight; as 30 rows it buried every
+     other machine, as one card it is one job. Cases stay the grain of the DATA (each gap is still actioned and
+     counted on its own), only the screen groups them.
+   · The first control is the QUEUE — To do / Open / Closed / All, with counts — because "what is left for me" is the
+     first question. To do is the default, so recording an action moves a machine off the list. Machine status is
+     derived from its cases in scope: any case with no action → To do; else any still open → Open; else Closed.
+   · Dates are a swipeable DAY STRIP with counts, not two date pickers; a custom range lives in the Filters sheet.
+     The queue and the strip are one sticky bar, so they stay under the thumb while the list scrolls.
+   · Each card ends in the two actions that matter at full width: Navigate (Google Maps, the app on a phone) and
+     Record action. Operator and CI each get a 44px call button. Repeat gaps fold into an expander.
+   · Desktop renders the SAME cards in a grid, with the filters inline instead of in a sheet. */
+const IOT_Q = [['new','To do'],['open','Open'],['closed','Closed'],['all','All']];
+const IOT_PILL = { new:['#FDECEA','#B42318','To do'], open:['#FBF1DA','#8A6A12','Open'], closed:['#E6F5EA','#15803D','Closed'] };
+const iotPill = s => { const [bg,ink,t]=IOT_PILL[s]||IOT_PILL.new; return `<span style="display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;background:${bg};color:${ink};white-space:nowrap">${t}</span>`; };
+function iotMachines(cases){
+  const by={};
+  cases.forEach(r=>{ (by[r.mc]||(by[r.mc]={ mc:r.mc, st:r.st, kind:r.kind, cases:[] })).cases.push(r); });
+  return Object.values(by).map(m=>{
+    const T=m.kind==='T';
+    m.cases.sort(T ? (a,b)=>b.at.localeCompare(a.at) : (a,b)=>(b.km||0)-(a.km||0));
+    const top=m.cases[0], who=m.cases.find(c=>c.op||c.opMob)||top, ciw=m.cases.find(c=>c.ci||c.ciMob)||top;
+    const sts=m.cases.map(c=>iotState(c.id));
+    const last=m.cases.map(c=>iotLast(c.id)).filter(Boolean).sort((a,b)=>a.ts.localeCompare(b.ts)).pop()||null;
+    return { ...m, n:m.cases.length, top, op:who.op, opMob:who.opMob, ci:ciw.ci, ciMob:ciw.ciMob, last,
+      status: sts.includes('new') ? 'new' : sts.includes('open') ? 'open' : 'closed',
+      dark: T ? m.cases.reduce((a,c)=>a+(c.gap||0),0) : m.cases.reduce((a,c)=>a+(c.mins||0),0),
+      km:   T ? Math.max(0,...m.cases.map(c=>c.km||0)) : m.cases.reduce((a,c)=>a+(c.km||0),0),
+      pings: T ? null : m.cases.reduce((a,c)=>a+(c.pings||0),0),
+      loc:  T ? ((m.cases.find(c=>c.loc)||{}).loc||null) : (top.end||top.start||null) };
+  });
+}
+function iotPageAgg(view){
+  const kind=view==='iotrisk'?'R':'T', sc=iotScope(), q=String(state.iotQ||'').trim().toLowerCase();
+  const queue=IOT_Q.some(x=>x[0]===state.iotQueue) ? state.iotQueue : 'new';
+  const inSt=(kind==='T'?IOT.tamper:IOT.risk).filter(r=>iotInScope(r,sc));
+  const R=kind==='T' ? iotRange(inSt) : null;
+  const pool=kind==='T' ? inSt.filter(r=>r.day>=R.from && r.day<=R.to) : inSt;
+  const hits=pool.filter(r=>iotMatch(r,q));
+  const all=iotMachines(hits);
+  const cnt={ new:0, open:0, closed:0, all:all.length }; all.forEach(m=>cnt[m.status]++);
+  const machines=all.filter(m=>queue==='all'||m.status===queue)
+    .sort(kind==='T' ? (a,b)=>b.n-a.n||b.top.at.localeCompare(a.top.at) : (a,b)=>b.km-a.km);
+  const dayN={}; if(kind==='T') inSt.filter(r=>iotMatch(r,q)).forEach(r=>{ dayN[r.day]=(dayN[r.day]||0)+1; });
+  let chips=[], custom=false;
+  if(kind==='T' && R.maxD){
+    const d7=iotAddDays(R.maxD,-6)<R.minD ? R.minD : iotAddDays(R.maxD,-6), sum=(f,t)=>Object.keys(dayN).filter(d=>d>=f&&d<=t).reduce((a,d)=>a+dayN[d],0);
+    chips=[{ t:'Last 7 days', f:d7, to:R.maxD, n:sum(d7,R.maxD) }]
+      .concat(Object.keys(dayN).sort().reverse().map(d=>({ t:iotShortDay(d), f:d, to:d, n:dayN[d] })))
+      .concat([{ t:'All', f:R.minD, to:R.maxD, n:sum(R.minD,R.maxD) }]);
+    custom=!chips.some(c=>c.f===R.from&&c.to===R.to);
+  }
+  const nFilt=(sc.st&&!sc.lockSt?1:0)+(custom?1:0);
+  return { ...sc, ...(R||{}), kind, view, q, queue, cnt, all, machines, cases:hits.length, chips, custom, nFilt };
+}
+
+const iotCallBtn = (mob, who) => mob ? `<a href="tel:${mob}" aria-label="Call ${E(who)} on ${mob}" style="width:44px;height:44px;flex-shrink:0;border-radius:12px;border:1px solid #DCEFE2;background:#F1FAF4;color:#15803D;display:flex;align-items:center;justify-content:center;text-decoration:none">${I.phone}</a>` : '';
+function iotPersonRow(role, name, mob){
+  return `<div style="display:flex;align-items:center;gap:10px;min-height:${mob?48:34}px">
+    <div style="width:62px;flex-shrink:0;font-size:11px;font-weight:700;letter-spacing:.05em;color:#6E6A62;text-transform:uppercase">${role}</div>
+    <div style="flex:1;min-width:0">${name||mob ? `<div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(name||'Name not on sheet')}</div>${mob?`<div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${mob}</div>`:''}`
+      : `<div style="font-size:13px;color:#6E6A62;font-style:italic">Not on the sheet</div>`}</div>
+    ${iotCallBtn(mob, role)}</div>`;
+}
+const IOT_PIN = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>';
+const IOT_CHECK = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+function iotCardHTML(m, A){
+  const T=m.kind==='T', key='iot:'+m.kind+'|'+m.mc, open=!!state.expanded[key];
+  const cap='font-size:12.5px;color:#46433d;line-height:1.45';
+  const back=T ? m.top.back : '', backDay=back.slice(0,10);
+  const fig = T
+    ? `<div style="display:flex;align-items:baseline;gap:7px;margin-top:10px"><span style="font-family:'IBM Plex Mono';font-size:24px;font-weight:700;line-height:1">${m.n}</span><span style="font-size:13px;font-weight:600">ping gap${m.n===1?'':'s'}</span>${m.n>1?`<span style="${cap}">· ${fmt(m.dark)} h dark in all</span>`:''}</div>
+       <div style="${cap};margin-top:4px">Latest ${iotShortDay(m.top.day)}, ${iotTime(m.top.at)} → ${backDay&&backDay!==m.top.day?iotShortDay(backDay)+' ':''}${iotTime(back)} · ${m.top.gap==null?'—':m.top.gap+' h'}${m.top.km?` · moved ${iotKm(m.top.km)} km`:''}</div>`
+    : `<div style="display:flex;align-items:baseline;gap:7px;margin-top:10px"><span style="font-family:'IBM Plex Mono';font-size:24px;font-weight:700;line-height:1">${iotKm(m.km)}</span><span style="font-size:13px;font-weight:600">km on zero voltage</span></div>
+       <div style="${cap};margin-top:4px">${iotMins(m.dark)} without power · ${fmt(m.pings||0)} pings${m.n>1?` · ${m.n} outages`:''}</div>`;
+  const last = m.last ? `<div style="margin-top:10px;padding:8px 10px;border-radius:10px;background:#FBFAF8;border:1px solid #EFEDE7;font-size:12px;color:#46433d;line-height:1.4"><b style="color:#1B1A17">${E(m.last.action)}</b> · ${E(m.last.status)}${m.last.remark?` — ${E(m.last.remark)}`:''}<div style="font-size:11px;color:#6E6A62;margin-top:2px">${E(String(m.last.by||'').replace(/^IoT · /,''))} · ${E(m.last.ts)}</div></div>` : '';
+  const nav = m.loc ? `<a href="${iotMapHref(m.loc)}" target="_blank" rel="noopener" style="flex:1;min-height:46px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;background:#1B1A17;color:#fff;font-size:14px;font-weight:700;text-decoration:none">${IOT_PIN}Navigate</a>`
+    : `<span style="flex:1;min-height:46px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#F2F0EB;color:#6E6A62;font-size:13px">No location on sheet</span>`;
+  const rec = IOT_W.url ? `<button data-act="iotact" data-case="${E(m.kind+'|'+m.mc)}" style="flex:1;min-height:46px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;border:1.5px solid #1B1A17;background:#fff;color:#1B1A17;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">${IOT_CHECK}${m.last?'Update':'Record action'}</button>` : '';
+  const rows = m.n>1 ? `<button data-act="exp" data-key="${E(key)}" aria-expanded="${open}" style="width:100%;min-height:44px;margin-top:6px;border:none;background:none;color:#46433d;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${open?'Hide':'Show'} all ${m.n} ${T?'gaps':'outages'} <span style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>
+    ${open?`<div style="border-top:1px solid #F0EEE9">${m.cases.map(c=>{ const s=iotState(c.id), dot=IOT_PILL[s][1];
+      return `<div style="display:flex;align-items:center;gap:10px;min-height:48px;border-bottom:1px solid #F4F2EE">
+        <span title="${IOT_PILL[s][2]}" style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0"></span>
+        <div style="flex:1;min-width:0;font-size:12.5px">${T
+          ? `<b>${iotShortDay(c.day)}</b> ${iotTime(c.at)} → ${iotTime(c.back)} <span style="color:#6E6A62">· ${c.gap==null?'—':c.gap+' h'}${c.km?` · ${iotKm(c.km)} km`:''}</span>`
+          : `<b>${iotKm(c.km)} km</b> <span style="color:#6E6A62">· ${iotMins(c.mins)} · ${fmt(c.pings||0)} pings</span>`}</div>
+        ${(T?c.loc:c.end)?`<a href="${iotMapHref(T?c.loc:c.end)}" target="_blank" rel="noopener" aria-label="Open this ${T?'gap':'outage'} in Maps" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#1B6FD1">${IOT_PIN}</a>`:''}</div>`; }).join('')}</div>`:''}` : '';
+  return `<article style="background:#fff;border:1px solid #E9E6DF;border-radius:16px;padding:14px 14px 10px;box-shadow:0 1px 2px rgba(27,26,23,.04)">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-family:'IBM Plex Mono';font-size:16px;font-weight:700">${E(m.mc)}</span>
+      ${A.st?'':`<span style="font-size:11.5px;color:#6E6A62">${E(iotStName(m.st))}</span>`}
+      <span style="flex:1"></span>${iotPill(m.status)}</div>
+    ${T?'':`<div style="margin-top:6px"><span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#FBEAE7;color:#B42318">${E(m.top.status||'At risk')}</span></div>`}
+    ${fig}${last}
+    <div style="margin-top:8px;border-top:1px solid #F0EEE9">${m.op||m.opMob||m.ci||m.ciMob ? iotPersonRow('Operator',m.op,m.opMob)+iotPersonRow('CI',m.ci,m.ciMob)
+      : `<div style="min-height:40px;display:flex;align-items:center;font-size:13px;color:#6E6A62;font-style:italic">No operator or CI on the sheet for this machine</div>`}</div>
+    <div style="display:flex;gap:8px;margin-top:8px">${nav}${rec}</div>
+    ${rows}</article>`;
+}
+function iotTechHTML(view, mob){
+  const A=iotPageAgg(view), T=A.kind==='T', P=mob?16:22;
+  const search=`<div style="position:relative;flex:1;min-width:0;${mob?'':'max-width:320px'}">${I.search}<input id="iotSearch" type="search" placeholder="Machine, operator or CI" value="${E(state.iotQ||'')}" style="width:100%;box-sizing:border-box;height:${mob?46:36}px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;padding:0 12px 0 32px;font-family:'Noto Sans';font-size:${mob?16:13}px;color:#1B1A17"></div>`;
+  const filtBtn=`<button data-act="iotsheet" aria-label="Filters${A.nFilt?`, ${A.nFilt} active`:''}" style="min-width:46px;height:46px;padding:0 12px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid ${A.nFilt?'#1B1A17':'#E9E6DF'};border-radius:12px;background:${A.nFilt?'#1B1A17':'#fff'};color:${A.nFilt?'#fff':'#46433d'};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0">${I.filter}${A.nFilt?`<span style="font-family:'IBM Plex Mono'">${A.nFilt}</span>`:''}</button>`;
+  const deskFilters = mob ? '' : iotFilterFields(A,false);
+  const top=`<div style="display:flex;align-items:center;gap:10px;${mob?'padding-top:14px':'flex-wrap:wrap'}">${search}${mob?filtBtn:deskFilters}</div>`;
+  const qBar=`<div role="tablist" aria-label="Queue" style="display:flex;background:#ECEAE4;border-radius:12px;padding:3px;gap:3px">${IOT_Q.map(([k,t])=>{ const on=A.queue===k;
+    return `<button role="tab" aria-selected="${on}" data-act="iotq" data-q="${k}" style="flex:1;min-height:${mob?44:38}px;border:none;border-radius:9px;background:${on?'#fff':'transparent'};box-shadow:${on?'0 1px 2px rgba(0,0,0,.1)':'none'};color:${on?'#1B1A17':'#6E6A62'};font-family:inherit;font-size:13px;font-weight:${on?700:600};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px">${t}<span style="font-family:'IBM Plex Mono';font-size:12px;${on&&k==='new'&&A.cnt.new?'color:#B42318':''}">${fmt(A.cnt[k])}</span></button>`; }).join('')}</div>`;
+  const strip = T ? `<div style="display:flex;gap:7px;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:8px -${P}px 0;padding:0 ${P}px 2px;scrollbar-width:none">${A.chips.map(c=>{ const on=c.f===A.from&&c.to===A.to;
+      return `<button data-act="iotrange" data-from="${c.f}" data-to="${c.to}" aria-pressed="${on}" style="flex-shrink:0;min-height:${mob?40:34}px;padding:0 13px;border-radius:999px;border:1px solid ${on?'#1B1A17':'#E2DFD8'};background:${on?'#1B1A17':'#fff'};color:${on?'#fff':'#1B1A17'};font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap">${E(c.t)} <span style="font-family:'IBM Plex Mono';font-size:11.5px;opacity:.75">${fmt(c.n)}</span></button>`; }).join('')}
+      ${A.custom?`<span style="flex-shrink:0;min-height:${mob?40:34}px;display:flex;align-items:center;padding:0 13px;border-radius:999px;background:#1B1A17;color:#fff;font-size:12.5px;font-weight:600;white-space:nowrap">${iotShortDay(A.from)} – ${iotShortDay(A.to)}</span>`:''}</div>` : '';
+  const sticky=`<div style="position:sticky;top:0;z-index:6;background:#F6F5F2;margin:12px -${P}px 0;padding:8px ${P}px 10px;border-bottom:1px solid #E9E6DF">${qBar}${strip}</div>`;
+  const scopeTxt = A.st ? iotStName(A.st) : (isAdmin()?'all states':'your states');
+  const sum = T
+    ? `${fmt(A.machines.length)} machine${A.machines.length===1?'':'s'} · ${fmt(A.machines.reduce((a,m)=>a+m.n,0))} gaps · ${A.from===A.to?iotShortDay(A.from):iotShortDay(A.from)+' – '+iotShortDay(A.to)} · ${scopeTxt}`
+    : `${fmt(A.machines.length)} machine${A.machines.length===1?'':'s'} · ${iotKm(A.machines.reduce((a,m)=>a+m.km,0))} km on zero voltage · ${scopeTxt}`;
+  const lead = T ? 'A ping gap is a lead to check, not proof of tampering.' : 'Machines that moved while the device read zero voltage. The sheet\'s current list.';
+  const ro = IOT_W.url ? '' : ' Recording actions switches on once the write endpoint is deployed.';
+  const head=`<div style="margin-top:12px;font-size:13px;font-weight:700">${sum}</div><div style="font-size:12px;color:#6E6A62;margin-top:2px;line-height:1.45">${lead}${ro}</div>`;
+  const lim=state.iotLimit||IOT_PAGE, shown=A.machines.slice(0,lim);
+  const emptyTxt = A.queue==='new' && A.cnt.all ? `Nothing left to do here. Every machine in ${T?'this range':'this list'} has an action recorded.`
+    : A.q ? `No machine matches "${E(A.q)}".` : A.queue==='all' ? (T?'No ping gaps in this range.':'No machines at risk right now.') : `No ${A.queue==='open'?'open':'closed'} machines here.`;
+  const list = !shown.length ? `<div style="margin-top:14px;background:#fff;border:1px solid #E9E6DF;border-radius:16px;padding:36px 20px;text-align:center;font-size:13.5px;color:#46433d;line-height:1.5">${emptyTxt}</div>`
+    : `<div style="margin-top:12px;display:grid;gap:12px;grid-template-columns:${mob?'1fr':'repeat(auto-fill,minmax(340px,1fr))'};align-items:start">${shown.map(m=>iotCardHTML(m,A)).join('')}</div>`
+      + (shown.length<A.machines.length ? `<div style="text-align:center;margin-top:14px"><button data-act="iotmore" style="min-height:46px;padding:0 20px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#1B1A17;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Show more · ${fmt(shown.length)} of ${fmt(A.machines.length)}</button></div>` : '');
+  return top + sticky + head + list;
+}
+// The filter fields: inline on desktop, the body of the Filters sheet on a phone. Same element ids either way, so the
+// existing change handlers (iotStSel / iotFrom / iotTo) cover both.
+function iotFilterFields(A, mob){
+  const lab=t=>mob?`<div class="mLbl" style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase">${t}</div>`:'';
+  const fld=`height:${mob?46:36}px;border:1px solid ${mob?'#D5D0C6':'#E9E6DF'};border-radius:${mob?10:10}px;background:#fff;font-family:'Noto Sans';font-size:${mob?16:13}px;color:#1B1A17`;
+  const st = A.lockSt||A.stOpts.length<2 ? '' : `<div${mob?' style="margin-bottom:18px"':''}>${lab('State')}<div style="position:relative"><select id="iotStSel" aria-label="State" style="${fld};padding:0 30px 0 12px;${mob?'width:100%':''}">${optionsHTML([{v:'',t:isAdmin()?'All states':'All my states'}].concat(A.stOpts.map(c=>({v:c,t:iotStName(c)}))),A.st)}</select>${I.caret}</div></div>`;
+  const dt = A.kind==='T' ? `<div${mob?' style="margin-bottom:18px"':' style="display:flex;align-items:center;gap:6px"'}>${lab('Date range')}${mob?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">':''}<input id="iotFrom" type="date" aria-label="From" value="${E(A.from)}" min="${E(A.minD)}" max="${E(A.maxD)}" style="${fld};padding:0 9px;${mob?'width:100%;box-sizing:border-box':''}">${mob?'':'<span style="color:#9C988F">–</span>'}<input id="iotTo" type="date" aria-label="To" value="${E(A.to)}" min="${E(A.minD)}" max="${E(A.maxD)}" style="${fld};padding:0 9px;${mob?'width:100%;box-sizing:border-box':''}">${mob?'</div>':''}</div>` : '';
+  const csv=`<button data-act="iotcsv" style="${mob?'width:100%;':''}height:${mob?46:36}px;padding:0 14px;border:1px solid #E9E6DF;border-radius:10px;background:#fff;color:#1B1A17;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">⤓ Download CSV · ${fmt(A.machines.length)} machines</button>`;
+  const stamp=`<span style="font-size:11px;color:#6E6A62">IoT sheet · ${E(IOT.at||'—')} ${refreshLink('iotretry','Reload',mob)}</span>`;
+  return mob ? `${st}${dt}${lab('Export')}${csv}<div style="margin-top:16px">${stamp}</div>` : `${st}${dt}<span style="flex:1"></span>${csv}${stamp}`;
+}
+function iotSheetHTML(){
+  const A=iotPageAgg(state.view);
+  const foot=`<div style="display:flex;gap:10px">${A.nFilt?`<button data-act="iotclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14.5px;font-weight:700;cursor:pointer">Show ${fmt(A.machines.length)} machine${A.machines.length===1?'':'s'}</button></div>`;
+  return mSheetHTML('Filters', iotFilterFields(A,true), 'sheetclose', foot);
+}
+function iotCSV(view){
+  const A=iotPageAgg(view), T=A.kind==='T';
+  const ll=l=>l?`${l.lat},${l.lon}`:'', last=r=>{ const a=iotLast(r.id); return a?[a.status,a.action,a.remark,a.by,a.ts]:['No action yet','','','','']; };
+  const head=T ? ['Potential tamper date','Last ping','Back online','Machine','Gaps on machine in range','Gap (h)','Moved (km)','Recovery lat,long','Maps link','Operator','Operator mobile','CI','CI mobile','State','Action status','Action','Remark','By','Recorded at']
+               : ['Machine','Status','Outage (min)','Pings','Travelled (km)','Start lat,long','End lat,long','Maps link (end)','Operator','Operator mobile','CI','CI mobile','State','Action status','Action','Remark','By','Recorded at'];
+  const lines=[head.join(',')].concat(A.machines.flatMap(m=>m.cases.map(r=>(T
+    ? [r.day,r.at,r.back,r.mc,m.n,r.gap,r.km,ll(r.loc),r.loc?iotMapHref(r.loc):'',r.op,r.opMob,r.ci,r.ciMob,iotStName(r.st),...last(r)]
+    : [r.mc,r.status,r.mins,r.pings,r.km,ll(r.start),ll(r.end),r.end?iotMapHref(r.end):'',r.op,r.opMob,r.ci,r.ciMob,iotStName(r.st),...last(r)]).map(csvCell).join(','))));
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
+  a.download=`IoT_${T?'potential-tamper_'+A.from+'_'+A.to:'at-risk_'+new Date().toISOString().slice(0,10)}_${A.st||'all'}_${A.queue}.csv`;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
+}
+
+/* ---- the WRITE: "Record action" on a MACHINE → one appended row per case it covers, via apps-script/iot-actions.gs.
+   It covers every case of that machine in the current scope that is not yet Closed (a technician who visits the
+   machine has dealt with all of its open gaps at once); when every case is already Closed, it updates the latest.
+   Built once onto document.body, OUTSIDE render(), as the concern form is: render() swaps app.innerHTML on every
+   state change and on the 10-minute refresh, which would wipe a remark mid-sentence. A bare-string POST body (no
+   preflight), and a failed send never clears what was typed. The choices are big tap targets, not a <select>:
+   this is used one-handed beside a machine. */
+let _iotTarget=null;
+function iotActMount(){
+  if(document.getElementById('iotActOv')) return;
+  const st=document.createElement('style');
+  st.textContent=`#iotActOv textarea:focus{border-color:#1B1A17;outline:none}#iotActOv button[disabled]{opacity:.4;cursor:not-allowed}
+    #iotActOv .iotOpt{display:flex;align-items:center;gap:12px;width:100%;min-height:50px;padding:0 14px;border:1.5px solid #E9E6DF;border-radius:12px;background:#fff;font-family:inherit;font-size:14.5px;font-weight:600;color:#1B1A17;text-align:left;cursor:pointer}
+    #iotActOv .iotOpt[aria-checked="true"]{border-color:#1B1A17;background:#F6F5F2}
+    #iotActOv .iotRad{width:20px;height:20px;border-radius:50%;border:2px solid #B6B1A8;flex-shrink:0;box-sizing:border-box}
+    #iotActOv .iotOpt[aria-checked="true"] .iotRad{border:6px solid #1B1A17}
+    @keyframes iotIn{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+    @media (prefers-reduced-motion:no-preference){#iotActCard{animation:iotIn .2s cubic-bezier(.2,.7,.3,1)}}`;
+  document.head.appendChild(st);
+  const ov=document.createElement('div'); ov.id='iotActOv';
+  ov.style.cssText="position:fixed;inset:0;z-index:90;display:none;align-items:flex-end;justify-content:center;background:rgba(20,19,15,.42);font-family:'Noto Sans',system-ui,sans-serif";
+  ov.innerHTML=`<div id="iotActCard" role="dialog" aria-modal="true" aria-labelledby="iotActTitle" style="width:460px;max-width:100%;max-height:94vh;display:flex;flex-direction:column;background:#fff;border-radius:22px 22px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,.2)">
+    <div style="padding:12px 18px 12px;border-bottom:1px solid #EFEDE7;flex-shrink:0">
+      <div style="width:38px;height:4px;border-radius:3px;background:#D5D0C6;margin:0 auto 12px"></div>
+      <div style="display:flex;align-items:flex-start;gap:10px"><div style="flex:1;min-width:0">
+        <div id="iotActTitle" style="font-family:'IBM Plex Mono';font-size:17px;font-weight:700;color:#1B1A17"></div>
+        <div id="iotActSub" style="font-size:12.5px;color:#46433d;margin-top:3px;line-height:1.4"></div></div>
+        <button id="iotActX" type="button" aria-label="Close" style="flex-shrink:0;width:44px;height:44px;margin:-6px -8px 0 0;border:1px solid #E9E6DF;border-radius:11px;background:#fff;color:#6E6A62;font-size:20px;line-height:1;cursor:pointer">×</button></div>
+    </div>
+    <div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:14px 18px 6px">
+      <div id="iotActHist"></div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#46433d;text-transform:uppercase;margin:4px 0 8px">What did you do?</div>
+      <div id="iotActOpts" role="radiogroup" aria-label="What did you do?" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#46433d;text-transform:uppercase;margin:18px 0 8px">Is it sorted?</div>
+      <div role="radiogroup" aria-label="Case status" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button type="button" class="iotOpt iotSt" data-st="Open" role="radio" style="justify-content:center;font-size:13.5px">Still open</button>
+        <button type="button" class="iotOpt iotSt" data-st="Closed" role="radio" style="justify-content:center;font-size:13.5px">Sorted · close it</button></div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin:18px 0 8px"><label for="iotActText" style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#46433d;text-transform:uppercase">Remark <span id="iotActReq" style="text-transform:none;letter-spacing:0;font-weight:600;color:#6E6A62">· optional</span></label><span id="iotActCount" style="font-family:'IBM Plex Mono';font-size:11px;color:#6E6A62"></span></div>
+      <textarea id="iotActText" rows="3" maxlength="${IOT_W.MAX}" placeholder="What did you find?" style="width:100%;box-sizing:border-box;padding:11px 12px;border:1.5px solid #E9E6DF;border-radius:12px;font-family:inherit;font-size:16px;line-height:1.45;color:#1B1A17;resize:vertical"></textarea>
+      <div id="iotActMsg" role="status" style="display:none;margin-top:10px;font-size:13px;font-weight:600;padding:10px 12px;border-radius:10px"></div>
+    </div>
+    <div style="flex-shrink:0;border-top:1px solid #EFEDE7;padding:12px 18px calc(env(safe-area-inset-bottom) + 12px)">
+      <button id="iotActSend" type="button" style="width:100%;min-height:50px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer">Save</button></div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click', e=>{ if(e.target===ov) iotActClose(); });
+  ov.querySelector('#iotActX').addEventListener('click', iotActClose);
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape' && ov.style.display==='flex') iotActClose(); });
+  ov.querySelectorAll('.iotSt').forEach(b=>b.addEventListener('click', ()=>{ ov.dataset.st=b.dataset.st; iotActRefine(); }));
+  ov.querySelector('#iotActOpts').addEventListener('click', e=>{ const b=e.target.closest('[data-a]'); if(b){ ov.dataset.a=b.dataset.a; iotActRefine(); } });
+  ov.querySelector('#iotActText').addEventListener('input', iotActRefine);
+  ov.querySelector('#iotActSend').addEventListener('click', iotActSend);
+}
+function iotActOpen(key){
+  const ov=document.getElementById('iotActOv'); if(!ov||!IOT_W.url) return;
+  const [kind,mc]=String(key||'').split('|'), A=iotPageAgg(kind==='R'?'iotrisk':'iottamper'), m=A.all.find(x=>x.mc===mc); if(!m) return;
+  const targets=m.cases.filter(c=>iotState(c.id)!=='closed'), cover=targets.length?targets:[m.cases[0]];
+  const fresh=!_iotTarget || _iotTarget.key!==key;
+  _iotTarget={ key, kind, mc, st:m.st, cases:cover };
+  const q=s=>ov.querySelector(s), T=kind==='T';
+  q('#iotActTitle').textContent=mc;
+  const what = T ? `${cover.length===1?'1 ping gap':cover.length+' ping gaps'}${cover.length>1?` (${iotShortDay(cover[cover.length-1].day)} – ${iotShortDay(cover[0].day)})`:` on ${iotShortDay(cover[0].day)}, ${iotTime(cover[0].at)}`}`
+                 : `${cover.length===1?'1 outage':cover.length+' outages'} · ${iotKm(cover.reduce((a,c)=>a+(c.km||0),0))} km on zero voltage`;
+  q('#iotActSub').textContent=`${IOT_KIND[kind]} · ${targets.length?'covers '+what:'updates the latest — '+what} · ${iotStName(m.st)}`;
+  const seen=new Set(), hist=m.cases.flatMap(c=>IOT.actions[c.id]||[]).filter(a=>{ const k=a.ts+'|'+a.action+'|'+a.remark; if(seen.has(k)) return false; seen.add(k); return true; }).sort((a,b)=>b.ts.localeCompare(a.ts));
+  q('#iotActHist').innerHTML = hist.length ? `<details style="margin-bottom:14px;border:1px solid #EFEDE7;border-radius:12px;background:#FBFAF8"><summary style="min-height:44px;display:flex;align-items:center;padding:0 12px;font-size:13px;font-weight:600;cursor:pointer">Earlier actions · ${hist.length}</summary>${hist.map(a=>`<div style="padding:9px 12px;border-top:1px solid #EFEDE7;font-size:12.5px"><b>${E(a.action)}</b> · ${E(a.status)}${a.remark?`<div style="color:#46433d;margin-top:2px">${E(a.remark)}</div>`:''}<div style="color:#6E6A62;font-size:11.5px;margin-top:2px">${E(String(a.by||'').replace(/^IoT · /,''))} · ${E(a.ts)}</div></div>`).join('')}</details>` : '';
+  if(fresh){
+    q('#iotActOpts').innerHTML=IOT_ACTIONS[kind].map(a=>`<button type="button" class="iotOpt" role="radio" data-a="${E(a)}"><span class="iotRad"></span>${E(a)}</button>`).join('');
+    q('#iotActText').value=''; ov.dataset.a=''; ov.dataset.st=m.last?m.last.status:'Open'; q('#iotActMsg').style.display='none';
+  }
+  const b=q('#iotActSend'); b.disabled=false; b.textContent='Save';
+  iotActRefine(); ov.style.display='flex';
+  setTimeout(()=>q('#iotActX').focus(),30);
+  track('iot_action_open',{ kind, st:m.st, cases:cover.length });
+}
+function iotActClose(){ const ov=document.getElementById('iotActOv'); if(ov) ov.style.display='none'; }
+function iotActRefine(){
+  const ov=document.getElementById('iotActOv'); if(!ov) return;
+  const q=s=>ov.querySelector(s), act=ov.dataset.a||'', txt=q('#iotActText').value.trim();
+  ov.querySelectorAll('#iotActOpts [data-a]').forEach(b=>b.setAttribute('aria-checked', String(b.dataset.a===act)));
+  ov.querySelectorAll('.iotSt').forEach(b=>b.setAttribute('aria-checked', String(b.dataset.st===ov.dataset.st)));
+  q('#iotActReq').textContent = act==='Other' ? '· needed for Other' : '· optional';
+  q('#iotActCount').textContent=`${txt.length}/${IOT_W.MAX}`;
+  const btn=q('#iotActSend');
+  if(btn.textContent!=='Saving…'){ btn.disabled = !act || (act==='Other' && !txt);
+    btn.textContent = !act ? 'Pick what you did' : (act==='Other'&&!txt) ? 'Add a remark' : `Save · ${ov.dataset.st==='Closed'?'close':'keep open'}${_iotTarget&&_iotTarget.cases.length>1?' · '+_iotTarget.cases.length+' cases':''}`; }
+}
+async function iotActSend(){
+  const ov=document.getElementById('iotActOv'), t=_iotTarget; if(!ov||!t) return;
+  const q=s=>ov.querySelector(s), action=ov.dataset.a||'', remark=q('#iotActText').value.trim(), status=ov.dataset.st==='Closed'?'Closed':'Open';
+  if(!action || (action==='Other'&&!remark)) return;
+  const note=(kind,txt)=>{ const el=q('#iotActMsg'), tone=kind==='ok'?['#E6F5EA','#15803D']:kind==='err'?['#FBEAE7','#B42318']:['#FBF1DA','#8A6A12']; el.style.display='block'; el.style.background=tone[0]; el.style.color=tone[1]; el.textContent=txt; };
+  const btn=q('#iotActSend'); btn.disabled=true; btn.textContent='Saving…'; note('warn','Saving…');
+  const by=(GATE.cur&&GATE.cur.label)||'';
+  const payload={ token:IOT_W.token, kind:IOT_KIND[t.kind], machine:t.mc, state:iotStName(t.st), action, status, remark, by, role:(GATE.cur&&GATE.cur.role)||'',
+    cases:t.cases.map(c=>({ id:c.id, date:t.kind==='T'?c.at:'' })), caseId:t.cases[0].id };
+  try{
+    const res=await fetch(IOT_W.url, { method:'POST', body:JSON.stringify(payload) });   // bare string body ⇒ no preflight
+    const j=await res.json().catch(()=>({ok:false,error:'bad_response'}));
+    if(!j.ok) throw new Error(j.error||'failed');
+    const ts=j.ts||new Date().toLocaleString('sv-SE',{timeZone:'Asia/Kolkata'});
+    t.cases.forEach(c=>{ const row={ ts, action, status, remark, by }; (IOT.actions[c.id]||(IOT.actions[c.id]=[])).push(row); IOT.local.push({ id:c.id, at:Date.now(), row }); });
+    note('ok', status==='Closed' ? `Saved and closed — ${t.mc} moves to Closed.` : `Saved — ${t.mc} moves to Open.`); btn.textContent='Saved ✓';
+    q('#iotActText').value=''; _iotTarget=null;
+    track('iot_action_submit',{ kind:t.kind, st:t.st, status, cases:t.cases.length });
+    render();
+    setTimeout(()=>{ iotActClose(); q('#iotActMsg').style.display='none'; }, 1200);
+  }catch(err){
+    note('err','Could not save — check your signal and try again. What you typed is still here.');
+    btn.disabled=false; btn.textContent='Save'; iotActRefine(); console.warn('[MP-Ops] iot action failed →', err);
+  }
+}
 function iotBodyHTML(view, mob){
   if(!IOT.loaded){
     if(!IOT.loading && !IOT.error) setTimeout(loadIoT,0);
@@ -8363,105 +8489,13 @@ function iotBodyHTML(view, mob){
     return `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:60px 20px;text-align:center;color:#6E6A62;font-size:13px">
       ${IOT.error?'⚠ ':''}${msg}${IOT.error?`<div style="margin-top:14px"><button data-act="iotretry" style="min-height:${mob?44:32}px;padding:0 16px;border:1px solid #E9E6DF;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Retry</button></div>`:''}</div>`;
   }
-  return view==='iotrisk' ? iotRiskHTML(mob) : view==='iotteam' ? iotTeamHTML(mob) : iotTamperHTML(mob);
-}
-function iotCSV(view){
-  const T=view!=='iotrisk', A=T?iotTamperAgg():iotRiskAgg();
-  const ll=l=>l?`${l.lat},${l.lon}`:'', last=r=>{ const a=iotLast(r.id); return a?[a.status,a.action,a.remark,a.by,a.ts]:['','','','','']; };
-  const head=T ? ['Potential tamper date','Last ping','Back online','Machine','Cases in range','Gap (h)','Moved (km)','Recovery lat,long','Maps link','Operator','Operator mobile','CI','CI mobile','State','Action status','Action','Remark','By','Recorded at']
-               : ['Machine','Status','Outage (min)','Pings','Travelled (km)','Start lat,long','End lat,long','Maps link (end)','Operator','Operator mobile','CI','CI mobile','State','Action status','Action','Remark','By','Recorded at'];
-  const lines=[head.join(',')].concat(A.rows.map(r=>(T
-    ? [r.day,r.at,r.back,r.mc,A.rep[r.mc],r.gap,r.km,ll(r.loc),r.loc?iotMapHref(r.loc):'',r.op,r.opMob,r.ci,r.ciMob,iotStName(r.st),...last(r)]
-    : [r.mc,r.status,r.mins,r.pings,r.km,ll(r.start),ll(r.end),r.end?iotMapHref(r.end):'',r.op,r.opMob,r.ci,r.ciMob,iotStName(r.st),...last(r)]).map(csvCell).join(',')));
-  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
-  a.download=`IoT_${T?'potential-tamper_'+A.from+'_'+A.to:'at-risk_'+new Date().toISOString().slice(0,10)}_${A.st||'all'}.csv`;
-  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
+  return view==='iotteam' ? iotTeamHTML(mob) : iotTechHTML(view, mob);
 }
 
 /* ---- the WRITE: "Record action" on a case → one appended row on the actions tab, via apps-script/iot-actions.gs.
    Built once onto document.body, OUTSIDE render(), for the same reason as the concern form: render() swaps
    app.innerHTML on every state change (and on the 10-minute refresh), which would wipe a remark mid-sentence.
    Same transport rules as HELP: a bare-string POST body (no preflight), a failed send never clears the text. */
-let _iotCase=null;
-function iotFind(id){ return IOT.tamper.find(r=>r.id===id) || IOT.risk.find(r=>r.id===id) || null; }
-function iotActMount(){
-  if(document.getElementById('iotActOv')) return;
-  const st=document.createElement('style');
-  st.textContent=`#iotActOv select:focus,#iotActOv textarea:focus{border-color:#1B1A17}#iotActOv button[disabled]{opacity:.45;cursor:not-allowed}
-    @media (max-width:820px),(max-height:500px) and (pointer:coarse){#iotActX{width:44px!important;height:44px!important}#iotActSend,#iotActOv select,#iotActOv textarea,#iotActOv .iotSt{min-height:46px}}`;
-  document.head.appendChild(st);
-  const ov=document.createElement('div'); ov.id='iotActOv';
-  ov.style.cssText="position:fixed;inset:0;z-index:90;display:none;align-items:flex-end;justify-content:center;background:rgba(27,26,23,.34);font-family:'Noto Sans',system-ui,sans-serif";
-  ov.innerHTML=`<div role="dialog" aria-modal="true" aria-labelledby="iotActTitle" style="width:440px;max-width:100%;max-height:92vh;overflow:auto;background:#fff;border-radius:18px 18px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,.18);padding:20px 20px calc(env(safe-area-inset-bottom) + 18px)">
-    <div style="display:flex;align-items:flex-start;gap:10px"><div style="flex:1;min-width:0"><div id="iotActTitle" style="font-size:17px;font-weight:700;color:#1B1A17">Record action</div><div id="iotActSub" style="font-size:12px;color:#6E6A62;margin-top:3px"></div></div>
-      <button id="iotActX" type="button" aria-label="Close" style="flex-shrink:0;width:30px;height:30px;border:none;border-radius:8px;background:#F2F0EB;color:#6E6A62;font-size:17px;line-height:1;cursor:pointer">×</button></div>
-    <div id="iotActHist" style="margin-top:12px"></div>
-    <div style="margin-top:14px;display:flex;flex-direction:column;gap:12px">
-      <div><label style="${HELP_LBL}" for="iotActSel2">Action taken</label><select id="iotActSel2" style="${HELP_SEL}"></select></div>
-      <div><div style="${HELP_LBL}">Case status</div><div style="display:flex;gap:8px;margin-top:5px">
-        <button type="button" class="iotSt" data-st="Open" style="flex:1;padding:9px 0;border-radius:9px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">Open · still working on it</button>
-        <button type="button" class="iotSt" data-st="Closed" style="flex:1;padding:9px 0;border-radius:9px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">Closed · resolved</button></div></div>
-      <div><div style="display:flex;align-items:baseline;justify-content:space-between"><label style="${HELP_LBL}" for="iotActText">Remark</label><span id="iotActCount" style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#9C988F"></span></div>
-        <textarea id="iotActText" rows="3" maxlength="${IOT_W.MAX}" placeholder="What did you find? (needed for Other)" style="${HELP_SEL};resize:vertical;line-height:1.45"></textarea></div>
-      <div id="iotActMsg" style="display:none;font-size:12.5px;font-weight:600;padding:9px 11px;border-radius:9px"></div>
-      <button id="iotActSend" type="button" style="width:100%;padding:12px 0;border:none;border-radius:10px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">Save action</button>
-    </div></div>`;
-  document.body.appendChild(ov);
-  ov.addEventListener('click', e=>{ if(e.target===ov) iotActClose(); });
-  ov.querySelector('#iotActX').addEventListener('click', iotActClose);
-  document.addEventListener('keydown', e=>{ if(e.key==='Escape' && ov.style.display==='flex') iotActClose(); });
-  ov.querySelectorAll('.iotSt').forEach(b=>b.addEventListener('click', ()=>{ ov.dataset.st=b.dataset.st; iotActRefine(); }));
-  ov.querySelector('#iotActSel2').addEventListener('change', iotActRefine);
-  ov.querySelector('#iotActText').addEventListener('input', iotActRefine);
-  ov.querySelector('#iotActSend').addEventListener('click', iotActSend);
-}
-function iotActOpen(id){
-  const ov=document.getElementById('iotActOv'), r=iotFind(id); if(!ov||!r||!IOT_W.url) return;
-  const fresh=_iotCase!==id; _iotCase=id;
-  const q=s=>ov.querySelector(s);
-  q('#iotActTitle').textContent=`${IOT_KIND[r.kind]} · ${r.mc}`;
-  q('#iotActSub').textContent=[r.kind==='T'?iotDayTxt(r.day)+', '+iotTime(r.at):(r.status+' · '+iotKm(r.km)+' km'), iotStName(r.st), r.op?'Operator '+r.op:''].filter(Boolean).join(' · ');
-  const hist=IOT.actions[id]||[];
-  q('#iotActHist').innerHTML = hist.length ? `<div style="${HELP_LBL}">Earlier on this case</div>`+hist.slice().reverse().map(a=>`<div style="margin-top:6px;padding:8px 10px;border-radius:9px;background:#FBFAF8;border:1px solid #EFEDE7;font-size:12px"><b>${E(a.action)}</b> · ${E(a.status)}${a.remark?`<div style="color:#46433d;margin-top:2px">${E(a.remark)}</div>`:''}<div style="color:#9C988F;font-size:11px;margin-top:2px">${E(a.by)} · ${E(a.ts)}</div></div>`).join('') : '';
-  if(fresh){ const last=iotLast(id);
-    q('#iotActSel2').innerHTML=`<option value="">Choose…</option>`+IOT_ACTIONS[r.kind].map(a=>`<option>${E(a)}</option>`).join('');
-    q('#iotActText').value=''; ov.dataset.st=last?last.status:'Open'; q('#iotActMsg').style.display='none'; }
-  const b=q('#iotActSend'); b.disabled=false; b.textContent='Save action';
-  iotActRefine(); ov.style.display='flex'; setTimeout(()=>q('#iotActSel2').focus(),30);
-  track('iot_action_open',{ kind:r.kind, st:r.st });
-}
-function iotActClose(){ const ov=document.getElementById('iotActOv'); if(ov) ov.style.display='none'; }
-function iotActRefine(){
-  const ov=document.getElementById('iotActOv'); if(!ov) return;
-  const q=s=>ov.querySelector(s), act=q('#iotActSel2').value, txt=q('#iotActText').value.trim();
-  ov.querySelectorAll('.iotSt').forEach(b=>{ const on=b.dataset.st===ov.dataset.st; b.style.border=`1.5px solid ${on?'#1B1A17':'#E9E6DF'}`; b.style.background=on?'#1B1A17':'#fff'; b.style.color=on?'#fff':'#46433d'; });
-  q('#iotActCount').textContent=`${txt.length}/${IOT_W.MAX}`;
-  if(q('#iotActSend').textContent!=='Saving…') q('#iotActSend').disabled = !act || (act==='Other' && !txt);
-}
-async function iotActSend(){
-  const ov=document.getElementById('iotActOv'), r=iotFind(_iotCase); if(!ov||!r) return;
-  const q=s=>ov.querySelector(s), action=q('#iotActSel2').value, remark=q('#iotActText').value.trim(), status=ov.dataset.st==='Closed'?'Closed':'Open';
-  if(!action || (action==='Other'&&!remark)) return;
-  const note=(kind,t)=>{ const el=q('#iotActMsg'), tone=kind==='ok'?['#E6F5EA','#15A24A']:kind==='err'?['#FBEAE7','#DC3A2B']:['#FBF1DA','#8A6A12']; el.style.display='block'; el.style.background=tone[0]; el.style.color=tone[1]; el.textContent=t; };
-  const btn=q('#iotActSend'); btn.disabled=true; btn.textContent='Saving…'; note('warn','Saving…');
-  const by=(GATE.cur&&GATE.cur.label)||'';
-  const payload={ token:IOT_W.token, kind:IOT_KIND[r.kind], caseId:r.id, machine:r.mc, caseDate:r.kind==='T'?r.at:'', state:iotStName(r.st),
-    action, status, remark, by, role:(GATE.cur&&GATE.cur.role)||'' };
-  try{
-    const res=await fetch(IOT_W.url, { method:'POST', body:JSON.stringify(payload) });   // bare string body ⇒ no preflight
-    const j=await res.json().catch(()=>({ok:false,error:'bad_response'}));
-    if(!j.ok) throw new Error(j.error||'failed');
-    const row={ ts:j.ts||new Date().toLocaleString('sv-SE',{timeZone:'Asia/Kolkata'}), action, status, remark, by };
-    (IOT.actions[r.id]||(IOT.actions[r.id]=[])).push(row); IOT.local.push({ id:r.id, at:Date.now(), row });
-    note('ok','Saved.'); btn.textContent='Saved ✓'; q('#iotActText').value=''; _iotCase=null;
-    track('iot_action_submit',{ kind:r.kind, st:r.st, status });
-    render();
-    setTimeout(()=>{ iotActClose(); q('#iotActMsg').style.display='none'; }, 1100);
-  }catch(err){
-    note('err','Could not save — check your connection and try again. Your remark is still here.');
-    btn.textContent='Save action'; btn.disabled=false; console.warn('[MP-Ops] iot action failed →', err);
-  }
-}
 function mpprodViewHTML(v){ return `<section style="padding:18px 22px">${mpprodBodyHTML(false)}</section>`; }
 /* MP product summary — a self-contained page over the "Product Data MP" tab. Controls (company / territory /
    measure) are page-local; the machine filter bar + KPI strip are suppressed (CHROMELESS), like Products and
@@ -9789,6 +9823,7 @@ function mobileHTML(v){
       ${sheet}
       ${S.sheet==='filters' ? mSheetHTML('Filters', mFiltersHTML(v), 'sheetclose', mFiltersFooterHTML(v)) : ''}
       ${S.sheet==='more'    ? mSheetHTML('More views', mMoreHTML(), 'sheetclose') : ''}
+      ${S.sheet==='iotfilters' && curProject().iot ? iotSheetHTML() : ''}
     </div>
   </div>`;
 }
@@ -9958,7 +9993,6 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='iotStSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({iotSt:w, iotLimit:IOT_PAGE}); }   // page-local
   else if(e.target.id==='iotFrom'){ const f=e.target.value; if(f) setState({itFrom:f, itTo:(state.itTo&&state.itTo<f)?f:state.itTo, iotLimit:IOT_PAGE}); }
   else if(e.target.id==='iotTo'){ const t=e.target.value; if(t) setState({itTo:t, itFrom:(state.itFrom&&state.itFrom>t)?t:state.itFrom, iotLimit:IOT_PAGE}); }
-  else if(e.target.id==='iotActSel') setState({iotAct:e.target.value, iotLimit:IOT_PAGE});
   else if(e.target.id==='wpZoneSel') setState({wpZone:e.target.value, wpTerr:''});
   else if(e.target.id==='wpTerrSel') setState({wpTerr:e.target.value});
   else if(e.target.id==='lbStateSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({lbSt:w, lbAll:false}); }   // page-local; never touches state.st
@@ -10028,8 +10062,10 @@ app.addEventListener('click', e=>{
     case 'wpretry': loadWPlan(); break;
     case 'iotretry': loadIoT(); break;
     case 'iotact': iotActOpen(el.dataset.case); break;
+    case 'iotq': setState({iotQueue:el.dataset.q, iotLimit:IOT_PAGE}); break;
+    case 'iotsheet': setState({sheet:'iotfilters'}); break;
     case 'iotmore': setState({iotLimit:(state.iotLimit||IOT_PAGE)+IOT_PAGE}); break;
-    case 'iotclear': setState({iotQ:'', itFrom:'', itTo:'', iotAct:'all', iotLimit:IOT_PAGE}); break;
+    case 'iotclear': setState(s=>({iotQ:'', itFrom:'', itTo:'', iotSt:(gateCanSwitchStates()?'':s.iotSt), iotLimit:IOT_PAGE})); break;
     case 'iotrange': setState({itFrom:el.dataset.from, itTo:el.dataset.to, iotLimit:IOT_PAGE}); break;
     case 'iotcsv': iotCSV(state.view); track('iot_csv',{ view:state.view, st:state.iotSt||'all' }); break;
     case 'wpcsv': wplanCSV(); track('wplan_csv',{ st:state.wpSt||'all' }); break;

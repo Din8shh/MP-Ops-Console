@@ -790,6 +790,22 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
   the **end** lat/long as the primary map link (start is secondary). With no date column, a case id is
   machine + START lat/long, stable while an outage grows.
 - Map links are Google's universal `maps/search/?api=1&query=lat,lon` URL — the Maps app on a phone.
+- **The two technician pages are MOBILE-FIRST** (redesigned 2026-10-15, by request; `iotTechHTML`). Designed for one
+  person on a phone whose jobs are: what next, get there / ring somebody, say what I did. The team overview is
+  Amit's desk view and keeps its table. The rules a later edit would break:
+  · **The unit on screen is the MACHINE** (`iotMachines`), not the gap: one machine logged 30 gaps in a fortnight,
+    and Rohit's week is 46 cards instead of 138 rows. The DATA grain is still the case — each gap is actioned,
+    counted and exported on its own.
+  · **The queue comes first**: To do / Open / Closed / All with counts (`state.iotQueue`, default To do). A machine is
+    To do if any case in scope has no action, Open if none is To do but one is open, else Closed.
+  · **Queue + day strip are one sticky bar.** Dates are chips with counts (Last 7 days, each day, All); a custom
+    range and the state picker live in the Filters sheet (`state.sheet='iotfilters'`, phone) or inline (desktop).
+  · Each card ends in **Navigate** (latest gap's recovery point / the furthest outage's END point) and **Record
+    action**; operator and CI each carry a 44px call button. Repeat gaps fold behind "Show all N gaps".
+  · **Record action covers the machine**: every case of it in scope that is not Closed (or the latest, if all are).
+    One POST carries `cases:[{id,date}]` and the script writes one row per case, so per-case status holds.
+    Choices are big radio rows, not a `<select>` — this is used one-handed beside a machine.
+  · Desktop renders the same cards in a `minmax(340px,1fr)` grid.
 - **Two sheet faults handled in code:** the tamper tab's `CI_name` / `CI_number` are SWAPPED (decided per row by
   which cell is digits, so a sheet fix needs no edit); state arrives as "Madhya pradesh" and "Madhya Pradesh"
   (both → MP). `-` means blank (254 tamper rows have no operator — printed "not mapped").
@@ -797,7 +813,7 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
   `pinDrift` if the two ever disagree — re-cut the PIN rows then. AP is a valid state here (`IOT_ST_NAMES`) though
   it is not one of the console's seven. Scope is page-local (`iotSt`, `iotQ`, `itFrom`/`itTo`, `iotAct`) and shared
   by the three pages.
-- **The WRITE** is "Record action" on a case → Action taken (per-kind list in `IOT_ACTIONS`), Open/Closed, remark
+- **The WRITE** is "Record action" on a machine (see above) → Action taken (per-kind list in `IOT_ACTIONS`), Open/Closed, remark
   (required for "Other") → `IOT_W.url`. Same transport rules as the concern form (bare-string POST, form built on
   `document.body` outside `render()`, a failed send keeps the text). A saved action is held locally (`IOT.local`)
   until the gviz export carries it, max 15 min. **`IOT_W.url` blank = every Record button is absent** and the pages
