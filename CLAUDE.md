@@ -845,7 +845,16 @@ network-first, a push is live on the next online open, with no version to rememb
   Live badge. A non-OK response (429, 500) is returned as-is, never swapped for the cache.
 - The page side lives in `PWA` / `pwaBannerHTML` / `pwaInstall`. The install offer is a dismissible strip at
   the top of the phone scroller on the **project's home view** (`curProject().home`, else the Map) — it was Map-only,
-  which meant the IoT technicians, who have no map, were never offered it — and **not** in the More sheet: a field login has four views and so no More
+  which meant the IoT technicians, who have no map, were never offered it — and **not** in the More sheet (2026-10-15).
+  **It has four forms, because a phone can install four ways, and the old two-form version hid it silently on most
+  Android phones.** `prompt` (Chrome fired `beforeinstallprompt`: a one-tap Install button) · `ios` (Share → Add to
+  Home Screen) · `android` (⋮ → Add to Home screen / Install app — shown whenever Chrome has NOT fired the event,
+  which it withholds until ~30 s of engagement, for ~3 months after its own mini-infobar is dismissed, and which
+  Samsung Internet never fires) · `inapp` (a WhatsApp / Instagram / Gmail in-app browser cannot install: "open
+  this link in Chrome / Safari"). **A dismissal SNOOZES for 7 days** (a timestamp under `mpoc_install_dismiss`); it
+  used to hide the offer for good on a key Kharif and IoT share, so one tap on the Kharif map silenced it for an IoT
+  technician on the same phone. The old permanent `'1'` reads as an expired timestamp. The `ios` test's
+  Mac-plus-touch iPad clause excludes Android UAs, or an Android phone emulated on a Mac reads as an iPad: a field login has four views and so no More
   button. Android gets a real Install button (`beforeinstallprompt`); iOS gets the Share → Add to Home Screen
   line. Neither shows when running installed. Going offline shows a strip; coming back online re-fetches at once.
 - `apple-mobile-web-app-status-bar-style` is `default`, not `black-translucent`. The phone header is white, and

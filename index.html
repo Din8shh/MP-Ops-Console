@@ -10048,7 +10048,7 @@ app.addEventListener('click', e=>{
     case 'sheet': setState({sheet:el.dataset.sheet}); break;
     case 'sheetclose': setState({sheet:null}); break;
     case 'pwainstall': pwaInstall(); break;
-    case 'pwadismiss': PWA.dismissed=true; try{ localStorage.setItem(PWA.KEY,'1'); }catch(_){ } render(); break;
+    case 'pwadismiss': PWA.dismissed=true; try{ localStorage.setItem(PWA.KEY,String(Date.now())); }catch(_){ } track('pwa_offer_dismiss',{ project:curProject().id }); render(); break;
     case 'loadmore': setState(s=>({listLimit:s.listLimit+MLIST_PAGE})); break;
     case 'org': { const want=el.dataset.org; if(gateAllows(want)){ setState({org:want, bm:'', tm:''}); } else { gateShow(()=>setState({org: gateAllows(want)?want:gateDefaultOrg(), bm:'', tm:''}), `Enter PIN for ${want} access`, true); } break; }
     case 'metric': setState({metric:el.dataset.metric}); break;
@@ -10629,8 +10629,16 @@ async function helpSend(){
 const PWA = {
   KEY:'mpoc_install_dismiss', prompt:null, online:navigator.onLine!==false,
   standalone: (()=>{ try{ return matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; }catch(_){ return false; } })(),
-  ios: /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1),
-  dismissed: (()=>{ try{ return localStorage.getItem('mpoc_install_dismiss')==='1'; }catch(_){ return false; } })(),
+  ios: /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1 && !/android/i.test(navigator.userAgent)),
+  android: /android/i.test(navigator.userAgent),
+  // An in-app browser (a link opened inside WhatsApp, Instagram, Facebook, Gmail …) cannot install anything, and on
+  // iOS its Share sheet has no Add to Home Screen. `; wv)` is Android's WebView marker; the rest name the apps.
+  inApp: /; wv\)|FBAN|FBAV|Instagram|Line\/|GSA\/|WhatsApp/i.test(navigator.userAgent),
+  // A dismissal SNOOZES the offer for SNOOZE_MS; it used to hide it for good, on a key Kharif and IoT share — so a phone
+  // that had once closed it on the Kharif map never offered the IoT technicians anything. The old permanent value
+  // ('1') reads as an ancient timestamp, i.e. already expired, so those phones are offered it again.
+  SNOOZE_MS: 7*864e5,
+  dismissed: (()=>{ try{ const v=Number(localStorage.getItem('mpoc_install_dismiss')||0); return Date.now()-v < 7*864e5; }catch(_){ return false; } })(),
 };
 if('serviceWorker' in navigator && (location.protocol==='https:' || ['localhost','127.0.0.1'].includes(location.hostname)))
   navigator.serviceWorker.register('./sw.js').catch(err=>console.warn('[MP-Ops] service worker not registered →', err));
@@ -10653,11 +10661,18 @@ function pwaBannerHTML(ph){
   // landing view only; the dismissal persists as before. (The offline strip is different: it is information
   // about the data on screen, so it stays on every view.) "Landing" is the PROJECT's home, not the map: the IoT
   // technicians have no map, so a map-only test meant the people who most need the app offline were never offered it.
-  const offer = ph && state.view===(curProject().home||'map') && !PWA.standalone && !PWA.dismissed && (PWA.prompt || PWA.ios);
+  // Four forms, one per way a phone can install. Android used to get NOTHING unless Chrome had fired
+  // beforeinstallprompt — which it holds back until the person has tapped and stayed ~30 s, withholds for about
+  // three months after its own mini-infobar is dismissed, and which Samsung Internet and others never fire. Those
+  // phones now get the manual menu path; the one-tap button still takes over the moment Chrome offers it.
+  const how = PWA.prompt ? 'prompt' : PWA.inApp ? 'inapp' : PWA.ios ? 'ios' : PWA.android ? 'android' : '';
+  const offer = ph && state.view===(curProject().home||'map') && !PWA.standalone && !PWA.dismissed && how;
   if(offer) out+=strip('#FFFFFF','#E9E6DF',`<img src="icons/icon-192.png" alt="" width="30" height="30" style="border-radius:8px;flex-shrink:0">
-    <div style="flex:1;min-width:0;font-size:12px;color:#46433d;line-height:1.35">${PWA.prompt
-      ? '<b>Install the console</b> — opens from your home screen, works without signal.'
-      : '<b>Add to Home Screen</b> — tap <b>Share</b> <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M8 11H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-2"/></svg> then <b>Add to Home Screen</b>.'}</div>
+    <div style="flex:1;min-width:0;font-size:12px;color:#46433d;line-height:1.35">${
+      how==='prompt' ? '<b>Install the app</b> — opens from your home screen, works without signal.'
+      : how==='inapp' ? '<b>To install the app</b>, open this link in <b>'+(PWA.ios?'Safari':'Chrome')+'</b> — tap ⋮ or ··· and choose <b>Open in '+(PWA.ios?'Safari':'browser')+'</b>.'
+      : how==='ios' ? '<b>Add to Home Screen</b> — tap <b>Share</b> <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M8 11H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-2"/></svg> then <b>Add to Home Screen</b>.'
+      : '<b>Install the app</b> — tap <b>⋮</b> at the top right, then <b>Add to Home screen</b> or <b>Install app</b>.'}</div>
     ${PWA.prompt?`<button data-act="pwainstall" style="flex-shrink:0;padding:8px 12px;border:none;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Install</button>`:''}
     <button data-act="pwadismiss" aria-label="Dismiss" style="flex-shrink:0;width:44px;height:44px;margin:-8px -8px -8px 0;border:none;background:none;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;display:flex;align-items:center;justify-content:center;pointer-events:none">${I.closeS}</span></button>`);
   return out;
