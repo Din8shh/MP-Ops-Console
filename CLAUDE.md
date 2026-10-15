@@ -825,7 +825,7 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
   (required for "Other") → `IOT_W.url`. Same transport rules as the concern form (bare-string POST, form built on
   `document.body` outside `render()`, a failed send keeps the text). A saved action is held locally (`IOT.local`)
   until the gviz export carries it, max 15 min. **`IOT_W.url` blank = every Record button is absent** and the pages
-  say "Read-only for now". `?iotUrl=` overrides it on localhost only. **Deployed 2026-10-15** from the IoT workbook (`AKfycbxsULRy…/exec`); verified then by probes that cannot write — a wrong token answers `bad_token`, and 81 cases answer `too_many_cases`, which only the multi-case version of the script says.
+  say "Read-only for now". `?iotUrl=` overrides it on localhost only. **Deployed 2026-10-15** from the IoT workbook (`AKfycbxsULRy…/exec`); verified then by probes that cannot write — a wrong token answers `bad_token`, and 81 cases answer `too_many_cases`, which only the multi-case version of the script says. **Version 2 (Action date) went live the same day**; a GET now answers `"v":2`, so any future redeploy can be checked with a plain GET and no write. **The deployment belongs to a different Google account than dineshkyadav008@gmail.com** — that account can edit and save the script's code but gets "You do not have permission" on both Manage deployments and New deployment, so a redeploy has to be done from the deploying account.
 - **gviz answers an unknown tab name with the FIRST tab**, so `iotActionsBuild` refuses anything without a
   `Case ID` header — before the script's first write the tab does not exist, and that must read as "no actions",
   not as 2,388 garbage ones.
