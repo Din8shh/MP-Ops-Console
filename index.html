@@ -7978,7 +7978,7 @@ const IOT_PAGE = 60;
 const IOT_MINW = 1080;   // desktop tables are fixed grids: below this they scroll sideways rather than clip the Action column
 // The write endpoint: the /exec URL of apps-script/iot-actions.gs deployed FROM the IoT workbook. Blank ⇒ every
 // "Record action" button is absent (a form that cannot submit is worse than none) and the pages are read-only.
-const IOT_W = { url:'', token:'mpops-iot-4q8zr2', MAX:600 };
+const IOT_W = { url:'https://script.google.com/macros/s/AKfycbxsULRyYcw60mqX3VX7mqoqcUy_suhLEzG0O20W3AlRR1Nc4kHgU0SCMPq8vtwI8v4cUg/exec', token:'mpops-iot-4q8zr2', MAX:600 };
 try{ const H=location.hostname, q=new URLSearchParams(location.search);
   if((H==='localhost'||H==='127.0.0.1'||H==='') && q.get('iotUrl')) IOT_W.url=q.get('iotUrl'); }catch(_){}   // localhost only, as HELP.url
 const IOT_ACTIONS = {
