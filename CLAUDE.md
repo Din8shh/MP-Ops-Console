@@ -686,6 +686,8 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | **Wheat** `admin` (`wh-admin`, 4040) | All / UPL / SWAL / Open | HR + PB, switchable | every Wheat view |
 | **Wheat** `wstate` × HR / PB (4811 / 4711) | All / UPL / SWAL | one, locked | Territory, AMs, FOs, Retailers |
 | **Wheat** `wsales` × HR / PB (4822 / 4722) | All / UPL / SWAL | one, locked | **placeholder** = the state PIN's; to be decided |
+| **IoT** `admin` (`iot-admin`, 2601 — Amit Kumar, IoT head) | n/a | all, switchable | Potential tamper, At risk, **Team overview** |
+| **IoT** `iottech` × Rohit (RJ, 2611) / Manish (HR+PB, 2621) / Vishal (MP+GJ+TG+MH+AP, 2631) | n/a | his own, locked or switchable within them | Potential tamper, At risk |
 
 The Wheat rows carry `project:'wheat'`; see **Projects** below. The Kharif admin (0088) does NOT see Wheat, and
 the Wheat admin does not see Kharif — "separated by PIN" is the requirement.
@@ -765,6 +767,45 @@ some added and some not carried over, on a new tab of the SAME workbook that doe
   on the phone. An FO and a retailer are each keyed on their **mobile**, with the name as the fallback, the
   identity rule operators already follow. Both view chains carry them (`contentHTML` + an explicit `mobileHTML`
   branch).
+
+## IoT device monitoring (project `iot`, added 2026-10-15)
+A third PIN-picked project, for the IoT team rather than a programme: three state technicians and the IoT head they
+report to. It reads its **own workbook**, "IOT Tampered data" (`PROJECTS.iot.iot.sheetId` =
+`19CSbLqTIB-TivT1rVrilFeQEERcts_LHAGwjpgE__Oo`), runs `applyRows([])` like the Wheat plan stage (no machine rows,
+no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine search and phone filter button).
+
+| gid | Tab | Grain | Shown as |
+|---|---|---|---|
+| `0` | Tampered cases and suspicious | one row per IoT ping GAP on one machine (27 Sep → 14 Oct 2026, 2,388 rows / 459 machines) | **Potential tamper cases** (`iottamper`) |
+| `504457328` | battery outage | current SNAPSHOT, no date (63 outages / 47 machines on 2026-10-15) | **At risk machines** (`iotrisk`) — the sheet's name is never shown |
+| `954063262` | IOT vs state mapping | technician ⇄ state + phone, IoT head | Team overview (`iotteam`, admin only) |
+| by name `IoT actions` | written by `apps-script/iot-actions.gs` | one row per technician action | the case's Open / Closed status |
+
+- **"Potential", always.** A ping gap is a lead, not a finding, so no screen says "tampered". The sheet's own
+  `status` column (NOT_RECOVERED / SUSPICIOUS_MOVEMENT) is **deliberately not shown** (by request); its names
+  mislead anyway — every NOT_RECOVERED row has a recovery ping and some moved 20+ km.
+- **Tamper date is column B, `last_ping_before_gap`**; the map link is the **recovery** lat/long. Default range is
+  the last 7 days the tab carries; ×N beside a machine counts its cases in the range (one machine has 30).
+- **At risk shows the status** (`MOVING_WITH_VOLTAGE_0` → "Zero voltage · moving"), km travelled, outage, pings and
+  the **end** lat/long as the primary map link (start is secondary). With no date column, a case id is
+  machine + START lat/long, stable while an outage grows.
+- Map links are Google's universal `maps/search/?api=1&query=lat,lon` URL — the Maps app on a phone.
+- **Two sheet faults handled in code:** the tamper tab's `CI_name` / `CI_number` are SWAPPED (decided per row by
+  which cell is digits, so a sheet fix needs no edit); state arrives as "Madhya pradesh" and "Madhya Pradesh"
+  (both → MP). `-` means blank (254 tamper rows have no operator — printed "not mapped").
+- **State scope is the PIN's.** Technicians' `states` are copied from the mapping tab; the load log reports
+  `pinDrift` if the two ever disagree — re-cut the PIN rows then. AP is a valid state here (`IOT_ST_NAMES`) though
+  it is not one of the console's seven. Scope is page-local (`iotSt`, `iotQ`, `itFrom`/`itTo`, `iotAct`) and shared
+  by the three pages.
+- **The WRITE** is "Record action" on a case → Action taken (per-kind list in `IOT_ACTIONS`), Open/Closed, remark
+  (required for "Other") → `IOT_W.url`. Same transport rules as the concern form (bare-string POST, form built on
+  `document.body` outside `render()`, a failed send keeps the text). A saved action is held locally (`IOT.local`)
+  until the gviz export carries it, max 15 min. **`IOT_W.url` blank = every Record button is absent** and the pages
+  say "Read-only for now". `?iotUrl=` overrides it on localhost only.
+- **gviz answers an unknown tab name with the FIRST tab**, so `iotActionsBuild` refuses anything without a
+  `Case ID` header — before the script's first write the tab does not exist, and that must read as "no actions",
+  not as 2,388 garbage ones.
+- Every load logs `[MP-Ops] iot → {tamper, risk, techs, actions, pinDrift}`. Read it first if a count looks wrong.
 
 ## PWA
 The console installs to the home screen and opens with no signal. It is one app for every project; the PIN
