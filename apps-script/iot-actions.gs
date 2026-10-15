@@ -47,8 +47,10 @@ var COLUMNS = [
   ['Action date', 'actionDate']     // the day the work was DONE (yyyy-MM-dd, IST); Timestamp is when it was saved.
 ];                                  // Appended LAST so a tab created by the first version keeps its column order.
 
+var VERSION   = 2;                       // 2 = stores the Action date. Shown by a GET, so a redeploy can be checked without writing.
+
 function doGet() {
-  return json({ ok: true, ping: new Date().toISOString() });
+  return json({ ok: true, v: VERSION, ping: new Date().toISOString() });
 }
 
 function doPost(e) {
@@ -95,7 +97,7 @@ function doPost(e) {
     } finally {
       lock.releaseLock();
     }
-    return json({ ok: true, ts: ts, rows: cases.length, v: 2 });   // v:2 = this version stores the action date
+    return json({ ok: true, ts: ts, rows: cases.length, v: VERSION });
   } catch (err) {
     return json({ ok: false, error: String(err && err.message || err) });
   }
