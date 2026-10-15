@@ -7985,6 +7985,10 @@ const IOT_ACTIONS = {
   T:['Called the operator','Visited the machine','Device reinstalled / repaired','Genuine gap — no tampering','Tampering confirmed','Other'],
   R:['Called the operator','Visited the machine','Battery replaced / charged','Wiring / connector fixed','Device replaced','Other'] };
 const IOT_KIND = { T:'Potential tamper', R:'At risk' };
+// The day the work was DONE, which is not the day it was typed in: a technician visits in a dead zone and records it
+// that evening, or the next morning. `on` is that date (YYYY-MM-DD, IST); `ts` stays the server's write time.
+const iotToday = () => new Date().toLocaleDateString('en-CA',{ timeZone:'Asia/Kolkata' });
+const iotActOn = a => a && (a.on || String(a.ts||'').slice(0,10));
 
 const iotCell = (r,i) => i<0 ? '' : String(r[i]==null?'':r[i]).trim().replace(/\s+/g,' ');
 const iotNil  = v => (v==='-'||v==='—'||v==='0'||v==='#N/A') ? '' : v;
@@ -8046,11 +8050,11 @@ function iotTechBuild(rows){
   return { techs, head };
 }
 function iotActionsBuild(rows){
-  const C=iotHead(rows,{ ts:x=>x==='timestamp', id:x=>x==='case id', action:x=>x==='action', status:x=>x==='status', remark:x=>x==='remark', by:x=>x==='by' });
+  const C=iotHead(rows,{ ts:x=>x==='timestamp', id:x=>x==='case id', action:x=>x==='action', status:x=>x==='status', remark:x=>x==='remark', by:x=>x==='by', on:x=>x==='action date' });
   if(C.id<0 || C.ts<0) return null;   // not the actions tab (gviz fell back to the first tab) — believe nothing
   const out={};
   for(const r of rows.slice(1)){ const id=iotCell(r,C.id); if(!id) continue;
-    (out[id]||(out[id]=[])).push({ ts:iotCell(r,C.ts), action:iotCell(r,C.action), status:iotCell(r,C.status)==='Closed'?'Closed':'Open', remark:iotCell(r,C.remark), by:iotCell(r,C.by) }); }
+    (out[id]||(out[id]=[])).push({ ts:iotCell(r,C.ts), action:iotCell(r,C.action), status:iotCell(r,C.status)==='Closed'?'Closed':'Open', remark:iotCell(r,C.remark), by:iotCell(r,C.by), on:iotCell(r,C.on) }); }
   Object.values(out).forEach(l=>l.sort((a,b)=>a.ts.localeCompare(b.ts)));
   return out;
 }
@@ -8290,7 +8294,7 @@ function iotCardHTML(m, A){
        <div style="${cap};margin-top:4px">Latest ${iotShortDay(m.top.day)}, ${iotTime(m.top.at)} → ${backDay&&backDay!==m.top.day?iotShortDay(backDay)+' ':''}${iotTime(back)} · ${m.top.gap==null?'—':m.top.gap+' h'}${m.top.km?` · moved ${iotKm(m.top.km)} km`:''}</div>`
     : `<div style="display:flex;align-items:baseline;gap:7px;margin-top:10px"><span style="font-family:'IBM Plex Mono';font-size:24px;font-weight:700;line-height:1">${iotKm(m.km)}</span><span style="font-size:13px;font-weight:600">km on zero voltage</span></div>
        <div style="${cap};margin-top:4px">${iotMins(m.dark)} without power · ${fmt(m.pings||0)} pings${m.n>1?` · ${m.n} outages`:''}</div>`;
-  const last = m.last ? `<div style="margin-top:10px;padding:8px 10px;border-radius:10px;background:#FBFAF8;border:1px solid #EFEDE7;font-size:12px;color:#46433d;line-height:1.4"><b style="color:#1B1A17">${E(m.last.action)}</b> · ${E(m.last.status)}${m.last.remark?` — ${E(m.last.remark)}`:''}<div style="font-size:11px;color:#6E6A62;margin-top:2px">${E(String(m.last.by||'').replace(/^IoT · /,''))} · ${E(m.last.ts)}</div></div>` : '';
+  const last = m.last ? `<div style="margin-top:10px;padding:8px 10px;border-radius:10px;background:#FBFAF8;border:1px solid #EFEDE7;font-size:12px;color:#46433d;line-height:1.4"><b style="color:#1B1A17">${E(m.last.action)}</b> · ${E(m.last.status)}${m.last.remark?` — ${E(m.last.remark)}`:''}<div style="font-size:11px;color:#6E6A62;margin-top:2px">${iotActOn(m.last)?'Done '+iotShortDay(iotActOn(m.last))+' · ':''}${E(String(m.last.by||'').replace(/^IoT · /,''))}</div></div>` : '';
   const nav = m.loc ? `<a href="${iotMapHref(m.loc)}" target="_blank" rel="noopener" style="flex:1;min-height:46px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;background:#1B1A17;color:#fff;font-size:14px;font-weight:700;text-decoration:none">${IOT_PIN}Navigate</a>`
     : `<span style="flex:1;min-height:46px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#F2F0EB;color:#6E6A62;font-size:13px">No location on sheet</span>`;
   const rec = IOT_W.url ? `<button data-act="iotact" data-case="${E(m.kind+'|'+m.mc)}" style="flex:1;min-height:46px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;border:1.5px solid #1B1A17;background:#fff;color:#1B1A17;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">${IOT_CHECK}${m.last?'Update':'Record action'}</button>` : '';
@@ -8359,9 +8363,9 @@ function iotSheetHTML(){
 }
 function iotCSV(view){
   const A=iotPageAgg(view), T=A.kind==='T';
-  const ll=l=>l?`${l.lat},${l.lon}`:'', last=r=>{ const a=iotLast(r.id); return a?[a.status,a.action,a.remark,a.by,a.ts]:['No action yet','','','','']; };
-  const head=T ? ['Potential tamper date','Last ping','Back online','Machine','Gaps on machine in range','Gap (h)','Moved (km)','Recovery lat,long','Maps link','Operator','Operator mobile','CI','CI mobile','State','Action status','Action','Remark','By','Recorded at']
-               : ['Machine','Status','Outage (min)','Pings','Travelled (km)','Start lat,long','End lat,long','Maps link (end)','Operator','Operator mobile','CI','CI mobile','State','Action status','Action','Remark','By','Recorded at'];
+  const ll=l=>l?`${l.lat},${l.lon}`:'', last=r=>{ const a=iotLast(r.id); return a?[a.status,a.action,iotActOn(a),a.remark,a.by,a.ts]:['No action yet','','','','','']; };
+  const head=T ? ['Potential tamper date','Last ping','Back online','Machine','Gaps on machine in range','Gap (h)','Moved (km)','Recovery lat,long','Maps link','Operator','Operator mobile','CI','CI mobile','State','Action status','Action','Action date','Remark','By','Recorded at']
+               : ['Machine','Status','Outage (min)','Pings','Travelled (km)','Start lat,long','End lat,long','Maps link (end)','Operator','Operator mobile','CI','CI mobile','State','Action status','Action','Action date','Remark','By','Recorded at'];
   const lines=[head.join(',')].concat(A.machines.flatMap(m=>m.cases.map(r=>(T
     ? [r.day,r.at,r.back,r.mc,m.n,r.gap,r.km,ll(r.loc),r.loc?iotMapHref(r.loc):'',r.op,r.opMob,r.ci,r.ciMob,iotStName(r.st),...last(r)]
     : [r.mc,r.status,r.mins,r.pings,r.km,ll(r.start),ll(r.end),r.end?iotMapHref(r.end):'',r.op,r.opMob,r.ci,r.ciMob,iotStName(r.st),...last(r)]).map(csvCell).join(','))));
@@ -8403,6 +8407,13 @@ function iotActMount(){
       <div id="iotActHist"></div>
       <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#46433d;text-transform:uppercase;margin:4px 0 8px">What did you do?</div>
       <div id="iotActOpts" role="radiogroup" aria-label="What did you do?" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#46433d;text-transform:uppercase;margin:18px 0 8px"><label for="iotActDate">When did you do it?</label></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:8px">
+        <button type="button" class="iotOpt iotDay" data-day="0" role="radio" style="justify-content:center;font-size:13.5px">Today</button>
+        <button type="button" class="iotOpt iotDay" data-day="1" role="radio" style="justify-content:center;font-size:13.5px">Yesterday</button>
+        <input id="iotActDate" type="date" style="min-height:50px;width:100%;box-sizing:border-box;padding:0 8px;border:1.5px solid #E9E6DF;border-radius:12px;font-family:inherit;font-size:16px;color:#1B1A17;background:#fff">
+      </div>
+      <div id="iotActDateNote" style="display:none;font-size:12px;color:#B42318;margin-top:6px"></div>
       <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#46433d;text-transform:uppercase;margin:18px 0 8px">Is it sorted?</div>
       <div role="radiogroup" aria-label="Case status" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <button type="button" class="iotOpt iotSt" data-st="Open" role="radio" style="justify-content:center;font-size:13.5px">Still open</button>
@@ -8419,6 +8430,9 @@ function iotActMount(){
   ov.querySelector('#iotActX').addEventListener('click', iotActClose);
   document.addEventListener('keydown', e=>{ if(e.key==='Escape' && ov.style.display==='flex') iotActClose(); });
   ov.querySelectorAll('.iotSt').forEach(b=>b.addEventListener('click', ()=>{ ov.dataset.st=b.dataset.st; iotActRefine(); }));
+  ov.querySelectorAll('.iotDay').forEach(b=>b.addEventListener('click', ()=>{ const d=new Date(iotToday()+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()-(+b.dataset.day)); ov.querySelector('#iotActDate').value=d.toISOString().slice(0,10); iotActRefine(); }));
+  ov.querySelector('#iotActDate').addEventListener('input', iotActRefine);
+  ov.querySelector('#iotActDate').addEventListener('change', iotActRefine);
   ov.querySelector('#iotActOpts').addEventListener('click', e=>{ const b=e.target.closest('[data-a]'); if(b){ ov.dataset.a=b.dataset.a; iotActRefine(); } });
   ov.querySelector('#iotActText').addEventListener('input', iotActRefine);
   ov.querySelector('#iotActSend').addEventListener('click', iotActSend);
@@ -8434,12 +8448,16 @@ function iotActOpen(key){
   const what = T ? `${cover.length===1?'1 ping gap':cover.length+' ping gaps'}${cover.length>1?` (${iotShortDay(cover[cover.length-1].day)} – ${iotShortDay(cover[0].day)})`:` on ${iotShortDay(cover[0].day)}, ${iotTime(cover[0].at)}`}`
                  : `${cover.length===1?'1 outage':cover.length+' outages'} · ${iotKm(cover.reduce((a,c)=>a+(c.km||0),0))} km on zero voltage`;
   q('#iotActSub').textContent=`${IOT_KIND[kind]} · ${targets.length?'covers '+what:'updates the latest — '+what} · ${iotStName(m.st)}`;
-  const seen=new Set(), hist=m.cases.flatMap(c=>IOT.actions[c.id]||[]).filter(a=>{ const k=a.ts+'|'+a.action+'|'+a.remark; if(seen.has(k)) return false; seen.add(k); return true; }).sort((a,b)=>b.ts.localeCompare(a.ts));
-  q('#iotActHist').innerHTML = hist.length ? `<details style="margin-bottom:14px;border:1px solid #EFEDE7;border-radius:12px;background:#FBFAF8"><summary style="min-height:44px;display:flex;align-items:center;padding:0 12px;font-size:13px;font-weight:600;cursor:pointer">Earlier actions · ${hist.length}</summary>${hist.map(a=>`<div style="padding:9px 12px;border-top:1px solid #EFEDE7;font-size:12.5px"><b>${E(a.action)}</b> · ${E(a.status)}${a.remark?`<div style="color:#46433d;margin-top:2px">${E(a.remark)}</div>`:''}<div style="color:#6E6A62;font-size:11.5px;margin-top:2px">${E(String(a.by||'').replace(/^IoT · /,''))} · ${E(a.ts)}</div></div>`).join('')}</details>` : '';
+  const seen=new Set(), hist=m.cases.flatMap(c=>IOT.actions[c.id]||[]).filter(a=>{ const k=a.ts+'|'+a.action+'|'+a.remark; if(seen.has(k)) return false; seen.add(k); return true; }).sort((a,b)=>(iotActOn(b)+b.ts).localeCompare(iotActOn(a)+a.ts));
+  q('#iotActHist').innerHTML = hist.length ? `<details style="margin-bottom:14px;border:1px solid #EFEDE7;border-radius:12px;background:#FBFAF8"><summary style="min-height:44px;display:flex;align-items:center;padding:0 12px;font-size:13px;font-weight:600;cursor:pointer">Earlier actions · ${hist.length}</summary>${hist.map(a=>`<div style="padding:9px 12px;border-top:1px solid #EFEDE7;font-size:12.5px"><b>${E(a.action)}</b> · ${E(a.status)}${a.remark?`<div style="color:#46433d;margin-top:2px">${E(a.remark)}</div>`:''}<div style="color:#6E6A62;font-size:11.5px;margin-top:2px">Done ${iotShortDay(iotActOn(a))} · ${E(String(a.by||'').replace(/^IoT · /,''))} · saved ${E(a.ts)}</div></div>`).join('')}</details>` : '';
   if(fresh){
     q('#iotActOpts').innerHTML=IOT_ACTIONS[kind].map(a=>`<button type="button" class="iotOpt" role="radio" data-a="${E(a)}"><span class="iotRad"></span>${E(a)}</button>`).join('');
     q('#iotActText').value=''; ov.dataset.a=''; ov.dataset.st=m.last?m.last.status:'Open'; q('#iotActMsg').style.display='none';
+    q('#iotActDate').value=iotToday();
   }
+  // Work cannot be dated in the future, nor before the earliest case it covers began (a gap's date; an at-risk
+  // outage carries none, so there the floor is open).
+  const dIn=q('#iotActDate'); dIn.max=iotToday(); dIn.min = kind==='T' ? cover.map(c=>c.day).sort()[0] : '';
   const b=q('#iotActSend'); b.disabled=false; b.textContent='Save';
   iotActRefine(); ov.style.display='flex';
   setTimeout(()=>q('#iotActX').focus(),30);
@@ -8451,28 +8469,38 @@ function iotActRefine(){
   const q=s=>ov.querySelector(s), act=ov.dataset.a||'', txt=q('#iotActText').value.trim();
   ov.querySelectorAll('#iotActOpts [data-a]').forEach(b=>b.setAttribute('aria-checked', String(b.dataset.a===act)));
   ov.querySelectorAll('.iotSt').forEach(b=>b.setAttribute('aria-checked', String(b.dataset.st===ov.dataset.st)));
+  const dIn=q('#iotActDate'), day=dIn.value, today=iotToday(), yest=(d=>{ d.setUTCDate(d.getUTCDate()-1); return d.toISOString().slice(0,10); })(new Date(today+'T00:00:00Z'));
+  ov.querySelectorAll('.iotDay').forEach(b=>b.setAttribute('aria-checked', String(day===(b.dataset.day==='0'?today:yest))));
+  dIn.style.borderColor = day && day!==today && day!==yest ? '#1B1A17' : '#E9E6DF';
+  const dateErr = !day ? 'Pick the date you did it.' : day>dIn.max ? 'That date is in the future.' : (dIn.min && day<dIn.min) ? `This case began on ${iotShortDay(dIn.min)} — pick that day or later.` : '';
+  const dn=q('#iotActDateNote'); dn.style.display=dateErr?'block':'none'; dn.textContent=dateErr;
   q('#iotActReq').textContent = act==='Other' ? '· needed for Other' : '· optional';
   q('#iotActCount').textContent=`${txt.length}/${IOT_W.MAX}`;
   const btn=q('#iotActSend');
-  if(btn.textContent!=='Saving…'){ btn.disabled = !act || (act==='Other' && !txt);
-    btn.textContent = !act ? 'Pick what you did' : (act==='Other'&&!txt) ? 'Add a remark' : `Save · ${ov.dataset.st==='Closed'?'close':'keep open'}${_iotTarget&&_iotTarget.cases.length>1?' · '+_iotTarget.cases.length+' cases':''}`; }
+  if(btn.textContent!=='Saving…'){ btn.disabled = !act || (act==='Other' && !txt) || !!dateErr;
+    btn.textContent = !act ? 'Pick what you did' : dateErr ? 'Check the date' : (act==='Other'&&!txt) ? 'Add a remark' : `Save · ${ov.dataset.st==='Closed'?'close':'keep open'}${_iotTarget&&_iotTarget.cases.length>1?' · '+_iotTarget.cases.length+' cases':''}`; }
 }
 async function iotActSend(){
   const ov=document.getElementById('iotActOv'), t=_iotTarget; if(!ov||!t) return;
   const q=s=>ov.querySelector(s), action=ov.dataset.a||'', remark=q('#iotActText').value.trim(), status=ov.dataset.st==='Closed'?'Closed':'Open';
-  if(!action || (action==='Other'&&!remark)) return;
+  const dIn=q('#iotActDate'), on=dIn.value;
+  if(!action || (action==='Other'&&!remark) || !on || on>dIn.max || (dIn.min&&on<dIn.min)) return;
   const note=(kind,txt)=>{ const el=q('#iotActMsg'), tone=kind==='ok'?['#E6F5EA','#15803D']:kind==='err'?['#FBEAE7','#B42318']:['#FBF1DA','#8A6A12']; el.style.display='block'; el.style.background=tone[0]; el.style.color=tone[1]; el.textContent=txt; };
   const btn=q('#iotActSend'); btn.disabled=true; btn.textContent='Saving…'; note('warn','Saving…');
   const by=(GATE.cur&&GATE.cur.label)||'';
   const payload={ token:IOT_W.token, kind:IOT_KIND[t.kind], machine:t.mc, state:iotStName(t.st), action, status, remark, by, role:(GATE.cur&&GATE.cur.role)||'',
-    cases:t.cases.map(c=>({ id:c.id, date:t.kind==='T'?c.at:'' })), caseId:t.cases[0].id };
+    actionDate:on, cases:t.cases.map(c=>({ id:c.id, date:t.kind==='T'?c.at:'' })), caseId:t.cases[0].id };
   try{
     const res=await fetch(IOT_W.url, { method:'POST', body:JSON.stringify(payload) });   // bare string body ⇒ no preflight
     const j=await res.json().catch(()=>({ok:false,error:'bad_response'}));
     if(!j.ok) throw new Error(j.error||'failed');
     const ts=j.ts||new Date().toLocaleString('sv-SE',{timeZone:'Asia/Kolkata'});
-    t.cases.forEach(c=>{ const row={ ts, action, status, remark, by }; (IOT.actions[c.id]||(IOT.actions[c.id]=[])).push(row); IOT.local.push({ id:c.id, at:Date.now(), row }); });
-    note('ok', status==='Closed' ? `Saved and closed — ${t.mc} moves to Closed.` : `Saved — ${t.mc} moves to Open.`); btn.textContent='Saved ✓';
+    // A script deployed before the action date existed accepts the save and DROPS the date without a word. It
+    // answers without `v`, so say so here rather than letting the date vanish.
+    const dated = (j.v||0) >= 2;
+    t.cases.forEach(c=>{ const row={ ts, action, status, remark, by, on:dated?on:'' }; (IOT.actions[c.id]||(IOT.actions[c.id]=[])).push(row); IOT.local.push({ id:c.id, at:Date.now(), row }); });
+    if(!dated) console.warn('[MP-Ops] iot action saved WITHOUT its date — redeploy apps-script/iot-actions.gs (New version).');
+    note(dated?'ok':'warn', (status==='Closed' ? `Saved and closed — ${t.mc} moves to Closed.` : `Saved — ${t.mc} moves to Open.`) + (dated?'':' The date was not stored: the sheet script needs updating.')); btn.textContent='Saved ✓';
     q('#iotActText').value=''; _iotTarget=null;
     track('iot_action_submit',{ kind:t.kind, st:t.st, status, cases:t.cases.length });
     render();
@@ -10623,8 +10651,9 @@ function pwaBannerHTML(ph){
     <div style="flex:1;font-size:12px;color:#5C4A12;line-height:1.35"><b>You're offline.</b> Showing the last data this phone loaded${lastUpdated?` (${E(lastUpdated)} IST)`:''}.</div>`);
   // The offer used to sit at the top of EVERY view until dismissed — ~100px of every page. It is shown on the
   // landing view only; the dismissal persists as before. (The offline strip is different: it is information
-  // about the data on screen, so it stays on every view.)
-  const offer = ph && state.view==='map' && !PWA.standalone && !PWA.dismissed && (PWA.prompt || PWA.ios);
+  // about the data on screen, so it stays on every view.) "Landing" is the PROJECT's home, not the map: the IoT
+  // technicians have no map, so a map-only test meant the people who most need the app offline were never offered it.
+  const offer = ph && state.view===(curProject().home||'map') && !PWA.standalone && !PWA.dismissed && (PWA.prompt || PWA.ios);
   if(offer) out+=strip('#FFFFFF','#E9E6DF',`<img src="icons/icon-192.png" alt="" width="30" height="30" style="border-radius:8px;flex-shrink:0">
     <div style="flex:1;min-width:0;font-size:12px;color:#46433d;line-height:1.35">${PWA.prompt
       ? '<b>Install the console</b> — opens from your home screen, works without signal.'

@@ -43,8 +43,9 @@ var COLUMNS = [
   ['Status',    'status'],
   ['Remark',    'remark'],
   ['By',        'by'],
-  ['Role',      'role']
-];
+  ['Role',      'role'],
+  ['Action date', 'actionDate']     // the day the work was DONE (yyyy-MM-dd, IST); Timestamp is when it was saved.
+];                                  // Appended LAST so a tab created by the first version keeps its column order.
 
 function doGet() {
   return json({ ok: true, ping: new Date().toISOString() });
@@ -77,7 +78,8 @@ function doPost(e) {
       status:   clean(body.status) === 'Closed' ? 'Closed' : 'Open',
       remark:   cap(clean(body.remark),   MAX_TEXT),
       by:       cap(clean(body.by),       MAX_FIELD),
-      role:     cap(clean(body.role),     MAX_FIELD)
+      role:     cap(clean(body.role),     MAX_FIELD),
+      actionDate: validDate(clean(body.actionDate), ts.slice(0, 10))
     };
 
     var lock = LockService.getScriptLock();
@@ -93,24 +95,36 @@ function doPost(e) {
     } finally {
       lock.releaseLock();
     }
-    return json({ ok: true, ts: ts, rows: cases.length });
+    return json({ ok: true, ts: ts, rows: cases.length, v: 2 });   // v:2 = this version stores the action date
   } catch (err) {
     return json({ ok: false, error: String(err && err.message || err) });
   }
 }
 
-/** Creates the tab with its header row on first use; never rewrites a header that is already there. */
+/** Creates the tab with its header row on first use. On a tab made by an earlier version it only fills in
+ *  header cells that are BLANK (the new Action date column), never rewriting one that is already there. */
 function ensureTab() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sh = ss.getSheetByName(TAB_NAME);
   if (!sh) {
     sh = ss.insertSheet(TAB_NAME);
-    sh.getRange(1, 1, 1, COLUMNS.length).setValues([COLUMNS.map(function (c) { return c[0]; })]).setFontWeight('bold');
     sh.setFrozenRows(1);
+  }
+  var head = sh.getRange(1, 1, 1, COLUMNS.length).getValues()[0], dirty = false;
+  for (var i = 0; i < COLUMNS.length; i++) {
+    if (String(head[i] || '').trim() === '') { head[i] = COLUMNS[i][0]; dirty = true; }
+  }
+  if (dirty) {
+    sh.getRange(1, 1, 1, COLUMNS.length).setValues([head]).setFontWeight('bold');
     // Case ID and dates must stay TEXT: "2026-10-09 11:46:37" would otherwise become a date and stop matching.
-    sh.getRange('A:K').setNumberFormat('@');
+    sh.getRange(1, 1, sh.getMaxRows(), COLUMNS.length).setNumberFormat('@');
   }
   return sh;
+}
+
+/** yyyy-MM-dd and not in the future (IST), else the save day. The page already enforces this; the script does not trust it. */
+function validDate(d, today) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today ? d : today;
 }
 
 /** A cell opening with = + - @ is evaluated as a formula; an apostrophe keeps it text. */

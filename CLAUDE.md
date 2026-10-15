@@ -805,6 +805,14 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
   · **Record action covers the machine**: every case of it in scope that is not Closed (or the latest, if all are).
     One POST carries `cases:[{id,date}]` and the script writes one row per case, so per-case status holds.
     Choices are big radio rows, not a `<select>` — this is used one-handed beside a machine.
+  · **Every action carries the date the work was DONE** (`on`, sheet column **Action date**, added 2026-10-15), which
+    is not the save time (`Timestamp`): a visit in a dead zone is recorded that evening or the next day. Today /
+    Yesterday chips plus a date field, default today (IST). It may not be in the future, nor before the earliest gap
+    the save covers (at-risk outages carry no date, so there the floor is open); the script re-checks the future
+    bound. The card and history read "Done 14 Oct". Rows from before the column existed fall back to the
+    Timestamp's day (`iotActOn`). **The column is appended LAST** so a tab made by the first script keeps its
+    order, and `ensureTab` fills only BLANK header cells. The script answers `v:2`; a save answered without it
+    (an un-redeployed script) still succeeds but the page SAYS the date was not stored rather than dropping it.
   · Desktop renders the same cards in a `minmax(340px,1fr)` grid.
 - **Two sheet faults handled in code:** the tamper tab's `CI_name` / `CI_number` are SWAPPED (decided per row by
   which cell is digits, so a sheet fix needs no edit); state arrives as "Madhya pradesh" and "Madhya Pradesh"
@@ -836,7 +844,8 @@ network-first, a push is live on the next online open, with no version to rememb
   passed off as live**. Weather is cached for the same reason; without it the app shows simulated rain under a
   Live badge. A non-OK response (429, 500) is returned as-is, never swapped for the cache.
 - The page side lives in `PWA` / `pwaBannerHTML` / `pwaInstall`. The install offer is a dismissible strip at
-  the top of the phone scroller, **not** in the More sheet: a field login has four views and so no More
+  the top of the phone scroller on the **project's home view** (`curProject().home`, else the Map) — it was Map-only,
+  which meant the IoT technicians, who have no map, were never offered it — and **not** in the More sheet: a field login has four views and so no More
   button. Android gets a real Install button (`beforeinstallprompt`); iOS gets the Share → Add to Home Screen
   line. Neither shows when running installed. Going offline shows a strip; coming back online re-fetches at once.
 - `apple-mobile-web-app-status-bar-style` is `default`, not `black-translucent`. The phone header is white, and
