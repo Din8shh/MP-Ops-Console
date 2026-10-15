@@ -777,7 +777,7 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
 | gid | Tab | Grain | Shown as |
 |---|---|---|---|
 | `0` | Tampered cases and suspicious | one row per IoT ping GAP on one machine (27 Sep → 14 Oct 2026, 2,388 rows / 459 machines) | **Potential tamper cases** (`iottamper`) |
-| `504457328` | battery outage | current SNAPSHOT, no date (63 outages / 47 machines on 2026-10-15) | **At risk machines** (`iotrisk`) — the sheet's name is never shown |
+| `504457328` | battery outage | one row per zero-voltage OUTAGE, dated by `outage_start` (63 outages / 46 machines, 1–14 Oct on 2026-10-15) — **no `state` column** | **At risk machines** (`iotrisk`) — the sheet's name is never shown |
 | `954063262` | IOT vs state mapping | technician ⇄ state + phone, IoT head | Team overview (`iotteam`, admin only) |
 | by name `IoT actions` | written by `apps-script/iot-actions.gs` | one row per technician action | the case's Open / Closed status |
 
@@ -787,8 +787,15 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
 - **Tamper date is column B, `last_ping_before_gap`**; the map link is the **recovery** lat/long. Default range is
   the last 7 days the tab carries; ×N beside a machine counts its cases in the range (one machine has 30).
 - **At risk shows the status** (`MOVING_WITH_VOLTAGE_0` → "Zero voltage · moving"), km travelled, outage, pings and
-  the **end** lat/long as the primary map link (start is secondary). With no date column, a case id is
-  machine + START lat/long, stable while an outage grows.
+  the **end** lat/long as the primary map link (start is secondary). **Since 2026-10-15 it is dated** (`outage_start`)
+  and filters exactly like Potential tamper — day strip, range, Filters sheet — and the team overview counts it over
+  the same range. A case id is machine + start TIME (machine + start lat/long on an undated tab).
+- **The same day, `state` LEFT the battery tab** — and the parser treated it as required, so the whole IoT load
+  failed until it was made optional. A row without a state is invisible to the technician meant to act on it, so
+  `iotResolveStates` places it: the tamper tab's state for that machine → the console's machine sheet (`Sheet1`) →
+  the nearest district centroid (all seven states' `COORDS`) within 150 km of where the outage ended or started.
+  Live: all 63 placed (2 by centroid — UPL_2424 / UPL_782 carry a blank State on Sheet1). Unplaced rows are dropped
+  and listed in the load log (`risk.dropped.stUnplaced`), never guessed.
 - Map links are Google's universal `maps/search/?api=1&query=lat,lon` URL — the Maps app on a phone.
 - **The two technician pages are MOBILE-FIRST** (redesigned 2026-10-15, by request; `iotTechHTML`). Designed for one
   person on a phone whose jobs are: what next, get there / ring somebody, say what I did. The team overview is
@@ -798,6 +805,12 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
     counted and exported on its own.
   · **The queue comes first**: To do / Open / Closed / All with counts (`state.iotQueue`, default To do). A machine is
     To do if any case in scope has no action, Open if none is To do but one is open, else Closed.
+  · **A closed machine with a new gap goes back to To do**, because status is read per CASE and the new gap is a case
+    nobody has actioned; its old closed cases stay closed, and Record action covers only the open ones. The card
+    then says WHICH of two things happened, read on the machine's whole history (not just the cases in the
+    selected range): **Back again** — gaps that started AFTER the last closing action's date (same day: after its
+    save time) — or **Partly done** — unactioned gaps from BEFORE it, i.e. an earlier save simply did not cover
+    them. The first build said "N new gaps since it was closed" for both, which was false for the second.
   · **Queue + day strip are one sticky bar.** Dates are chips with counts (Last 7 days, each day, All); a custom
     range and the state picker live in the Filters sheet (`state.sheet='iotfilters'`, phone) or inline (desktop).
   · Each card ends in **Navigate** (latest gap's recovery point / the furthest outage's END point) and **Record
@@ -805,6 +818,9 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
   · **Record action covers the machine**: every case of it in scope that is not Closed (or the latest, if all are).
     One POST carries `cases:[{id,date}]` and the script writes one row per case, so per-case status holds.
     Choices are big radio rows, not a `<select>` — this is used one-handed beside a machine.
+  · **A remark is REQUIRED** (3+ visible characters) on every action except `IOT_REMARK_OPTIONAL` — "Genuine gap —
+    no tampering" and "Device reinstalled / repaired", both Potential-tamper only, so every At risk action needs one.
+    Enforced in the page only (the script would need a redeploy from the deploying account to enforce it too).
   · **Every action carries the date the work was DONE** (`on`, sheet column **Action date**, added 2026-10-15), which
     is not the save time (`Timestamp`): a visit in a dead zone is recorded that evening or the next day. Today /
     Yesterday chips plus a date field, default today (IST). It may not be in the future, nor before the earliest gap
