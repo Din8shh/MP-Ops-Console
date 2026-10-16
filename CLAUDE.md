@@ -686,7 +686,7 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | **Wheat** `admin` (`wh-admin`, 4040) | All / UPL / SWAL / Open | HR + PB, switchable | every Wheat view |
 | **Wheat** `wstate` × HR / PB (4811 / 4711) | All / UPL / SWAL | one, locked | Territory, AMs, FOs, Retailers |
 | **Wheat** `wsales` × HR / PB (4822 / 4722) | All / UPL / SWAL | one, locked | **placeholder** = the state PIN's; to be decided |
-| **IoT** `admin` (`iot-admin`, 2601 — Amit Kumar, IoT head) | n/a | all, switchable | Potential tamper, At risk, **Team overview** |
+| **IoT** `admin` (`iot-admin`, 7314 — Amit Kumar, IoT head; 2601 retired 2026-10-16) | n/a | all, switchable | Potential tamper, At risk, **Team overview** |
 | **IoT** `iottech` × Rohit (RJ, 2611) / Manish (HR+PB, 2621) / Vishal (MP+GJ+TG+MH+AP, 2631) | n/a | his own, locked or switchable within them | Potential tamper, At risk |
 
 The Wheat rows carry `project:'wheat'`; see **Projects** below. The Kharif admin (0088) does NOT see Wheat, and
