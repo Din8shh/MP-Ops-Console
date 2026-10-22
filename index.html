@@ -64,7 +64,7 @@
   @media (min-height:760px){
     .navbtn.lbl{width:64px;height:40px;flex-direction:column;gap:2px;border-radius:9px}
     .navbtn.lbl svg{width:17px;height:17px}
-    .navlbl{display:block;font-size:9.5px;font-weight:600;line-height:1;letter-spacing:.01em;white-space:nowrap;font-family:'Noto Sans'}
+    .navlbl{display:block;font-size:9.5px;font-weight:600;line-height:1;letter-spacing:.01em;text-align:center;max-width:60px;font-family:'Noto Sans'}   /* two-word names ('Potential tamper') wrap to a second line */
     .railNav{gap:3px}
   }
   /* The chrome around the list gives up its space first — it is decoration, the buttons are the navigation.
@@ -2079,6 +2079,9 @@ function roleHidesView(view){
   // The PROJECT is the outer gate and runs first, so it binds admin too: a Wheat login never sees a Kharif-tab
   // view, and the Wheat-only views never appear under Kharif.
   if(projectHidesView(view)) return true;
+  // "Didn't run" is the field logins' home (plan M3): their own machines that did not run, with whom to ring.
+  // Kharif only; admin reads the same set through Machines + the Health filter.
+  if(view==='norun') return curProject().id!=='kharif' || !['upl','swal'].includes(GATE.cur&&GATE.cur.role);
   if(!GATED_VIEWS.includes(view)) return false;
   // The MP product summary reads a Madhya-Pradesh-only tab, so it is offered only while the ACTIVE STATE SCOPE
   // is MP — not at All India, and not under another state. This is a scope test, not a role test, and it runs
@@ -2128,6 +2131,8 @@ function distinctNames(list, field){
 const isPlaceholder = s => /^(|0|-|—|unassigned|not in plan)$/i.test(String(s??'').trim());
 const phName = s => /^(0|-|—)$/.test(String(s??'').trim()) ? 'Not named on sheet' : s;
 const phLast = (a,b) => isPlaceholder(a)-isPlaceholder(b);
+// A phone number worth a Call button: at least ten digits once spaces, "+91" and dashes are stripped.
+const realTel = s => String(s??'').replace(/\D/g,'').length>=10;
 const phOpts = list => list.slice().sort(phLast).map(t=>({v:t,t:phName(t)}));
 function rowBars(r){ const tt=r.deployed||1, ht=(r.Active+r.Idle+r.Breakdown)||1; return {
   orgUStyle:{width:(100*r.upl/tt)+'%',background:C.orange,display:'block'}, orgSStyle:{width:(100*r.swal/tt)+'%',background:C.green,display:'block'}, orgOStyle:{width:(100*(r.open||0)/tt)+'%',background:C.open,display:'block'},
@@ -2699,11 +2704,12 @@ function vals(){
   const season = narrowed ? null : seasonVsLast(S.st||'ALL');
   const fleet={ deployed:tot.deployed, plan:isAdmin()?planVal:null, upl:tot.upl, swal:tot.swal, open:tot.open, org:S.org };
   const kpis=[
-    {label:'Breakdown',value:fmt(tot.Breakdown),unit:'',valStyle:mono22(C.brk)},
-    {label:'Idle',value:fmt(tot.Idle),unit:'',valStyle:mono22(C.idle)},
-    {label:'Acres '+dayShort(),value:fmt(tot.acresY),unit:'ac',valStyle:mono22(C.ink)},
+    // `ph`: the four the phone shows (plan M11) — the rest are desktop-only.
+    {label:'Breakdown',value:fmt(tot.Breakdown),unit:'',valStyle:mono22(C.brk),ph:1},
+    {label:'Idle',value:fmt(tot.Idle),unit:'',valStyle:mono22(C.idle),ph:1},
+    {label:'Acres '+dayShort(),value:fmt(tot.acresY),unit:'ac',valStyle:mono22(C.ink),ph:1},
     {label:'MTD acres',value:fmt(tot.mtd),unit:'ac',valStyle:mono22(C.ink)},
-    {kind:'fleet'},
+    {kind:'fleet',ph:1},
   ];
   if(isAdmin()){   // IoT/connectivity + operator-mapping KPIs — admin role only
     kpis.push({label:'Operators mapped',value:fmt(tot.opMappedCount)+'/'+fmt(tot.deployed),unit:'',valStyle:mono22(tot.opMappedCount===tot.deployed?C.greenD:C.ink)});
@@ -2966,16 +2972,16 @@ function vals(){
     const maxP=Math.max(1,...m.scanned.map(s=>s.acres));
     const products=(m.scanned.length?m.scanned:[{product:'Unspecified',acres:0}]).map(s=>({product:s.product,acres:fmt(s.acres),barStyle:{display:'block',height:'100%',width:(100*s.acres/maxP)+'%',background:C.orange}}));
     const opMapped=m.opMapped===1;
-    d={ mc:m.mc, org:m.org, geo:`${m.territory} · ${m.cluster}`,
+    d={ mc:m.mc, org:m.org, geo:`${phName(m.territory)} · ${phName(m.cluster)}`,
       orgStyle:{display:'inline-flex',fontSize:'10.5px',fontWeight:700,letterSpacing:'.03em',padding:'3px 9px',borderRadius:'6px',background:orgSoft(m.org),color:orgInk(m.org)},
       healthStyle:{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10.5px',fontWeight:600,padding:'3px 9px',borderRadius:'6px',background:hcolor(hs)+'18',color:hcolor(hs)}, healthDot:{width:'6px',height:'6px',borderRadius:'50%',background:hcolor(hs),display:'block'}, health:hs,
       sprayBg:w.bg, sprayBorder:w.border, sprayIcon:w.icon, sprayLabel:w.label, sprayInk:w.ink, weatherLine:w.line,
-      opInitial:(m.opName||'?').charAt(0), opName:m.opName, opNum:m.opNum, opTel:'tel:'+m.opNum,
+      opInitial:(m.opName&&!isPlaceholder(m.opName)?m.opName:'?').charAt(0), opName:isPlaceholder(m.opName)?'Not named on sheet':m.opName, opNum:m.opNum, opTel:'tel:'+m.opNum,
       opTag: opMapped? 'Mapped' : 'Unverified',
       opTagStyle:{display:'inline-flex',fontSize:'9.5px',fontWeight:600,padding:'1px 7px',borderRadius:'5px',background:opMapped?C.softG:C.softA,color:opMapped?C.greenD:'#9A6B05'},
       callStyle:{width:'36px',height:'36px',borderRadius:'9px',background:C.ink,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0},
       funnel, products,
-      locTitle:(m.lat!=null)?`${m.territory} cluster`:'No location on file', coords:(m.lat!=null)?`${m.lat}, ${m.lon}`:'Excluded from map · listed here',
+      locTitle:(m.lat!=null)?`${phName(m.territory)} cluster`:'No location on file', mapHref:(m.lat!=null&&m.lon!=null)?iotMapHref(m):'', coords:(m.lat!=null)?`${m.lat}, ${m.lon}`:'Excluded from map · listed here',
       coName:m.co, coMob:m.coMob, coTel:'tel:'+m.coMob, amName:m.am, amNum:m.amNum, amTel:'tel:'+m.amNum,
       bmName:m.bmName, bmMob:m.bmMob, bmTel:'tel:'+m.bmMob, tmName:m.tmName, tmMob:m.tmMob, tmTel:'tel:'+m.tmMob,
       foName:m.foName, foMob:m.foMob, foTel:'tel:'+m.foMob, retailerName:m.retailerName, retailerMob:m.retailerMob, retailerTel:'tel:'+m.retailerMob, retailerLoc:m.retailerLoc,
@@ -2999,8 +3005,18 @@ function vals(){
       // the hword beside the number ("Idle … idle"); the state is said once, by the word, and this says 0 ac.
       acresLabel: acD(m)>0? fmt(acD(m))+' ac' : '0 ac' }; });
 
+  // DIDN'T RUN (plan M3) — the field logins' home. Every machine in scope that did not run on the selected day,
+  // in four observed, mutually exclusive groups (the same decomposition as Insights' Yesterday, first match wins).
+  // The call-worthy group leads: a driver and a season record, and still nothing. The total equals Idle +
+  // Breakdown on the number cards, by construction — one count, one number.
+  const nr = F.filter(m=>hstate(m)!=='Active');
+  const nrWhy = m => hstate(m)==='Breakdown' ? 'brk' : !m.opMapped ? 'noop' : !(m.achieved>0) ? 'never' : 'none';
+  const NR = [['none','No reason on the sheet','Has an operator and a season record'],['brk','Flagged breakdown',''],
+    ['noop','No operator assigned',''],['never','Not sprayed this season','']];
+  const norun = { total:nr.length, of:F.length, groups:NR.map(([k,label,note])=>({ k, label, note,
+    list:nr.filter(m=>nrWhy(m)===k).sort((a,b)=>(b.achieved||0)-(a.achieved||0)) })).filter(g=>g.list.length) };
   const fleetDated = dataMode==='live' && curProject().id==='kharif';   // Kharif machine sheet, fetched live: name the data's day
-  return { tot, kpis, status, season, fleet, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, noTerr, rows, terrTable, wetTerr, amRows, bmRows, pendRows, pendCount:pendAll.length, machineTable, mobileList, d, wxDay:wxDayIdx(S.wxDay),
+  return { tot, kpis, status, season, fleet, norun, adm, terrOptions, clusterOptions, amOptions, coOptions, bmOptions, tmOptions, topTerr, noTerr, rows, terrTable, wetTerr, amRows, bmRows, pendRows, pendCount:pendAll.length, machineTable, mobileList, d, wxDay:wxDayIdx(S.wxDay),
     multiState, stOptions, stName:(S.st?(STATE_NAMES[S.st]||S.st):''), canSwitchStates:gateCanSwitchStates(),
     scopeLabel:(S.st ? S.st : (multiState ? 'India' : (allStates[0]||'MP'))),  // header/title scope: state code when scoped, 'India' for multi-state all-India, sole state when single-state
     anyFilter, amCount:amKeys.length, bmCount:bmKeys.length, foRows, retRows, foCount:foGroups.length, retCount:retGroups.length, pinCount:F.length, mListCount:F.length, mListShown:mobileList.length,
@@ -3017,19 +3033,24 @@ function vals(){
 const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" title="${NAV_TITLE[act]||act}" aria-label="${NAV_TITLE[act]||act}"${active?' aria-current="page"':''} class="navbtn lbl${active?' on':''}">${icon}<span class="navlbl" aria-hidden="true">${RAIL_LBL[act]||act}</span></button>`;
 // Hover titles: the rail is icon-only, so this is the only place a view is named. "snake" and "recap" are internal
 // keys and mean nothing to a reader hunting for the cumulative chart.
-const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machine locations', weather:'Weather',
-  am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Yesterday', leader:'Leaders',
-  product:'Products', mpprod:'MP products by territory', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer machine plan',
+const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', norun:'Didn’t run',
+  am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Daily recap', leader:'Leaders',
+  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer machine plan',
   iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotteam:'IoT team overview' };
 // The word under each rail icon: short enough for a 64px button at 9.5px. One word where the title is long.
-const RAIL_LBL = { insights:'Insights', map:'Map', tables:'Territory', machines:'Machines', weather:'Weather', am:'AMs', bm:'BMs',
-  pending:'Pending', recap:'Yesterday', leader:'Leaders', product:'Products', mpprod:'MP prod.', snake:'Cumulative', fo:'FOs',
-  retailer:'Retailers', wplan:'Plan', iottamper:'Tamper', iotrisk:'At risk', iotteam:'Team' };
+// ONE NAME TABLE (plan I4). NAV_TITLE is the full name — page heading, browser title, the phone's All pages sheet.
+// RAIL_LBL is the SHORT form, used only where room is tight (desktop rail, phone tab bar, phone header), and it is
+// the same short form in all three. M_VIEWS takes its labels from here.
+const RAIL_LBL = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', am:'AMs', bm:'BMs', norun:'Didn’t run',
+  pending:'Pending', recap:'Recap', leader:'Leaders', product:'Products', mpprod:'MP products', snake:'Cumulative', fo:'FOs',
+  retailer:'Retailers', wplan:'Retailer plan', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
 // Rail order, in labelled groups (a hairline between them): the project's own pages, then what happened TODAY,
 // then the PEOPLE tables, then the SEASON reading. Insights used to lead the rail; it now leads the Season group.
+// Group names, index for index with RAIL_GROUPS (the first group is the project's own pages and has none).
+const RAIL_GROUP_NAMES = ['', 'Today', 'People', 'Season'];
 const RAIL_GROUPS = [
   [['wplan',I.retailer],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am]],
-  [['map',I.map],['machines',I.machines],['weather',I.weather],['recap',I.recap]],
+  [['norun',I.risk],['map',I.map],['machines',I.machines],['weather',I.weather],['recap',I.recap]],
   [['tables',I.tables],['am',I.am],['bm',I.bm],['fo',I.fo],['retailer',I.retailer],['pending',I.pending]],
   [['insights',I.insights],['snake',I.snake],['product',I.product],['mpprod',I.mpprod],['leader',I.leader]],
 ];
@@ -3063,7 +3084,7 @@ function topbarHTML(v){
     <div style="flex:1"></div>
     ${OWN_PAGES.has(state.view)?'':`<div style="position:relative;width:300px;max-width:34vw">
       ${I.search}
-      <input id="searchInput" placeholder="Search machine no. or operator…" style="width:100%;height:36px;border:1px solid #E9E6DF;border-radius:9px;background:#FAF9F6;padding:0 12px 0 32px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;" />
+      <input id="searchInput" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Search machine no. or operator…" style="width:100%;height:36px;border:1px solid #E9E6DF;border-radius:9px;background:#FAF9F6;padding:0 12px 0 32px;font-family:'Noto Sans';font-size:12.5px;color:#1B1A17;" />
     </div>`}
     <div style="display:flex;align-items:center;gap:9px;border-left:1px solid #E9E6DF;padding-left:16px">
       <span style="width:8px;height:8px;border-radius:50%;background:${v.statusDot};box-shadow:0 0 0 3px ${v.statusRing}"></span>
@@ -7840,8 +7861,14 @@ function insightsBodyHTML(mob){
         <strong style="color:#46433d">${P?fmt(P.ytd):'—'} acres</strong> can be traced to a named brand${P&&P.coverage!=null?`, about ${Math.round(P.coverage)}% of the season`:''}. The rest was sprayed with nothing recorded about the product.
       </div></div>`;
 
-  return `<div style="display:flex;flex-direction:column;gap:14px">
-    ${header}${hero}${sigCard}${traj}${mom}${fleet}${prodCard}${league}${foot}
+  // ON A PHONE THE SEASON PAGE FOLDS (plan M8). It ran to ~5,800px — ten screens for one thumb. The hero and
+  // "What changed" stay open (the answer and the news); each card below is a 48px row with its own name, tapped
+  // open. Open/closed lives in state.insOpen so a re-render (any tap) does not snap a card shut.
+  const fold = (k, title, html) => (!mob || !html) ? html
+    : (state.insOpen||{})[k] ? `<div>${html}<button data-act="insfold" data-k="${k}" style="width:100%;min-height:44px;margin-top:6px;border:none;background:none;font-size:12.5px;color:#6E6A62;cursor:pointer">Close ${E(title)} ˄</button></div>`
+    : `<button data-act="insfold" data-k="${k}" aria-expanded="false" style="width:100%;min-height:48px;display:flex;align-items:center;gap:10px;padding:0 15px;border:1px solid #E9E6DF;border-radius:14px;background:#fff;cursor:pointer;text-align:left"><span style="flex:1;font-size:14px;font-weight:600;color:#1B1A17">${E(title)}</span><span aria-hidden="true" style="color:#6E6A62">˅</span></button>`;
+  return `<div style="display:flex;flex-direction:column;gap:${mob?10:14}px">
+    ${header}${hero}${sigCard}${fold('traj','The season so far',traj)}${fold('mom','Each day, this season against last',mom)}${fold('fleet','The fleet yesterday',fleet)}${fold('prod','Product mix',prodCard)}${fold('league',A.gst&&A.terrs?'Territories in '+A.regionName:'States',league)}${fold('foot','Why three acre totals',foot)}
     ${mob?`<div style="text-align:center;padding:2px 0 4px">${src}</div>`:''}</div>`;
 }
 function insightsViewHTML(v){ return `<section style="padding:18px 22px">${insightsBodyHTML(false)}</section>`; }
@@ -8938,7 +8965,7 @@ function recapBodyHTML(mob){
     : `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:start">${stateCard}${prodCard}${cropCard}</div>`;
   return `<div style="display:flex;flex-direction:column;gap:14px">
     <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <div><div style="font-size:16px;font-weight:700;line-height:1.15">Yesterday · ${E(dstr)}</div><div style="font-size:11px;color:#9C988F;margin-top:2px">Daily recap · machines (Sheet1) + product spray (Product data)</div></div>
+      <div><div style="font-size:16px;font-weight:700;line-height:1.15">Daily recap · ${E(dstr)}</div><div style="font-size:11px;color:#9C988F;margin-top:2px">Machines (Sheet1) + product spray (Product data)</div></div>
       <div style="flex:1"></div>
       <span style="font-size:10.5px;color:#9C988F">Updated ${E(lastUpdated||'—')} IST ${refreshLink('refresh','Reload',mob)}</span>
     </div>
@@ -9092,7 +9119,7 @@ function hierTableHTML(v, title, hint, col, rows){
             <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right">${E(r.ranY)}</div>
             ${v.adm?`<div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;text-align:right;color:#D96A12">${E(r.iotRanY)}</div><div style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600;text-align:right;color:${r.pingInk||'#46433d'}">${E(r.pingLabel)}</div>`:''}
             <div style="font-family:'IBM Plex Mono';font-size:12px;font-weight:500;text-align:right;color:#6E6A62">${E(r.opMap)}</div>
-            <div style="display:flex;align-items:center;gap:9px"><span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(r.contact)}</span><a href="${E(r.callTel)}" data-stop="1" style="${css(r.callStyle)}">${I.phoneS}</a></div>
+            <div style="display:flex;align-items:center;gap:9px">${realTel(r.contact)?`<span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(r.contact)}</span><a href="${E(r.callTel)}" data-stop="1" aria-label="Call ${E(r.name)}" style="${css(r.callStyle)}">${I.phoneS}</a>`:'<span style="font-size:11px;color:#6E6A62">No number on sheet</span>'}</div>
           </div>`).join('')}
         </div>
       </div></div>
@@ -9126,7 +9153,7 @@ function pendViewHTML(v){
             <div style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600;color:${r.count?'#3A5B7D':'#C4BFB5'}">${E(r.count)}</div>
             <div style="font-size:11px;color:#6E6A62;white-space:nowrap">${E(r.mix)}</div>
             <div>${r.org?`<span style="${css(r.orgStyle)}">${E(r.org)}</span>`:''}</div>
-            <div style="display:flex;align-items:center;gap:9px">${r.contact?`<span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(r.contact)}</span><a href="${E(r.callTel)}" data-stop="1" style="${css(r.callStyle)}">${I.phoneS}</a>`:''}</div>
+            <div style="display:flex;align-items:center;gap:9px">${realTel(r.contact)?`<span style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(r.contact)}</span><a href="${E(r.callTel)}" data-stop="1" style="${css(r.callStyle)}">${I.phoneS}</a>`:''}</div>
           </div>`).join('')}
         </div>
       </div></div>
@@ -9534,7 +9561,9 @@ function leaderBodyHTML(mob){
 function leaderViewHTML(){ return leaderBodyHTML(false); }
 // Escalation contact row — shared by desktop drawer + mobile sheet. Optional roles hide when blank.
 function escRowHTML(label,name,mob,tel,phoneIcon,extra,optional,big){
-  const hasName=name&&String(name).trim(), hasMob=mob&&String(mob).trim();
+  // A placeholder name ("0") reads as what it is, and a Call button needs a REAL number: the sheet's "0" in a
+  // mobile column used to render as "Call 0" (plan M4).
+  const hasName=name&&String(name).trim()&&!isPlaceholder(name), hasMob=realTel(mob);
   if(optional && !hasName && !hasMob && !extra) return '';
   return `<div style="display:flex;align-items:center;gap:11px;padding:12px 14px;border-bottom:1px solid #F2F0EB">
     <div style="flex:1;min-width:0"><div style="font-size:10px;color:#9C988F;text-transform:uppercase;letter-spacing:.05em">${label}</div><div style="font-size:13px;font-weight:600;margin-top:2px">${E(hasName?name:'—')}</div>${hasMob?`<div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(mob)}</div>`:''}${extra||''}</div>
@@ -9571,7 +9600,7 @@ function drawerHTML(v){
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">
         <div style="width:40px;height:40px;border-radius:50%;background:#F2F0EB;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;color:#6E6A62;flex-shrink:0">${E(d.opInitial)}</div>
         <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:7px;flex-wrap:wrap">${E(d.opName)}<span style="${css(d.opTagStyle)}">${E(d.opTag)}</span>${opRankChip(d.opNum)}</div><div style="font-family:'IBM Plex Mono';font-size:12px;color:#6E6A62;margin-top:2px">${E(d.opNum)}</div></div>
-        <a href="${E(d.opTel)}" data-stop="1" style="${css(d.callStyle)}">${I.phone}</a>
+        ${realTel(d.opNum)?`<a href="${E(d.opTel)}" data-stop="1" style="${css(d.callStyle)}">${I.phone}</a>`:''}
       </div>
       <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Acres: season, month, day</div>
       <div style="margin-bottom:18px">
@@ -9601,7 +9630,7 @@ function drawerHTML(v){
       <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Location</div>
       <div style="display:flex;gap:12px;margin-bottom:18px;align-items:center">
         <div id="drawerMap" style="width:96px;height:96px;border:1px solid #E9E6DF;border-radius:10px;background:#FBFAF8;flex-shrink:0;overflow:hidden"></div>
-        <div style="flex:1"><div style="font-size:12px;font-weight:600">${E(d.locTitle)}</div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;margin-top:3px">${E(d.coords)}</div></div>
+        <div style="flex:1"><div style="font-size:12px;font-weight:600">${E(d.locTitle)}</div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;margin-top:3px">${E(d.coords)}</div>${d.mapHref?`<a href="${E(d.mapHref)}" target="_blank" rel="noopener" data-stop="1" style="display:inline-flex;align-items:center;gap:6px;margin-top:7px;min-height:30px;padding:0 11px;font-size:12px;border:1px solid #E9E6DF;border-radius:10px;background:#fff;color:#1B1A17;font-weight:600;text-decoration:none">📍 Open in Maps</a>`:''}</div>
       </div>
       <div style="font-size:10px;font-weight:700;letter-spacing:.09em;color:#9C988F;text-transform:uppercase;margin-bottom:9px">Escalation</div>
       <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">${escalationHTML(d, I.phone)}</div>
@@ -9626,6 +9655,7 @@ function contentHTML(v){
     case 'wplan': return wplanViewHTML(v);
     case 'iottamper': case 'iotrisk': case 'iotteam': return `<section style="padding:18px 22px">${iotBodyHTML(state.view,false)}</section>`;
     case 'recap': return recapViewHTML(v);
+    case 'norun': return `<section style="padding:18px 22px">${norunBodyHTML(v,false)}</section>`;
     default: return mapViewHTML(v);
   }
 }
@@ -9660,27 +9690,44 @@ function desktopHTML(v){
 // admins. It leads the desktop rail's Season group instead, where the list is vertical and nothing is displaced, and heads the
 // phone's "More" sheet. Move it up only if you intend to knock Weather off the bar.
 const M_VIEWS = [
-  { k:'wplan',    label:'Retailer plan', icon:()=>I.retailer },   // Wheat planning stage only (project `only`)
-  { k:'iottamper',label:'Potential tamper', icon:()=>I.tamper },   // IoT project only
-  { k:'iotrisk',  label:'At risk',   icon:()=>I.risk },
-  { k:'iotteam',  label:'Team',      icon:()=>I.am },               // IoT head (admin) only
-  { k:'map',      label:'Map',       icon:()=>I.map },
-  { k:'tables',   label:'Territory', icon:()=>I.tables },
-  { k:'machines', label:'Machines',  icon:()=>I.machines },
-  { k:'weather',  label:'Weather',   icon:()=>I.weather },
-  { k:'insights', label:'Insights',  icon:()=>I.insights },
-  { k:'am',       label:'AMs',       icon:()=>I.am },
-  { k:'bm',       label:'BMs',       icon:()=>I.bm },
-  { k:'fo',       label:'FOs',       icon:()=>I.fo },
-  { k:'retailer', label:'Retailers', icon:()=>I.retailer },
-  { k:'pending',  label:'Pending',   icon:()=>I.pending },
-  { k:'leader',   label:'Leaders',   icon:()=>I.leader },
-  { k:'recap',    label:'Yesterday', icon:()=>I.recap },
-  { k:'product',  label:'Products',  icon:()=>I.product },
-  { k:'mpprod',   label:'MP products',icon:()=>I.mpprod },
-  { k:'snake',    label:'Cumulative',icon:()=>I.snake },
+  { k:'wplan',    label:RAIL_LBL.wplan, icon:()=>I.retailer },   // Wheat planning stage only (project `only`)
+  { k:'iottamper',label:RAIL_LBL.iottamper, icon:()=>I.tamper },   // IoT project only
+  { k:'iotrisk',  label:RAIL_LBL.iotrisk,   icon:()=>I.risk },
+  { k:'iotteam',  label:RAIL_LBL.iotteam,      icon:()=>I.am },               // IoT head (admin) only
+  { k:'norun',    label:RAIL_LBL.norun, icon:()=>I.risk },     // field logins' home: their machines that didn't run
+  { k:'map',      label:RAIL_LBL.map,       icon:()=>I.map },
+  { k:'tables',   label:RAIL_LBL.tables, icon:()=>I.tables },
+  { k:'machines', label:RAIL_LBL.machines,  icon:()=>I.machines },
+  { k:'weather',  label:RAIL_LBL.weather,   icon:()=>I.weather },
+  { k:'insights', label:RAIL_LBL.insights,  icon:()=>I.insights },
+  { k:'am',       label:RAIL_LBL.am,       icon:()=>I.am },
+  { k:'bm',       label:RAIL_LBL.bm,       icon:()=>I.bm },
+  { k:'fo',       label:RAIL_LBL.fo,       icon:()=>I.fo },
+  { k:'retailer', label:RAIL_LBL.retailer, icon:()=>I.retailer },
+  { k:'pending',  label:RAIL_LBL.pending,   icon:()=>I.pending },
+  { k:'leader',   label:RAIL_LBL.leader,   icon:()=>I.leader },
+  { k:'recap',    label:RAIL_LBL.recap, icon:()=>I.recap },
+  { k:'product',  label:RAIL_LBL.product,  icon:()=>I.product },
+  { k:'mpprod',   label:RAIL_LBL.mpprod,icon:()=>I.mpprod },
+  { k:'snake',    label:RAIL_LBL.snake,icon:()=>I.snake },
 ];
-const mViews = () => M_VIEWS.filter(x=>!roleHidesView(x.k));
+// EACH ROLE'S OWN BAR (plan I6). The first tabs are the role's work: a field login's machines that did not
+// run, leadership's season pages, admin's "Today" group (the same group the desktop rail opens with). The rest
+// follow in the desktop rail's group order, so the phone's All pages sheet and the rail tell one structure.
+// Kharif only — Wheat and IoT keep M_VIEWS order (their pages are few and already in job order).
+const ROLE_BAR = { admin:['map','machines','weather','recap'], lead:['snake','product','map','machines'],
+  upl:['norun','machines','map','bm'], swal:['norun','machines','map','bm'] };
+const RAIL_ORDER = RAIL_GROUPS.flat().map(x=>x[0]);
+const mViews = () => {
+  const vis=M_VIEWS.filter(x=>!roleHidesView(x.k));
+  if(curProject().id!=='kharif') return vis;
+  const first=ROLE_BAR[GATE.cur&&GATE.cur.role]||[];
+  const rank=k=>{ const i=first.indexOf(k); return i>=0 ? i : 100+RAIL_ORDER.indexOf(k); };
+  return vis.slice().sort((a,b)=>rank(a.k)-rank(b.k));
+};
+// The role's landing page. Field logins land on Didn't run (Decision A); everyone else keeps the project's home
+// (the Map for Kharif, chosen 2026-10-22 — leadership's bar OPENS with Cumulative, but they still land on the Map).
+const homeView = () => roleHidesView('norun') ? (curProject().home||'map') : 'norun';
 const M_PRIMARY = 4;                       // bottom bar holds 4 + "More"; the rest live in the sheet
 
 // Generic bottom sheet. The body scrolls internally and clears the home indicator; an optional `footer` is a
@@ -9717,7 +9764,7 @@ function mFiltersHTML(v){
   const segB=(o,t)=>`<button data-act="org" data-org="${o}" style="${css({...segM(S.org===o,true),borderRadius:'8px',minHeight:'44px'})}">${t}</button>`;
   const dayB=(d,t)=>`<button data-act="day" data-day="${d}" style="${css({...segM((d==='today')===(S.day==='today'),true),borderRadius:'8px',minHeight:'44px'})}">${t}</button>`;
   return `${lab('Search')}
-    <input id="searchInput" placeholder="Machine no. or operator…" value="${E(S.search)}" style="width:100%;height:46px;border:1px solid #D5D0C6;border-radius:10px;background:#FAF9F6;padding:0 13px;font-family:'Noto Sans';font-size:16px;color:#1B1A17;margin-bottom:18px" />
+    <input id="searchInput" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Machine no. or operator…" value="${E(S.search)}" style="width:100%;height:46px;border:1px solid #D5D0C6;border-radius:10px;background:#FAF9F6;padding:0 13px;font-family:'Noto Sans';font-size:16px;color:#1B1A17;margin-bottom:18px" />
     ${lab('Org')}
     <div style="display:flex;background:#F2F0EB;border-radius:10px;padding:3px;gap:2px;margin-bottom:18px">
       ${segB('Both','All')}${segB('UPL','UPL')}${segB('SWAL','SWAL')}${segB('Open','Open')}
@@ -9751,22 +9798,65 @@ function mFiltersFooterHTML(v){
     </div>`;
 }
 
+// The Didn't run page, shared by desktop (a card grid) and phone (one column). A card is one machine: who
+// operates it and a Call button (only for a real number), where it is, and its season acres. Tapping the card
+// opens the machine sheet. Paged with the machine list's `listLimit`.
+function norunBodyHTML(v, mob){
+  const N=v.norun, lim=state.listLimit||MLIST_PAGE;
+  let shown=0;
+  const card = m => `<div ${rowDataAttrs({act:'open',mc:m.mc})} role="button" tabindex="0" style="min-width:0;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 12px;display:flex;align-items:center;gap:10px;cursor:pointer">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(m.mc)}</span><span style="font-size:11px;color:#6E6A62">${E(m.org)}</span></div>
+        <div style="font-size:13px;color:#1B1A17;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.opName&&!isPlaceholder(m.opName)?m.opName:'No operator named')}</div>
+        <div style="font-size:12px;color:#6E6A62;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(phName(m.territory))} · ${E(phName(m.cluster))} · ${fmt(m.achieved||0)} ac this season</div>
+      </div>
+      ${realTel(m.opNum)?`<a href="tel:${E(m.opNum)}" data-stop="1" aria-label="Call ${E(m.opName||'operator')}" style="width:44px;height:44px;border-radius:11px;background:#1B1A17;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0">${I.phoneS}</a>`:''}
+    </div>`;
+  const head = `<div style="margin-bottom:12px"><div style="font-size:${mob?15:16.5}px;font-weight:700">${fmt(N.total)} of ${fmt(N.of)} didn’t run ${dayWord().toLowerCase()}</div>
+      <div style="font-size:12px;color:#6E6A62;margin-top:2px">Grouped by what the sheet says. Tap a machine for its details, or call the operator.</div></div>`;
+  if(!N.total) return head+`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:26px 18px;text-align:center;color:#6E6A62;font-size:13px">Every machine in this view ran ${dayWord().toLowerCase()}.</div>`;
+  const groups = N.groups.map(g=>{ if(shown>=lim) return '';
+    const take=g.list.slice(0,lim-shown); shown+=take.length;
+    return `<div style="margin-bottom:16px"><div style="display:flex;${mob?'flex-direction:column;gap:2px':'align-items:baseline;gap:8px'};margin-bottom:8px"><div class="mLbl" style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#46433d">${g.label} · ${fmt(g.list.length)}</div>${g.note?`<div style="font-size:11px;color:#6E6A62">${g.note}</div>`:''}</div>
+      <div style="display:grid;grid-template-columns:${mob?'minmax(0,1fr)':'repeat(auto-fill,minmax(320px,1fr))'};gap:8px">${take.map(card).join('')}</div></div>`; }).join('');
+  const more = shown<N.total ? `<button data-act="loadmore" style="width:100%;height:48px;border:1px solid #D5D0C6;border-radius:11px;background:#fff;color:#46433d;font-size:14px;font-weight:600;cursor:pointer">Load more · showing ${fmt(shown)} of ${fmt(N.total)}</button>` : '';
+  return head+groups+more;
+}
+// EVERY PAGE ENDS WITH A NEXT STEP (plan M6, *Mobile First*: a page that just stops is a dead end). One or two
+// links to where a reader of this page usually goes next, filtered by what the role may see. Phone only.
+const M_NEXT = { norun:['machines','bm'], map:['tables','machines'], tables:['machines','am'], machines:['tables','weather'],
+  weather:['machines','map'], am:['bm','machines'], bm:['machines','tables'], pending:['am'], recap:['insights','machines'],
+  insights:['snake','recap'], snake:['insights','product'], product:['mpprod','snake'], mpprod:['product'], leader:['recap'] };
+function mNextHTML(view){
+  const ks=(M_NEXT[view]||[]).filter(k=>!roleHidesView(k));
+  const brk = view==='machines' && !state.health.includes('Breakdown')
+    ? `<button data-act="health" data-h="Breakdown" style="min-height:44px;padding:0 13px;border:1px solid #E9E6DF;border-radius:11px;background:#fff;font-size:13px;color:#1B1A17;cursor:pointer">Breakdowns only</button>` : '';
+  if(!ks.length && !brk) return '';
+  return `<div style="margin-top:18px"><div class="mLbl" style="margin-bottom:8px">Next</div><div style="display:flex;gap:8px;flex-wrap:wrap">${brk}${ks.map(k=>`<button data-act="view" data-view="${k}" style="min-height:44px;padding:0 13px;border:1px solid #E9E6DF;border-radius:11px;background:#fff;font-size:13px;color:#1B1A17;cursor:pointer">${E(NAV_TITLE[k]||k)} →</button>`).join('')}</div></div>`;
+}
+// "All pages" (plan I1/I2): EVERY page the role has, in the desktop rail's groups and order under the same
+// headings, two to a row so the whole map fits a 320 × 560 phone without scrolling. It used to be a flat list of
+// whatever did not fit the bar, titled "More views" — a different structure from the desktop for the same pages.
 function mMoreHTML(){
-  const rest=mViews().slice(M_PRIMARY);
-  return rest.map(x=>`<button data-act="view" data-view="${x.k}" style="width:100%;display:flex;align-items:center;gap:13px;padding:15px 4px;min-height:52px;background:none;border:none;border-bottom:1px solid #F2F0EB;cursor:pointer;text-align:left;color:${state.view===x.k?'#1B1A17':'#46433d'}"${state.view===x.k?' aria-current="page"':''}>
-      <span style="color:${state.view===x.k?'#1B1A17':'#6E6A62'};display:flex">${x.icon()}</span>
-      <span style="flex:1;font-size:15px;font-weight:${state.view===x.k?700:500}">${x.label}</span>
-    </button>`).join('');
+  const vis=new Set(mViews().map(x=>x.k));
+  const tile=k=>{ const x=M_VIEWS.find(m=>m.k===k), on=state.view===k;
+    return `<button data-act="view" data-view="${k}"${on?' aria-current="page"':''} style="display:flex;align-items:center;gap:9px;min-height:48px;padding:0 10px;border:1px solid ${on?'#1B1A17':'#E9E6DF'};border-radius:11px;background:${on?'#F2F0EB':'#fff'};cursor:pointer;text-align:left;color:#1B1A17">
+      <span style="color:${on?'#1B1A17':'#6E6A62'};display:flex;flex-shrink:0">${x.icon()}</span>
+      <span style="font-size:13.5px;font-weight:${on?700:500};line-height:1.2">${E(NAV_TITLE[k]||x.label)}</span></button>`; };
+  return RAIL_GROUPS.map((g,i)=>{ const ks=g.map(x=>x[0]).filter(k=>vis.has(k)); if(!ks.length) return '';
+    return `${RAIL_GROUP_NAMES[i]?`<div class="mLbl" style="margin:12px 2px 7px">${RAIL_GROUP_NAMES[i]}</div>`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">${ks.map(tile).join('')}</div>`; }).join('');
 }
 
 function mBottomNavHTML(){
-  const all=mViews(), prim=all.slice(0,M_PRIMARY), hasMore=all.length>M_PRIMARY;
+  // Five pages fit as five tabs (NN/g: 4–5). A More sheet holding ONE page was what the MP field logins got.
+  const all=mViews(), nPrim=all.length<=M_PRIMARY+1?all.length:M_PRIMARY, prim=all.slice(0,nPrim), hasMore=all.length>nPrim;
   if(all.length<2) return '';   // one view (Wheat's planning stage): a bar with a single tab is furniture
-  const restActive=all.slice(M_PRIMARY).some(x=>x.k===state.view);
+  const restActive=all.slice(nPrim).some(x=>x.k===state.view);
   const item=(active,inner,attrs)=>`<button class="mNavItem" ${attrs}${active?' aria-current="page"':''} style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:7px 0 0;background:none;border:none;cursor:pointer;color:${active?'#1B1A17':'#6E6A62'};font-size:11px;font-weight:${active?700:500};min-height:56px">${inner}</button>`;
   return `<nav aria-label="Views" style="flex-shrink:0;background:#fff;border-top:1px solid #E9E6DF;display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:9">
     ${prim.map(x=>item(state.view===x.k, `${x.icon()}<span>${x.label}</span>`, `data-act="view" data-view="${x.k}"`)).join('')}
-    ${hasMore?item(restActive, `${I.more}<span>More</span>`, `data-act="sheet" data-sheet="more"`):''}
+    ${hasMore?item(restActive, `${I.more}<span>All pages</span>`, `data-act="sheet" data-sheet="more"`):''}
   </nav>`;
 }
 
@@ -9790,7 +9880,7 @@ function mHierCardHTML(r, opts){
         <div style="${css({...r.nameStyle,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'})}">${E(r.name)}</div>
         ${r.sub?`<div style="display:flex;align-items:center;gap:6px;min-width:0"><span style="${css({...r.subStyle,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'})}">${E(r.sub)}</span>${r.rank||''}</div>`:''}
       </div>
-      ${r.contact?`<a href="${E(r.callTel)}" data-stop="1" aria-label="Call ${E(r.name)}" style="${css({...r.callStyle,width:'44px',height:'44px',borderRadius:'11px',flexShrink:0,margin:'-6px 0'})}">${I.phoneS}</a>`:''}
+      ${realTel(r.contact)?`<a href="${E(r.callTel)}" data-stop="1" aria-label="Call ${E(r.name)}" style="${css({...r.callStyle,width:'44px',height:'44px',borderRadius:'11px',flexShrink:0,margin:'-6px 0'})}">${I.phoneS}</a>`:''}
       ${chev}
     </div>
     ${opts&&opts.pending
@@ -9842,6 +9932,8 @@ function mobileHTML(v){
         <span style="font-size:10.5px;color:#9C988F">Tap a bubble to drill in</span>
       </div>
     </div>`;
+  } else if(S.view==='norun'){
+    body = norunBodyHTML(v,true);
   } else if(S.view==='tables'){
     // Territory breakdown — the desktop's 8-column grid as drill-down cards.
     body = mSectionTitle((v.multiState && !S.st)?'State breakdown':((v.stName?v.stName+' · ':'')+'Territory breakdown'),
@@ -9946,7 +10038,7 @@ function mobileHTML(v){
         <div style="display:flex;align-items:center;gap:11px;margin-bottom:16px">
           <div style="width:38px;height:38px;border-radius:50%;background:#F2F0EB;display:flex;align-items:center;justify-content:center;font-weight:600;color:#6E6A62;flex-shrink:0">${E(d.opInitial)}</div>
           <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${E(d.opName)}<span style="${css(d.opTagStyle)}">${E(d.opTag)}</span>${opRankChip(d.opNum,'s')}</div><div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62">${E(d.opNum)}</div></div>
-          <a href="${E(d.opTel)}" data-stop="1" aria-label="Call ${E(d.opName)}" style="${css({...d.callStyle,width:'44px',height:'44px',borderRadius:'11px'})}">${I.phone}</a>
+          ${realTel(d.opNum)?`<a href="${E(d.opTel)}" data-stop="1" aria-label="Call ${E(d.opName)}" style="${css({...d.callStyle,width:'44px',height:'44px',borderRadius:'11px'})}">${I.phone}</a>`:''}
         </div>
         <div class="mLbl" style="margin-bottom:9px">Acres: season, month, day</div>
         <div style="margin-bottom:16px">
@@ -9972,7 +10064,10 @@ function mobileHTML(v){
         </div>`:`<div class="mLbl" style="margin-bottom:9px">Connectivity</div>
         <div style="display:flex;align-items:center;justify-content:space-between;border:1px solid #E9E6DF;border-radius:10px;padding:10px 13px;margin-bottom:16px"><div style="font-size:11.5px;color:#6E6A62">Machine pinged yesterday</div><div style="font-size:13.5px;font-weight:700;color:${d.pingInk}">${E(d.pingLabel)}</div></div>`}
         <div class="mLbl" style="margin-bottom:9px">Location · Escalation</div>
-        <div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;margin-bottom:12px">${E(d.coords)}</div>
+        <div style="font-family:'IBM Plex Mono';font-size:11.5px;color:#6E6A62;margin-bottom:8px">${E(d.coords)}</div>
+        <!-- Open in Maps (plan M5, Decision D): Google's universal maps URL — the Maps app on a phone. The same
+             link the IoT pages give technicians; tapping it is what sends the coordinates to Google. -->
+        ${d.mapHref?`<a href="${E(d.mapHref)}" target="_blank" rel="noopener" data-stop="1" style="display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;margin-bottom:12px;font-size:13px;border:1px solid #E9E6DF;border-radius:10px;background:#fff;color:#1B1A17;font-weight:600;text-decoration:none">📍 Open in Maps</a>`:''}
         <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">${escalationHTML(d, I.phoneS, true)}</div>
       </div>
     </div>` : '';
@@ -9995,14 +10090,18 @@ function mobileHTML(v){
   // A chromeless page keeps its OWN scope (insSt / lbSt / pmState / snState / mpTerr) and the machine filter
   // bar does not reach it, so the header names that scope — not the fleet filter's state, which on an
   // All-India Insights page used to read "GJ Operations". Fleet views keep the project's own title.
-  const headTitle = chromeless && nav ? `${nav.label} · ${mPageScope(S.view)}` : curProject().mHead(v.scopeLabel);
+  // YOU ARE HERE (plan M2): every page's header names the PAGE, and the line under it names its scope and the
+  // programme — "Machines" over "All India · 1+1=11 Kharif · AFS". The fleet pages used to show the programme's
+  // name, cut to "India O…" at 320px, so the only cue to which page you were on was the highlighted tab.
+  const headTitle = nav ? nav.label : curProject().mHead(v.scopeLabel);
+  const headSub = nav ? `${mPageScope(S.view)} · ${curProject().mSub}` : curProject().mSub;
   return `<div style="${outer}">
     <div class="mShell" style="${shell}">
       ${notch}
       <div style="padding:${ph?'calc(env(safe-area-inset-top) + 12px) 16px 12px':'30px 18px 12px'};background:#fff;border-bottom:1px solid #E9E6DF;flex-shrink:0">
         <div style="display:flex;align-items:center;gap:9px">
           <div style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;letter-spacing:.02em;color:#fff;flex-shrink:0" aria-hidden="true">UPL</div>
-          <div style="flex:1;min-width:0"><h1 style="margin:0;font-size:14px;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(headTitle)}</h1><div class="mCap">${E(curProject().mSub)}</div></div>
+          <div style="flex:1;min-width:0"><h1 style="margin:0;font-size:14px;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(headTitle)}</h1><div class="mCap" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(headSub)}</div></div>
           <!-- the status stamp doubles as the refresh control: it is the thing you look at when the numbers seem old -->
           <button data-act="refresh" aria-label="${E(v.statusAria)}" style="display:flex;align-items:center;gap:6px;min-width:44px;height:44px;padding:0 6px;border:none;background:none;cursor:pointer;flex-shrink:0;${ph?'':'margin-right:4px'}">${S.refreshing?I.refresh('animation:spin 1s linear infinite;color:#6E6A62'):`<span style="width:8px;height:8px;border-radius:50%;background:${v.statusDot};flex-shrink:0"></span>`}<span style="font-size:12px;font-weight:600;color:#46433d">${E(v.statusTime)}</span></button>
           ${OWN_PAGES.has(S.view)?'':filterBtn}${toDesktop}
@@ -10015,10 +10114,17 @@ function mobileHTML(v){
         <!-- a tablet-width phone layout would stretch single-column cards to 736px; the column is capped and centred -->
         <div style="max-width:680px;margin:0 auto">
         ${pwaBannerHTML(ph)}
-        ${chromeless?`<div style="height:${ph?'14px':'0'}"></div>`:`<div class="mWx" style="display:flex;align-items:center;gap:11px;background:${v.mobileWeather.bg};border:1px solid ${v.mobileWeather.border};border-radius:14px;padding:12px 14px;${ph?'margin:14px 0 14px':'margin-bottom:14px'}">
+        <!-- CONTENT BEFORE NAVIGATION (plan M1). Every fleet tab used to open with the same three blocks — weather
+             banner, status card, a sideways row of up to 12 number cards — so at 320 × 560 the page you tapped
+             began below the first screen and switching tabs looked like nothing happened. Now the status card and
+             four number cards sit on the role's HOME tab only, the weather banner on Weather (it is one place's
+             forecast, now named), and every other tab opens straight onto its own content. -->
+        ${ph?'<div style="height:14px"></div>':''}
+        ${!chromeless && S.view==='weather' ? `<div class="mWx" style="display:flex;align-items:center;gap:11px;background:${v.mobileWeather.bg};border:1px solid ${v.mobileWeather.border};border-radius:14px;padding:12px 14px;margin-bottom:14px">
           <span style="font-size:22px">${v.mobileWeather.icon}</span>
-          <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:${v.mobileWeather.ink}">${E(v.mobileWeather.label)}</div><div style="font-size:12px;color:#6E6A62;margin-top:1px">${E(v.mobileWeather.line)}</div></div>
-        </div>
+          <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:${v.mobileWeather.ink}">${E(v.mobileWeather.label)}</div><div style="font-size:11px;color:#6E6A62">Spray window today · ${E(mPageScope('weather'))}</div><div style="font-size:12px;color:#6E6A62;margin-top:1px">${E(v.mobileWeather.line)}</div></div>
+        </div>` : ''}
+        ${!chromeless && S.view===homeView() ? `
         <!-- "Did the fleet work?" is the first thing on the phone, full width — it used to be the 6th tile of a
              sideways scroller, off-screen. The season line joins it when the view is All India or one state. -->
         <div style="background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:12px 14px;margin-bottom:9px">
@@ -10030,18 +10136,20 @@ function mobileHTML(v){
         <!-- The rest stays the one deliberate horizontal scroller. Tiles snap to the left edge and the right edge
              fades, so it reads as "more this way" rather than a tile cut through a number. -->
         <div style="display:flex;gap:9px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;padding:0 28px 3px 0;margin-bottom:14px;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)">
-          ${v.kpis.map(k=>k.kind==='fleet'
+          ${v.kpis.filter(k=>k.ph).map(k=>k.kind==='fleet'
             ? `<div style="flex-shrink:0;scroll-snap-align:start;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px">${fleetTileInner(v.fleet,true)}</div>`
             : `<div style="flex-shrink:0;scroll-snap-align:start;min-width:92px;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px"><div style="${css(k.valStyle)}">${E(k.value)}</div><div style="font-size:11px;font-weight:600;letter-spacing:.03em;color:#6E6A62;text-transform:uppercase;margin-top:4px;white-space:nowrap">${E(k.label)}</div></div>`).join('')}
-        </div>`}
+        </div>` : ''}
         ${body}
+        ${mNextHTML(S.view)}
         ${footnoteHTML(true)}
+        ${helpAllowed()?'<div style="height:64px" aria-hidden="true"></div>':''}<!-- room under the floating "Raise a concern" button (plan M9) -->
         </div>
       </div>
       ${mBottomNavHTML()}
       ${sheet}
       ${S.sheet==='filters' ? mSheetHTML('Filters', mFiltersHTML(v), 'sheetclose', mFiltersFooterHTML(v)) : ''}
-      ${S.sheet==='more'    ? mSheetHTML('More views', mMoreHTML(), 'sheetclose') : ''}
+      ${S.sheet==='more'    ? mSheetHTML('All pages', mMoreHTML(), 'sheetclose') : ''}
       ${S.sheet==='iotfilters' && curProject().iot ? iotSheetHTML() : ''}
     </div>
   </div>`;
@@ -10068,12 +10176,12 @@ function mPageScope(view){
     case 'mpprod':   return state.mpTerr || 'Madhya Pradesh';
     case 'wplan':    return (lock||state.wpSt) ? nm(lock||state.wpSt) : 'HR + PB';
     case 'iottamper': case 'iotrisk': case 'iotteam': { const sc=iotScope(); return sc.st ? iotStName(sc.st) : (isAdmin()?'All states':'My states'); }
-    default:         return nm(lock);
+    default:         return nm(lock||pick('st'));   // the fleet pages: the filter bar's state
   }
 }
 function render(){
   // keep every device off tabs their role no longer exposes — the phone carries all of them now
-  if(roleHidesView(state.view)) state.view=curProject().home||'map';
+  if(roleHidesView(state.view)) state.view=homeView();
   // Any change to the filter set restarts the mobile list's paging, so "Load more" can't leave a
   // stale offset applied to a freshly-filtered (and possibly much shorter) result set.
   const S0=state, fsig=[S0.org,S0.st,S0.terr,S0.cluster,S0.am,S0.co,S0.bm,S0.tm,S0.health.join(','),S0.search].join('|');
@@ -10113,9 +10221,9 @@ function render(){
    handling (histSync) owns the history ENTRIES; this only rewrites the address of the current one. A typed or
    pasted address is honoured at boot and on hashchange, and `render()`'s role guard still bounces a view the
    login may not see. */
-const VIEW_SLUG = { tables:'territory', snake:'cumulative', recap:'yesterday', mpprod:'mp-products', wplan:'retailer-plan',
+const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-plan',
   iottamper:'tamper', iotrisk:'at-risk', iotteam:'team', am:'area-managers', bm:'business-managers',
-  leader:'leaders', product:'products', fo:'field-officers' };
+  leader:'leaders', product:'products', fo:'field-officers', recap:'daily-recap', norun:'didnt-run' };
 const slugOf = v => VIEW_SLUG[v]||v;
 const viewOfHash = h => { const sl=String(h||'').replace(/^#\/?/,''); if(!sl) return null;
   const hit=Object.keys(NAV_TITLE).find(k=>slugOf(k)===sl); return hit||null; };
@@ -10258,6 +10366,8 @@ app.addEventListener('click', e=>{
     case 'logout': gateLock(); break;
     case 'sheet': setState({sheet:el.dataset.sheet}); break;
     case 'sheetclose': setState({sheet:null}); break;
+    // The install offer is ONE line on the phone (plan M10): the steps for this browser open on "How".
+    case 'pwahow': PWA.showHow=!PWA.showHow; render(); break;
     case 'pwainstall': pwaInstall(); break;
     case 'pwadismiss': PWA.dismissed=true; try{ localStorage.setItem(PWA.KEY,String(Date.now())); }catch(_){ } track('pwa_offer_dismiss',{ project:curProject().id }); render(); break;
     case 'loadmore': setState(s=>({listLimit:s.listLimit+MLIST_PAGE})); break;
@@ -10273,6 +10383,7 @@ app.addEventListener('click', e=>{
     case 'pinmode': setState({pinMode:el.dataset.mode}); break;
     case 'health': { const h=el.dataset.h; setState(s=>({health: s.health.includes(h)? s.health.filter(x=>x!==h) : [...s.health,h]})); break; }
     case 'gloss': setState(s=>({gloss:!s.gloss})); break;
+    case 'insfold': { const k=el.dataset.k; setState(s=>({insOpen:{...(s.insOpen||{}), [k]:!(s.insOpen||{})[k]}})); break; }
     // Jump links on the long pages: scroll the page's own scroller to a section. Motion only if the reader allows it.
     case 'jump': { const t=document.getElementById(el.dataset.id); if(t){ let sm='smooth'; try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) sm='auto'; }catch(_){ } t.scrollIntoView({behavior:sm,block:'start'}); } break; }
     case 'morefilters': setState(s=>({moreF:!s.moreF})); break;
@@ -10883,22 +10994,23 @@ function pwaBannerHTML(ph){
   // three months after its own mini-infobar is dismissed, and which Samsung Internet and others never fire. Those
   // phones now get the manual menu path; the one-tap button still takes over the moment Chrome offers it.
   const how = PWA.prompt ? 'prompt' : PWA.inApp ? 'inapp' : PWA.ios ? 'ios' : PWA.android ? 'android' : '';
-  const offer = ph && state.view===(curProject().home||'map') && !PWA.standalone && !PWA.dismissed && how;
+  const offer = ph && state.view===homeView() && !PWA.standalone && !PWA.dismissed && how;
   if(offer) out+=strip('#FFFFFF','#E9E6DF',`<img src="icons/icon-192.png" alt="" width="30" height="30" style="border-radius:8px;flex-shrink:0">
-    <div style="flex:1;min-width:0;font-size:12px;color:#46433d;line-height:1.35">${
-      how==='prompt' ? '<b>Install the app</b> — opens from your home screen, works without signal.'
+    <div style="flex:1;min-width:0;font-size:12px;color:#46433d;line-height:1.35"><b>Install the app</b> · works without signal${how!=='prompt'&&PWA.showHow?`<div style="margin-top:4px">${how==='prompt' ? '<b>Install the app</b> — opens from your home screen, works without signal.'
       : how==='inapp' ? '<b>To install the app</b>, open this link in <b>'+(PWA.ios?'Safari':'Chrome')+'</b> — tap ⋮ or ··· and choose <b>Open in '+(PWA.ios?'Safari':'browser')+'</b>.'
       : how==='ios' ? '<b>Add to Home Screen</b> — tap <b>Share</b> <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M8 11H6a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-2"/></svg> then <b>Add to Home Screen</b>.'
-      : '<b>Install the app</b> — tap <b>⋮</b> at the top right, then <b>Add to Home screen</b> or <b>Install app</b>.'}</div>
+      : '<b>Install the app</b> — tap <b>⋮</b> at the top right, then <b>Add to Home screen</b> or <b>Install app</b>.'}</div>`:''}</div>
+    ${how!=='prompt'?`<button data-act="pwahow" aria-expanded="${PWA.showHow?'true':'false'}" style="flex-shrink:0;min-height:44px;padding:0 10px;border:1px solid #E9E6DF;border-radius:9px;background:#fff;font-size:12px;font-weight:600;color:#1B1A17;cursor:pointer">${PWA.showHow?'Hide':'How'}</button>`:''}
     ${PWA.prompt?`<button data-act="pwainstall" style="flex-shrink:0;padding:8px 12px;border:none;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Install</button>`:''}
     <button data-act="pwadismiss" aria-label="Dismiss" style="flex-shrink:0;width:44px;height:44px;margin:-8px -8px -8px 0;border:none;background:none;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;display:flex;align-items:center;justify-content:center;pointer-events:none">${I.closeS}</span></button>`);
   return out;
 }
 
 /* ============================= mount ============================= */
+var _bootRole=null;
 var _booted=false;   // var, not let: addrSync() reads it from render(), which may run before this line is evaluated
 function bootApp(){
-  if(_booted){ if(!gateAllows(state.org)) state.org=gateDefaultOrg(); if(!gateAllowsState(state.st)) state.st=gateDefaultState(); render(); return; }
+  if(_booted){ if(!gateAllows(state.org)) state.org=gateDefaultOrg(); if(!gateAllowsState(state.st)) state.st=gateDefaultState(); if((GATE.cur&&GATE.cur.id)!==_bootRole){ _bootRole=GATE.cur&&GATE.cur.id; Object.assign(state,{org:gateDefaultOrg(), st:gateDefaultState(), terr:'',cluster:'',am:'',co:'',bm:'',tm:'',health:[],search:'',expanded:{}}); state.view=homeView(); } render(); return; }   // a DIFFERENT PIN lands on its role's home; a re-lock keeps the page
   _booted=true;
   document.title=curProject().title;
   helpMount();
@@ -10906,9 +11018,10 @@ function bootApp(){
   state.org=gateDefaultOrg();
   state.st=gateDefaultState();   // scoped UPL/SWAL land locked on their state; admin lands on all-India ('')
   setupProj();
-  { const hv=viewOfHash(location.hash); if(hv) state.view=hv; }   // a bookmarked / shared address opens on its page
+  _bootRole=GATE.cur&&GATE.cur.id;
+  { const hv=viewOfHash(location.hash); state.view = hv || homeView(); }   // a bookmarked / shared address opens on its page; else the role's home
   render();
-  if(roleHidesView(state.view)) state.view=curProject().home||'map';   // a project without a map (Wheat, planning stage) lands on its home
+  if(roleHidesView(state.view)) state.view=homeView();   // a project without a map (Wheat, planning stage) lands on its home
   trackView(state.view);   // landing view for this session (map)
   loadData();
   // The contest tab is fetched at BOOT now, not on first sight of the Leaders page: the operator's India

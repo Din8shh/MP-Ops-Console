@@ -109,6 +109,29 @@ the non-obvious one a later edit would otherwise quietly break:
   preview pane the worker's own fetches fail, after which it serves its stale precache — you will be reading
   yesterday's `index.html`. `navigator.serviceWorker.getRegistrations()` → `unregister()` right after load.
 
+### Phone structure and the information hierarchy (`docs/mobile-ia-plan.md`, 2026-10-22)
+Reviewed against *Mobile First* and the NN/g IA guide; M1–M11 and I1–I6 are built. The rules a later edit would break:
+- **One structure, desktop and phone.** `RAIL_GROUPS` + `RAIL_GROUP_NAMES` (Today · People · Season) drive the desktop
+  rail AND the phone's **"All pages"** sheet (`mMoreHTML`: every page the role has, grouped, two per row, fitting
+  320 × 560). A new view goes into `RAIL_GROUPS`, or it appears in neither.
+- **One name table.** `NAV_TITLE` = full name (headings, browser title, All pages sheet); `RAIL_LBL` = the short
+  form for the rail, the phone bar and the phone header, and `M_VIEWS` labels come from it. The Yesterday page is
+  **Daily recap** (`#/daily-recap`); "Yesterday" now means only the day.
+- **A bar per role** (`ROLE_BAR`, Kharif only): `mViews()` puts the role's tabs first, the rest in rail order. Five
+  pages show as five tabs (`nPrim`); more than five show four + All pages. **`homeView()` is the landing page**:
+  `norun` for field logins, else the project's home (Map). Leadership's bar opens with Cumulative but lands on the Map.
+- **Didn't run (`norun`)** is a field-only fleet view (`roleHidesView`): `v.norun` groups the scope's non-Active
+  machines (no reason · breakdown · no operator · never sprayed), so its total equals Idle + Breakdown. Desktop and
+  phone share `norunBodyHTML`; it pages with `listLimit`.
+- **Content before navigation on the phone.** The status card + four `ph:1` number cards render only on
+  `homeView()`; the weather banner only on Weather. Every page ends with `mNextHTML` (`M_NEXT`).
+- **The phone header names the page** (`nav.label`), with `mPageScope(view) · mSub` under it; `mPageScope`'s
+  default branch reads `state.st` for the fleet pages.
+- **No Call button without a real number** (`realTel`: ≥10 digits), in the hierarchy rows, the escalation list and
+  the operator line. The sheet's "0" and a date in a number column both fail it.
+- **Insights folds on the phone** (Season mode): `fold()` + `state.insOpen`, opened with `data-act="insfold"`.
+- A **different PIN** resets scope, filters and page (`_bootRole` in `bootApp`); a re-lock with the same PIN keeps them.
+
 **The desktop rail sizes itself off viewport HEIGHT, and that is load-bearing.** An admin carries twelve
 buttons — **thirteen under MP**, where the MP products view joins them; measured after that addition, all
 thirteen still fit unscrolled at a 620px viewport (clamped to 27px each) and the list starts scrolling around
