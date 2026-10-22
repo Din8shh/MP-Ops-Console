@@ -140,6 +140,44 @@ the third call site). Reword it in `FOOTNOTE` only. The desktop `<main>` carries
 yields to the strip inside the fixed-`100vh` shell instead of pushing it off; the rail is a sibling of
 that whole column, so its height clamp is untouched.
 
+## Dashboard plan (`docs/dashboard-plan.md`, 2026-10-22)
+A review against the DataCamp / Pencil & Paper dashboard rules: problems D1–D14, decisions, phases 1–7. Phases 1–5
+and 7 are built; phase 6 (season-phase mode, D7) was left out by decision. The rules it set, which a later edit
+would quietly break:
+- **Placeholder names are never ranked** (`isPlaceholder` / `phName` / `phLast` / `phOpts`, next to
+  `distinctNames`). "0", "-", blank, "Unassigned" and "Not in plan" sort last in every fleet list and dropdown, and
+  "0" displays as "Not named on sheet". Top territories and Wettest leave them out, and Top territories states the
+  count (`v.noTerr`). **Display only**: keys, `data-terr` and filter values keep the raw string, so filtering to
+  them still works. Insights has its own, stricter `insJunkTerr`.
+- **The fleet header names the DATA's day, not the fetch time** (`dataDayTxt`, `fleetDated` in `vals()`):
+  "Data for Wed 21 Oct · checked 10:42 pm". Only Kharif with a live fetch; offline/demo/Wheat/IoT keep their wording.
+- **Season figures read THROUGH YESTERDAY everywhere** — the Cumulative badge and legend (`closedPts`), the KPI
+  strip (`seasonVsLast`) and Insights (`insAnchor`) — so one quantity prints one number.
+- **The KPI strip opens with "did the fleet work"** (`v.status`), then season vs last season (`v.season`), then
+  Breakdown / Idle / acres, then the inventory as ONE card (`{kind:'fleet'}` in `kpis` → `fleetTileInner`: deployed
+  of plan, with the org split as a stacked bar). The phone lifts status + season into a full-width card above its
+  scroller. **`v.season` is withdrawn whenever the view is narrower than one state with every company** (`narrowed`
+  in `vals()`): the cumulative tab is all-company and state-grain, so a field login (org forced) never sees it.
+  It fetches the cumulative tab on first need.
+- **`target` is shown NOWHERE.** It is a flat 1,000 ac per machine (Field availability). "Achieved %", the
+  achieved/target bar, the drawer's Target row and the CSV Target column are gone; the tables read "Season acres ·
+  per machine". Do not bring a target back without a real one from the programme.
+- **Every view has a tab title and an address** (`addrSync`, `VIEW_SLUG`): `#/cumulative`, `#/territory`, …
+  `replaceState` keeps `history.state`, so the phone's `histSync` entries are untouched; `bootApp` opens a
+  bookmarked address, `hashchange` follows a typed one, and the role guard still bounces a forbidden view. `_booted`
+  is a `var` because `render()` can run before its line is evaluated.
+- **The rail is labelled and grouped** (`RAIL_GROUPS`, `RAIL_LBL`, `.navlbl`, `.railSep`): project pages · Today
+  (Map, Machines, Weather, Yesterday) · People · Season (Insights first). Labels show at ≥760px of viewport height,
+  where all thirteen admin buttons fit unscrolled (measured at 768); below that the old icon-only clamp applies.
+  A new view costs ~43px with labels — re-check 768.
+- **Desktop filter bar: Company · Day · State · Health up front, the rest behind "More filters"** (`state.moreF`).
+  While closed, each hidden filter that is set shows as a removable chip (`data-act="unf"`, clearing a parent
+  clears its child). A child dropdown reads as its own name and is disabled until its parent is picked.
+- **One acres glossary** (`ACRE_GLOSS`, `glossBtnHTML`, `glossHTML`, `state.gloss`): opens on tap from the KPI
+  strip, the phone status card and the Products head. Reword the four definitions there only.
+- Desktop page heads (`pageHeadHTML`) on Cumulative, Products, MP products; jump links (`jumpBarHTML`) on Weather
+  and the Leaders operator board.
+
 ## Data
 One row = one machine. Live source is a published-CSV Google Sheet (see `CONFIG` in
 index.html). To go live, set `CONFIG.csvUrl` (Publish-to-web CSV link) or `CONFIG.sheetId`.
@@ -200,7 +238,7 @@ designing anything on a column — several look usable and are not:
 | `mtd` | 343 of 938 season-active | Yes, but thin early in a month |
 | `iotAcresY` | **now populated** — 4,304 ac across the sheet on 2026-08-25, where the 2026-08-03 audit found 0/1,518 | **Re-audit before designing on it.** The IoT-vs-reported divergence detector this table has been asking for is now possible in principle. It already counts for one thing: IoT acres satisfy the deployed-override `worked` test, since a sensor reporting sprayed area is the same evidence a reported acre is (3 GJ rows live, 55 ac, all with zero reported acres) |
 | `lastPing` / `daysSincePing` | 100% | **No** — the two columns are **swapped** (`daysSincePing` holds an Excel serial date, `lastPing` holds the day count) *and* stale: median last ping 76 days old, only 17 machines in the last day |
-| `target` | 100% | **No** — flat 1000 for every row, so any %-of-target measure is just `achieved` rescaled |
+| `target` | 100% | **No** — flat 1000 for every row, so any %-of-target measure is just `achieved` rescaled. **Shown nowhere since 2026-10-22** |
 | `acresT` (today) | 18/1,518 | **No** — the page runs on yesterday anyway |
 | `scanned` per machine | 149/1,518 | **No** — too sparse for per-machine product mix |
 
@@ -1006,7 +1044,7 @@ the console. Work on a branch and fast-forward `main`; don't commit straight to 
 
 ## Insights (the cross-tab summary)
 `insights` is the only view that reads all three tabs at once. **Admin-only** (in `roleHidesView`, like
-Cumulative / Products / Leaders); it sits first in the rail and first in the phone's bottom bar for those who
+Cumulative / Products / Leaders); it leads the rail's Season group (see Dashboard plan) and first in the phone's bottom bar for those who
 have it. Chromeless (no filter bar, no KPI strip) and filter-free by design; the state league table is its only
 navigation (`data-act="insdrill"` → that state's map).
 
@@ -1367,7 +1405,7 @@ prior seasons); **Sheet1** → is the fleet working (deployed / ran / broken dow
   reports the same quantity over one. Both can be true and opposite ("across four weeks the gap has widened" +
   "the gap stopped widening last week"). Naming both windows is all that stops adjacent cards reading as a
   contradiction — do not drop those phrases when editing copy.
-- **`M_VIEWS` position 5 is deliberate** — see the comment there. Insights leads the desktop rail but stays off the
+- **`M_VIEWS` position 5 is deliberate** — see the comment there. Insights leads the desktop rail's Season group but stays off the
   phone's 4-slot primary bar, because adding a twelfth view to it would displace Weather for admins.
 - **Three acre totals, deliberately reconciled on-page.** Season-to-date (snake, the headline — the only
   year-comparable one) > Kharif achieved (Sheet1) > product-identified (~half the season). The footer card says
