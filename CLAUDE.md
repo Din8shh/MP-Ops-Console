@@ -15,7 +15,7 @@ HTML/CSS/JS + inline-SVG maps. Same deploy shape as `din8shh.github.io/MP-map-vi
   centroids). Reused directly for map geometry.
 - `wheat-demo.js` — 235 **DUMMY** rows (`export const WHEAT_DEMO`, HR + PB) for the Wheat North project while its
   sheet tab does not exist. Invented names/numbers/acres, generated once; same object shape as `machines.js`.
-  **No longer shown while Wheat is in its planning stage** (`PROJECTS.wheat.plan`, below); kept for the machine phase.
+  **Never shown live**: Wheat reads its real machine tab since 2026-10-26; the dummy rows are only the fallback if that fetch fails.
 - `bayer/index.html` — the **Bayer partner page**: self-contained, reads Bayer's own workbook (see **Partner pages**).
 - `manifest.webmanifest`, `sw.js`, `icons/` — the PWA (see **PWA** below). `icons/icon.svg` is the source; the PNGs
   were rasterised from it with macOS `qlmanage -t` + `sips` (no ImageMagick here).
@@ -802,7 +802,31 @@ some added and some not carried over, on a new tab of the SAME workbook that doe
 - Header, title, the State control's all-scope label (`allLabel`: "North · HR + PB") and the GA `page_title` /
   `project` property come from the project. The PIN card stays generic because the project is unknown until
   the PIN is entered. The concern button stays Kharif-only: it keys on `upl`/`swal`, and its tab is Kharif's.
-- **PLANNING STAGE (2026-10-14): Wheat runs on its retailer PLAN, not on machine rows.** `PROJECTS.wheat.plan` points
+- **MACHINE PHASE (live 2026-10-26): Wheat reads its own machine workbook** (`PROJECTS.wheat.sheetId` =
+  `1l7mMhlFUj-URefRDWUlDicaponlyLCGAZw3hNyQTPsg`, tab "a", gid `1847044238`; `liveUrl` takes a project's `sheetId` over
+  `CONFIG.sheetId`). One row per machine: retailer (`party_name`), territory, FO, TM, planned machines + placement acres
+  (party-level, repeated per machine), village, `handover_status`, organisation, operator, CI, AM, SH, `ops_state`, Rabi /
+  MTD / yesterday / today / IoT acres, latest lat/long, `last_pinged_date`, scanned acres. Parsed by **`wheatRows`**, not
+  `resolveCols` (snake_case names, read by NAME). Views: Map · Machines · Weather · Territories · AMs · FOs · Retailers ·
+  Pending · Retailer plan; no BMs (no BM column). Phone bar `PROJECTS.wheat.bar`. Every load logs
+  `[MP-Ops] wheat machine tab → {…}` — read it first if a count looks wrong. Rules the parser holds:
+  · **Deployed = handed over** (`handover_status` Yes) or recorded acres (the Kharif override). Not handed over = Pending.
+  · **State comes from the TERRITORY** (`NORTH_DIST` district lists after `TERR_ALIAS`), never `ops_state`: that column
+    names the ops TEAM — the Rajasthan team (SH Sudershan Chauhan) runs Amritsar / Gurdaspur / Khanna / Kapurthala — and is
+    blank on 151 rows. A machine with no territory (not yet given to a retailer) takes the state of the nearest placed
+    machine within 50 km of its last ping, then its ops_state; else it is dropped and listed in `unplaced` (4 on 26 Oct:
+    the two "Shimla" rows among them).
+  · **49 rows arrive SHIFTED** — a party or village cell with a comma ("Samana, Patiala") is split across two cells, which
+    pushes the A–L block right and loses `organisation`. The halves are re-joined; the handover cell those rows then carry
+    is a date, so they read as not handed over. Their organisation is taken from the row's TM where that TM's other rows
+    name one company (34 rows), else Open. **This is a sheet fix** (the export that writes tab "a" must quote or strip
+    commas); the repair only keeps the console readable meanwhile.
+  · 3 machine numbers appear twice (UPL_3036 / 3040 / 3045); the first row wins. `0` and `-` read as blank. No breakdown
+    column, so Breakdown reads 0; `pinged` = last ping on/after yesterday; the `cluster` field carries the VILLAGE.
+  · Live 26 Oct: 406 machines placed, 155 deployed (HR 83 / PB 72), 245 season acres — reconciling with the sheet's column.
+- **PLANNING STAGE (2026-10-14, superseded 2026-10-26 — kept as the Retailer plan page): Wheat ran on its retailer PLAN.**
+  With `gid` set, the plan workbook is fetched after the machines and feeds only the `wplan` page; blank `gid` = the old
+  planning-stage behaviour. `PROJECTS.wheat.plan` points
   at the programme's OWN workbook (`1NCrNwwTf0fSNDEMvM6s0Y00XsXSP0uNiTos2BG1Hqm0`, not `CONFIG.sheetId`) and its two
   raw tabs — `PB - Raw Working Sheet` (gid `916215567`) and `HR - Raw Working Sheet` (gid `177705638`). While `plan` is
   set, `loadData()` applies **zero machine rows** (the dummy rows never reach a screen beside real plan figures),
@@ -823,7 +847,8 @@ some added and some not carried over, on a new tab of the SAME workbook that doe
     15 of 84 retailers and an FO on none; the page prints "not assigned yet", not a blank. `Hissar` folds into `Hisar`
     (`WPLAN_TERR`). Filters: State · Company · **Org zone** (the sheet's `Organization/Zone`, e.g. `SWAL Karnal`; its
     options follow the company toggle and it cascades into Territory) · Territory · search. Every load logs `[MP-Ops] wheat plan → {PB:{…}, HR:{…}}`.
-  · **Leaving the planning stage:** delete `plan` + `home`, restore the commented `views` list, set `gid`.
+  · Its retailer / machine totals come from the plan workbook and need not equal the machine tab's (planned 389 there vs
+    403 machine rows here on 26 Oct) — two sources, labelled as such.
 - **Field officers (`fo`) and Retailers (`retailer`) — TENTATIVE, the spec is not final.** Both are trees built
   in `vals()` (`grpRow` / `mcRow`) in the SAME row shape as the AM/BM trees. They render through
   `hierTableHTML`, which am/bm now share too since the two were verified identical, and through `mHierCardHTML`

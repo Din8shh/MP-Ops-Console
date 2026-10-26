@@ -275,17 +275,18 @@ const PROJECTS = {
             head:sc=>`${sc} Operations Dashboard`, sub:'1+1=11 Kharif Programme · Farm Mechanisation Services',
             mHead:sc=>`${sc} Operations`, mSub:'1+1=11 Kharif · AFS' },
   wheat:  { id:'wheat', title:'Wheat Spray Operations — North', short:'Wheat North', allLabel:'North · HR + PB',
-            gid:'' /* ← the wheat machine tab's gid, once it exists in the workbook. Blank = dummy data. */,
+            // MACHINE PHASE (2026-10-26). The programme's own machine workbook (`sheetId`, not CONFIG.sheetId), one tab
+            // "a" = one row per machine with its retailer plan, people, acres and last ping. See wheatRow().
+            sheetId:'1l7mMhlFUj-URefRDWUlDicaponlyLCGAZw3hNyQTPsg', gid:'1847044238',
             demo:WHEAT_DEMO, states:['HR','PB'], fullDeploy:[],
-            // PLANNING STAGE (2026-10-14). The programme has no machine tab yet — only a retailer-wise PLAN, kept in
-            // its OWN workbook (`plan.sheetId`, not CONFIG.sheetId) as one raw working sheet per state. While `plan`
-            // is set the project runs on that alone: no machine rows (so no dummy data reaches any screen), and the
-            // only view is the Retailer plan page. Going live with machines = drop `plan`, restore the commented
-            // views list below, and set `gid`.
+            // The retailer PLAN workbook from the planning stage (2026-10-14) — still read, for the Retailer plan page
+            // only. While `gid` is blank the project runs on the plan alone (no machine rows, the plan page its only
+            // view); with `gid` set it is fetched after the machines and machine views come first.
             plan:{ sheetId:'1NCrNwwTf0fSNDEMvM6s0Y00XsXSP0uNiTos2BG1Hqm0',
                    tabs:[ { st:'PB', gid:'916215567', name:'PB - Raw Working Sheet' }, { st:'HR', gid:'177705638', name:'HR - Raw Working Sheet' } ] },
-            home:'wplan',
-            views:['wplan'], // machine phase: ['map','tables','machines','weather','am','bm','pending','fo','retailer']
+            // No BM column on the wheat sheet, so no Business managers view.
+            views:['map','machines','weather','tables','am','fo','retailer','pending','wplan'],
+            bar:['map','machines','tables','retailer'],   // the phone's tab bar, first; the rest under All pages
             only:['fo','retailer','wplan'], kharifTabs:false,
             head:sc=>`Wheat Spray Operations · ${sc==='India'?'North':sc}`, sub:'Wheat Spray Programme · Haryana + Punjab',
             mHead:sc=>`Wheat Spray · ${sc==='India'?'North':sc}`, mSub:'Wheat North · AFS' },
@@ -368,8 +369,8 @@ const TERR_ALIAS = {
   TG:{ 'nagarkarnool':'Nagarkurnool', 'mahaboobnagar':'Mahabubnagar', 'warangal 1':'Warangal Urban', 'warangal-1':'Warangal Urban', 'warangal 2':'Warangal Rural' },
   GJ:{ 'halvad':'Morbi', 'rajkot cotton':'Rajkot' },
   RJ:{ 'sri ganganagar':'Ganganagar', 'suratgarh':'Ganganagar', 'anoopgarh':'Ganganagar', 'sangria':'Hanumangarh', 'merta':'Nagaur' },
-  PB:{ 'abohar':'Fazilka', 'malout':'Sri Muktsar Sahib' },
-  HR:{ 'dabwali':'Sirsa' },
+  PB:{ 'abohar':'Fazilka', 'malout':'Sri Muktsar Sahib', 'khanna':'Ludhiana', 'malerkotla':'Sangrur', 'nawanshehar':'Shahid Bhagat Singh Nagar', 'nawanshahr':'Shahid Bhagat Singh Nagar' },
+  HR:{ 'dabwali':'Sirsa', 'hissar':'Hisar', 'sonepat':'Sonipat' },
 };
 const aliasTerr = (st,terr) => { const a=TERR_ALIAS[st]; return (a && a[String(terr||'').trim().toLowerCase()]) || terr; };
 let ROWS = MACHINES_MOCK;        // DEPLOYED machines only — drives every map/table/KPI view
@@ -387,7 +388,8 @@ function dataDayTxt(short){ try{ return new Date(Date.now()-864e5).toLocaleDateS
 function nowIST(){ try{ return new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'}); }catch(_){ return new Date().toLocaleTimeString(); } }
 function liveUrl(){
   const P=curProject();
-  if(P.id!=='kharif') return (CONFIG.sheetId && P.gid) ? `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&gid=${P.gid}&t=${Date.now()}` : '';
+  const sid = P.sheetId || CONFIG.sheetId;
+  if(P.id!=='kharif') return (sid && P.gid) ? `https://docs.google.com/spreadsheets/d/${sid}/gviz/tq?tqx=out:csv&gid=${P.gid}&t=${Date.now()}` : '';
   if(CONFIG.csvUrl) return CONFIG.csvUrl + (CONFIG.csvUrl.includes('?')?'&':'?') + 't=' + Date.now();
   if(CONFIG.sheetId) return `https://docs.google.com/spreadsheets/d/${CONFIG.sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(CONFIG.sheetName)}&t=${Date.now()}`;
   return '';
@@ -472,8 +474,93 @@ function resolveCols(header){
   if(c.acresT<0 && h.length>33) c.acresT=33;
   return c;
 }
+/* ===================== Wheat North — the machine tab (PROJECTS.wheat.sheetId / gid) =====================
+   Its own column names (snake_case, read by NAME), not Sheet1's, so it gets its own parser rather than more
+   patterns in resolveCols. Measured 2026-10-26: 413 rows / 410 machines. Four things are handled here:
+   · ROWS SHIFTED BY A COMMA. A party or village cell holding a comma ("Samana, Patiala") arrives split in two,
+     which pushes the rest of the A–L block one cell right and drops `organisation` off its end (49 rows). The
+     two halves are re-joined and organisation left blank. The handover cell those rows then carry is a date,
+     not Yes/No, so they read as not handed over. The real fix is in the sheet.
+   · STATE COMES FROM THE TERRITORY, not `ops_state`. ops_state names the ops TEAM (the Rajasthan team runs
+     Amritsar, Gurdaspur, Khanna …) and is blank on 151 rows. A territory in a district list decides; ops_state
+     is used only for a machine with no territory, and a row neither can place is dropped and logged.
+   · ORGANISATION, where blank, is taken from the row's TM when every other row of that TM names one company.
+   · DEPLOYED = handed over (`handover_status` Yes), or recorded acres — the Kharif override, same reason. */
+const NORTH_DIST = {
+  HR:['Jhajjar','Gurugram','Faridabad','Mahendragarh','Rewari','Nuh','Palwal','Charkhi Dadri','Yamunanagar','Kurukshetra','Kaithal','Sirsa','Karnal','Jind','Fatehabad','Hisar','Panipat','Sonipat','Bhiwani','Rohtak','Panchkula','Ambala'],
+  PB:['Gurdaspur','Hoshiarpur','Amritsar','Jalandhar','Tarn Taran','Rupnagar','Shahid Bhagat Singh Nagar','Fazilka','Moga','Ludhiana','S.A.S. Nagar','Faridkot','Fatehgarh Sahib','Sri Muktsar Sahib','Sangrur','Barnala','Bathinda','Patiala','Mansa','Ferozepur','Pathankot','Kapurthala'],
+};
+function wheatRows(grid){
+  const h=(grid[0]||[]).map(x=>String(x||'').trim().toLowerCase());
+  const ix=(...ns)=>{ for(const n of ns){ const i=h.indexOf(n); if(i>=0) return i; } return -1; };
+  const C={ mc:ix('machine_number'), party:ix('party_name'), terr:ix('territory'), fo:ix('fo_name'), foMob:ix('fo_number'),
+    tm:ix('tm_name'), tmMob:ix('tm_number'), village:ix('village_location'), hand:ix('handover_status'), org:ix('organisation'),
+    opNum:ix('operator_number'), opName:ix('operator_name'), coMob:ix('ci_contact'), co:ix('ci_name'), amNum:ix('am_contact'), am:ix('am_name'),
+    opsSt:ix('ops_state'), achieved:ix('rabi_achieved_acres'), mtd:ix('mtd_acres'), acresY:ix('yesterday_acres'), acresT:ix('today_acres'),
+    iot:ix('iot_acres_yesterday'), lat:ix('latest_latitude'), lon:ix('latest_longitude'), ping:ix('last_pinged_date') };
+  const miss=['mc','terr','hand','org'].filter(k=>C[k]<0);
+  if(miss.length) throw new Error('wheat machine tab: missing column(s) '+miss.join(', '));
+  const distSt={}; Object.entries(NORTH_DIST).forEach(([st,l])=>l.forEach(d=>distSt[d.toLowerCase()]=st));
+  const blank=v=>{ v=txt(v); return (v==='0'||v==='-')?'':v; };
+  const yday=new Date(Date.now()-864e5).toISOString().slice(0,10);   // a ping on or after yesterday = "pinged"
+  const log={ rows:0, shifted:0, dupMc:[], unplaced:[], orgFromTm:0, handedOver:0, handoverUnreadable:0, flips:0, byState:{} };
+  const seen=new Set(), out=[];
+  for(const raw of grid.slice(1)){ if(!raw||!raw.join('').trim()) continue;
+    const row=raw.slice();
+    for(let i=1;i<C.org;i++){ const a=row[i]||'', b=row[i+1]||'';
+      if(a.startsWith('"') && !a.endsWith('"') && b.endsWith('"')){ row.splice(i,2,a.slice(1)+','+b.slice(0,-1)); row.splice(C.org,0,''); log.shifted++; break; } }
+    const g=k=>C[k]>=0&&C[k]<row.length?row[C[k]]:'';
+    const mc=txt(g('mc')); if(!mc) continue;
+    if(seen.has(mc)){ log.dupMc.push(mc); continue; } seen.add(mc);
+    log.rows++;
+    const t0=canonTerr(blank(g('terr')));
+    let st='';
+    for(const s of ['HR','PB']){ const a=aliasTerr(s,t0); if(distSt[String(a).toLowerCase()]===s){ st=s; break; } }
+    const orgRaw=txt(g('org')).toLowerCase();
+    const achieved=num(g('achieved')), mtd=num(g('mtd')), acresY=num(g('acresY')), acresT=num(g('acresT')), iotAcresY=num(g('iot'));
+    const hand=txt(g('hand')).toLowerCase();
+    if(hand!=='yes' && hand!=='no') log.handoverUnreadable++;
+    const worked = achieved>0||mtd>0||acresY>0||acresT>0||iotAcresY>0;
+    const deployed = (hand==='yes'||worked) ? 1 : 0;
+    if(hand==='yes') log.handedOver++; else if(worked) log.flips++;
+    const lat=num(g('lat'))||null, lon=num(g('lon'))||null;
+    const ping=/^\d{4}-\d\d-\d\d/.test(txt(g('ping'))) ? txt(g('ping')).slice(0,10) : '';
+    const opNum=blank(g('opNum')), opName=blank(g('opName'));
+    out.push({ mc, org: orgRaw==='swal'?'SWAL':orgRaw==='upl'?'UPL':'', deployed, st,
+      territory: aliasTerr(st,t0)||'Unassigned', cluster: titleCase(blank(g('village')))||'Unassigned',
+      co:blank(g('co')), coMob:blank(g('coMob')), am:blank(g('am')), amNum:blank(g('amNum')),
+      target:0, achieved, mtd, acresY, acresT, iotAcresY, scanned:[], breakdown:0,
+      opMapped: (opName&&opNum)?1:0, pinged: ping && ping>=yday ? 1 : 0, lastPing: ping,
+      daysSincePing: ping ? String(Math.max(0, Math.round((Date.now()-Date.parse(ping+'T00:00:00+05:30'))/864e5))) : '',
+      opName, opNum, bmName:'', bmMob:'', tmName:blank(g('tm')), tmMob:blank(g('tmMob')), foName:blank(g('fo')), foMob:blank(g('foMob')),
+      retailerName:blank(g('party')), retailerMob:'', retailerLoc:titleCase(blank(g('village'))),
+      handover: hand==='yes', lat:lat&&lon?lat:null, lon:lat&&lon?lon:null, _t0:t0, _ops:blank(g('opsSt')) });
+  }
+  // A machine with no territory (not yet given to a retailer) is placed where it IS: the state of the nearest
+  // territory-placed machine within 50 km of its last ping. Failing that, its ops team's state. Else dropped + logged.
+  const placed=out.filter(m=>m.st&&m.lat!=null);
+  const km=(a,b)=>{ const r=Math.PI/180, x=(b.lon-a.lon)*r*Math.cos((a.lat+b.lat)/2*r), y=(b.lat-a.lat)*r; return 6371*Math.hypot(x,y); };
+  out.forEach(m=>{ if(m.st) return;
+    if(m.lat!=null){ let best=null, d=50; placed.forEach(p=>{ const k=km(m,p); if(k<d){ d=k; best=p; } }); if(best){ m.st=best.st; log.byLocation=(log.byLocation||0)+1; } }
+    if(!m.st && !m._t0){ const o=canonState(m._ops); if(m._ops && STATE_NAMES[o]) m.st=o; }
+    if(m.st) m.territory=aliasTerr(m.st,m._t0)||'Unassigned';
+  });
+  out.forEach(m=>{ if(!m.st) log.unplaced.push(m.mc+(m._t0?' ('+m._t0+')':'')); delete m._t0; delete m._ops; });
+  for(let i=out.length-1;i>=0;i--) if(!out[i].st){ log.rows--; out.splice(i,1); }
+  // A blank organisation (the shifted rows, and machines not yet given to a party) takes its TM's company where
+  // that TM's other rows name exactly one. Anything left is Open.
+  const tmOrg={}; out.forEach(m=>{ const k=phoneKey(m.tmMob); if(k&&m.org) (tmOrg[k]||(tmOrg[k]=new Set())).add(m.org); });
+  out.forEach(m=>{ if(m.org) return; const s=tmOrg[phoneKey(m.tmMob)];
+    if(s&&s.size===1){ m.org=[...s][0]; log.orgFromTm++; } else m.org='Open'; });
+  out.forEach(m=>{ const b=log.byState[m.st]||(log.byState[m.st]={machines:0,handedOver:0,UPL:0,SWAL:0,Open:0,seasonAc:0});
+    b.machines++; b.handedOver+=m.handover?1:0; b[m.org]++; b.seasonAc+=m.achieved; });
+  Object.values(log.byState).forEach(b=>b.seasonAc=Math.round(b.seasonAc*10)/10);
+  console.info('[MP-Ops] wheat machine tab →', log);
+  return out;
+}
 function rowsToMachines(grid){
   if(grid.length<2) return [];
+  if(curProject().id==='wheat') return wheatRows(grid);
   const col=resolveCols(grid[0]); const out=[];
   // Reconciliation counters for the load-time log — see the deployed-flag note below.
   let depFlips=0, depFlipAc=0, orphans=0, orphanAc=0; const orphanSt={};
@@ -606,7 +693,8 @@ async function loadData(){
   const url=liveUrl(), P=curProject();
   // Planning stage: the project has a retailer plan and no machines. No machine rows at all — the dummy rows
   // must not reach a screen beside real plan figures — and no weather fetch, since no view reads it.
-  if(P.plan){ applyRows([]); await loadWPlan(); return; }
+  if(P.plan && !P.gid){ applyRows([]); await loadWPlan(); return; }
+  if(P.plan && !WPLAN.loaded) loadWPlan();   // machine phase: the plan page still reads the plan workbook
   if(P.iot){ applyRows([]); await loadIoT(); return; }   // IoT team: its own workbook, no machine rows, no weather
   // The project's state list is the outer scope: a row outside it never reaches a view, whatever the tab holds.
   const scoped = rows => P.states ? rows.filter(m=>P.states.includes(m.st)) : rows;
@@ -2356,7 +2444,12 @@ function alignTerritories(rows){
 // Territory names arrive alias-resolved (aliasTerr) but not necessarily in the map's casing, so match
 // case-insensitively — wxKey lowercases both sides.
 const wxCoords=(st,terr)=>WX_GEO[wxKey(st,terr)];
-function applyGeo(key){ const g=GEO_CACHE[key]; if(!g) return false; BASE=g.BASE; COORDS=g.COORDS; activeGeoKey=key; rebuildGeoDerived(); setupProj(); scale=1; tx=0; ty=0; mapLocked=true; return true; }
+// The national map carries all seven states; a project scoped to fewer (Wheat: HR + PB) draws only its own, so the
+// map fits them instead of leaving two states in a corner of seven.
+function applyGeo(key){ const g=GEO_CACHE[key]; if(!g) return false; BASE=g.BASE; COORDS=g.COORDS;
+  const ps=curProject().states;
+  if(key==='__india' && ps){ BASE={...g.BASE, features:g.BASE.features.filter(f=>ps.includes(f.properties.code))};
+    COORDS=Object.fromEntries(Object.entries(g.COORDS).filter(([n])=>ps.some(c=>STATE_NAMES[c]===n))); } activeGeoKey=key; rebuildGeoDerived(); setupProj(); scale=1; tx=0; ty=0; mapLocked=true; return true; }
 // Which geometry the current state needs: a selected state → its districts; all-India w/ >1 state → national; else the sole state (MP).
 function geoKeyForState(){ if(state.st) return knownGeo(state.st)?state.st:'MP';
   const sts=[...new Set(ROWS.map(m=>m.st))]; if(sts.length>1) return '__india';
@@ -2896,7 +2989,9 @@ function vals(){
       mixAStyle:{display:'none'},mixIStyle:{display:'none'},mixBStyle:{display:'none'}, mixLabel:hs, mixLabelStyle:{display:'none'},
       acresLabel:`${fmt(m.achieved)} ac`, ranY:fmt(acD(m)), opMap:'', iotRanY:fmt(m.iotAcresY||0), pingLabel:(m.pinged?'✓':'—'), pingInk:(m.pinged?C.act:C.brk),
       contact:m.opNum, callTel:'tel:'+m.opNum, callStyle:callBtn }; };
-  const groupBy=(list,keyOf)=>{ const g={}; list.forEach(m=>{ (g[keyOf(m)] ||= []).push(m); }); return Object.entries(g).sort((a,b)=>b[1].length-a[1].length||a[0].localeCompare(b[0])); };
+  // A name-keyed group ("n:Unassigned") whose name is a placeholder sorts last, like every other fleet list.
+  const phKey=k=>k.startsWith('n:')&&isPlaceholder(k.slice(2));
+  const groupBy=(list,keyOf)=>{ const g={}; list.forEach(m=>{ (g[keyOf(m)] ||= []).push(m); }); return Object.entries(g).sort((a,b)=>phKey(a[0])-phKey(b[0])||b[1].length-a[1].length||a[0].localeCompare(b[0])); };
   const retKey=m=>phoneKey(m.retailerMob)||('n:'+(m.retailerName||'Unassigned'));
   const foRows=[], foGroups=groupBy(F, m=>phoneKey(m.foMob)||('n:'+(m.foName||'Unassigned')));
   foGroups.forEach(([k,list])=>{
@@ -2905,14 +3000,14 @@ function vals(){
     foRows.push(row); if(!row._exp) return;
     rets.forEach(([rk,rl])=>{
       const r2=grpRow(key+'|ret:'+rk,1,'RET',roleChip('#EFEAF9','#6A5AC4'),dominantName(rl,'retailerName')||'Unassigned',rl[0].retailerLoc||rl[0].territory,rl,rl[0].retailerMob);
-      foRows.push(r2); if(r2._exp) rl.forEach(m=>foRows.push(mcRow(m,2,m.opName+' · '+m.territory)));
+      foRows.push(r2); if(r2._exp) rl.forEach(m=>foRows.push(mcRow(m,2,[m.opName,m.territory].filter(Boolean).join(' · '))));
     });
   });
   const retRows=[], retGroups=groupBy(F,retKey);
   retGroups.forEach(([k,list])=>{
     const key='ret:'+k, fo=dominantName(list,'foName');
     const row=grpRow(key,0,'RET',roleChip('#EFEAF9','#6A5AC4'),dominantName(list,'retailerName')||'Unassigned',[list[0].retailerLoc||list[0].territory, fo&&('FO · '+fo)].filter(Boolean).join(' · '),list,list[0].retailerMob);
-    retRows.push(row); if(row._exp) list.forEach(m=>retRows.push(mcRow(m,1,m.opName+' · '+m.territory)));
+    retRows.push(row); if(row._exp) list.forEach(m=>retRows.push(mcRow(m,1,[m.opName,m.territory].filter(Boolean).join(' · '))));
   });
 
   // Pending Deployment view (admin) — not-yet-deployed machines grouped AM → Cluster Officer → Machine.
@@ -9719,9 +9814,9 @@ const ROLE_BAR = { admin:['map','machines','weather','recap'], lead:['snake','pr
   upl:['norun','machines','map','bm'], swal:['norun','machines','map','bm'] };
 const RAIL_ORDER = RAIL_GROUPS.flat().map(x=>x[0]);
 const mViews = () => {
-  const vis=M_VIEWS.filter(x=>!roleHidesView(x.k));
-  if(curProject().id!=='kharif') return vis;
-  const first=ROLE_BAR[GATE.cur&&GATE.cur.role]||[];
+  const vis=M_VIEWS.filter(x=>!roleHidesView(x.k)), P=curProject();
+  if(P.id!=='kharif' && !P.bar) return vis;
+  const first=P.bar || ROLE_BAR[GATE.cur&&GATE.cur.role] || [];   // a project's own bar (Wheat) leads, then rail order
   const rank=k=>{ const i=first.indexOf(k); return i>=0 ? i : 100+RAIL_ORDER.indexOf(k); };
   return vis.slice().sort((a,b)=>rank(a.k)-rank(b.k));
 };
@@ -10166,7 +10261,7 @@ let _ovKey='', _ovFresh=false;
 // The scope a chromeless page is showing, for the phone header. Each page owns its own (the gate's lock wins,
 // exactly as in insAgg / leaderBodyHTML); none of them reads state.st.
 function mPageScope(view){
-  const nm=c=>c?(STATE_NAMES[c]||c):'All India', lock=gateDefaultState();
+  const nm=c=>c?(STATE_NAMES[c]||c):curProject().allLabel, lock=gateDefaultState();
   const pick=k=>(state[k]&&gateAllowsState(state[k]))?state[k]:'';
   switch(view){
     case 'insights': return nm(lock||pick('insSt'));
