@@ -12,68 +12,135 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+  /* Tokens — the console's (CLAUDE.md → Tokens). Health: assigned = Active green, awaiting = Idle amber. */
   :root{ --ink:#1B1A17; --ink2:#6E6A62; --ink3:#9C988F; --line:#E9E6DF; --soft:#F2F0EB; --bg:#F6F5F2; --card:#fff;
-         --accent:#D96A12; --ok:#15A24A; --okBg:#E8F6EE; --wait:#B98200; --waitBg:#FDF5DD; }
+         --accent:#D96A12; --accentBg:#FDF1E6;
+         --ok:#15A24A; --okInk:#0F7A37; --okBg:#E8F6EE; --wait:#E0A008; --waitInk:#8A6100; --waitBg:#FDF5DD; --none:#D8D4CA; }
   *{ box-sizing:border-box; }
-  html,body{ margin:0; background:var(--bg); color:var(--ink); font-family:'Noto Sans',system-ui,sans-serif; }
+  html,body{ margin:0; background:var(--bg); color:var(--ink); font-family:'Noto Sans',system-ui,sans-serif; -webkit-text-size-adjust:100%; }
   body{ min-height:100dvh; display:flex; flex-direction:column; }
   .mono{ font-family:'IBM Plex Mono',monospace; }
-  header{ background:#fff; border-bottom:1px solid var(--line); padding:calc(env(safe-area-inset-top) + 12px) 20px 0; }
-  .hrow{ display:flex; align-items:center; gap:12px; max-width:1100px; margin:0 auto; }
+  .muted{ color:var(--ink2); }
+  button{ font:inherit; }
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* header: who · page · scope, then the two tabs */
+  header{ background:#fff; border-bottom:1px solid var(--line); padding:calc(env(safe-area-inset-top) + 12px) 20px 0; position:sticky; top:0; z-index:5; }
+  .hrow{ display:flex; align-items:flex-start; gap:12px; max-width:1180px; margin:0 auto; }
   .eyebrow{ font-size:11px; font-weight:700; letter-spacing:.14em; color:var(--accent); text-transform:uppercase; }
-  h1{ font-size:19px; margin:2px 0 0; font-weight:700; }
-  .sub{ font-size:12px; color:var(--ink2); margin-top:2px; }
+  h1{ font-size:20px; margin:2px 0 0; font-weight:700; line-height:1.25; }
+  .scope{ font-size:12.5px; color:var(--ink2); margin-top:2px; }
   .grow{ flex:1; min-width:0; }
-  .btn{ font:inherit; font-size:13px; font-weight:600; color:var(--ink2); background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:9px 14px; min-height:44px; cursor:pointer; }
+  .hside{ display:flex; align-items:center; gap:12px; }
+  .stamp{ font-size:12px; color:var(--ink2); text-align:right; line-height:1.35; }
+  .stamp b{ color:var(--ink); font-weight:600; }
+  .stamp.stale b{ color:#DC3A2B; }
+  .btn{ color:var(--ink2); background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:8px 14px; min-height:44px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
   .btn:hover{ border-color:#D8D4CA; color:var(--ink); }
-  .tabs{ display:flex; gap:4px; max-width:1100px; margin:10px auto 0; }
-  .tab{ font:inherit; font-size:13.5px; font-weight:600; color:var(--ink2); background:none; border:none; border-bottom:2.5px solid transparent; padding:10px 12px; min-height:44px; cursor:pointer; }
-  .tab[aria-selected="true"]{ color:var(--ink); border-bottom-color:var(--accent); }
-  main{ flex:1; width:100%; max-width:1100px; margin:0 auto; padding:20px 16px 40px; }
+  .btn.sm{ min-height:36px; padding:6px 12px; font-size:12.5px; }
+  .tabs{ display:flex; gap:4px; max-width:1180px; margin:8px auto 0; }
+  .tab{ font-size:14px; font-weight:600; color:var(--ink2); background:none; border:none; border-bottom:3px solid transparent; padding:10px 12px; min-height:46px; cursor:pointer; }
+  .tab[aria-current="page"]{ color:var(--ink); border-bottom-color:var(--accent); font-weight:700; }
+  .tab .n{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink2); margin-left:4px; font-weight:500; }
+
+  main{ flex:1; width:100%; max-width:1180px; margin:0 auto; padding:18px 20px 40px; }
+  .lead{ font-size:13.5px; color:var(--ink2); margin:0 0 14px; }
   .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
-  .stats{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
-  .stat{ padding:14px 16px; }
-  .stat .lbl{ font-size:11.5px; color:var(--ink2); font-weight:600; }
-  .stat .val{ font-size:26px; font-weight:700; margin-top:4px; font-family:'IBM Plex Mono',monospace; }
-  .stat .note{ font-size:11.5px; color:var(--ink2); margin-top:2px; }
-  .meter{ height:6px; background:var(--soft); border-radius:3px; margin-top:8px; overflow:hidden; }
-  .meter > i{ display:block; height:100%; background:var(--ok); border-radius:3px; }
-  .sec{ margin-top:22px; }
-  .sec h2{ font-size:15px; margin:0 0 10px; }
-  .sec h2 small{ font-weight:500; color:var(--ink2); font-size:12.5px; margin-left:6px; }
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  th{ text-align:left; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink2); padding:10px 14px; border-bottom:1px solid var(--line); }
-  td{ padding:10px 14px; border-bottom:1px solid var(--soft); }
-  tr:last-child td{ border-bottom:none; }
-  td.n, th.n{ text-align:right; font-family:'IBM Plex Mono',monospace; }
-  .bar{ display:flex; align-items:center; gap:8px; }
-  .bar .meter{ flex:1; margin:0; min-width:60px; }
-  .filters{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .sec{ margin-top:26px; scroll-margin-top:130px; }   /* clears the sticky header when a filter jumps to the list */
+  .sechead{ display:flex; align-items:baseline; gap:10px; margin:0 0 10px; flex-wrap:wrap; }
+  .sechead h2{ font-size:15.5px; margin:0; }
+  .sechead .sub{ font-size:12.5px; color:var(--ink2); }
+  .sechead .end{ margin-left:auto; }
+
+  /* 1 · status: the "good or not" card */
+  .status{ display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr); gap:28px; padding:20px 22px; border-left:4px solid var(--ok); }
+  .status.low{ border-left-color:var(--wait); }
+  .big{ font-size:34px; font-weight:700; font-family:'IBM Plex Mono',monospace; line-height:1.1; }
+  .big small{ font-size:18px; color:var(--ink2); font-weight:500; }
+  .bigLbl{ font-size:14px; font-weight:600; margin-top:4px; }
+  .bigNote{ font-size:12.5px; color:var(--ink2); margin-top:2px; }
+  .sbar{ display:flex; gap:2px; height:12px; border-radius:6px; overflow:hidden; background:var(--soft); margin-top:14px; }
+  .sbar i{ display:block; height:100%; }
+  .sbar .a{ background:var(--ok); } .sbar .w{ background:var(--wait); }
+  .key{ display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--ink2); margin-top:8px; }
+  .key span::before{ content:''; display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:0; background:var(--k); }
+  .stages{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0; align-self:center; }
+  .stages li{ position:relative; padding:0 10px 0 0; }
+  .stages li + li{ padding-left:14px; border-left:1px solid var(--line); }
+  .stages .sl{ font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink2); }
+  .stages .sv{ font-size:24px; font-weight:700; font-family:'IBM Plex Mono',monospace; margin-top:4px; }
+  .stages .sn{ font-size:12px; color:var(--ink2); margin-top:2px; }
+  .stages .off .sv{ color:var(--ink3); }
+
+  /* 2 · by state */
+  .states{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
+  .stc{ padding:14px 16px; text-align:left; cursor:pointer; border:1px solid var(--line); width:100%; }
+  .stc:hover{ border-color:#D8D4CA; }
+  .stc[aria-pressed="true"]{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  .stc .t{ display:flex; align-items:baseline; gap:8px; }
+  .stc .nm{ font-size:14.5px; font-weight:700; }
+  .stc .v{ margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600; }
+  .stc .v small{ color:var(--ink2); font-weight:500; }
+  .stc .sbar{ height:8px; margin-top:10px; }
+  .stc .ft{ font-size:12px; color:var(--ink2); margin-top:7px; }
+
+  /* 3 · districts still waiting: a sorted horizontal bar list */
+  .dlist{ padding:6px 0; }
+  .drow{ display:grid; grid-template-columns:minmax(150px,220px) minmax(0,1fr) 150px; gap:14px; align-items:center; width:100%;
+         background:none; border:none; text-align:left; padding:8px 18px; min-height:44px; cursor:pointer; color:inherit; }
+  .drow:hover{ background:#FAF9F6; }
+  .drow[aria-pressed="true"]{ background:var(--accentBg); }
+  .drow .nm{ font-size:13.5px; font-weight:600; }
+  .drow .wh{ font-size:11.5px; color:var(--ink2); }
+  .drow .track{ display:flex; gap:2px; height:10px; }
+  .drow .track i{ display:block; height:100%; border-radius:2px; }
+  .drow .fig{ font-size:12.5px; text-align:right; }
+  .drow .fig b{ font-family:'IBM Plex Mono',monospace; }
+  .done{ color:var(--okInk); font-weight:600; }
+  .more{ display:block; width:100%; background:none; border:none; border-top:1px solid var(--soft); color:var(--accent); font-weight:600; font-size:13px; padding:12px; min-height:44px; cursor:pointer; }
+
+  /* 4 · the list */
+  .filters{ display:flex; flex-wrap:wrap; gap:8px; }
   select, input[type=search]{ font:inherit; font-size:13.5px; color:var(--ink); background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:8px 10px; min-height:44px; outline:none; }
-  input[type=search]{ flex:1; min-width:180px; }
   select:focus, input[type=search]:focus{ border-color:var(--accent); }
-  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; }
-  .loc{ padding:14px 16px; }
-  .loc .top{ display:flex; align-items:flex-start; gap:10px; }
-  .loc .name{ font-weight:700; font-size:14.5px; }
-  .loc .where{ font-size:12px; color:var(--ink2); margin-top:2px; }
-  .chip{ flex-shrink:0; font-size:11px; font-weight:700; border-radius:20px; padding:3px 9px; white-space:nowrap; }
-  .chip.ok{ color:var(--ok); background:var(--okBg); }
-  .chip.wait{ color:var(--wait); background:var(--waitBg); }
-  dl{ display:grid; grid-template-columns:auto 1fr; gap:5px 12px; margin:12px 0 0; font-size:12.5px; }
-  dt{ color:var(--ink2); }
-  dd{ margin:0; min-width:0; }
-  .muted{ color:var(--ink3); }
-  .person{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .call{ display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600; color:var(--accent); text-decoration:none; border:1.5px solid #F4D9C1; border-radius:8px; padding:3px 8px; }
-  .call:hover{ background:#FDF1E6; }
-  .empty, .msg{ padding:28px 20px; text-align:center; color:var(--ink2); font-size:13.5px; }
+  input[type=search]{ flex:1; min-width:200px; }
+  .fstate{ display:flex; align-items:center; gap:10px; font-size:12.5px; color:var(--ink2); margin:10px 0; min-height:28px; }
+  .link{ background:none; border:none; color:var(--accent); font-weight:600; font-size:12.5px; padding:6px 4px; cursor:pointer; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink2); padding:10px 14px; border-bottom:1px solid var(--line); background:#FBFAF8; position:sticky; top:0; }
+  td{ padding:10px 14px; border-bottom:1px solid var(--soft); vertical-align:top; }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover td{ background:#FCFBF9; }
+  .tl{ font-weight:600; }
+  .ts{ font-size:12px; color:var(--ink2); margin-top:1px; }
+  .tel{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink2); text-decoration:none; }
+  .tel:hover{ color:var(--accent); text-decoration:underline; }
+  .chip{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:700; border-radius:20px; padding:3px 9px; white-space:nowrap; }
+  .chip.ok{ color:var(--okInk); background:var(--okBg); }
+  .chip.wait{ color:var(--waitInk); background:var(--waitBg); }
+  .tblwrap{ overflow:hidden; }
+  .cards{ display:none; }
+  .empty, .msg{ padding:30px 20px; text-align:center; color:var(--ink2); font-size:13.5px; }
   .msg .btn{ margin-top:12px; }
-  .grp{ margin-top:14px; }
-  .grp:first-child{ margin-top:0; }
-  .grp h3{ font-size:13px; margin:0 0 6px; display:flex; gap:8px; align-items:center; }
-  .grp h3 .person{ font-weight:500; }
+  .skel{ height:14px; border-radius:7px; background:linear-gradient(90deg,var(--soft),#F8F7F4,var(--soft)); background-size:200% 100%; margin:10px 0; }
+  @media (prefers-reduced-motion:no-preference){ .skel{ animation:sk 1.2s linear infinite; } @keyframes sk{ to{ background-position:-200% 0; } } }
+
+  /* field officers */
+  .kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+  .kpi{ padding:14px 16px; }
+  .kpi .l{ font-size:12px; font-weight:600; color:var(--ink2); }
+  .kpi .v{ font-size:26px; font-weight:700; font-family:'IBM Plex Mono',monospace; margin-top:4px; }
+  .kpi .v small{ font-size:15px; color:var(--ink2); font-weight:500; }
+  .kpi .n{ font-size:12px; color:var(--ink2); margin-top:2px; }
+  .grp + .grp{ border-top:1px solid var(--line); }
+  .ghead{ display:flex; align-items:center; gap:10px; padding:12px 16px; background:#FBFAF8; }
+  .ghead .nm{ font-weight:700; font-size:13.5px; }
+  .ghead .ct{ margin-left:auto; font-size:12px; color:var(--ink2); }
+  .forow{ display:grid; grid-template-columns:minmax(160px,240px) 120px minmax(0,1fr); gap:14px; padding:10px 16px; border-top:1px solid var(--soft); font-size:13px; align-items:baseline; }
+  .call{ display:none; }
+
   footer{ font-size:11px; color:var(--ink2); text-align:center; padding:14px 16px calc(env(safe-area-inset-bottom) + 14px); }
+
   /* PIN gate */
   #gate{ position:fixed; inset:0; z-index:10; display:none; align-items:center; justify-content:center; background:var(--bg); padding:16px; }
   #gate .box{ width:340px; max-width:100%; background:#fff; border:1px solid var(--line); border-radius:16px; padding:30px 28px; box-shadow:0 12px 40px rgba(0,0,0,.08); text-align:center; }
@@ -81,15 +148,55 @@
   #pin{ margin-top:16px; width:100%; text-align:center; font-family:'IBM Plex Mono',monospace; font-size:30px; letter-spacing:.5em; padding:12px 0 12px .5em; border:1.5px solid var(--line); border-radius:10px; outline:none; color:var(--ink); }
   #pin:focus{ border-color:var(--accent); }
   #err{ font-size:12px; color:#DC3A2B; margin-top:10px; min-height:15px; font-weight:600; }
-  #gate .note{ font-size:11px; color:var(--ink2); margin-top:14px; line-height:1.4; }
+  #gate .note{ font-size:11.5px; color:var(--ink2); margin-top:14px; line-height:1.4; }
   #app{ display:none; }
+
+  /* ── phone: one column, status first, cards instead of the table, 44px targets, 16px fields ── */
   @media (max-width:820px){
     input, select{ font-size:16px !important; }
-    .stats{ grid-template-columns:repeat(2,minmax(0,1fr)); }
-    .grid{ grid-template-columns:1fr; }
-    .call{ min-height:36px; padding:6px 10px; }
-    .hideM{ display:none; }
-    td, th{ padding:10px 10px; }
+    header{ padding:calc(env(safe-area-inset-top) + 10px) 16px 0; position:static; }   /* a sticky header would hold a fifth of a phone screen */
+    .sec{ scroll-margin-top:12px; }
+    .btn.sm{ min-height:44px; }
+    h1{ font-size:18px; }
+    .hrow .stamp{ display:none; }
+    .mstamp{ display:block !important; }
+    main{ padding:14px 16px 32px; }
+    .status{ grid-template-columns:1fr; gap:18px; padding:16px; }
+    .big{ font-size:30px; }
+    /* the first two stages restate the headline above them; the phone keeps only the two still to come */
+    .stages li.rep{ display:none; }
+    .stages{ grid-template-columns:repeat(2,minmax(0,1fr)); border-top:1px solid var(--line); padding-top:14px; }
+    .stages li:nth-child(3){ padding-left:0; border-left:none; }
+    .drow{ grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"nm fig" "bar bar"; gap:6px 10px; padding:10px 16px; }
+    .drow > div:first-child{ grid-area:nm; } .drow .track{ grid-area:bar; } .drow .fig{ grid-area:fig; }
+    .filters select{ flex:1 1 calc(50% - 4px); min-width:0; }
+    input[type=search]{ flex:1 1 100%; min-width:0; }
+    .tblwrap{ display:none; }
+    .cards{ display:grid; gap:10px; }
+    .lc{ padding:14px 14px 6px; }
+    .lc .top{ display:flex; gap:10px; align-items:flex-start; }
+    .lc .nm{ font-weight:700; font-size:15px; }
+    .lc .wh{ font-size:12px; color:var(--ink2); margin-top:2px; }
+    .lc .facts{ display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:13px; margin:10px 0 4px; }
+    .lc .facts dt{ color:var(--ink2); } .lc .facts dd{ margin:0; min-width:0; }
+    .prow{ display:flex; align-items:center; gap:10px; border-top:1px solid var(--soft); padding:4px 0; min-height:52px; }
+    .prow .r{ font-size:11.5px; color:var(--ink2); width:30px; flex-shrink:0; font-weight:600; }
+    .prow .who{ flex:1; min-width:0; font-size:13.5px; }
+    .prow .who .tel{ display:block; }
+    .call{ display:inline-flex; align-items:center; justify-content:center; gap:6px; min-width:44px; min-height:44px; padding:0 14px; border-radius:10px;
+           border:1.5px solid #F4D9C1; color:var(--accent); font-weight:700; font-size:13px; text-decoration:none; background:#fff; }
+    .kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .ghead{ padding:12px 14px; }
+    .ghead > .tel{ display:none; }   /* the Call button carries the CCM's number on a phone */
+    .ghead .ct{ white-space:nowrap; }
+    .forow{ grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"who call" "locs locs"; gap:4px 10px; padding:8px 14px; }
+    .forow .who{ grid-area:who; } .forow .locs{ grid-area:locs; font-size:12.5px; color:var(--ink2); } .forow .num{ display:none; }
+    .forow .call{ grid-area:call; }
+    .tab{ flex:1; }
+  }
+  @media (max-width:360px){
+    .stages .sv{ font-size:20px; }
+    .big{ font-size:26px; }
   }
 </style>
 </head>
@@ -113,17 +220,21 @@
     <div class="hrow">
       <div class="grow">
         <div class="eyebrow">Partner view · Bayer</div>
-        <h1>Machine deployment</h1>
-        <div class="sub" id="stamp">Loading…</div>
+        <h1 id="ttl">Machine deployment</h1>
+        <div class="scope" id="scope">UPL machines for Bayer</div>
+        <div class="scope mstamp" id="mstamp" style="display:none"></div>
       </div>
-      <button class="btn" id="logout" type="button">Log out</button>
+      <div class="hside">
+        <div class="stamp" id="stamp" aria-live="polite"></div>
+        <button class="btn" id="logout" type="button">Log out</button>
+      </div>
     </div>
-    <div class="tabs" role="tablist">
-      <button class="tab" role="tab" data-tab="loc">Locations</button>
-      <button class="tab" role="tab" data-tab="fo">Field officers</button>
-    </div>
+    <nav class="tabs" aria-label="Pages">
+      <button class="tab" type="button" data-tab="loc">Deployment</button>
+      <button class="tab" type="button" data-tab="fo">Field officers</button>
+    </nav>
   </header>
-  <main id="main"></main>
+  <main id="main" tabindex="-1"></main>
   <footer>Built with tokens, Powered by Claude. By din8sh.</footer>
 </div>
 
@@ -243,9 +354,10 @@ function buildFO(rows){
     ccmMob:tel(cell(r,c.ccmMob)), app:/^y/i.test(val(cell(r,c.app))) })).filter(f=>f.name||f.mob);
 }
 
-const S = { tab:'loc', st:'', squad:'', dist:'', status:'', q:'', foQ:'' };
+const S = { tab:'loc', st:'', squad:'', dist:'', status:'', q:'', foQ:'', allD:false, limit:20 };
 const D = { mc:null, fo:null, at:null, err:null, loading:false };
-try{ const t=localStorage.getItem('bayer_tab'); if(t==='loc'||t==='fo') S.tab=t; }catch(_){ }
+const M_PAGE = 20;   // phone cards per page; the desktop table shows every row
+const TABS = { loc:{ slug:'deployment', title:'Machine deployment' }, fo:{ slug:'field-officers', title:'Field officers' } };
 
 async function load(){
   D.loading=true; D.err=null; stamp();
@@ -257,130 +369,269 @@ async function load(){
 }
 
 /* ================================ view ================================ */
+const isPhone = () => matchMedia('(max-width:820px)').matches;
 const fmtTime = d => d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'});
-function stamp(){
-  const el=document.getElementById('stamp'); if(!el) return;
-  el.textContent = D.loading && !D.at ? 'Loading…' : D.err && !D.at ? 'Could not load the sheet' :
-    'Checked '+fmtTime(D.at)+(D.err?' · last refresh failed':'');
-}
-function personHTML(name, mob){
-  if(!name && !mob) return '<span class="muted">Not named yet</span>';
-  return `<span class="person"><span>${E(name||'—')}</span>${mob?`<a class="call mono" href="tel:+91${mob}" aria-label="Call ${E(name||mob)}">${mob}</a>`:''}</span>`;
-}
+const fmtDate = d => d.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+const pct = (a,b) => b ? Math.round(a/b*100) : 0;
 const opt = (v, cur, label) => `<option value="${E(v)}"${v===cur?' selected':''}>${E(label||v)}</option>`;
 const uniq = a => [...new Set(a.filter(Boolean))].sort((x,y)=>x.localeCompare(y));
+const plural = (n, one, many) => n+' '+(n===1?one:(many||one+'s'));
+const listAnd = a => a.length<2 ? (a[0]||'') : a.slice(0,-1).join(', ')+' & '+a[a.length-1];
+
+// How far a slot has got. Deployment and handover are columns the sheet has not started filling; a stage counts the
+// moment its column carries anything, and a handover status that reads like "no" / "pending" is not a handover.
+const isHanded = m => !!m.handover && !/^(no|not|pending|awaiting|tbd)/i.test(m.handover);
+const stageOf = m => isHanded(m) ? 3 : m.deploy ? 2 : m.mc ? 1 : 0;
+const STAGE_CHIP = [
+  '<span class="chip wait"><span aria-hidden="true">◷</span> Awaiting a machine</span>',
+  '<span class="chip ok"><span aria-hidden="true">●</span> Machine assigned</span>',
+  '<span class="chip ok"><span aria-hidden="true">▲</span> Deployed</span>',
+  '<span class="chip ok"><span aria-hidden="true">✓</span> Handed over</span>' ];
+
+// Data stamp: the time of the last good fetch; a failed refresh says so in red rather than passing old figures off as current.
+function stamp(){
+  const t = D.at ? `Updated <b>${fmtTime(D.at)}</b>${D.err?' · <b>last refresh failed</b>':''}<br>refreshes every ${SHEET.refreshMinutes} min`
+          : D.err ? '<b>Could not load the sheet</b>' : 'Loading…';
+  const a=document.getElementById('stamp'), b=document.getElementById('mstamp');
+  if(a){ a.innerHTML=t; a.classList.toggle('stale', !!D.err); }
+  if(b) b.innerHTML = D.at ? `Updated ${fmtTime(D.at)}${D.err?' · last refresh failed':''}` : (D.err?'Could not load the sheet':'Loading…');
+}
+const telLink = mob => mob ? `<a class="tel" href="tel:+91${mob}">${mob}</a>` : '';
+function personCell(name, mob){
+  if(!name && !mob) return '<span class="muted">Not named yet</span>';
+  return `<div>${E(name||'—')}</div>${telLink(mob)}`;
+}
+function personRow(role, name, mob){
+  return `<div class="prow"><span class="r">${role}</span><div class="who">${name||mob?`${E(name||'—')}${mob?`<span class="tel">${mob}</span>`:''}`:'<span class="muted">Not named yet</span>'}</div>
+    ${mob?`<a class="call" href="tel:+91${mob}" aria-label="Call ${E(name||mob)}">Call</a>`:''}</div>`;
+}
+
+/* ---------- Deployment ---------- */
+function filtered(all){
+  const q=S.q.trim().toLowerCase();
+  return all.filter(m=>(!S.st||m.state===S.st) && (!S.squad||m.squad===S.squad) && (!S.dist||m.dist===S.dist)
+    && (!S.status || (S.status==='wait' ? !m.mc : !!m.mc))
+    && (!q || [m.market,m.dist,m.squad,m.state,m.mc,m.retailer,m.fo,m.foMob,m.ccm,m.ccmMob,m.co,m.am].join(' ').toLowerCase().includes(q)));
+}
+// Waiting slots first inside each district, so the gaps sit at the top of every group.
+const listOrder = (a,b) => a.state.localeCompare(b.state) || a.dist.localeCompare(b.dist) || (a.mc?1:0)-(b.mc?1:0) || a.market.localeCompare(b.market);
 
 function locHTML(){
-  const all=D.mc;
-  const req=all.reduce((s,m)=>s+m.count,0), got=all.filter(m=>m.mc).length, wait=all.filter(m=>!m.mc).length;
-  const handed=all.filter(m=>m.handover).length, deployed=all.filter(m=>m.deploy).length;
-  const pct=req?Math.round(got/req*100):0;
-  const stats=`<div class="stats">
-    <div class="card stat"><div class="lbl">Machines requested</div><div class="val">${req}</div><div class="note">${all.length} locations</div></div>
-    <div class="card stat"><div class="lbl">Machine assigned</div><div class="val">${got}</div><div class="meter"><i style="width:${pct}%"></i></div><div class="note">${pct}% of requested</div></div>
-    <div class="card stat"><div class="lbl">Awaiting a machine</div><div class="val">${wait}</div><div class="note">no machine number yet</div></div>
-    <div class="card stat"><div class="lbl">Deployed</div><div class="val">${deployed}</div><div class="note">${deployed?'with a deployment date':'no deployment dates yet'}${handed?` · ${handed} with a handover status`:''}</div></div>
-  </div>`;
+  const all=D.mc, ph=isPhone();
+  const req=all.reduce((s,m)=>s+m.count,0);
+  const got=all.filter(m=>stageOf(m)>=1).length, dep=all.filter(m=>stageOf(m)>=2).length, hand=all.filter(m=>stageOf(m)>=3).length;
+  const wait=req-got, p=pct(got,req);
 
-  // By district (the sheet's "Territory / District"), grouped under its squad.
-  const byD={}; all.forEach(m=>{ const k=m.state+'|'+m.squad+'|'+m.dist; (byD[k]=byD[k]||{state:m.state,squad:m.squad,dist:m.dist,req:0,got:0}); byD[k].req+=m.count; if(m.mc) byD[k].got++; });
-  const drows=Object.values(byD).sort((a,b)=>a.state.localeCompare(b.state)||a.squad.localeCompare(b.squad)||b.req-a.req||a.dist.localeCompare(b.dist));
-  const dist=`<div class="sec"><h2>By district</h2><div class="card"><table>
-    <thead><tr><th>District</th><th class="hideM">Squad · State</th><th class="n">Requested</th><th class="n">Assigned</th><th class="hideM"></th></tr></thead>
-    <tbody>${drows.map(d=>`<tr><td>${E(d.dist)}</td><td class="hideM">${E([d.squad,d.state].filter(Boolean).join(' · '))}</td><td class="n">${d.req}</td><td class="n">${d.got}</td>
-      <td class="hideM" style="width:28%"><div class="bar"><div class="meter"><i style="width:${d.req?d.got/d.req*100:0}%"></i></div></div></td></tr>`).join('')}</tbody>
-  </table></div></div>`;
+  // 1 · status — "how far along is the handover?"
+  const stage = (lbl, v, note, off, rep) => `<li class="${[off&&'off',rep&&'rep'].filter(Boolean).join(' ')}"><div class="sl">${lbl}</div><div class="sv">${v}</div><div class="sn">${note}</div></li>`;
+  const status=`<section class="card status${p<50?' low':''}" aria-label="Overall progress">
+    <div>
+      <div class="big">${got}<small> of ${req}</small></div>
+      <div class="bigLbl">machines assigned (${p}%)</div>
+      <div class="bigNote">${wait ? `${plural(wait,'location')} still waiting for a UPL machine` : 'Every requested location has a machine'}</div>
+      <div class="sbar" role="img" aria-label="${got} assigned, ${wait} waiting"><i class="a" style="width:${got/req*100}%"></i><i class="w" style="width:${wait/req*100}%"></i></div>
+      <div class="key"><span style="--k:var(--ok)">Assigned ${got}</span><span style="--k:var(--wait)">Waiting ${wait}</span></div>
+    </div>
+    <ol class="stages" aria-label="Handover stages">
+      ${stage('Requested', req, plural(all.length,'location'), false, true)}
+      ${stage('Machine assigned', got, p+'% of requested', false, true)}
+      ${stage('Deployed', dep||'—', dep?pct(dep,req)+'% of requested':'not started yet', !dep)}
+      ${stage('Handed over', hand||'—', hand?pct(hand,req)+'% of requested':'not started yet', !hand)}
+    </ol>
+  </section>`;
 
-  // Filters: squad → district cascade, status, search.
-  const states=uniq(all.map(m=>m.state));
-  if(S.st && !states.includes(S.st)) S.st='';
+  // 2 · by state — two programmes moving at different speeds
+  const byS={}; all.forEach(m=>{ const s=byS[m.state]=byS[m.state]||{st:m.state,req:0,got:0,squads:new Set()}; s.req+=m.count; if(m.mc) s.got++; s.squads.add(m.squad); });
+  const sts=Object.values(byS).sort((a,b)=>b.req-a.req);
+  const states = sts.length<2 ? '' : `<section class="sec" aria-label="By state"><div class="sechead"><h2>By state</h2><span class="sub">tap a state to filter the list</span></div>
+    <div class="states">${sts.map(s=>{ const w=s.req-s.got; return `<button type="button" class="card stc" data-st="${E(s.st)}" aria-pressed="${S.st===s.st}">
+      <div class="t"><span class="nm">${E(s.st)}</span><span class="v">${s.got}<small> of ${s.req}</small></span></div>
+      <div class="sbar"><i class="a" style="width:${s.got/s.req*100}%"></i><i class="w" style="width:${w/s.req*100}%"></i></div>
+      <div class="ft">${pct(s.got,s.req)}% assigned · ${w?`<b style="color:var(--waitInk)">${w} waiting</b>`:'<span class="done">✓ all assigned</span>'} · ${plural(s.squads.size,'squad')}</div>
+    </button>`; }).join('')}</div></section>`;
+
+  // 3 · where machines are still needed — districts ranked by machines waiting, bars on one scale
+  const byD={}; all.forEach(m=>{ const k=m.state+'|'+m.dist; const d=byD[k]=byD[k]||{state:m.state,squad:m.squad,dist:m.dist,req:0,got:0}; d.req+=m.count; if(m.mc) d.got++; });
+  const ds=Object.values(byD).map(d=>Object.assign(d,{w:d.req-d.got})).sort((a,b)=>b.w-a.w||b.req-a.req||a.dist.localeCompare(b.dist));
+  const maxReq=Math.max(1,...ds.map(d=>d.req)), waitingD=ds.filter(d=>d.w).length;
+  const cap = ph ? 6 : 10, shown = S.allD ? ds : ds.slice(0,cap);
+  const drows=shown.map(d=>`<button type="button" class="drow" data-dist="${E(d.dist)}" data-dst="${E(d.state)}" aria-pressed="${S.dist===d.dist}">
+      <div><div class="nm">${E(d.dist)}</div><div class="wh">${E(d.squad)} squad · ${E(d.state)}</div></div>
+      <div class="track" aria-hidden="true"><i style="width:${d.got/maxReq*100}%;background:var(--ok)"></i><i style="width:${d.w/maxReq*100}%;background:var(--wait)"></i></div>
+      <div class="fig">${d.w?`<b style="color:var(--waitInk)">${d.w} waiting</b> · ${d.got} of ${d.req}`:`<span class="done">✓ ${d.got} of ${d.req} assigned</span>`}</div>
+    </button>`).join('');
+  const dist=`<section class="sec" aria-label="Districts"><div class="sechead"><h2>Where machines are still needed</h2>
+      <span class="sub">${waitingD} of ${ds.length} districts waiting · most first · tap one to filter</span></div>
+    <div class="card dlist">${drows}${ds.length>cap?`<button type="button" class="more" data-act="allD">${S.allD?'Show fewer':`Show all ${ds.length} districts`}</button>`:''}</div></section>`;
+
+  // 4 · every location — the operational list
+  const states2=uniq(all.map(m=>m.state));
+  if(S.st && !states2.includes(S.st)) S.st='';
   const inSt=all.filter(m=>!S.st||m.state===S.st);
-  const squads=uniq(inSt.map(m=>m.squad));
-  if(S.squad && !squads.includes(S.squad)) S.squad='';
-  const dists=uniq(inSt.filter(m=>!S.squad||m.squad===S.squad).map(m=>m.dist));
-  if(S.dist && !dists.includes(S.dist)) S.dist='';
-  const q=S.q.trim().toLowerCase();
-  const list=inSt.filter(m=>(!S.squad||m.squad===S.squad) && (!S.dist||m.dist===S.dist)
-    && (!S.status || (S.status==='got'?!!m.mc:!m.mc))
-    && (!q || [m.market,m.dist,m.squad,m.state,m.mc,m.retailer,m.fo,m.foMob,m.ccm,m.co,m.am].join(' ').toLowerCase().includes(q)));
-  const filters=`<div class="filters">
-    ${states.length>1?`<select id="fSt" aria-label="State">${opt('',S.st,'All states')}${states.map(s=>opt(s,S.st)).join('')}</select>`:''}
-    <select id="fSquad" aria-label="Squad">${opt('',S.squad,'All squads')}${squads.map(s=>opt(s,S.squad)).join('')}</select>
+  const squads=uniq(inSt.map(m=>m.squad)); if(S.squad && !squads.includes(S.squad)) S.squad='';
+  const dists=uniq(inSt.filter(m=>!S.squad||m.squad===S.squad).map(m=>m.dist)); if(S.dist && !dists.includes(S.dist)) S.dist='';
+  const list=filtered(all).sort(listOrder);
+  const nF=[S.st,S.squad,S.dist,S.status,S.q.trim()].filter(Boolean).length;
+  // Columns the sheet has not started filling stay out of the table until some row carries them.
+  const has = k => all.some(m=>m[k]);
+  const xcols=[ has('deploy')&&['Deployed','deploy'], has('handover')&&['Handover','handover'], has('org')&&['Organisation','org'] ].filter(Boolean);
+  const xppl=[ (has('co')||has('coMob'))&&['Cluster officer','co','coMob'], (has('am')||has('amMob'))&&['Area manager','am','amMob'] ].filter(Boolean);
+  const filters=`<div class="filters" role="search">
+    ${states2.length>1?`<select id="fSt" aria-label="State">${opt('',S.st,'All states')}${states2.map(s=>opt(s,S.st)).join('')}</select>`:''}
+    <select id="fSquad" aria-label="Squad">${opt('',S.squad,'All squads')}${squads.map(s=>opt(s,S.squad,s+' squad')).join('')}</select>
     <select id="fDist" aria-label="District">${opt('',S.dist,'All districts')}${dists.map(s=>opt(s,S.dist)).join('')}</select>
-    <select id="fStatus" aria-label="Status">${opt('',S.status,'Any status')}${opt('got',S.status,'Machine assigned')}${opt('wait',S.status,'Awaiting a machine')}</select>
-    <input type="search" id="fQ" placeholder="Search village, machine, retailer, person…" value="${E(S.q)}" aria-label="Search">
-  </div>`;
-  const cards=list.length ? `<div class="grid">${list.map(m=>`<div class="card loc">
-      <div class="top"><div class="grow"><div class="name">${E(m.market||m.dist)}</div><div class="where">${E([m.dist, m.squad&&m.squad+' squad', m.state].filter(Boolean).join(' · '))}</div></div>
-        ${m.mc?`<span class="chip ok">Machine assigned</span>`:`<span class="chip wait">Awaiting a machine</span>`}</div>
-      <dl>
-        <dt>Machine</dt><dd>${m.mc?`<span class="mono">${E(m.mc)}</span>`:'<span class="muted">Not assigned yet</span>'}</dd>
+    <select id="fStatus" aria-label="Status">${opt('',S.status,'Any status')}${opt('wait',S.status,'Awaiting a machine')}${opt('got',S.status,'Machine assigned')}</select>
+    <input type="search" id="fQ" placeholder="Search village, machine, retailer, person" value="${E(S.q)}" aria-label="Search locations" enterkeyhint="search" autocorrect="off">
+  </div>
+  <div class="fstate" aria-live="polite">${nF?`Showing <b>${list.length}</b>&nbsp;of ${all.length} locations · ${plural(nF,'filter')} on <button type="button" class="link" data-act="clear">Clear filters</button>`:`Showing all ${all.length} locations · waiting ones first in each district`}</div>`;
+  const table = list.length ? `<div class="card tblwrap"><table>
+      <thead><tr><th>Location</th><th>Status</th><th>Machine</th><th>Retailer</th>${xcols.map(c=>`<th>${c[0]}</th>`).join('')}<th>Field officer</th><th>CCM</th>${xppl.map(c=>`<th>${c[0]}</th>`).join('')}</tr></thead>
+      <tbody>${list.map(m=>`<tr>
+        <td><div class="tl">${E(m.market||m.dist)}</div><div class="ts">${E(m.dist)} · ${E(m.squad)} · ${E(m.state)}</div></td>
+        <td>${STAGE_CHIP[stageOf(m)]}</td>
+        <td>${m.mc?`<span class="mono">${E(m.mc)}</span>`:'<span class="muted">—</span>'}</td>
+        <td>${m.retailer?E(m.retailer):'<span class="muted">—</span>'}</td>
+        ${xcols.map(c=>`<td>${m[c[1]]?E(m[c[1]]):'<span class="muted">—</span>'}</td>`).join('')}
+        <td>${personCell(m.fo,m.foMob)}</td><td>${personCell(m.ccm,m.ccmMob)}</td>
+        ${xppl.map(c=>`<td>${personCell(m[c[1]],m[c[2]])}</td>`).join('')}
+      </tr>`).join('')}</tbody></table></div>` : '';
+  const page=list.slice(0,S.limit);
+  const cards = list.length ? `<div class="cards">${page.map(m=>`<article class="card lc">
+      <div class="top"><div class="grow"><div class="nm">${E(m.market||m.dist)}</div><div class="wh">${E(m.dist)} · ${E(m.squad)} squad · ${E(m.state)}</div></div>${STAGE_CHIP[stageOf(m)]}</div>
+      <dl class="facts"><dt>Machine</dt><dd>${m.mc?`<span class="mono">${E(m.mc)}</span>`:'<span class="muted">Not assigned yet</span>'}</dd>
         ${m.retailer?`<dt>Retailer</dt><dd>${E(m.retailer)}</dd>`:''}
-        ${m.deploy?`<dt>Deployed</dt><dd>${E(m.deploy)}</dd>`:''}
-        ${m.handover?`<dt>Handover</dt><dd>${E(m.handover)}</dd>`:''}
-        ${(m.from||m.to)?`<dt>Period</dt><dd>${E([m.from,m.to].filter(Boolean).join(' → '))}</dd>`:''}
-        ${m.org?`<dt>Organisation</dt><dd>${E(m.org)}</dd>`:''}
-        <dt>Field officer</dt><dd>${personHTML(m.fo,m.foMob)}</dd>
-        <dt>CCM</dt><dd>${personHTML(m.ccm,m.ccmMob)}</dd>
-        ${(m.co||m.coMob)?`<dt>Cluster officer</dt><dd>${personHTML(m.co,m.coMob)}</dd>`:''}
-        ${(m.am||m.amMob)?`<dt>Area manager</dt><dd>${personHTML(m.am,m.amMob)}</dd>`:''}
-      </dl></div>`).join('')}</div>` : `<div class="card empty">No location matches these filters.</div>`;
-  const anyF=S.st||S.squad||S.dist||S.status||q;
-  return stats + dist + `<div class="sec"><h2>Locations<small>${anyF?`${list.length} of ${all.length}`:all.length}</small></h2>${filters}${cards}</div>`;
+        ${xcols.map(c=>m[c[1]]?`<dt>${c[0]}</dt><dd>${E(m[c[1]])}</dd>`:'').join('')}</dl>
+      ${personRow('FO',m.fo,m.foMob)}${personRow('CCM',m.ccm,m.ccmMob)}
+      ${xppl.map(c=>(m[c[1]]||m[c[2]])?personRow(c[0]==='Cluster officer'?'CO':'AM',m[c[1]],m[c[2]]):'').join('')}
+    </article>`).join('')}
+    ${list.length>page.length?`<button type="button" class="btn" data-act="moreList" style="width:100%">Show ${Math.min(M_PAGE,list.length-page.length)} more · ${list.length-page.length} left</button>`:''}</div>` : '';
+  const none = list.length ? '' : `<div class="card empty">No location matches these filters. <button type="button" class="link" data-act="clear">Clear filters</button></div>`;
+  const listSec=`<section class="sec" id="listSec" aria-label="All locations"><div class="sechead"><h2>All locations</h2>
+      <button type="button" class="btn sm end" data-act="csv">Download CSV</button></div>${filters}${table}${cards}${none}</section>`;
+
+  const lead=`<p class="lead">Where each of the ${req} machines Bayer requested stands, and who to call about a location.</p>`;
+  return lead + status + states + dist + listSec;
 }
 
+/* ---------- Field officers ---------- */
+// An FO is matched to the locations he covers on his MOBILE, the name only where the number is missing.
+function foLocs(){
+  const by={}; (D.mc||[]).forEach(m=>{ const k=m.foMob||('n:'+m.fo.toLowerCase()); if(!m.fo&&!m.foMob) return; (by[k]=by[k]||[]).push(m); });
+  return by;
+}
+function foFiltered(){
+  const q=S.foQ.trim().toLowerCase(), by=foLocs();
+  return D.fo.map(f=>Object.assign({}, f, { locs:by[f.mob]||by['n:'+f.name.toLowerCase()]||[] }))
+    .filter(f=>!q || [f.name,f.mob,f.ccm,f.ccmMob,...f.locs.map(m=>m.market+' '+m.dist)].join(' ').toLowerCase().includes(q));
+}
+// "Patti ×2" rather than "Patti, Patti": two slots in one village are one place with two machines.
+const villages = locs => { const n={}; locs.forEach(m=>{ const k=m.market||m.dist; n[k]=(n[k]||0)+1; }); return Object.keys(n).map(k=>n[k]>1?`${k} ×${n[k]}`:k).join(', '); };
 function foHTML(){
-  const all=D.fo, q=S.foQ.trim().toLowerCase();
-  const withApp=all.filter(f=>f.app).length;
-  const list=all.filter(f=>!q||[f.name,f.mob,f.ccm,f.ccmMob].join(' ').toLowerCase().includes(q));
-  // Grouped under the CCM, keyed on the CCM's number (the name as fallback) so two CCMs sharing a name stay apart.
-  const g={}; list.forEach(f=>{ const k=f.ccmMob||f.ccm||'—'; (g[k]=g[k]||{ccm:f.ccm,mob:f.ccmMob,fos:[]}).fos.push(f); });
-  const groups=Object.values(g).sort((a,b)=>b.fos.length-a.fos.length||a.ccm.localeCompare(b.ccm));
-  const stats=`<div class="stats">
-    <div class="card stat"><div class="lbl">Field officers</div><div class="val">${all.length}</div></div>
-    <div class="card stat"><div class="lbl">CCMs</div><div class="val">${new Set(all.map(f=>f.ccmMob||f.ccm)).size}</div></div>
-    <div class="card stat"><div class="lbl">Partner app access</div><div class="val">${withApp}</div><div class="note">of ${all.length} field officers</div></div>
+  const all=foFiltered(), base=D.fo, q=S.foQ.trim(), by=foLocs();
+  const totalWith=base.filter(f=>(by[f.mob]||by['n:'+f.name.toLowerCase()]||[]).length).length;
+  const app=base.filter(f=>f.app).length, ccms=new Set(base.map(f=>f.ccmMob||f.ccm)).size;
+  const kpis=`<div class="kpis">
+    <div class="card kpi"><div class="l">Field officers</div><div class="v">${base.length}</div><div class="n">on the FO mapping</div></div>
+    <div class="card kpi"><div class="l">CCMs</div><div class="v">${ccms}</div><div class="n">each leading a group below</div></div>
+    <div class="card kpi"><div class="l">FOs with a location</div><div class="v">${totalWith}<small> of ${base.length}</small></div><div class="n">named against a machine slot</div></div>
+    <div class="card kpi"><div class="l">Partner app access</div><div class="v">${app}<small> of ${base.length}</small></div><div class="n">${app?'have access':'none given yet'}</div></div>
   </div>`;
-  const body=groups.length ? `<div class="card" style="padding:14px 16px">${groups.map(gr=>`<div class="grp">
-      <h3>CCM · ${personHTML(gr.ccm,gr.mob)} <span class="muted" style="font-weight:500">${gr.fos.length} FO${gr.fos.length>1?'s':''}</span></h3>
-      <table><tbody>${gr.fos.map(f=>`<tr><td>${personHTML(f.name,f.mob)}</td><td class="n" style="font-family:inherit;width:1%;white-space:nowrap">${f.app?'<span class="chip ok">App access</span>':'<span class="muted" style="font-size:12px">No app access</span>'}</td></tr>`).join('')}</tbody></table>
-    </div>`).join('')}</div>` : `<div class="card empty">No field officer matches “${E(S.foQ)}”.</div>`;
-  return stats + `<div class="sec"><h2>Field officers by CCM<small>${q?`${list.length} of ${all.length}`:''}</small></h2>
-    <div class="filters"><input type="search" id="fFoQ" placeholder="Search name or number…" value="${E(S.foQ)}" aria-label="Search field officers"></div>${body}</div>`;
+  const g={}; all.forEach(f=>{ const k=f.ccmMob||f.ccm||'—'; (g[k]=g[k]||{ccm:f.ccm,mob:f.ccmMob,fos:[]}).fos.push(f); });
+  const groups=Object.values(g).sort((a,b)=>b.fos.length-a.fos.length||a.ccm.localeCompare(b.ccm));
+  const body=groups.length ? `<div class="card" style="overflow:hidden">${groups.map(gr=>`<div class="grp">
+      <div class="ghead"><span class="muted" style="font-size:11.5px;font-weight:700">CCM</span><span class="nm">${E(gr.ccm||'Not named')}</span>${telLink(gr.mob)}
+        <span class="ct">${plural(gr.fos.length,'FO')}</span>${gr.mob?`<a class="call" href="tel:+91${gr.mob}" aria-label="Call ${E(gr.ccm)}">Call</a>`:''}</div>
+      ${gr.fos.sort((a,b)=>b.locs.length-a.locs.length||a.name.localeCompare(b.name)).map(f=>`<div class="forow">
+        <div class="who"><b style="font-weight:600">${E(f.name)}</b>${f.app?' <span class="chip ok">✓ App access</span>':''}${isPhone()&&f.mob?`<span class="tel" style="display:block">${f.mob}</span>`:''}</div>
+        <div class="num">${telLink(f.mob)}</div>
+        <div class="locs">${f.locs.length?E(villages(f.locs)):'<span class="muted">No location yet</span>'}</div>
+        ${f.mob?`<a class="call" href="tel:+91${f.mob}" aria-label="Call ${E(f.name)}">Call</a>`:''}
+      </div>`).join('')}</div>`).join('')}</div>`
+    : `<div class="card empty">No field officer matches “${E(q)}”. <button type="button" class="link" data-act="clearFo">Clear search</button></div>`;
+  const lead=`<p class="lead">Bayer's field officers, grouped under their CCM, with the locations each one covers.</p>`;
+  return lead + kpis + `<section class="sec"><div class="sechead"><h2>Field officers by CCM</h2>
+      <span class="sub">${q?`${all.length} of ${base.length} match`:'most locations first'}</span>
+      <button type="button" class="btn sm end" data-act="csvFo">Download CSV</button></div>
+    <div class="filters" role="search"><input type="search" id="fFoQ" placeholder="Search name, number or village" value="${E(S.foQ)}" aria-label="Search field officers" enterkeyhint="search" autocorrect="off"></div>
+    <div style="height:10px"></div>${body}</section>`;
 }
 
+/* ---------- CSV ---------- */
+function csvDownload(name, head, rows){
+  const esc = v => { let s=String(v==null?'':v); if(/^[=+\-@]/.test(s)) s="'"+s; return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const txt='﻿'+[head,...rows].map(r=>r.map(esc).join(',')).join('\r\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));
+  a.download=name+'_'+new Date().toISOString().slice(0,10)+'.csv'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+}
+const STAGE_TXT=['Awaiting a machine','Machine assigned','Deployed','Handed over'];
+
+/* ---------- render ---------- */
+function skeleton(){ return `<div class="card" style="padding:20px 22px">${'<div class="skel"></div>'.repeat(4)}</div><div class="sec card" style="padding:20px 22px">${'<div class="skel"></div>'.repeat(6)}</div>`; }
 function render(){
   stamp();
-  document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected', String(b.dataset.tab===S.tab)));
+  document.querySelectorAll('.tab').forEach(b=>{ const on=b.dataset.tab===S.tab; if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
+  if(D.mc) document.querySelector('[data-tab=loc]').innerHTML=`Deployment<span class="n">${D.mc.length}</span>`;
+  if(D.fo) document.querySelector('[data-tab=fo]').innerHTML=`Field officers<span class="n">${D.fo.length}</span>`;
+  document.getElementById('ttl').textContent=TABS[S.tab].title;
+  document.title=TABS[S.tab].title+' · Bayer partner view';
+  if(D.mc){ const st=uniq(D.mc.map(m=>m.state)); document.getElementById('scope').textContent=`UPL machines for Bayer · ${listAnd(st)}`; }
   const main=document.getElementById('main');
   let html;
-  if(!D.mc && D.err) html=`<div class="card msg">The sheet could not be loaded (${E(D.err)}).<br><button class="btn" id="retry" type="button">Try again</button></div>`;
-  else if(!D.mc) html=`<div class="card msg">Loading the sheet…</div>`;
+  if(!D.mc && D.err) html=`<div class="card msg">The sheet could not be loaded (${E(D.err)}). Check the connection and try again.<br><button class="btn" data-act="retry" type="button">Try again</button></div>`;
+  else if(!D.mc) html=skeleton();
   else html = S.tab==='fo' ? foHTML() : locHTML();
-  // Keep the search box's focus and caret across the rebuild.
-  const a=document.activeElement, id=a&&a.id, pos=a&&a.selectionStart;
+  // Keep the search box's focus and caret, and the page's scroll, across the rebuild.
+  const a=document.activeElement, id=a&&a.id, pos=a&&a.selectionStart, y=scrollY;
   main.innerHTML=html;
-  if(id){ const el=document.getElementById(id); if(el){ el.focus(); try{ if(pos!=null) el.setSelectionRange(pos,pos); }catch(_){ } } }
+  if(id){ const el=document.getElementById(id); if(el){ el.focus({preventScroll:true}); try{ if(pos!=null) el.setSelectionRange(pos,pos); }catch(_){ } } }
+  scrollTo(0,y);
 }
 
+/* ---------- address: #/deployment and #/field-officers, so Back moves between tabs ---------- */
+const tabOfHash = () => { const h=location.hash.replace(/^#\/?/,''); return Object.keys(TABS).find(k=>TABS[k].slug===h)||null; };
+S.tab = tabOfHash() || (()=>{ try{ const t=localStorage.getItem('bayer_tab'); return TABS[t]?t:null; }catch(_){ return null; } })() || 'loc';
+history.replaceState(null,'','#/'+TABS[S.tab].slug);
+window.addEventListener('hashchange', ()=>{ const t=tabOfHash(); if(t && t!==S.tab){ S.tab=t; try{ localStorage.setItem('bayer_tab',t); }catch(_){ } render(); scrollTo(0,0); } });
 document.querySelector('.tabs').addEventListener('click', e=>{
   const b=e.target.closest('.tab'); if(!b) return;
-  S.tab=b.dataset.tab; try{ localStorage.setItem('bayer_tab', S.tab); }catch(_){ } render();
+  if(b.dataset.tab===S.tab){ scrollTo({top:0,behavior:'smooth'}); return; }
+  location.hash='#/'+TABS[b.dataset.tab].slug;
 });
-document.getElementById('main').addEventListener('change', e=>{
+
+const toList = () => { const el=document.getElementById('listSec'); if(el) el.scrollIntoView({block:'start'}); };
+const main=document.getElementById('main');
+main.addEventListener('change', e=>{
   const t=e.target;
   if(t.id==='fSt'){ S.st=t.value; S.squad=''; S.dist=''; }
   else if(t.id==='fSquad'){ S.squad=t.value; S.dist=''; }
   else if(t.id==='fDist') S.dist=t.value;
   else if(t.id==='fStatus') S.status=t.value;
   else return;
-  render();
+  S.limit=M_PAGE; render();
 });
-document.getElementById('main').addEventListener('input', e=>{
-  if(e.target.id==='fQ'){ S.q=e.target.value; render(); }
+main.addEventListener('input', e=>{
+  if(e.target.id==='fQ'){ S.q=e.target.value; S.limit=M_PAGE; render(); }
   else if(e.target.id==='fFoQ'){ S.foQ=e.target.value; render(); }
 });
-document.getElementById('main').addEventListener('click', e=>{ if(e.target.id==='retry') load(); });
+main.addEventListener('click', e=>{
+  const st=e.target.closest('[data-st]'), di=e.target.closest('[data-dist]'), act=e.target.closest('[data-act]');
+  if(st){ S.st = S.st===st.dataset.st ? '' : st.dataset.st; S.squad=''; S.dist=''; S.limit=M_PAGE; render(); if(S.st) toList(); return; }
+  if(di){ const same=S.dist===di.dataset.dist; S.dist=same?'':di.dataset.dist; S.st=same?S.st:di.dataset.dst; S.squad=''; S.limit=M_PAGE; render(); if(!same) toList(); return; }
+  if(!act) return;
+  const a=act.dataset.act;
+  if(a==='retry') load();
+  else if(a==='allD'){ S.allD=!S.allD; render(); }
+  else if(a==='clear'){ Object.assign(S,{st:'',squad:'',dist:'',status:'',q:'',limit:M_PAGE}); render(); }
+  else if(a==='clearFo'){ S.foQ=''; render(); }
+  else if(a==='moreList'){ S.limit+=M_PAGE; render(); }
+  else if(a==='csv') csvDownload('Bayer-deployment',
+      ['State','Squad','District','Village / market','Status','Machine','Retailer','FO','FO mobile','CCM','CCM mobile','Cluster officer','CO mobile','Area manager','AM mobile','Deployment date','Handover status'],
+      filtered(D.mc).sort(listOrder).map(m=>[m.state,m.squad,m.dist,m.market,STAGE_TXT[stageOf(m)],m.mc,m.retailer,m.fo,m.foMob,m.ccm,m.ccmMob,m.co,m.coMob,m.am,m.amMob,m.deploy,m.handover]));
+  else if(a==='csvFo') csvDownload('Bayer-field-officers', ['FO','FO mobile','CCM','CCM mobile','Locations','Partner app access'],
+      foFiltered().map(f=>[f.name,f.mob,f.ccm,f.ccmMob,villages(f.locs).replace(/, /g,'; '),f.app?'Yes':'No']));
+});
+// Desktop table ↔ phone cards: re-render when the window crosses the breakpoint (district cap and phone numbers differ).
+matchMedia('(max-width:820px)').addEventListener('change', ()=>{ if(D.mc) render(); });
 
 if(gateValid()){ const o=gateRead(); arm(GATE.TTL_MS-(Date.now()-o.at)); show(); } else lock();
 </script>

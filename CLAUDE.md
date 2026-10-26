@@ -1089,8 +1089,17 @@ Bayer's. It is `noindex`, registers no service worker, and the console never lin
   · **`720662332` "FO Mapping final"** — 47 FOs under 18 CCMs, with a `Partner App access` flag (all "No").
   · **The workbook's DEFAULT tab (gid 0) is a hidden, older 30-row Haryana list** with an internal sign-off column. An
     export without a gid lands on it — always pass the gid.
-  Pages: **Locations** (stat band, by-district table, State → Squad → District + status + search, one card per slot)
-  and **Field officers** (grouped by CCM). Refreshes every 10 minutes while unlocked.
+- **Layout (design review 2026-10-26, `design/Bayer-Page-Review-2026-10-26.md`)** — two tabs with addresses,
+  `#/deployment` and `#/field-officers` (Back moves between them). Deployment reads top-down: a **status card**
+  ("39 of 75 machines assigned" + the four handover stages, an empty stage reading "not started yet", never 0) →
+  **by state** → **"Where machines are still needed"** (districts sorted by machines WAITING, bars on one shared
+  scale; tapping a state or district filters the list and jumps to it) → **All locations** (a table on desktop,
+  compact cards with Call buttons and 20-per-page on the phone; waiting slots first in each district). Field
+  officers groups FOs under their CCM and lists the villages each covers, joined to the machine tab on the FO's
+  MOBILE ("Patti ×2" for two slots in one village). Both tabs export the filtered rows as CSV.
+  A stage counts the moment its column carries anything; a handover status reading no / pending is not a handover.
+  On the phone the header is not sticky and the first two stages (which restate the headline) are hidden.
+  Refreshes every 10 minutes while unlocked; a failed refresh says so in the header.
 - **Another partner** = a new folder copied from `bayer/` with its own hash and `SKEY`, plus one handoff row.
 
 ## Insights (the cross-tab summary)
