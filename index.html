@@ -10572,6 +10572,9 @@ const GATE = {
     '511425f1125b98b09c7b636c27a56b0be1fff185717d5233144fd02ddf0cddab': { id:'iot-manish', project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['HR','PB'], switchStates:true, label:'IoT · Manish Kumar', tech:'Manish Kumar' }, // 2621
     '72a1917673994c23e72b3f49c2134549aa2219dffd8c029a071efe9c437f7888': { id:'iot-vishal', project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['MP','GJ','TG','MH','AP'], switchStates:true, label:'IoT · Vishal Makwana', tech:'Vishal Makwana' }, // 2631
     'd95936051b112558c270fd675137155155c74b8f0721fde9007b53d40cedba2b': { id:'wh-hr-sales', project:'wheat', role:'wsales', org:'Both', allow:['Both','UPL','SWAL'], states:['HR'], switchStates:false, views:['tables','am','fo','retailer'], label:'Wheat North · Haryana sales' }, // 4822
+    // ── External partners. A partner PIN is a HANDOFF, not a role: it never sets GATE.cur and never boots the console —
+    // the gate sends it to the partner's own page (its own URL, its own copy of this one hash). See CLAUDE.md → Partner pages.
+    '0f7afb8f94e54a80bfa3e9ba07d875ac4d23dccac94c90f84adcf22ad277825a': { id:'bayer', handoff:{ url:'bayer/', key:'bayer_gate' }, label:'Partner · Bayer' }, // 3906
   },
   cur:null, timer:null,
 };
@@ -10619,6 +10622,9 @@ function gateShow(onOk, msg, cancelable){
       if(inp.value.length!==4) return;
       let h; try{ h=await sha256(inp.value); }catch(_){ ov.querySelector('#gateErr').textContent='PIN check needs https — open the live site.'; inp.value=''; return; }
       const role=GATE.ROLES[h];
+      // An external partner's PIN never opens the console: it is handed over to that partner's own page, whose source
+      // carries no other PIN. The page reads {h, at} from sessionStorage (same origin, same tab) and skips its own prompt.
+      if(role && role.handoff){ inp.value=''; try{ sessionStorage.setItem(role.handoff.key, JSON.stringify({h, at:Date.now()})); }catch(_){ } location.replace(role.handoff.url); return; }
       if(role){ inp.value=''; gateSave(role); gateHide(); (ov._onOk||function(){})(role); }
       else { ov.querySelector('#gateErr').textContent='Incorrect PIN'; inp.value=''; }
     });

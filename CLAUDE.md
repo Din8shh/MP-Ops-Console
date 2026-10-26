@@ -16,6 +16,7 @@ HTML/CSS/JS + inline-SVG maps. Same deploy shape as `din8shh.github.io/MP-map-vi
 - `wheat-demo.js` — 235 **DUMMY** rows (`export const WHEAT_DEMO`, HR + PB) for the Wheat North project while its
   sheet tab does not exist. Invented names/numbers/acres, generated once; same object shape as `machines.js`.
   **No longer shown while Wheat is in its planning stage** (`PROJECTS.wheat.plan`, below); kept for the machine phase.
+- `bayer/index.html` — the **Bayer partner page**, self-contained (see **Partner pages**).
 - `manifest.webmanifest`, `sw.js`, `icons/` — the PWA (see **PWA** below). `icons/icon.svg` is the source; the PNGs
   were rasterised from it with macOS `qlmanage -t` + `sips` (no ImageMagick here).
 
@@ -749,6 +750,7 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | **Wheat** `wsales` × HR / PB (4822 / 4722) | All / UPL / SWAL | one, locked | **placeholder** = the state PIN's; to be decided |
 | **IoT** `admin` (`iot-admin`, 7314 — Amit Kumar, IoT head; 2601 retired 2026-10-16) | n/a | all, switchable | Potential tamper, At risk, **Team overview** |
 | **IoT** `iottech` × Rohit (RJ, 2611) / Manish (HR+PB, 2621) / Vishal (MP+GJ+TG+MH+AP, 2631) | n/a | his own, locked or switchable within them | Potential tamper, At risk |
+| **Partner** `bayer` (3906) | n/a | n/a | **none in the console** — a handoff to `bayer/` (see Partner pages) |
 
 The Wheat rows carry `project:'wheat'`; see **Projects** below. The Kharif admin (0088) does NOT see Wheat, and
 the Wheat admin does not see Kharif — "separated by PIN" is the requirement.
@@ -1064,6 +1066,23 @@ the console. Work on a branch and fast-forward `main`; don't commit straight to 
   standing between Month/Week mode and sub-state detail. ~15 lines of Apps Script.
 - **Open-Meteo quota is fragile** — heavy reloading triggers HTTP 429 and the app silently falls back to
   *simulated* rain while still showing a green "Live" badge. See the weather note.
+
+## Partner pages — external teams at their own URL (`bayer/`, added 2026-10-26)
+An external partner gets a **separate, self-contained page** in its own folder, never a view inside `index.html`:
+**https://din8shh.github.io/MP-Ops-Console/bayer/** for Bayer. The reason is the source, not the URL: `index.html`
+carries every internal PIN, so a partner opening View Source on the console would see all of them. `bayer/index.html`
+loads nothing from the console (no `index.html`, `machines.js`, sheet ids or role table) and holds exactly one hash —
+Bayer's. It is `noindex`, registers no service worker, and the console never links to it.
+
+- **The Bayer PIN also works on the main URL, as a HANDOFF.** Its `GATE.ROLES` row carries `handoff:{url, key}` and no
+  scope; the gate's input handler catches it BEFORE `gateSave`, writes `{h, at}` under `bayer_gate` in sessionStorage
+  (same origin, same tab) and `location.replace`s to `bayer/`, which accepts it only if `h` equals its own hash and is
+  under 30 minutes old. So a partner PIN never sets `GATE.cur`, never boots the console, and admin (0088) does not see
+  the partner page in its rail — "Bayer PIN only", by request.
+- **Placeholder for now** — the "Spray tracker" card. When its data is decided, give the page its OWN published sheet
+  holding only the shareable columns; pointing it at `CONFIG.sheetId` would put the whole internal workbook's id in
+  the partner's View Source.
+- **Another partner** = a new folder copied from `bayer/` with its own hash and `SKEY`, plus one handoff row.
 
 ## Insights (the cross-tab summary)
 `insights` is the only view that reads all three tabs at once. **Admin-only** (in `roleHidesView`, like
