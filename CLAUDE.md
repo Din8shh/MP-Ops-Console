@@ -745,7 +745,7 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | `admin` | All / UPL / SWAL / Open | all, switchable | all of them |
 | `lead` (leadership) | All / UPL / SWAL | all, switchable | Products, Cumulative, MP products |
 | `upl` / `swal` × 7 states | one, forced | one, locked | MP products (the two **MP** logins only) |
-| **Wheat** `admin` (`wh-admin`, 4040) | All / UPL / SWAL / Open | HR + PB, switchable | every Wheat view |
+| **Wheat** `admin` (`wh-admin`, 4040) | All / UPL / SWAL / Open | HR + PB + RJ, switchable | every Wheat view |
 | **Wheat** `wstate` × HR / PB (4811 / 4711) | All / UPL / SWAL | one, locked | Territory, AMs, FOs, Retailers |
 | **Wheat** `wsales` × HR / PB (4822 / 4722) | All / UPL / SWAL | one, locked | **placeholder** = the state PIN's; to be decided |
 | **IoT** `admin` (`iot-admin`, 7314 — Amit Kumar, IoT head; 2601 retired 2026-10-16) | n/a | all, switchable | Potential tamper, At risk, **Team overview** |
@@ -810,12 +810,16 @@ some added and some not carried over, on a new tab of the SAME workbook that doe
   `resolveCols` (snake_case names, read by NAME). Views: Map · Machines · Weather · Territories · AMs · FOs · Retailers ·
   Pending · Retailer plan; no BMs (no BM column). Phone bar `PROJECTS.wheat.bar`. Every load logs
   `[MP-Ops] wheat machine tab → {…}` — read it first if a count looks wrong. Rules the parser holds:
-  · **Deployed = handed over** (`handover_status` Yes) or recorded acres (the Kharif override). Not handed over = Pending.
+  · **Every machine on the tab is in the fleet** (`deployed=1`). Handover is a STAGE, kept as `m.handover` and shown on its
+    own: the fleet tile reads "410 · 143 handed over", and Pending lists the machines NOT handed over (its CSV adds a
+    Handed over column). The first build counted only handed-over machines, so every figure — operators included —
+    read ~155 of 410, and it was reported as wrong data. Do not gate the fleet on handover again.
   · **State comes from the TERRITORY** (`NORTH_DIST` district lists after `TERR_ALIAS`), never `ops_state`: that column
     names the ops TEAM — the Rajasthan team (SH Sudershan Chauhan) runs Amritsar / Gurdaspur / Khanna / Kapurthala — and is
-    blank on 151 rows. A machine with no territory (not yet given to a retailer) takes the state of the nearest placed
-    machine within 50 km of its last ping, then its ops_state; else it is dropped and listed in `unplaced` (4 on 26 Oct:
-    the two "Shimla" rows among them).
+    blank on 151 rows. A machine with no territory (not yet given to a retailer) is placed by its last ping: the nearest
+    district centre (`NORTH_GEO`, HR + PB + RJ) within 150 km, then its ops_state; else dropped and listed in `unplaced`
+    (none on 26 Oct). **Wheat's `states` is HR + PB + RJ**: ten pool machines sit in Rajasthan (Tonk / Sawai Madhopur),
+    and the total must match the sheet.
   · **49 rows arrive SHIFTED** — a party or village cell with a comma ("Samana, Patiala") is split across two cells, which
     pushes the A–L block right and loses `organisation`. The halves are re-joined; the handover cell those rows then carry
     is a date, so they read as not handed over. Their organisation is taken from the row's TM where that TM's other rows
@@ -823,7 +827,8 @@ some added and some not carried over, on a new tab of the SAME workbook that doe
     commas); the repair only keeps the console readable meanwhile.
   · 3 machine numbers appear twice (UPL_3036 / 3040 / 3045); the first row wins. `0` and `-` read as blank. No breakdown
     column, so Breakdown reads 0; `pinged` = last ping on/after yesterday; the `cluster` field carries the VILLAGE.
-  · Live 26 Oct: 406 machines placed, 155 deployed (HR 83 / PB 72), 245 season acres — reconciling with the sheet's column.
+  · Live 26 Oct: 410 machines (= the tab's distinct machine numbers; HR 196 / PB 204 / RJ 10), 143 handed over, 260 with
+    an operator (the tab's 262 filled cells include two on duplicate rows), 245 season acres — matching the sheet's column.
 - **PLANNING STAGE (2026-10-14, superseded 2026-10-26 — kept as the Retailer plan page): Wheat ran on its retailer PLAN.**
   With `gid` set, the plan workbook is fetched after the machines and feeds only the `wplan` page; blank `gid` = the old
   planning-stage behaviour. `PROJECTS.wheat.plan` points
