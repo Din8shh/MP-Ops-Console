@@ -825,8 +825,16 @@ some added and some not carried over, on a new tab of the SAME workbook that doe
     is a date, so they read as not handed over. Their organisation is taken from the row's TM where that TM's other rows
     name one company (34 rows), else Open. **This is a sheet fix** (the export that writes tab "a" must quote or strip
     commas); the repair only keeps the console readable meanwhile.
-  · 3 machine numbers appear twice (UPL_3036 / 3040 / 3045); the first row wins. `0` and `-` read as blank. No breakdown
-    column, so Breakdown reads 0; `pinged` = last ping on/after yesterday; the `cluster` field carries the VILLAGE.
+  · 3 machine numbers appear twice (UPL_3036 / 3040 / 3045); the first row wins. `0` and `-` read as blank. `pinged` =
+    last ping on/after yesterday, and days since ping are CALENDAR days in IST. The `cluster` field carries the VILLAGE.
+  · **No breakdown column, so the Breakdown KPI tile is ABSENT for Wheat**, not a 0 that claims nothing broke down.
+  · **Role tags are stripped from people's names** (`person()` in wheatRows): "Sampat AM" → Sampat, "Sunil_Haryana_AM"
+    → Sunil, "Rajesh Kumar FO" (a CI) → Rajesh Kumar. Wheat only; Kharif names are untouched.
+  · Scanned acres are a per-machine TOTAL with no product, shown as one line "Scanned · product not named".
+  · The drawer's subtitle carries Handed over / Not handed over, and its location reads "Last ping position".
+  · **The full sheet audit (2026-10-26) is `docs/wheat-sheet-audit.md`**: every sheet-side fault, with the workaround
+    the console applies to each. Re-run it when the sheet's owner says the faults are fixed, and retire workarounds
+    that are no longer needed.
   · Live 26 Oct: 410 machines (= the tab's distinct machine numbers; HR 196 / PB 204 / RJ 10), 143 handed over, 260 with
     an operator (the tab's 262 filled cells include two on duplicate rows), 245 season acres — matching the sheet's column.
 - **PLANNING STAGE (2026-10-14, superseded 2026-10-26 — kept as the Retailer plan page): Wheat ran on its retailer PLAN.**
@@ -853,7 +861,8 @@ some added and some not carried over, on a new tab of the SAME workbook that doe
     (`WPLAN_TERR`). Filters: State · Company · **Org zone** (the sheet's `Organization/Zone`, e.g. `SWAL Karnal`; its
     options follow the company toggle and it cascades into Territory) · Territory · search. Every load logs `[MP-Ops] wheat plan → {PB:{…}, HR:{…}}`.
   · Its retailer / machine totals come from the plan workbook and need not equal the machine tab's (planned 389 there vs
-    403 machine rows here on 26 Oct) — two sources, labelled as such.
+    403 machine rows here on 26 Oct) — two sources, labelled as such. Its State picker offers the plan's own tabs (HR,
+    PB), not the project's states, since the plan workbook has no Rajasthan tab.
 - **Field officers (`fo`) and Retailers (`retailer`) — TENTATIVE, the spec is not final.** Both are trees built
   in `vals()` (`grpRow` / `mcRow`) in the SAME row shape as the AM/BM trees. They render through
   `hierTableHTML`, which am/bm now share too since the two were verified identical, and through `mHierCardHTML`
@@ -1510,6 +1519,11 @@ fetch covers every state in the sheet and district names are not globally unique
 A blank territory is that state's **statewide** point (mobile banner / national choropleth);
 state `IN` + blank is the all-India point. `rainOf(terr,di,st)` / `weather(terr,st)` — always pass
 `st` (take it off the row); the no-`st` fallbacks only guess when a name is unique across states.
+
+**The Wettest list ranks only territories with a REAL weather point while the feed is live.** A territory with no
+centroid (a sheet-side name such as Wheat's "Shimla") falls back to simulated rain, which once topped the list at
+1.8 mm (2026-10-26). **On the national weather map a state is labelled with its own name**; it used to print the
+first machine's territory ("Jind" for Haryana), on Kharif too.
 
 Centroids come from `WX_GEO` (`buildWxGeo`), which merges **every** state's `COORDS` via
 `GEO_LOADERS`/`GEO_CACHE`. This is deliberately independent of `COORDS`/`coordsOf`, which only ever

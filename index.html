@@ -504,18 +504,22 @@ function wheatRows(grid){
     tm:ix('tm_name'), tmMob:ix('tm_number'), village:ix('village_location'), hand:ix('handover_status'), org:ix('organisation'),
     opNum:ix('operator_number'), opName:ix('operator_name'), coMob:ix('ci_contact'), co:ix('ci_name'), amNum:ix('am_contact'), am:ix('am_name'),
     opsSt:ix('ops_state'), achieved:ix('rabi_achieved_acres'), mtd:ix('mtd_acres'), acresY:ix('yesterday_acres'), acresT:ix('today_acres'),
-    iot:ix('iot_acres_yesterday'), lat:ix('latest_latitude'), lon:ix('latest_longitude'), ping:ix('last_pinged_date') };
+    iot:ix('iot_acres_yesterday'), lat:ix('latest_latitude'), lon:ix('latest_longitude'), ping:ix('last_pinged_date'), scan:ix('rabi_scanned_acres') };
   const miss=['mc','terr','hand','org'].filter(k=>C[k]<0);
   if(miss.length) throw new Error('wheat machine tab: missing column(s) '+miss.join(', '));
   const distSt={}; Object.entries(NORTH_GEO).forEach(([st,l])=>Object.keys(l).forEach(d=>distSt[d.toLowerCase()]=st));
   const blank=v=>{ v=txt(v); return (v==='0'||v==='-')?'':v; };
-  const yday=new Date(Date.now()-864e5).toISOString().slice(0,10);   // a ping on or after yesterday = "pinged"
+  // People's names arrive with their ROLE typed in ("Sampat AM", "Sunil_Haryana_AM", "Rajesh Kumar FO"); the role is
+  // already the column, so the tag is dropped from the name. Underscores read as spaces.
+  const person=v=>blank(v).replace(/_/g,' ').replace(/(\s+(haryana|punjab|rajasthan))?\s+(am|sh|fo|ci|tm|co)$/i,'').trim();
+  // Calendar days in IST: a ping dated yesterday is 1 day old whatever the time of day.
+  const istDay=ms=>new Date(ms+5.5*36e5).toISOString().slice(0,10), today=istDay(Date.now()), yday=istDay(Date.now()-864e5);   // pinged = on/after yesterday
   const log={ rows:0, shifted:0, dupMc:[], unplaced:[], orgFromTm:0, handedOver:0, handoverUnreadable:0, flips:0, byState:{} };
   const seen=new Set(), out=[];
   for(const raw of grid.slice(1)){ if(!raw||!raw.join('').trim()) continue;
     const row=raw.slice();
     for(let i=1;i<C.org;i++){ const a=row[i]||'', b=row[i+1]||'';
-      if(a.startsWith('"') && !a.endsWith('"') && b.endsWith('"')){ row.splice(i,2,a.slice(1)+','+b.slice(0,-1)); row.splice(C.org,0,''); log.shifted++; break; } }
+      if(a.startsWith('"') && !a.endsWith('"') && b.endsWith('"')){ row.splice(i,2,a.slice(1).trim()+', '+b.slice(0,-1).trim()); row.splice(C.org,0,''); log.shifted++; break; } }
     const g=k=>C[k]>=0&&C[k]<row.length?row[C[k]]:'';
     const mc=txt(g('mc')); if(!mc) continue;
     if(seen.has(mc)){ log.dupMc.push(mc); continue; } seen.add(mc);
@@ -535,11 +539,12 @@ function wheatRows(grid){
     const opNum=blank(g('opNum')), opName=blank(g('opName'));
     out.push({ mc, org: orgRaw==='swal'?'SWAL':orgRaw==='upl'?'UPL':'', deployed, st,
       territory: aliasTerr(st,t0)||'Unassigned', cluster: titleCase(blank(g('village')))||'Unassigned',
-      co:blank(g('co')), coMob:blank(g('coMob')), am:blank(g('am')), amNum:blank(g('amNum')),
-      target:0, achieved, mtd, acresY, acresT, iotAcresY, scanned:[], breakdown:0,
+      co:person(g('co')), coMob:blank(g('coMob')), am:person(g('am')), amNum:blank(g('amNum')),
+      // Scanned acres are a TOTAL here, with no product named — shown as one line, never as a product.
+      target:0, achieved, mtd, acresY, acresT, iotAcresY, scanned: num(g('scan'))>0 ? [{product:'Scanned · product not named', acres:num(g('scan'))}] : [], breakdown:0,
       opMapped: (opName&&opNum)?1:0, pinged: ping && ping>=yday ? 1 : 0, lastPing: ping,
-      daysSincePing: ping ? String(Math.max(0, Math.round((Date.now()-Date.parse(ping+'T00:00:00+05:30'))/864e5))) : '',
-      opName, opNum, bmName:'', bmMob:'', tmName:blank(g('tm')), tmMob:blank(g('tmMob')), foName:blank(g('fo')), foMob:blank(g('foMob')),
+      daysSincePing: ping ? String(Math.max(0, Math.round((Date.parse(today)-Date.parse(ping))/864e5))) : '',
+      opName, opNum, bmName:'', bmMob:'', tmName:person(g('tm')), tmMob:blank(g('tmMob')), foName:person(g('fo')), foMob:blank(g('foMob')),
       retailerName:blank(g('party')), retailerMob:'', retailerLoc:titleCase(blank(g('village'))),
       handover: hand==='yes', lat:lat&&lon?lat:null, lon:lat&&lon?lon:null, _t0:t0, _ops:blank(g('opsSt')) });
   }
@@ -2574,7 +2579,7 @@ function drawMap(hostId, metric){
     const items=[];
     Object.keys(byT).forEach(nm=>{ const c=coordsOf(nm); if(!c) return;
       const list=byT[nm], total=list.length, ran=list.filter(m=>m.acresY>0).length, rain=rainOfList(list,nm), ink=rainInk(rain), [cx,cy]=proj(c[0],c[1]);
-      const label=(list[0].territory)||nm, fig=ran+'/'+total;
+      const label=national ? nm : ((list[0].territory)||nm), fig=ran+'/'+total;
       const mk=(dy,size,weight,fam,txt)=>{ const t=document.createElementNS(NS,'text'); t.setAttribute('x',cx);t.setAttribute('y',cy+dy);t.dataset.cy=cy;t.dataset.dy=dy;t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','central');t.setAttribute('font-family',fam);t.setAttribute('font-size',size);t.dataset.fs=size;t.setAttribute('font-weight',weight);t.setAttribute('fill',ink); t.style.pointerEvents='none'; t.textContent=txt; g.appendChild(t); return t; };
       const dyName=-numFs*.5, dyNum=nameFs*.6;
       items.push({ total, cx, cy, nameFs, numFs, dyName, dyNum,
@@ -2807,7 +2812,8 @@ function vals(){
     handed: wheat ? F.filter(m=>m.handover).length : null };   // Wheat: every sheet machine is in the fleet; handover is the stage
   const kpis=[
     // `ph`: the four the phone shows (plan M11) — the rest are desktop-only.
-    {label:'Breakdown',value:fmt(tot.Breakdown),unit:'',valStyle:mono22(C.brk),ph:1},
+    // Wheat's tab has no breakdown column, so the tile is absent rather than a 0 that claims none broke down.
+    ...(curProject().id==='wheat'?[]:[{label:'Breakdown',value:fmt(tot.Breakdown),unit:'',valStyle:mono22(C.brk),ph:1}]),
     {label:'Idle',value:fmt(tot.Idle),unit:'',valStyle:mono22(C.idle),ph:1},
     {label:'Acres '+dayShort(),value:fmt(tot.acresY),unit:'ac',valStyle:mono22(C.ink),ph:1},
     {label:'MTD acres',value:fmt(tot.mtd),unit:'ac',valStyle:mono22(C.ink)},
@@ -2883,7 +2889,10 @@ function vals(){
       uStyle:{width:(100*r.upl/tt)+'%',background:C.orange,display:'block'}, sStyle:{width:(100*r.swal/tt)+'%',background:C.green,display:'block'},
       past3Swatch:'background:'+rainColor(past3/WX_PAST), rainSwatch:'background:'+rainColor(yday),
       todaySwatch:'background:'+rainColor(today), next3Swatch:'background:'+rainColor(next3/(WX_DAYS-1-WX_I_TODAY)) }; });
-  const wetTerr=terrEntries.filter(e=>!isPlaceholder(e.name)).map(({name,list,r})=>({name,rain:rainOf(name,null,list[0]&&list[0].st),ran:r.ranY})).sort((a,b)=>b.rain-a.rain).slice(0,7).map(w=>({ name:w.name, rain:w.rain.toFixed(1), ran:w.ran, swatch:'background:'+rainColor(w.rain) }));
+  // Ranked only on territories with a real weather point while the feed is live: one with no centroid (a sheet-side
+  // name such as Wheat's "Shimla") falls back to SIMULATED rain, which must never top a list of real readings.
+  const wxReal=e=>!!wxAt(e.name, e.list[0]&&e.list[0].st), anyReal=terrEntries.some(wxReal);
+  const wetTerr=terrEntries.filter(e=>!isPlaceholder(e.name) && (!anyReal||wxReal(e))).map(({name,list,r})=>({name,rain:rainOf(name,null,list[0]&&list[0].st),ran:r.ranY})).sort((a,b)=>b.rain-a.rain).slice(0,7).map(w=>({ name:w.name, rain:w.rain.toFixed(1), ran:w.ran, swatch:'background:'+rainColor(w.rain) }));
 
   // AM view
   const amRows=[]; const grid5am={display:'grid',gridTemplateColumns:adm?'320px 110px 132px 1fr 78px 84px 74px 84px 150px':'330px 120px 150px 1fr 84px 96px 168px',gap:'14px',alignItems:'center'};
@@ -2897,7 +2906,7 @@ function vals(){
     amRows.push({ click:{act:'exp',key}, indent:'0px',
       rowStyle:{...grid5am,padding:'12px 18px',borderTop:'1px solid #F2F0EB',cursor:'pointer',background:exp?'#FBFAF8':'#fff'},
       chev:exp?'▾':'▸', chevStyle:{fontSize:'10px',color:'#B6B1A8',width:'12px'}, role:'AM', roleStyle:roleChip(C.softO,C.orangeD), dotStyle:{display:'none'},
-      name:phName(am), nameStyle:{fontSize:'13.5px',fontWeight:600,whiteSpace:'nowrap'}, sub:`${cos.length} cluster officers · ${terrs.length} territories`, subStyle:{fontSize:'11px',color:'#9C988F',marginTop:'1px'},
+      name:phName(am), nameStyle:{fontSize:'13.5px',fontWeight:600,whiteSpace:'nowrap'}, sub:`${cos.length} cluster officer${cos.length===1?"":"s"} · ${terrs.length} territor${terrs.length===1?"y":"ies"}`, subStyle:{fontSize:'11px',color:'#9C988F',marginTop:'1px'},
       deployed:r.deployed, orgBarStyle:{display:'flex',width:'42px',height:'5px',borderRadius:'3px',overflow:'hidden',background:'#F2F0EB'}, mixLabelStyle:{fontSize:'10px',color:'#9C988F',marginTop:'4px',whiteSpace:'nowrap'}, ...rowBars(r), opMap:opMapLabel(r),
       contact:list[0].amNum, callTel:'tel:'+list[0].amNum, callStyle:callBtn });
     if(exp){
@@ -3033,7 +3042,7 @@ function vals(){
     pendRows.push({ click:{act:'exp',key}, indent:'0px',
       rowStyle:{padding:'12px 18px',borderTop:'1px solid #F2F0EB',cursor:'pointer',background:exp?'#FBFAF8':'#fff'},
       chev:exp?'▾':'▸', chevStyle:{fontSize:'10px',color:'#B6B1A8',width:'12px'}, role:'AM', roleStyle:roleChip(C.softO,C.orangeD), dotStyle:{display:'none'},
-      name:phName(am), nameStyle:{fontSize:'13.5px',fontWeight:600,whiteSpace:'nowrap'}, sub:`${cos.length} cluster officers`, subStyle:{fontSize:'11px',color:'#9C988F',marginTop:'1px'},
+      name:phName(am), nameStyle:{fontSize:'13.5px',fontWeight:600,whiteSpace:'nowrap'}, sub:`${cos.length} cluster officer${cos.length===1?"":"s"}`, subStyle:{fontSize:'11px',color:'#9C988F',marginTop:'1px'},
       count:list.length, mix:orgMix(list), org:'',
       contact:list[0].amNum, callTel:'tel:'+list[0].amNum, callStyle:callBtn });
     if(exp){
@@ -3074,9 +3083,10 @@ function vals(){
     const maxF=Math.max(m.achieved,m.mtd,acD(m),1);   // no Target row: it is a flat 1,000 ac nobody set
     const funnel=[['Season',m.achieved,'#46433d'],['MTD',m.mtd,'#8C8780'],[dayWord(),acD(m),C.act]].map(([label,v,col])=>({label,value:fmt(v),barStyle:{display:'block',height:'100%',width:(100*v/maxF)+'%',background:col}}));
     const maxP=Math.max(1,...m.scanned.map(s=>s.acres));
-    const products=(m.scanned.length?m.scanned:[{product:'Unspecified',acres:0}]).map(s=>({product:s.product,acres:fmt(s.acres),barStyle:{display:'block',height:'100%',width:(100*s.acres/maxP)+'%',background:C.orange}}));
+    const products=(m.scanned.length?m.scanned:[{product:'Nothing scanned yet',acres:0}]).map(s=>({product:s.product,acres:fmt(s.acres),barStyle:{display:'block',height:'100%',width:(100*s.acres/maxP)+'%',background:C.orange}}));
     const opMapped=m.opMapped===1;
-    d={ mc:m.mc, org:m.org, geo:`${phName(m.territory)} · ${phName(m.cluster)}`,
+    const wheat=curProject().id==='wheat';   // Wheat's cluster field is the VILLAGE, and handover is the machine's stage
+    d={ mc:m.mc, org:m.org, geo:`${phName(m.territory)} · ${phName(m.cluster)}`+(wheat?` · ${m.handover?'Handed over':'Not handed over'}`:''),
       orgStyle:{display:'inline-flex',fontSize:'10.5px',fontWeight:700,letterSpacing:'.03em',padding:'3px 9px',borderRadius:'6px',background:orgSoft(m.org),color:orgInk(m.org)},
       healthStyle:{display:'inline-flex',alignItems:'center',gap:'5px',fontSize:'10.5px',fontWeight:600,padding:'3px 9px',borderRadius:'6px',background:hcolor(hs)+'18',color:hcolor(hs)}, healthDot:{width:'6px',height:'6px',borderRadius:'50%',background:hcolor(hs),display:'block'}, health:hs,
       sprayBg:w.bg, sprayBorder:w.border, sprayIcon:w.icon, sprayLabel:w.label, sprayInk:w.ink, weatherLine:w.line,
@@ -3085,7 +3095,7 @@ function vals(){
       opTagStyle:{display:'inline-flex',fontSize:'9.5px',fontWeight:600,padding:'1px 7px',borderRadius:'5px',background:opMapped?C.softG:C.softA,color:opMapped?C.greenD:'#9A6B05'},
       callStyle:{width:'36px',height:'36px',borderRadius:'9px',background:C.ink,color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0},
       funnel, products,
-      locTitle:(m.lat!=null)?`${phName(m.territory)} cluster`:'No location on file', mapHref:(m.lat!=null&&m.lon!=null)?iotMapHref(m):'', coords:(m.lat!=null)?`${m.lat}, ${m.lon}`:'Excluded from map · listed here',
+      locTitle:(m.lat!=null)?(wheat?'Last ping position':`${phName(m.territory)} cluster`):'No location on file', mapHref:(m.lat!=null&&m.lon!=null)?iotMapHref(m):'', coords:(m.lat!=null)?`${m.lat}, ${m.lon}`:'Excluded from map · listed here',
       coName:m.co, coMob:m.coMob, coTel:'tel:'+m.coMob, amName:m.am, amNum:m.amNum, amTel:'tel:'+m.amNum,
       bmName:m.bmName, bmMob:m.bmMob, bmTel:'tel:'+m.bmMob, tmName:m.tmName, tmMob:m.tmMob, tmTel:'tel:'+m.tmMob,
       foName:m.foName, foMob:m.foMob, foTel:'tel:'+m.foMob, retailerName:m.retailerName, retailerMob:m.retailerMob, retailerTel:'tel:'+m.retailerMob, retailerLoc:m.retailerLoc,
@@ -8086,7 +8096,7 @@ function productBodyHTML(mob){
 function wplanAgg(){
   const S=state, P=curProject(), lockSt=gateCanSwitchStates()?'':gateDefaultState();
   const lockOrg=(o=>(o==='UPL'||o==='SWAL')?o:'')(gateDefaultOrg());
-  const stOpts=(P.states||[]).filter(gateAllowsState);
+  const stOpts=(P.plan?P.plan.tabs.map(t=>t.st):(P.states||[])).filter(gateAllowsState);   // the plan's own states (no RJ tab)
   const st = lockSt || (stOpts.includes(S.wpSt)?S.wpSt:'');
   const org = lockOrg || (['UPL','SWAL'].includes(S.wpOrg)?S.wpOrg:'ALL');
   const inSt = WPLAN.rows.filter(r=>(!st||r.st===st) && gateAllowsState(r.st));
@@ -9192,7 +9202,7 @@ function machinesViewHTML(v){
             <div style="min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(r.opName)}</div><div style="display:flex;align-items:center;gap:6px"><span style="font-family:'IBM Plex Mono';font-size:10.5px;color:#9C988F">${E(r.opNum)}</span>${opRankChip(r.opNum,'s')}</div></div>
             <div style="font-size:11.5px;color:#6E6A62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(r.geo)}</div>
             <div style="${css(r.acresStyle)}">${E(r.acresY)}</div>
-            <div style="min-width:0;font-size:11.5px;color:#6E6A62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(r.co)} <span style="color:#C9C4BA">·</span> ${E(r.am)}</div>
+            <div style="min-width:0;font-size:11.5px;color:#6E6A62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.co&&r.am?`${E(r.co)} <span style="color:#C9C4BA">·</span> ${E(r.am)}`:E(r.co||r.am||'—')}</div>
           </div>`).join('')}
         </div>
       </div></div>
@@ -10064,7 +10074,7 @@ function mobileHTML(v){
         <span style="${css(m.dotStyle)}"></span>
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:600">${E(m.mc)}</span><span style="${css(m.orgStyle)}">${E(m.org)}</span>${m.hword?`<span style="font-size:11px;font-weight:700;color:#46433d">${m.hword}</span>`:''}</div>
-          <div style="display:flex;align-items:center;gap:6px;min-width:0;margin-top:2px"><span class="mCap" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.opName)} · ${E(m.geo)}</span>${opRankChip(m.opNum,'s')}</div>
+          <div style="display:flex;align-items:center;gap:6px;min-width:0;margin-top:2px"><span class="mCap" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.opName?E(m.opName)+' · ':''}${E(m.geo)}</span>${opRankChip(m.opNum,'s')}</div>
         </div>
         <span style="font-family:'IBM Plex Mono';font-size:12.5px;color:#46433d;white-space:nowrap">${E(m.acresLabel)}</span>
       </div>`).join('') : mEmpty('No machines match these filters.')}
