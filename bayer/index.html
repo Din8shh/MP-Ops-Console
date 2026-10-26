@@ -12,21 +12,67 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root{ --ink:#1B1A17; --ink2:#6E6A62; --ink3:#9C988F; --line:#E9E6DF; --bg:#F6F5F2; --card:#fff; --accent:#D96A12; }
+  :root{ --ink:#1B1A17; --ink2:#6E6A62; --ink3:#9C988F; --line:#E9E6DF; --soft:#F2F0EB; --bg:#F6F5F2; --card:#fff;
+         --accent:#D96A12; --ok:#15A24A; --okBg:#E8F6EE; --wait:#B98200; --waitBg:#FDF5DD; }
   *{ box-sizing:border-box; }
   html,body{ margin:0; background:var(--bg); color:var(--ink); font-family:'Noto Sans',system-ui,sans-serif; }
   body{ min-height:100dvh; display:flex; flex-direction:column; }
-  header{ background:#fff; border-bottom:1px solid var(--line); padding:calc(env(safe-area-inset-top) + 14px) 20px 14px; display:flex; align-items:center; gap:12px; }
+  .mono{ font-family:'IBM Plex Mono',monospace; }
+  header{ background:#fff; border-bottom:1px solid var(--line); padding:calc(env(safe-area-inset-top) + 12px) 20px 0; }
+  .hrow{ display:flex; align-items:center; gap:12px; max-width:1100px; margin:0 auto; }
   .eyebrow{ font-size:11px; font-weight:700; letter-spacing:.14em; color:var(--accent); text-transform:uppercase; }
   h1{ font-size:19px; margin:2px 0 0; font-weight:700; }
+  .sub{ font-size:12px; color:var(--ink2); margin-top:2px; }
   .grow{ flex:1; min-width:0; }
   .btn{ font:inherit; font-size:13px; font-weight:600; color:var(--ink2); background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:9px 14px; min-height:44px; cursor:pointer; }
   .btn:hover{ border-color:#D8D4CA; color:var(--ink); }
-  main{ flex:1; width:100%; max-width:960px; margin:0 auto; padding:28px 16px 40px; }
-  .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:0 1px 2px rgba(0,0,0,.04); padding:28px 24px; }
-  .card h2{ font-size:17px; margin:0; }
-  .card p{ font-size:14px; line-height:1.55; color:var(--ink2); margin:8px 0 0; }
-  .pill{ display:inline-block; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); background:#FDF1E6; border-radius:20px; padding:4px 10px; margin-bottom:12px; }
+  .tabs{ display:flex; gap:4px; max-width:1100px; margin:10px auto 0; }
+  .tab{ font:inherit; font-size:13.5px; font-weight:600; color:var(--ink2); background:none; border:none; border-bottom:2.5px solid transparent; padding:10px 12px; min-height:44px; cursor:pointer; }
+  .tab[aria-selected="true"]{ color:var(--ink); border-bottom-color:var(--accent); }
+  main{ flex:1; width:100%; max-width:1100px; margin:0 auto; padding:20px 16px 40px; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .stats{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+  .stat{ padding:14px 16px; }
+  .stat .lbl{ font-size:11.5px; color:var(--ink2); font-weight:600; }
+  .stat .val{ font-size:26px; font-weight:700; margin-top:4px; font-family:'IBM Plex Mono',monospace; }
+  .stat .note{ font-size:11.5px; color:var(--ink2); margin-top:2px; }
+  .meter{ height:6px; background:var(--soft); border-radius:3px; margin-top:8px; overflow:hidden; }
+  .meter > i{ display:block; height:100%; background:var(--ok); border-radius:3px; }
+  .sec{ margin-top:22px; }
+  .sec h2{ font-size:15px; margin:0 0 10px; }
+  .sec h2 small{ font-weight:500; color:var(--ink2); font-size:12.5px; margin-left:6px; }
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink2); padding:10px 14px; border-bottom:1px solid var(--line); }
+  td{ padding:10px 14px; border-bottom:1px solid var(--soft); }
+  tr:last-child td{ border-bottom:none; }
+  td.n, th.n{ text-align:right; font-family:'IBM Plex Mono',monospace; }
+  .bar{ display:flex; align-items:center; gap:8px; }
+  .bar .meter{ flex:1; margin:0; min-width:60px; }
+  .filters{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  select, input[type=search]{ font:inherit; font-size:13.5px; color:var(--ink); background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:8px 10px; min-height:44px; outline:none; }
+  input[type=search]{ flex:1; min-width:180px; }
+  select:focus, input[type=search]:focus{ border-color:var(--accent); }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; }
+  .loc{ padding:14px 16px; }
+  .loc .top{ display:flex; align-items:flex-start; gap:10px; }
+  .loc .name{ font-weight:700; font-size:14.5px; }
+  .loc .where{ font-size:12px; color:var(--ink2); margin-top:2px; }
+  .chip{ flex-shrink:0; font-size:11px; font-weight:700; border-radius:20px; padding:3px 9px; white-space:nowrap; }
+  .chip.ok{ color:var(--ok); background:var(--okBg); }
+  .chip.wait{ color:var(--wait); background:var(--waitBg); }
+  dl{ display:grid; grid-template-columns:auto 1fr; gap:5px 12px; margin:12px 0 0; font-size:12.5px; }
+  dt{ color:var(--ink2); }
+  dd{ margin:0; min-width:0; }
+  .muted{ color:var(--ink3); }
+  .person{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .call{ display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:600; color:var(--accent); text-decoration:none; border:1.5px solid #F4D9C1; border-radius:8px; padding:3px 8px; }
+  .call:hover{ background:#FDF1E6; }
+  .empty, .msg{ padding:28px 20px; text-align:center; color:var(--ink2); font-size:13.5px; }
+  .msg .btn{ margin-top:12px; }
+  .grp{ margin-top:14px; }
+  .grp:first-child{ margin-top:0; }
+  .grp h3{ font-size:13px; margin:0 0 6px; display:flex; gap:8px; align-items:center; }
+  .grp h3 .person{ font-weight:500; }
   footer{ font-size:11px; color:var(--ink2); text-align:center; padding:14px 16px calc(env(safe-area-inset-bottom) + 14px); }
   /* PIN gate */
   #gate{ position:fixed; inset:0; z-index:10; display:none; align-items:center; justify-content:center; background:var(--bg); padding:16px; }
@@ -37,13 +83,21 @@
   #err{ font-size:12px; color:#DC3A2B; margin-top:10px; min-height:15px; font-weight:600; }
   #gate .note{ font-size:11px; color:var(--ink2); margin-top:14px; line-height:1.4; }
   #app{ display:none; }
-  @media (max-width:820px){ input{ font-size:16px; } }
+  @media (max-width:820px){
+    input, select{ font-size:16px !important; }
+    .stats{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .grid{ grid-template-columns:1fr; }
+    .call{ min-height:36px; padding:6px 10px; }
+    .hideM{ display:none; }
+    td, th{ padding:10px 10px; }
+  }
 </style>
 </head>
 <body>
 
 <!-- The Bayer partner page. Deliberately SELF-CONTAINED: it loads nothing from the main console (no index.html,
-     no machines.js, no sheet ids), so its source carries one PIN — Bayer's — and nothing internal. -->
+     no machines.js, no internal sheet ids), so its source carries one PIN — Bayer's — and reads only Bayer's own
+     workbook. See CLAUDE.md → Partner pages. -->
 <div id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTtl">
   <div class="box">
     <div class="eyebrow">Partner view</div>
@@ -56,19 +110,20 @@
 
 <div id="app">
   <header>
-    <div class="grow">
-      <div class="eyebrow">Partner view</div>
-      <h1>Bayer</h1>
+    <div class="hrow">
+      <div class="grow">
+        <div class="eyebrow">Partner view · Bayer</div>
+        <h1>Machine deployment</h1>
+        <div class="sub" id="stamp">Loading…</div>
+      </div>
+      <button class="btn" id="logout" type="button">Log out</button>
     </div>
-    <button class="btn" id="logout" type="button">Log out</button>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="loc">Locations</button>
+      <button class="tab" role="tab" data-tab="fo">Field officers</button>
+    </div>
   </header>
-  <main>
-    <div class="card">
-      <span class="pill">Being set up</span>
-      <h2>Spray tracker</h2>
-      <p>The programme's figures for Bayer will appear on this page. Nothing is published here yet.</p>
-    </div>
-  </main>
+  <main id="main"></main>
   <footer>Built with tokens, Powered by Claude. By din8sh.</footer>
 </div>
 
@@ -82,12 +137,25 @@ const GATE = {
   TTL_MS: 30*60*1000,
   timer: null,
 };
+/* Bayer's own workbook — never the console's. Tabs are read by gid, columns by header keyword. */
+const SHEET = {
+  id: '13SpCKS_Am9mPOqSh8jPOH8OS6htEMCDfA15iuJgEZL8',
+  machines: '1933202962',   // "Machine details": one row per machine slot, HR + PB, under a title row (headerRow finds the real one)
+  fo: '720662332',          // "FO Mapping final": one row per field officer
+  refreshMinutes: 10,
+};
+
 async function sha256(s){ const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
 function gateRead(){ try{ return JSON.parse(sessionStorage.getItem(GATE.SKEY)||'null'); }catch(_){ return null; } }
 function gateValid(){ const o=gateRead(); return !!o && o.h===GATE.HASH && (Date.now()-(o.at||0)) < GATE.TTL_MS; }
 function gateTouch(){ try{ sessionStorage.setItem(GATE.SKEY, JSON.stringify({h:GATE.HASH, at:Date.now()})); }catch(_){ } arm(GATE.TTL_MS); }
 function arm(ms){ clearTimeout(GATE.timer); GATE.timer=setTimeout(lock, Math.max(0,ms)); }
-function show(){ document.getElementById('gate').style.display='none'; document.getElementById('app').style.display='block'; }
+let _started=false;
+function show(){
+  document.getElementById('gate').style.display='none'; document.getElementById('app').style.display='block';
+  if(!_started){ _started=true; load(); setInterval(()=>{ if(gateValid()) load(); }, SHEET.refreshMinutes*60000); }
+  render();
+}
 function lock(){
   clearTimeout(GATE.timer);
   try{ sessionStorage.removeItem(GATE.SKEY); }catch(_){ }
@@ -107,6 +175,212 @@ document.getElementById('logout').addEventListener('click', lock);
 // Activity keeps the session alive, like the console's 30-minute idle expiry.
 ['click','keydown','touchstart'].forEach(ev=>document.addEventListener(ev, ()=>{ if(gateValid()) gateTouch(); }, {passive:true}));
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !gateValid()) lock(); });
+
+/* ================================ data ================================ */
+const E = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// The sheet writes "0" / "-" where a name or number is not known yet; both read as blank.
+const val = v => { const s=String(v==null?'':v).trim(); return (s==='0'||s==='-'||/^n\/?a$/i.test(s)) ? '' : s; };
+const tel = v => { const d=String(v||'').replace(/\D/g,''); return d.length>=10 ? d.slice(-10) : ''; };
+const nice = s => val(s).replace(/_/g,' ').replace(/\s+/g,' ').trim();
+
+function parseCSV(t){
+  const rows=[]; let row=[], f='', q=false;
+  for(let i=0;i<t.length;i++){
+    const c=t[i];
+    if(q){ if(c==='"'){ if(t[i+1]==='"'){ f+='"'; i++; } else q=false; } else f+=c; }
+    else if(c==='"') q=true;
+    else if(c===','){ row.push(f); f=''; }
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&t[i+1]==='\n') i++; row.push(f); rows.push(row); row=[]; f=''; }
+    else f+=c;
+  }
+  if(f!==''||row.length){ row.push(f); rows.push(row); }
+  return rows;
+}
+// The tab opens with a title line ("UPL Machine Details – Oct 2026"), which gviz may or may not fold into the header.
+// So the header is whichever of the first rows names the most of the expected columns, wherever it sits.
+function headerRow(rows, pats){
+  let best=0, hit=-1;
+  rows.slice(0,6).forEach((r,i)=>{ const h=r.map(x=>String(x).trim().toLowerCase()); const n=pats.filter(p=>h.some(x=>p.test(x))).length; if(n>hit){ hit=n; best=i; } });
+  return best;
+}
+// First header matching each pattern; -1 when the sheet has no such column (the field then reads blank).
+function cols(head, spec){
+  const h=head.map(x=>String(x).trim().toLowerCase()), out={};
+  for(const k in spec) out[k]=h.findIndex(x=>spec[k].test(x));
+  return out;
+}
+const cell = (r,i) => i>=0 && i<r.length ? r[i] : '';
+
+async function fetchTab(gid){
+  const u=`https://docs.google.com/spreadsheets/d/${SHEET.id}/gviz/tq?tqx=out:csv&gid=${gid}&t=${Date.now()}`;
+  const res=await fetch(u, {cache:'no-store'});
+  if(!res.ok) throw new Error('HTTP '+res.status);
+  const rows=parseCSV(await res.text());
+  if(!rows.length) throw new Error('empty');
+  return rows;
+}
+
+function buildMachines(rows){
+  const spec={ state:/^state$/, mc:/machine (no|number)/, squad:/squad/, dist:/territory|district/, market:/market|village/,
+    count:/machine count/, retailer:/retailer/, fo:/^fo name/, foMob:/^fo mob/, ccm:/^ccm name/, ccmMob:/^ccm mob/,
+    co:/cluster officer name|^co$/, coMob:/cluster officer mob|^co.?mob/, am:/area manager name|^am$/, amMob:/area manager mob|^am.?mob/,
+    deploy:/deployment date/, handover:/handover/, from:/^from$/, to:/^to$/, org:/organi[sz]ation/ };
+  const hi=headerRow(rows, Object.values(spec)), c=cols(rows[hi], spec);
+  return rows.slice(hi+1).map(r=>({
+      state:val(cell(r,c.state)), mc:val(cell(r,c.mc)).replace(/\s+/g,''), squad:val(cell(r,c.squad)),
+      dist:val(cell(r,c.dist)).replace(/\s+(district|territory)$/i,''), market:val(cell(r,c.market)),
+      count:Math.max(1, parseInt(cell(r,c.count),10)||1), retailer:val(cell(r,c.retailer)),
+      fo:nice(cell(r,c.fo)), foMob:tel(cell(r,c.foMob)), ccm:nice(cell(r,c.ccm)), ccmMob:tel(cell(r,c.ccmMob)),
+      co:nice(cell(r,c.co)), coMob:tel(cell(r,c.coMob)), am:nice(cell(r,c.am)), amMob:tel(cell(r,c.amMob)),
+      deploy:val(cell(r,c.deploy)), handover:val(cell(r,c.handover)), from:val(cell(r,c.from)), to:val(cell(r,c.to)),
+      org:val(cell(r,c.org)) }))
+    // The sheet closes with a "Total" row, which carries no place; a row needs a village or a district to be a slot.
+    .filter(m=>(m.market||m.dist) && m.squad);
+}
+function buildFO(rows){
+  const c=cols(rows[0], { name:/^fo name/, mob:/^fo mob/, ccm:/^ccm name/, ccmMob:/^ccm mob/, app:/partner app/ });
+  return rows.slice(1).map(r=>({ name:nice(cell(r,c.name)), mob:tel(cell(r,c.mob)), ccm:nice(cell(r,c.ccm)),
+    ccmMob:tel(cell(r,c.ccmMob)), app:/^y/i.test(val(cell(r,c.app))) })).filter(f=>f.name||f.mob);
+}
+
+const S = { tab:'loc', st:'', squad:'', dist:'', status:'', q:'', foQ:'' };
+const D = { mc:null, fo:null, at:null, err:null, loading:false };
+try{ const t=localStorage.getItem('bayer_tab'); if(t==='loc'||t==='fo') S.tab=t; }catch(_){ }
+
+async function load(){
+  D.loading=true; D.err=null; stamp();
+  try{
+    const [a,b]=await Promise.all([fetchTab(SHEET.machines), fetchTab(SHEET.fo)]);
+    D.mc=buildMachines(a); D.fo=buildFO(b); D.at=new Date();
+  }catch(e){ D.err=String(e&&e.message||e); console.warn('[Bayer] load failed', e); }
+  D.loading=false; render();
+}
+
+/* ================================ view ================================ */
+const fmtTime = d => d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'});
+function stamp(){
+  const el=document.getElementById('stamp'); if(!el) return;
+  el.textContent = D.loading && !D.at ? 'Loading…' : D.err && !D.at ? 'Could not load the sheet' :
+    'Checked '+fmtTime(D.at)+(D.err?' · last refresh failed':'');
+}
+function personHTML(name, mob){
+  if(!name && !mob) return '<span class="muted">Not named yet</span>';
+  return `<span class="person"><span>${E(name||'—')}</span>${mob?`<a class="call mono" href="tel:+91${mob}" aria-label="Call ${E(name||mob)}">${mob}</a>`:''}</span>`;
+}
+const opt = (v, cur, label) => `<option value="${E(v)}"${v===cur?' selected':''}>${E(label||v)}</option>`;
+const uniq = a => [...new Set(a.filter(Boolean))].sort((x,y)=>x.localeCompare(y));
+
+function locHTML(){
+  const all=D.mc;
+  const req=all.reduce((s,m)=>s+m.count,0), got=all.filter(m=>m.mc).length, wait=all.filter(m=>!m.mc).length;
+  const handed=all.filter(m=>m.handover).length, deployed=all.filter(m=>m.deploy).length;
+  const pct=req?Math.round(got/req*100):0;
+  const stats=`<div class="stats">
+    <div class="card stat"><div class="lbl">Machines requested</div><div class="val">${req}</div><div class="note">${all.length} locations</div></div>
+    <div class="card stat"><div class="lbl">Machine assigned</div><div class="val">${got}</div><div class="meter"><i style="width:${pct}%"></i></div><div class="note">${pct}% of requested</div></div>
+    <div class="card stat"><div class="lbl">Awaiting a machine</div><div class="val">${wait}</div><div class="note">no machine number yet</div></div>
+    <div class="card stat"><div class="lbl">Deployed</div><div class="val">${deployed}</div><div class="note">${deployed?'with a deployment date':'no deployment dates yet'}${handed?` · ${handed} with a handover status`:''}</div></div>
+  </div>`;
+
+  // By district (the sheet's "Territory / District"), grouped under its squad.
+  const byD={}; all.forEach(m=>{ const k=m.state+'|'+m.squad+'|'+m.dist; (byD[k]=byD[k]||{state:m.state,squad:m.squad,dist:m.dist,req:0,got:0}); byD[k].req+=m.count; if(m.mc) byD[k].got++; });
+  const drows=Object.values(byD).sort((a,b)=>a.state.localeCompare(b.state)||a.squad.localeCompare(b.squad)||b.req-a.req||a.dist.localeCompare(b.dist));
+  const dist=`<div class="sec"><h2>By district</h2><div class="card"><table>
+    <thead><tr><th>District</th><th class="hideM">Squad · State</th><th class="n">Requested</th><th class="n">Assigned</th><th class="hideM"></th></tr></thead>
+    <tbody>${drows.map(d=>`<tr><td>${E(d.dist)}</td><td class="hideM">${E([d.squad,d.state].filter(Boolean).join(' · '))}</td><td class="n">${d.req}</td><td class="n">${d.got}</td>
+      <td class="hideM" style="width:28%"><div class="bar"><div class="meter"><i style="width:${d.req?d.got/d.req*100:0}%"></i></div></div></td></tr>`).join('')}</tbody>
+  </table></div></div>`;
+
+  // Filters: squad → district cascade, status, search.
+  const states=uniq(all.map(m=>m.state));
+  if(S.st && !states.includes(S.st)) S.st='';
+  const inSt=all.filter(m=>!S.st||m.state===S.st);
+  const squads=uniq(inSt.map(m=>m.squad));
+  if(S.squad && !squads.includes(S.squad)) S.squad='';
+  const dists=uniq(inSt.filter(m=>!S.squad||m.squad===S.squad).map(m=>m.dist));
+  if(S.dist && !dists.includes(S.dist)) S.dist='';
+  const q=S.q.trim().toLowerCase();
+  const list=inSt.filter(m=>(!S.squad||m.squad===S.squad) && (!S.dist||m.dist===S.dist)
+    && (!S.status || (S.status==='got'?!!m.mc:!m.mc))
+    && (!q || [m.market,m.dist,m.squad,m.state,m.mc,m.retailer,m.fo,m.foMob,m.ccm,m.co,m.am].join(' ').toLowerCase().includes(q)));
+  const filters=`<div class="filters">
+    ${states.length>1?`<select id="fSt" aria-label="State">${opt('',S.st,'All states')}${states.map(s=>opt(s,S.st)).join('')}</select>`:''}
+    <select id="fSquad" aria-label="Squad">${opt('',S.squad,'All squads')}${squads.map(s=>opt(s,S.squad)).join('')}</select>
+    <select id="fDist" aria-label="District">${opt('',S.dist,'All districts')}${dists.map(s=>opt(s,S.dist)).join('')}</select>
+    <select id="fStatus" aria-label="Status">${opt('',S.status,'Any status')}${opt('got',S.status,'Machine assigned')}${opt('wait',S.status,'Awaiting a machine')}</select>
+    <input type="search" id="fQ" placeholder="Search village, machine, retailer, person…" value="${E(S.q)}" aria-label="Search">
+  </div>`;
+  const cards=list.length ? `<div class="grid">${list.map(m=>`<div class="card loc">
+      <div class="top"><div class="grow"><div class="name">${E(m.market||m.dist)}</div><div class="where">${E([m.dist, m.squad&&m.squad+' squad', m.state].filter(Boolean).join(' · '))}</div></div>
+        ${m.mc?`<span class="chip ok">Machine assigned</span>`:`<span class="chip wait">Awaiting a machine</span>`}</div>
+      <dl>
+        <dt>Machine</dt><dd>${m.mc?`<span class="mono">${E(m.mc)}</span>`:'<span class="muted">Not assigned yet</span>'}</dd>
+        ${m.retailer?`<dt>Retailer</dt><dd>${E(m.retailer)}</dd>`:''}
+        ${m.deploy?`<dt>Deployed</dt><dd>${E(m.deploy)}</dd>`:''}
+        ${m.handover?`<dt>Handover</dt><dd>${E(m.handover)}</dd>`:''}
+        ${(m.from||m.to)?`<dt>Period</dt><dd>${E([m.from,m.to].filter(Boolean).join(' → '))}</dd>`:''}
+        ${m.org?`<dt>Organisation</dt><dd>${E(m.org)}</dd>`:''}
+        <dt>Field officer</dt><dd>${personHTML(m.fo,m.foMob)}</dd>
+        <dt>CCM</dt><dd>${personHTML(m.ccm,m.ccmMob)}</dd>
+        ${(m.co||m.coMob)?`<dt>Cluster officer</dt><dd>${personHTML(m.co,m.coMob)}</dd>`:''}
+        ${(m.am||m.amMob)?`<dt>Area manager</dt><dd>${personHTML(m.am,m.amMob)}</dd>`:''}
+      </dl></div>`).join('')}</div>` : `<div class="card empty">No location matches these filters.</div>`;
+  const anyF=S.st||S.squad||S.dist||S.status||q;
+  return stats + dist + `<div class="sec"><h2>Locations<small>${anyF?`${list.length} of ${all.length}`:all.length}</small></h2>${filters}${cards}</div>`;
+}
+
+function foHTML(){
+  const all=D.fo, q=S.foQ.trim().toLowerCase();
+  const withApp=all.filter(f=>f.app).length;
+  const list=all.filter(f=>!q||[f.name,f.mob,f.ccm,f.ccmMob].join(' ').toLowerCase().includes(q));
+  // Grouped under the CCM, keyed on the CCM's number (the name as fallback) so two CCMs sharing a name stay apart.
+  const g={}; list.forEach(f=>{ const k=f.ccmMob||f.ccm||'—'; (g[k]=g[k]||{ccm:f.ccm,mob:f.ccmMob,fos:[]}).fos.push(f); });
+  const groups=Object.values(g).sort((a,b)=>b.fos.length-a.fos.length||a.ccm.localeCompare(b.ccm));
+  const stats=`<div class="stats">
+    <div class="card stat"><div class="lbl">Field officers</div><div class="val">${all.length}</div></div>
+    <div class="card stat"><div class="lbl">CCMs</div><div class="val">${new Set(all.map(f=>f.ccmMob||f.ccm)).size}</div></div>
+    <div class="card stat"><div class="lbl">Partner app access</div><div class="val">${withApp}</div><div class="note">of ${all.length} field officers</div></div>
+  </div>`;
+  const body=groups.length ? `<div class="card" style="padding:14px 16px">${groups.map(gr=>`<div class="grp">
+      <h3>CCM · ${personHTML(gr.ccm,gr.mob)} <span class="muted" style="font-weight:500">${gr.fos.length} FO${gr.fos.length>1?'s':''}</span></h3>
+      <table><tbody>${gr.fos.map(f=>`<tr><td>${personHTML(f.name,f.mob)}</td><td class="n" style="font-family:inherit;width:1%;white-space:nowrap">${f.app?'<span class="chip ok">App access</span>':'<span class="muted" style="font-size:12px">No app access</span>'}</td></tr>`).join('')}</tbody></table>
+    </div>`).join('')}</div>` : `<div class="card empty">No field officer matches “${E(S.foQ)}”.</div>`;
+  return stats + `<div class="sec"><h2>Field officers by CCM<small>${q?`${list.length} of ${all.length}`:''}</small></h2>
+    <div class="filters"><input type="search" id="fFoQ" placeholder="Search name or number…" value="${E(S.foQ)}" aria-label="Search field officers"></div>${body}</div>`;
+}
+
+function render(){
+  stamp();
+  document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected', String(b.dataset.tab===S.tab)));
+  const main=document.getElementById('main');
+  let html;
+  if(!D.mc && D.err) html=`<div class="card msg">The sheet could not be loaded (${E(D.err)}).<br><button class="btn" id="retry" type="button">Try again</button></div>`;
+  else if(!D.mc) html=`<div class="card msg">Loading the sheet…</div>`;
+  else html = S.tab==='fo' ? foHTML() : locHTML();
+  // Keep the search box's focus and caret across the rebuild.
+  const a=document.activeElement, id=a&&a.id, pos=a&&a.selectionStart;
+  main.innerHTML=html;
+  if(id){ const el=document.getElementById(id); if(el){ el.focus(); try{ if(pos!=null) el.setSelectionRange(pos,pos); }catch(_){ } } }
+}
+
+document.querySelector('.tabs').addEventListener('click', e=>{
+  const b=e.target.closest('.tab'); if(!b) return;
+  S.tab=b.dataset.tab; try{ localStorage.setItem('bayer_tab', S.tab); }catch(_){ } render();
+});
+document.getElementById('main').addEventListener('change', e=>{
+  const t=e.target;
+  if(t.id==='fSt'){ S.st=t.value; S.squad=''; S.dist=''; }
+  else if(t.id==='fSquad'){ S.squad=t.value; S.dist=''; }
+  else if(t.id==='fDist') S.dist=t.value;
+  else if(t.id==='fStatus') S.status=t.value;
+  else return;
+  render();
+});
+document.getElementById('main').addEventListener('input', e=>{
+  if(e.target.id==='fQ'){ S.q=e.target.value; render(); }
+  else if(e.target.id==='fFoQ'){ S.foQ=e.target.value; render(); }
+});
+document.getElementById('main').addEventListener('click', e=>{ if(e.target.id==='retry') load(); });
 
 if(gateValid()){ const o=gateRead(); arm(GATE.TTL_MS-(Date.now()-o.at)); show(); } else lock();
 </script>

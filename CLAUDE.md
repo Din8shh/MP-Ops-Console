@@ -16,7 +16,7 @@ HTML/CSS/JS + inline-SVG maps. Same deploy shape as `din8shh.github.io/MP-map-vi
 - `wheat-demo.js` — 235 **DUMMY** rows (`export const WHEAT_DEMO`, HR + PB) for the Wheat North project while its
   sheet tab does not exist. Invented names/numbers/acres, generated once; same object shape as `machines.js`.
   **No longer shown while Wheat is in its planning stage** (`PROJECTS.wheat.plan`, below); kept for the machine phase.
-- `bayer/index.html` — the **Bayer partner page**, self-contained (see **Partner pages**).
+- `bayer/index.html` — the **Bayer partner page**: self-contained, reads Bayer's own workbook (see **Partner pages**).
 - `manifest.webmanifest`, `sw.js`, `icons/` — the PWA (see **PWA** below). `icons/icon.svg` is the source; the PNGs
   were rasterised from it with macOS `qlmanage -t` + `sips` (no ImageMagick here).
 
@@ -1079,9 +1079,18 @@ Bayer's. It is `noindex`, registers no service worker, and the console never lin
   (same origin, same tab) and `location.replace`s to `bayer/`, which accepts it only if `h` equals its own hash and is
   under 30 minutes old. So a partner PIN never sets `GATE.cur`, never boots the console, and admin (0088) does not see
   the partner page in its rail — "Bayer PIN only", by request.
-- **Placeholder for now** — the "Spray tracker" card. When its data is decided, give the page its OWN published sheet
-  holding only the shareable columns; pointing it at `CONFIG.sheetId` would put the whole internal workbook's id in
-  the partner's View Source.
+- **It reads Bayer's OWN workbook** (`SHEET.id` = `13SpCKS_Am9mPOqSh8jPOH8OS6htEMCDfA15iuJgEZL8`, wired 2026-10-26), never
+  `CONFIG.sheetId`, which would put the internal workbook's id in the partner's View Source. Two tabs, by gid:
+  · **`1933202962` "Machine details"** — one row per machine slot, **75 slots, HR + PB** (Hisar / Karnal / Chandigarh /
+    Jalandhar squads); 39 carry a machine number on 2026-10-26. The tab opens with a TITLE line ("UPL Machine Details –
+    Oct 2026") that gviz folds into the first header, so `headerRow` picks whichever of the first rows names the most
+    expected columns; a closing "Total" row is dropped (no squad). `-` / `0` read as blank. CO, AM, deployment date,
+    handover status, From/To and Organisation are **empty today** — each appears on the card the moment it is filled.
+  · **`720662332` "FO Mapping final"** — 47 FOs under 18 CCMs, with a `Partner App access` flag (all "No").
+  · **The workbook's DEFAULT tab (gid 0) is a hidden, older 30-row Haryana list** with an internal sign-off column. An
+    export without a gid lands on it — always pass the gid.
+  Pages: **Locations** (stat band, by-district table, State → Squad → District + status + search, one card per slot)
+  and **Field officers** (grouped by CCM). Refreshes every 10 minutes while unlocked.
 - **Another partner** = a new folder copied from `bayer/` with its own hash and `SKEY`, plus one handoff row.
 
 ## Insights (the cross-tab summary)
