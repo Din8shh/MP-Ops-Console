@@ -20,7 +20,7 @@
    expires. That is what offline means. The PIN gate is soft by design; see CLAUDE.md → PWA. */
 const SHELL = 'ops-shell-v1', DATA = 'ops-data-v1', FONTS = 'ops-fonts-v1';
 const PRECACHE = [
-  './', './index.html', './machines.js', './mapdata.js', './wheat-demo.js', './manifest.webmanifest',
+  './', './index.html', './machines.js', './mapdata.js', './manifest.webmanifest',
   './states/india/mapdata.js', './states/MH/mapdata.js', './states/TG/mapdata.js', './states/GJ/mapdata.js',
   './states/RJ/mapdata.js', './states/PB/mapdata.js', './states/HR/mapdata.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/favicon-32.png',
