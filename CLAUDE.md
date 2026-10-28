@@ -843,6 +843,27 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     `wret:true` and `drawerHTML` / the phone sheet branch to `wpDrawerHTML` / `wpPhoneSheetHTML`. Shows acres,
     plan share, days sprayed, village, operator / CI / AM / FO / TM / SH with Call, and the position or why not.
   · CSV = one line per machine shown, with its retailer's columns.
+- **Page 2, the Territory summary** (`wterr`, `#/territory-summary`, rail "Territories"; `wterrAgg` / `wterrBodyHTML`,
+  built 2026-10-28). **Wheat admin only** until every Wheat page is finalised; sales logins come after. Same `WRET` parse.
+  · One row per territory, NAMED WITH ITS TM(S) (TM is a retailer field: the distinct TMs of the retailers whose machines
+    sit there). It opens straight to its MACHINES, grouped under each TM where there is more than one; a machine opens
+    the shared details panel, which now lists the retailer first among the people.
+  · Columns: machines · plan · acres sprayed (with % of plan) · yesterday · scanned · **operator mapped** (n of N) · a
+    14-day mini trend. A page-level "Acres sprayed by day" bar chart runs from the sheet's first date to YESTERDAY.
+    Handover, `breakdown_id` and the Spruce / Feego split are deliberately NOT shown (by request); no map.
+  · KPI strip: Acres sprayed vs plan · Acres yesterday (with the change on the day before; amber if the sheet is stale) ·
+    Territories that sprayed yesterday (n of the named ones) · Operator mapped (n of N machines) · Scanned acres.
+  · **Territory clean-up lives in `wretBuild`** and so applies to BOTH pages: sheet names kept, one spelling each
+    (titleCase folds ABOHAR; `WRET_TERR` folds Hissar → Hisar). "0", "-", blank and `WRET_TERR_BAD` (Shimla) become ONE
+    `WRET_NO_TERR` row ("Territory not on sheet"), always last, never ranked, raw cell kept as `terrRaw` and named in
+    the details panel and CSV. Live 28 Oct: 28 machines. A retailer cell of "0" is no shop: those machines group per
+    territory as "No retailer named" instead of one phantom retailer spanning the programme.
+- **The Main sheet changed shape on 2026-10-28 (afternoon).** The future-date pre-fill went (only 22–28 Oct, 375 rows a
+  day) and 33,220 EMPTY rows appeared below, filled only by formulas in the new columns — a null date passes
+  "<= today", so the filtered fetch was 4.8 MB again. `loadWRet` now also asks `machine_number is not null`: 0.85 MB.
+  New columns then: `handover_status` (Yes/No, no history), `FO onboarded`, `breakdown_id` (78 machines, meaning
+  unconfirmed), `Spruce` / `Feego` / `FEEGO_EDGE` (scanned acres by product; they sum to `scanned_acres`).
+  `Latest_Longitude` is now numeric but rounded to 2 decimals (~1 km). 372 machines / plan 2,79,375 ac.
 
 ## IoT device monitoring (project `iot`, added 2026-10-15)
 A third PIN-picked project, for the IoT team rather than a programme: three state technicians and the IoT head they
