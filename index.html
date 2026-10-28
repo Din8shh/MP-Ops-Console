@@ -219,7 +219,8 @@ const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
-  wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope
+  wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
+  wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
   iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60,   // IoT pages — page-local, shared by the three of them
   // Cumulative (snake) view: its own independent scope — region + a day-level fiscal range stored as offsets
   // (0 = Apr 1 … 364 = Mar 31). NOT tied to the machine filter bar. snTo defaults to today's fiscal offset
@@ -331,8 +332,8 @@ const PROJECTS = {
             // ROWS (`gid` blank → applyRows([])), and no weather is fetched: nothing on these pages reads either.
             gid:'', demo:[], states:['HR','PB'], fullDeploy:[],
             ret:{ sheetId:'1Tz3OAhykHa144JAufDRwK_G2_LuG0QXxwOsQqhR9mfc', gid:'486286189', name:'Main sheet' },
-            home:'wplan', views:['wplan','wterr','wmap'], bar:['wplan','wterr','wmap'],
-            only:['fo','retailer','wplan','wterr','wmap'], kharifTabs:false,
+            home:'wplan', views:['wplan','wterr','wam','wmap'], bar:['wplan','wterr','wam','wmap'],
+            only:['fo','retailer','wplan','wterr','wam','wmap'], kharifTabs:false,
             head:sc=>`Wheat Spray Operations · ${sc==='India'?'North':sc}`, sub:'Wheat Spray Programme · Haryana · Punjab',
             mHead:sc=>`Wheat Spray · ${sc==='India'?'North':sc}`, mSub:'Wheat North · AFS' },
   // IoT device monitoring (2026-10-15). Not a programme but a team: the three state IoT technicians and the IoT head
@@ -2212,7 +2213,7 @@ function isAdmin(){ return !!(GATE.cur && GATE.cur.role==='admin'); }
 // 'mpprod' is the exception to that constraint rather than a breach of it: its tab holds Madhya Pradesh and
 // nothing else, and it renders NO state picker, so it cannot widen anybody's scope. It is safe to grant to a
 // state-locked MP login, and is granted to exactly those two plus leadership.
-const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wmap'];   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
+const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wmap'];   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
 function roleHidesView(view){
   // The PROJECT is the outer gate and runs first, so it binds admin too: a Wheat login never sees a Kharif-tab
   // view, and the Wheat-only views never appear under Kharif.
@@ -2232,10 +2233,10 @@ function roleHidesView(view){
 }
 // Views that render their OWN controls and so drop the shared machine filter bar + KPI strip (desktop) and the
 // weather banner + KPI cards (mobile): the standalone rollup/insight pages.
-const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wmap','iottamper','iotrisk','iotteam']);
+const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wmap','iottamper','iotrisk','iotteam']);
 // Pages with no machine rows behind them (Wheat plan, the IoT pages): the machine search and the phone's filter
 // button go, because neither can reach anything on them.
-const OWN_PAGES = new Set(['wplan','wterr','wmap','iottamper','iotrisk','iotteam']);
+const OWN_PAGES = new Set(['wplan','wterr','wam','wmap','iottamper','iotrisk','iotteam']);
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
@@ -3192,7 +3193,7 @@ const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" 
 // keys and mean nothing to a reader hunting for the cumulative chart.
 const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', norun:'Didn’t run',
   am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Daily recap', leader:'Leaders',
-  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wmap:'Machine map',
+  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wmap:'Machine map',
   iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotteam:'IoT team overview' };
 // The word under each rail icon: short enough for a 64px button at 9.5px. One word where the title is long.
 // ONE NAME TABLE (plan I4). NAV_TITLE is the full name — page heading, browser title, the phone's All pages sheet.
@@ -3200,13 +3201,13 @@ const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machin
 // the same short form in all three. M_VIEWS takes its labels from here.
 const RAIL_LBL = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', am:'AMs', bm:'BMs', norun:'Didn’t run',
   pending:'Pending', recap:'Recap', leader:'Leaders', product:'Products', mpprod:'MP products', snake:'Cumulative', fo:'FOs',
-  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wmap:'Map', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
+  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wmap:'Map', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
 // Rail order, in labelled groups (a hairline between them): the project's own pages, then what happened TODAY,
 // then the PEOPLE tables, then the SEASON reading. Insights used to lead the rail; it now leads the Season group.
 // Group names, index for index with RAIL_GROUPS (the first group is the project's own pages and has none).
 const RAIL_GROUP_NAMES = ['', 'Today', 'People', 'Season'];
 const RAIL_GROUPS = [
-  [['wplan',I.retailer],['wterr',I.tables],['wmap',I.map],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am]],
+  [['wplan',I.retailer],['wterr',I.tables],['wam',I.am],['wmap',I.map],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am]],
   [['norun',I.risk],['map',I.map],['machines',I.machines],['weather',I.weather],['recap',I.recap]],
   [['tables',I.tables],['am',I.am],['bm',I.bm],['fo',I.fo],['retailer',I.retailer],['pending',I.pending]],
   [['insights',I.insights],['snake',I.snake],['product',I.product],['mpprod',I.mpprod],['leader',I.leader]],
@@ -3251,13 +3252,13 @@ function topbarHTML(v){
   // The Wheat Retailer summary reads its own sheet: the header names the PAGE's own state scope, the machine search goes,
   // and the stamp counts retailers on the plan rather than machines.
   const wp = state.view==='wplan' && WRET.loaded && isAdmin() ? wplanAgg() : null;
-  const wt = (state.view==='wterr'||state.view==='wmap') && WRET.loaded && isAdmin() ? wterrAgg() : null;
+  const wt = (state.view==='wterr'||state.view==='wam'||state.view==='wmap') && WRET.loaded && isAdmin() ? wterrAgg() : null;
   const iot = curProject().iot ? iotScope() : null;
   const scope = state.view==='wplan' ? (wp ? (wp.st||wp.lockSt||'India') : (state.wpSt||'India'))
-    : (state.view==='wterr'||state.view==='wmap') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
+    : (state.view==='wterr'||state.view==='wam'||state.view==='wmap') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
     : iot ? (iot.st||iot.lockSt||'India') : v.scopeLabel;
   const fresh = state.view==='wplan' ? (wp ? `${fmt(wp.all.length)} retailers · ${fmt(wp.allMc)} machines` : 'Retailer summary')
-    : (state.view==='wterr'||state.view==='wmap') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
+    : (state.view==='wterr'||state.view==='wam'||state.view==='wmap') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
     : iot ? (IOT.loaded ? `${fmt(IOT.tamper.filter(r=>gateAllowsState(r.st)).length)} potential tamper · ${fmt(IOT.risk.filter(r=>gateAllowsState(r.st)).length)} at risk` : 'IoT sheet')
     : v.freshCount;
   if(isWheat()) return `<header style="height:68px;flex-shrink:0;background-color:#fff;background-image:linear-gradient(90deg,#F5821F,#1FAE43);background-size:100% 3px;background-repeat:no-repeat;border-bottom:1px solid ${W2.line};display:flex;align-items:center;gap:20px;padding:0 32px">
@@ -8500,13 +8501,16 @@ function wterrAgg(){
   const inTerr=inOrg.filter(m=>!terr||m.territory===terr);
   const tms=[...new Set(inTerr.map(m=>tmOf(m).n).filter(Boolean))].sort((a,b)=>a.localeCompare(b)), tm=pick(tms,S.wtTm);
   const inTm=inTerr.filter(m=>!tm||tmOf(m).n===tm);
+  // AM is a MACHINE field (it arrives with the operator mapping), so it narrows machines, after the retailer-level TM.
+  const ams=[...new Set(inTm.map(m=>m.am).filter(Boolean))].sort((a,b)=>a.localeCompare(b)), am=pick(ams,S.wtAm);
+  const inAm=inTm.filter(m=>!am||m.am===am);
   const q=String(S.wtQ||'').trim().toLowerCase(), hit=x=>String(x||'').toLowerCase().includes(q);
   const days=wtDays(), sumOf=(l,f)=>l.reduce((a,x)=>a+f(x),0);
   const series=l=>days.map(d=>sumOf(l,m=>m.days[d]||0));
   const G={};
   // The no-territory machines are ONE row across both states (one sheet fault, not two territories); its state reads
   // whichever states it holds.
-  inTm.forEach(m=>{ const none=m.territory===WRET_NO_TERR, k=none?'~none':m.st+'|'+m.territory;
+  inAm.forEach(m=>{ const none=m.territory===WRET_NO_TERR, k=none?'~none':m.st+'|'+m.territory;
     const g=G[k]||(G[k]={ key:k, name:m.territory, st:m.st, none, all:[] }); if(g.st!==m.st) g.st=''; g.all.push(m); });
   const rows=Object.values(G).map(g=>{
     const tmsAll=wpPeople(g.all.map(m=>({tm:tmOf(m).n, tmMob:tmOf(m).mob})),'tm','tmMob');
@@ -8527,8 +8531,8 @@ function wterrAgg(){
     : ((b[sort]==null?-1:b[sort])-(a[sort]==null?-1:a[sort])) || b.plan-a.plan || a.name.localeCompare(b.name)));
   const mcs=rows.flatMap(r=>r.list), named=rows.filter(r=>!r.none);
   const tot=series(mcs), plan=sumOf(rows,r=>r.plan), acAll=sumOf(rows,r=>r.acAll);
-  const nF = (!lockOrg&&org!=='ALL'?1:0)+(st&&!lockSt?1:0)+[terr,tm].filter(Boolean).length;
-  return { st, org, lockSt, lockOrg, stOpts, terrs, terr, tms, tm, q, sort, rows, days, tot,
+  const nF = (!lockOrg&&org!=='ALL'?1:0)+(st&&!lockSt?1:0)+[terr,tm,am].filter(Boolean).length;
+  return { st, org, lockSt, lockOrg, stOpts, terrs, terr, tms, tm, ams, am, q, sort, rows, days, tot,
     allTerr: new Set(all.filter(m=>m.territory!==WRET_NO_TERR).map(m=>m.st+'|'+m.territory)).size, allMc: all.length,
     nF, narrowed: nF>0 || !!q, n:mcs.length, plan, acAll, acY:sumOf(rows,r=>r.acY), scAll:sumOf(rows,r=>r.scAll), scY:sumOf(rows,r=>r.scY),
     acPrev: days.length>1 ? tot[tot.length-2] : null, prevDay: days.length>1 ? days[days.length-2] : '',
@@ -8537,7 +8541,7 @@ function wterrAgg(){
     open: mcs.filter(m=>m.org!=='UPL'&&m.org!=='SWAL').length, pinged: mcs.filter(m=>m.lastPing&&m.lastPing>=WRET.yday).length,
     mtd: sumOf(mcs,m=>Object.keys(m.days).reduce((a,d)=>d.slice(0,7)===WRET.yday.slice(0,7)&&d<=WRET.yday?a+m.days[d]:a,0)),
     nNamed: named.length, nSprayedY: named.filter(r=>r.acY>0).length, none: rows.find(r=>r.none)||null,
-    sig: [st,org,terr,tm,q,sort].join('|') };
+    sig: [st,org,terr,tm,am,q,sort].join('|') };
 }
 function wterrCSV(){
   const A=wterrAgg();
@@ -8561,11 +8565,12 @@ function wtFilterFields(A, mob){
     A.lockOrg ? '' : lab('Company',`<div style="${w2segBox(mob)}">${['ALL','UPL','SWAL'].map(c=>`<button data-act="wtorg" data-org="${c}" aria-pressed="${A.org===c}" style="${w2seg(A.org===c,mob)}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`, true),
     lab('Territory', dd('wtTerrSel','All territories',A.terrs,A.terr)),
     lab('TM', dd('wtTmSel','All TMs',A.tms,A.tm)),
+    lab('AM', dd('wtAmSel','All AMs',A.ams,A.am)),
   ].filter(Boolean).join('');
 }
 function wtSheetHTML(){
   const A=wterrAgg();
-  const foot=`<div style="display:flex;gap:10px">${A.nF?`<button data-act="wtclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Show ${fmt(A.rows.length)} territor${A.rows.length===1?'y':'ies'}</button></div>`;
+  const foot=`<div style="display:flex;gap:10px">${A.nF?`<button data-act="wtclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">${state.view==='wam'?`Show ${fmt(A.n)} machine${A.n===1?'':'s'}`:`Show ${fmt(A.rows.length)} territor${A.rows.length===1?'y':'ies'}`}</button></div>`;
   return mSheetHTML('Filters', `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px">${wtFilterFields(A,true)}</div>`, 'sheetclose', foot);
 }
 // A row's mini trend: the last WT_SPARK days, one bar each, yesterday dark. Scaled to the row's own best day, so it
@@ -8579,12 +8584,13 @@ function wtSpark(series, days, w){
 }
 // The Territory page's controls — shared with the Wheat map, which reads the same filters (agreed 2026-10-28), so a
 // territory picked on one page is still picked on the other. The map has no table, so no sort.
-function wtControlsHTML(A, mob, withSort){
-  const S=state, B=wpBits(mob);
-  const search = B.search('wtSearch', mob?'Search territory, TM, machine…':'Search territory, TM, machine, person', S.wtQ);
-  const csvBtn = B.csv('wtcsv', `Download the ${fmt(A.n)} machines shown, with their territory and TM, as CSV`);
+// `o` lets another page on the same scope (the Area managers page) bring its own sort, CSV and search wording.
+function wtControlsHTML(A, mob, withSort, o){
+  const S=state, B=wpBits(mob); o=o||{};
+  const search = B.search('wtSearch', o.ph ? o.ph[mob?0:1] : mob?'Search territory, TM, machine…':'Search territory, TM, machine, person', S.wtQ);
+  const csvBtn = B.csv(o.csv||'wtcsv', o.csvTitle||`Download the ${fmt(A.n)} machines shown, with their territory and TM, as CSV`);
   const clearBtn = A.narrowed ? B.ghost('wtclear','Clear') : '';
-  const sortSel = withSort ? B.sortSel('wtSortSel','Sort territories by',WT_SORTS,A.sort) : '';
+  const sortSel = o.sort ? B.sortSel(...o.sort) : withSort ? B.sortSel('wtSortSel','Sort territories by',WT_SORTS,A.sort) : '';
   return mob
     ? `<div style="display:flex;gap:8px">${search}${B.filtersBtn('wtsheet',A.nF)}</div>
        <div style="display:flex;gap:8px;margin-top:8px;${withSort?'':'justify-content:flex-end'}">${sortSel}${clearBtn}${csvBtn}</div>`
@@ -8726,6 +8732,123 @@ function wtStripHTML(A, mob, stale, cardOnly){
     </div>`;
 }
 function wterrViewHTML(v){ return `<section style="padding:24px 32px">${wterrBodyHTML(false)}</section>`; }
+/* ===================== Wheat North — Area manager summary (view key `wam`) =====================
+   Page 4 of the Wheat rebuild (agreed 2026-10-28). One row per AREA MANAGER, opening to his CIs, each CI to its machines;
+   a machine opens the shared details panel. Questions: which AM's machines are moving against their plan, how many ran
+   yesterday, which CI under him is quiet. Wheat ADMIN only, until every Wheat page is finalised.
+   · The ops chain is a strict tree on the sheet — operator → CI → AM (no CI under two AMs, measured 2026-10-28) — and it
+     arrives WITH the operator mapping: a machine with no operator has no CI and no AM either (118 of 371 that day). Those
+     machines are ONE last row, "No AM — operator not mapped", never ranked, opening by territory (there is no CI).
+   · AM does NOT follow territory or TM (Kaithal sits under two AMs; 17 TMs span two or three), so this page is not nested
+     under either. The SH column is not shown (by request).
+   · It reads the Territory / Map pages' filters (one wt* scope, wterrAgg), which is why the KPI strip is the same strip
+     with the same numbers. Plan, acres through yesterday and the trend follow that page's rules (wtAc, wtDays).
+   · "Operators mapped" is left out of the rows: under an AM it is always n of n, by the rule above. */
+const WAM_SORTS = [['plan','Plan acres'],['acAll','Acres sprayed'],['acY','Acres yesterday'],['ranPct','Ran yesterday %'],['scAll','Scanned acres'],['n','Machines'],['name','Name']];
+const WAM_NONE = 'No AM — operator not mapped';
+function wamAgg(){
+  const A=wterrAgg(), S=state, days=A.days;
+  const sumOf=(l,f)=>l.reduce((a,x)=>a+f(x),0), series=l=>days.map(d=>sumOf(l,m=>m.days[d]||0));
+  const sort = WAM_SORTS.some(([k])=>k===S.wamSort) ? S.wamSort : 'plan';
+  const figs = list => { const plan=sumOf(list,m=>m.planShare), acAll=sumOf(list,m=>wtAc(m)), ran=list.filter(m=>m.acY>0).length;
+    return { list:list.slice().sort((a,b)=>wtAc(b)-wtAc(a)||a.mc.localeCompare(b.mc)), n:list.length, plan, acAll, acY:sumOf(list,m=>m.acY), ran,
+      ranPct:list.length?100*ran/list.length:null, scAll:sumOf(list,m=>m.scAll), pct:plan>0?100*acAll/plan:null, series:series(list) }; };
+  const order = (a,b) => (!!a.none-!!b.none) || (sort==='name' ? String(a.name).localeCompare(String(b.name))
+    : ((b[sort]==null?-1:b[sort])-(a[sort]==null?-1:a[sort])) || b.plan-a.plan || String(a.name).localeCompare(String(b.name)));
+  const G={};
+  A.rows.flatMap(r=>r.list).forEach(m=>{ const k=m.am ? 'am:'+(m.amNum||m.am.toLowerCase()) : '~none';
+    (G[k]||(G[k]={ key:k, name:m.am||WAM_NONE, mob:m.amNum, none:!m.am, all:[] })).all.push(m); });
+  const rows=Object.values(G).map(g=>{
+    const sub={};   // under an AM: his CIs; under the no-AM row: territories
+    g.all.forEach(m=>{ const k = g.none ? 't:'+m.st+'|'+m.territory : 'ci:'+(m.coMob||String(m.co).toLowerCase());
+      (sub[k]||(sub[k]={ key:g.key+'|'+k, name:g.none?m.territory:(m.co||'CI not on the sheet'), mob:g.none?'':m.coMob, none:g.none?m.territory===WRET_NO_TERR:!m.co, all:[] })).all.push(m); });
+    const subs=Object.values(sub).map(c=>({ ...c, ...figs(c.all) })).sort(order);
+    // Two CIs can share a name (two Bhupinder Singhs under Sampat, 28 Oct): they are keyed on the number, and say it.
+    const seen={}; subs.forEach(c=>seen[c.name]=(seen[c.name]||0)+1); subs.forEach(c=>c.dup=seen[c.name]>1);
+    return { ...g, ...figs(g.all), subs, sts:[...new Set(g.all.map(m=>m.st))].sort() };
+  }).sort(order);
+  const named=rows.filter(r=>!r.none);
+  return { A, rows, named, none:rows.find(r=>r.none)||null, sort, days, open: k => !!S.wamOpen[k] || !!A.q };
+}
+function wamCSV(){
+  const W=wamAgg();
+  const head=['AM','AM mobile','CI','CI mobile','Machine','State','Territory','Retailer','Company','Machine plan acres (retailer plan ÷ machines)',
+    `Acres yesterday (${WRET.yday})`,`Season acres to ${WRET.yday}`,'Scanned overall','Operator','Operator mobile'];
+  const lines=[head.join(',')].concat(W.rows.flatMap(r=>r.subs.flatMap(c=>c.list.map(m=>[m.am, m.amNum, m.co, m.coMob, m.mc, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.org,
+    Math.round(m.planShare*10)/10, m.acY, wtAc(m), m.scAll, m.opName, m.opNum].map(csvCell).join(',')))));
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
+  a.download=`Wheat-North_area-managers_${W.A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
+}
+function wamBodyHTML(mob){
+  if(!isAdmin() || !WRET.loaded) return wplanBodyHTML(mob);   // the "being rebuilt" / loading / error card, same loader
+  const W=wamAgg(), A=W.A, B=wpBits(mob), { orgChip, meter, tel } = B;
+  const stale = WRET.lastDate && WRET.lastDate < WRET.yday;
+  const kpis = wtStripHTML(A, mob, stale);
+  const controls = wtControlsHTML(A, mob, true, { sort:['wamSortSel','Sort area managers by',WAM_SORTS,W.sort], csv:'wamcsv',
+    csvTitle:`Download the ${fmt(A.n)} machines shown, with their AM and CI, as CSV`, ph:['Search AM, CI, machine…','Search AM, CI, machine, territory, person'] });
+  const showSt = !A.st, stName = r => r.sts.map(s=>s==='HR'?'Haryana':s==='PB'?'Punjab':s).join(' + ');
+  const sortName = ((WAM_SORTS.find(([k])=>k===W.sort)||[])[1]||'').toLowerCase();
+  const subN = r => r.none ? `${r.subs.length} territor${r.subs.length===1?'y':'ies'}` : `${r.subs.length} CI${r.subs.length===1?'':'s'}`;
+  const noneNote = `<div style="font-size:12.5px;color:${W2.idleD};margin-top:3px;line-height:1.4">⚠ No operator is mapped, so the sheet names no CI or AM — fix on the sheet</div>`;
+  const ranTxt = r => `${fmt(r.ran)}<span style="color:${W2.ink2};font-weight:400"> of ${fmt(r.n)}</span>`;
+  const empty = B.msg(`No machines match these filters.${A.narrowed?`<div style="margin-top:12px">${B.ghost('wtclear','Clear filters')}</div>`:''}`, '40px 18px');
+  let list;
+  if(!W.rows.length) list=empty;
+  else if(mob){
+    const stat=(v,l)=>`<div style="display:flex;flex-direction:column;min-width:0"><span style="${w2num(17)}">${v}</span><span style="font-size:12.5px;color:${W2.ink2}">${l}</span></div>`;
+    const mcBtn=m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:#fff;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
+        <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${orgChip(m.org)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.opName?E(m.opName):'No operator'} · ${E(m.territory)}</span></span>
+        <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${acF(wtAc(m))} ac</span><span style="display:block;font-size:12.5px;color:${m.acY>0?W2.actD:W2.ink2}">${m.acY>0?acF(m.acY)+' yesterday':'idle yesterday'}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`;
+    const toggle=(k,open,t)=>`<button data-act="wamexp" data-k="${E(k)}" aria-expanded="${open}" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:${open?W2.head:'#fff'};color:${W2.ink};font:500 14px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${open?'Hide':'Show'} ${t} <span aria-hidden="true" style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>`;
+    const subBox=(c,r)=>{ const open=W.open(c.key);
+      return `<div style="border:1px solid ${W2.line2};border-radius:14px;background:${W2.head};padding:12px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:${W2.ink2}">${r.none?'Territory':'CI'}</div><div style="font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(c.name)}</div>${c.dup&&c.mob?`<div style="font:12.5px 'IBM Plex Mono',monospace;color:${W2.ink2}">${E(c.mob)}</div>`:''}</div>${r.none?'':tel({n:c.name,mob:c.mob},'CI')}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${stat(acF(c.acAll),'ac sprayed')}${stat(acF(c.acY),'ac yesterday')}${stat(ranTxt(c),'ran yesterday')}</div>
+        ${toggle(c.key,open,`${c.n} machine${c.n===1?'':'s'}`)}
+        ${open?`<div style="display:flex;flex-direction:column;gap:8px">${c.list.map(mcBtn).join('')}</div>`:''}</div>`; };
+    list = `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:18px 2px 10px"><span style="font-size:16px;font-weight:600">Area managers · ${fmt(W.named.length)}</span><span style="font-size:12.5px;color:${W2.ink2}">by ${E(sortName)}</span></div>`
+      + W.rows.map(r=>{ const open=W.open(r.key);
+        return B.cardBox(`<div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:flex-start;gap:10px"><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:600;line-height:1.3">${E(r.name)}</div>
+            <div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">${showSt?E(stName(r))+' · ':''}${r.none?'':subN(r)+' · '}${fmt(r.n)} machine${r.n===1?'':'s'}</div>${r.none?noneNote:''}</div>${r.none?'':tel({n:r.name,mob:r.mob},'AM')}</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span style="${w2num(22)}">${acF(r.acAll)}</span> <span style="font-size:13.5px;color:${W2.ink2}">of ${fmt(r.plan)} ac plan</span></span><span style="${w2num(14)}">${pctF(r.pct)}</span></div>
+            ${meter(r.pct,'',W2.act)}</div>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${stat(acF(r.acY),'ac yesterday')}${stat(ranTxt(r),'ran yesterday')}${stat(acF(r.scAll),'ac scanned')}</div>
+          <div style="display:flex;align-items:flex-end;gap:10px">${wtSpark(r.series,W.days,'')}<span style="flex-shrink:0;white-space:nowrap;font-size:12.5px;color:${W2.ink2}">last ${Math.min(WT_SPARK,W.days.length)} days</span></div>
+          ${toggle(r.key,open,r.none?`${r.n} machines by territory`:subN(r))}
+          ${open?`<div style="display:flex;flex-direction:column;gap:10px">${r.subs.map(c=>subBox(c,r)).join('')}</div>`:''}
+        </div>`, `margin-bottom:12px${r.none?';border-color:#F1E2BC':''}`); }).join('')
+      + `<div style="margin-top:10px">${B.stamp('wpretry')}</div>`;
+  } else {
+    const cols='minmax(190px,1.6fr) 40px 66px 76px 116px 76px 104px 70px 100px';
+    const hd=B.th('wamsort',W.sort);
+    const head=`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 18px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2};position:sticky;top:0;z-index:1">
+      ${hd('name','Area manager · CI')}${hd('','CIs',1)}${hd('n','Machines',1)}${hd('plan','Plan ac',1)}${hd('acAll','Sprayed ac',1)}${hd('acY','Yesterday',1)}${hd('ranPct','Ran yesterday',1)}${hd('scAll','Scanned',1)}${hd('',`Last ${Math.min(WT_SPARK,W.days.length)} days`)}</div>`;
+    const numC=(v,b)=>`<span style="text-align:right;font-variant-numeric:tabular-nums${b?';font-weight:600':''}">${v}</span>`;
+    const sprayC=(v,p)=>`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums"><b style="font-weight:600">${acF(v)}</b><span style="font-size:12.5px;color:${W2.ink2}"> · ${pctF(p)}</span></span>${meter(p,'100%',W2.act)}</div>`;
+    const ranC=r=>`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums;font-weight:500">${ranTxt(r)}</span>${meter(r.ranPct,'100%',W2.act)}</div>`;
+    const phone=mob=>mob&&realTel(mob)?` · <a href="tel:${mob}" onclick="event.stopPropagation()" style="color:${W2.ink2};font-family:'IBM Plex Mono'">${E(mob)}</a>`:'';
+    const mRow=m=>`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 18px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;background:#FBFCFD">
+        <div style="min-width:0;padding-left:40px"><div style="display:flex;align-items:center;gap:6px"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font:600 13px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</button>${orgChip(m.org)}</div><div style="font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${E(m.party)}">${m.opName?E(m.opName):'No operator'} · ${E(m.territory)} · ${E(m.party)}</div></div>
+        <span></span><span></span>${numC(`<span style="color:${W2.ink2}" title="Retailer plan ÷ his ${m.retailer.list.length} machines">${fmt(m.planShare)}</span>`)}${numC(acF(wtAc(m)),1)}${numC(acF(m.acY))}
+        <span style="text-align:right;font-size:13px;color:${m.acY>0?W2.actD:W2.ink2}">${m.acY>0?'✓ Ran':'Idle'}</span>${numC(acF(m.scAll))}${wtSpark(W.days.map(d=>m.days[d]||0),W.days,'100px')}</div>`;
+    const cRow=(c,r)=>{ const open=W.open(c.key);
+      return `<div class="w2Row" data-act="wamexp" data-k="${E(c.key)}" role="button" aria-expanded="${open}" tabindex="0" style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 18px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;cursor:pointer;background:${open?'#F3F6F9':W2.head}">
+        <div style="min-width:0;padding-left:20px;display:flex;gap:8px;align-items:flex-start">${B.chev(open)}<div style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-size:11.5px;font-weight:600;color:${W2.ink2}">${r.none?'Territory':'CI'}</b> <b style="font-weight:600">${E(c.name)}</b><span style="font-size:13px;color:${W2.ink2}">${phone(c.mob)}</span></div></div>
+        <span></span>${numC(fmt(c.n))}${numC(fmt(c.plan))}${sprayC(c.acAll,c.pct)}${numC(acF(c.acY))}${ranC(c)}${numC(acF(c.scAll))}${wtSpark(c.series,W.days,'100px')}</div>`
+        + (open ? c.list.map(mRow).join('') : ''); };
+    const body=W.rows.map(r=>{ const open=W.open(r.key);
+      return `<div class="w2Row" data-act="wamexp" data-k="${E(r.key)}" role="button" aria-expanded="${open}" tabindex="0" style="display:grid;grid-template-columns:${cols};gap:12px;padding:12px 18px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;cursor:pointer;background:${open?W2.head:r.none?'#FFFBF2':'#fff'}">
+        <div style="min-width:0;display:flex;gap:8px;align-items:flex-start">${B.chev(open)}<div style="min-width:0"><div style="font-weight:600">${E(r.name)}${showSt&&!r.none?` <span style="font-weight:400;color:${W2.ink2};font-size:13px">· ${E(stName(r))}</span>`:''}</div>${r.none?noneNote:`<div style="font-size:13px;color:${W2.ink2};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.subs.map(c=>E(c.name)).join(', ')}${phone(r.mob)}</div>`}</div></div>
+        ${numC(r.none?'—':fmt(r.subs.length))}${numC(fmt(r.n))}${numC(fmt(r.plan),1)}${sprayC(r.acAll,r.pct)}${numC(acF(r.acY))}${ranC(r)}${numC(acF(r.scAll))}${wtSpark(r.series,W.days,'100px')}</div>`
+      + (open ? r.subs.map(c=>cRow(c,r)).join('') : ''); }).join('');
+    list = B.cardBox(`<div style="padding:18px 22px;border-bottom:1px solid ${W2.line2}"><div style="font-size:16px;font-weight:600">Area managers · ${fmt(W.named.length)}${W.none?` <span style="font-weight:500;font-size:14px;color:${W2.idleD}">+ ${fmt(W.none.n)} machines with no operator mapped</span>`:''}</div><div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">Sorted by ${E(sortName)} · click an AM for his CIs, a CI for its machines, a machine number for its details · plan is each retailer’s plan, split over his machines</div></div>
+      <div style="overflow-x:auto"><div style="min-width:970px">${head}${body}</div></div>`, 'overflow:hidden;margin-top:16px');
+  }
+  return mob ? kpis + `<div style="margin-top:12px">${controls}</div>` + list : controls + kpis + list;
+}
 /* ===================== Wheat North — Machine map (view key `wmap`) =====================
    Page 3 of the Wheat rebuild (agreed 2026-10-28). Every machine at its LAST PING position, on the Haryana + Punjab
    district outlines, under the Territory page's own filters (one shared `wt*` scope: wterrAgg feeds both pages).
@@ -10433,6 +10556,7 @@ function contentHTML(v){
     case 'mpprod': return mpprodViewHTML(v);
     case 'wplan': return wplanViewHTML(v);
     case 'wterr': return wterrViewHTML(v);
+    case 'wam': return `<section style="padding:24px 32px">${wamBodyHTML(false)}</section>`;
     case 'wmap': return wmapViewHTML(v);
     case 'iottamper': case 'iotrisk': case 'iotteam': return `<section style="padding:18px 22px">${iotBodyHTML(state.view,false)}</section>`;
     case 'recap': return recapViewHTML(v);
@@ -10475,6 +10599,7 @@ function desktopHTML(v){
 const M_VIEWS = [
   { k:'wplan',    label:RAIL_LBL.wplan, icon:()=>I.retailer },   // Wheat Retailer summary only (project `only`)
   { k:'wterr',    label:RAIL_LBL.wterr, icon:()=>I.tables },     // Wheat Territory summary
+  { k:'wam',      label:RAIL_LBL.wam,   icon:()=>I.am },         // Wheat Area manager summary
   { k:'wmap',     label:RAIL_LBL.wmap,  icon:()=>I.map },        // Wheat Machine map
   { k:'iottamper',label:RAIL_LBL.iottamper, icon:()=>I.tamper },   // IoT project only
   { k:'iotrisk',  label:RAIL_LBL.iotrisk,   icon:()=>I.risk },
@@ -10612,7 +10737,7 @@ function norunBodyHTML(v, mob){
 const M_NEXT = { norun:['machines','bm'], map:['tables','machines'], tables:['machines','am'], machines:['tables','weather'],
   weather:['machines','map'], am:['bm','machines'], bm:['machines','tables'], pending:['am'], recap:['insights','machines'],
   insights:['snake','recap'], snake:['insights','product'], product:['mpprod','snake'], mpprod:['product'], leader:['recap'],
-  wplan:['wterr'], wterr:['wmap'], wmap:['wplan'] };
+  wplan:['wterr'], wterr:['wam'], wam:['wmap'], wmap:['wplan'] };
 function mNextHTML(view){
   const ks=(M_NEXT[view]||[]).filter(k=>!roleHidesView(k));
   const brk = view==='machines' && !state.health.includes('Breakdown')
@@ -10793,6 +10918,8 @@ function mobileHTML(v){
     body = wplanBodyHTML(true);
   } else if(S.view==='wterr'){
     body = wterrBodyHTML(true);
+  } else if(S.view==='wam'){
+    body = wamBodyHTML(true);
   } else if(S.view==='wmap'){
     body = wmapBodyHTML(true);
   } else if(S.view==='iottamper'||S.view==='iotrisk'||S.view==='iotteam'){
@@ -10963,7 +11090,7 @@ function mobileHTML(v){
       ${S.sheet==='more'    ? mSheetHTML('All pages', mMoreHTML(), 'sheetclose') : ''}
       ${S.sheet==='iotfilters' && curProject().iot ? iotSheetHTML() : ''}
       ${S.sheet==='wpfilters' && S.view==='wplan' && WRET.loaded && isAdmin() ? wpSheetHTML() : ''}
-      ${S.sheet==='wtfilters' && (S.view==='wterr'||S.view==='wmap') && WRET.loaded && isAdmin() ? wtSheetHTML() : ''}
+      ${S.sheet==='wtfilters' && (S.view==='wterr'||S.view==='wam'||S.view==='wmap') && WRET.loaded && isAdmin() ? wtSheetHTML() : ''}
     </div>
   </div>`;
 }
@@ -10988,7 +11115,7 @@ function mPageScope(view){
     case 'snake':    return state.snState&&state.snState!=='ALL' ? nm(state.snState) : 'All India';
     case 'mpprod':   return state.mpTerr || 'Madhya Pradesh';
     case 'wplan':    return (lock||state.wpSt) ? nm(lock||state.wpSt) : 'HR + PB';
-    case 'wterr': case 'wmap': return (lock||state.wtSt) ? nm(lock||state.wtSt) : 'HR + PB';
+    case 'wterr': case 'wam': case 'wmap': return (lock||state.wtSt) ? nm(lock||state.wtSt) : 'HR + PB';
     case 'iottamper': case 'iotrisk': case 'iotteam': { const sc=iotScope(); return sc.st ? iotStName(sc.st) : (isAdmin()?'All states':'My states'); }
     default:         return nm(lock||pick('st'));   // the fleet pages: the filter bar's state
   }
@@ -11036,12 +11163,13 @@ function render(){
    handling (histSync) owns the history ENTRIES; this only rewrites the address of the current one. A typed or
    pasted address is honoured at boot and on hashchange, and `render()`'s role guard still bounces a view the
    login may not see. */
-const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wmap:'machine-map',
+const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wam:'area-managers', wmap:'machine-map',
   iottamper:'tamper', iotrisk:'at-risk', iotteam:'team', am:'area-managers', bm:'business-managers',
   leader:'leaders', product:'products', fo:'field-officers', recap:'daily-recap', norun:'didnt-run' };
 const slugOf = v => VIEW_SLUG[v]||v;
 const viewOfHash = h => { const sl=String(h||'').replace(/^#\/?/,''); if(!sl) return null;
-  const hit=Object.keys(NAV_TITLE).find(k=>slugOf(k)===sl); return hit||null; };
+  // Two projects may share an address (Kharif `am` and Wheat `wam` are both #/area-managers): the project's own view wins.
+  const hits=Object.keys(NAV_TITLE).filter(k=>slugOf(k)===sl); return hits.find(k=>!projectHidesView(k))||hits[0]||null; };
 function addrSync(){
   if(!_booted) return;   // before the PIN, leave a bookmarked address alone so boot can read it
   const t=(NAV_TITLE[state.view]||state.view)+' · '+curProject().title;
@@ -11163,9 +11291,11 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='wpAmSel') setState({wpAm:e.target.value, wpCi:''});
   else if(e.target.id==='wpCiSel') setState({wpCi:e.target.value});
   else if(e.target.id==='wpSortSel') setState({wpSort:e.target.value});
-  else if(e.target.id==='wtStSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({wtSt:w, wtTerr:'', wtTm:''}); }
-  else if(e.target.id==='wtTerrSel') setState({wtTerr:e.target.value, wtTm:''});
-  else if(e.target.id==='wtTmSel') setState({wtTm:e.target.value});
+  else if(e.target.id==='wtStSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({wtSt:w, wtTerr:'', wtTm:'', wtAm:''}); }
+  else if(e.target.id==='wtTerrSel') setState({wtTerr:e.target.value, wtTm:'', wtAm:''});
+  else if(e.target.id==='wtTmSel') setState({wtTm:e.target.value, wtAm:''});
+  else if(e.target.id==='wtAmSel') setState({wtAm:e.target.value});
+  else if(e.target.id==='wamSortSel') setState({wamSort:e.target.value});
   else if(e.target.id==='wtSortSel') setState({wtSort:e.target.value});
   else if(e.target.id==='lbStateSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({lbSt:w, lbAll:false}); }   // page-local; never touches state.st
   else if(e.target.id==='insStateSel') setState({insSt:e.target.value, insAm:'', insCo:''});   // page-local; never touches state.st
@@ -11255,8 +11385,11 @@ app.addEventListener('click', e=>{
     case 'iotrange': setState({itFrom:el.dataset.from, itTo:el.dataset.to, iotLimit:IOT_PAGE}); break;
     case 'iotcsv': iotCSV(state.view); track('iot_csv',{ view:state.view, st:state.iotSt||'all' }); break;
     case 'wpcsv': wplanCSV(); track('wplan_csv',{ st:state.wpSt||'all' }); break;
-    case 'wtorg': setState({wtOrg:el.dataset.org, wtTerr:'', wtTm:''}); break;
-    case 'wtclear': setState({wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtQ:''}); break;
+    case 'wtorg': setState({wtOrg:el.dataset.org, wtTerr:'', wtTm:'', wtAm:''}); break;
+    case 'wtclear': setState({wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
+    case 'wamexp': { const k=el.dataset.k; setState(s=>({wamOpen:{...s.wamOpen, [k]:!s.wamOpen[k]}})); break; }
+    case 'wamsort': setState({wamSort:el.dataset.k}); break;
+    case 'wamcsv': wamCSV(); track('wam_csv',{ st:state.wtSt||'all' }); break;
     case 'wtexp': { const k=el.dataset.k; setState(s=>({wtOpen:{...s.wtOpen, [k]:!s.wtOpen[k]}})); break; }
     case 'wtsort': setState({wtSort:el.dataset.k}); break;
     case 'wtmore': setState(s=>({wtLimit:(s.wtLimit||WT_PAGE)+WT_PAGE})); break;

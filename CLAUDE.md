@@ -886,6 +886,20 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     took the zoom-reset button's icon with it.
   · Positions are approximate (longitude has 2 decimals, ~1 km) and the page says so; machines with no usable position
     (5 on 28 Oct) are named under the map and open their details.
+- **Page 4, the Area manager summary** (`wam`, `#/area-managers`, rail "AMs"; `wamAgg` / `wamBodyHTML` / `wamCSV`, built
+  2026-10-28). Wheat admin only. One row per AM → his CIs → their machines (the shared details panel).
+  · **The ops chain arrives WITH the operator mapping**: a machine with no operator has no CI, AM or SH either (118 of
+    371 on 28 Oct). They are ONE last row, "No AM — operator not mapped", never ranked, opening by TERRITORY. The chain
+    is a strict tree (no CI under two AMs), but AM does NOT follow territory or TM, so this page nests under neither.
+  · **CIs are keyed on the NUMBER**: two different "Bhupinder Singh"s sit under Sampat; when names collide the number is
+    printed under the name. SH is not shown (by request). "Operators mapped" is left out of the rows: under an AM it is
+    always n of n.
+  · **It reads the Territory / Map scope (`wt*`), and that scope now has an AM filter** (`wtAm`, after TM, shown on all
+    three pages; a parent change clears it). So the KPI strip is the same strip with the same numbers. Own sort
+    (`wamSort`) and open rows (`wamOpen`); a search opens every row.
+  · `#/area-managers` is also Kharif's `am` address: `viewOfHash` now picks the slug's view the PROJECT can show.
+  · Columns: CIs · machines · plan · sprayed (% of plan) · yesterday · ran yesterday (n of N) · scanned · last 14 days.
+    The desktop table fits unscrolled at 1280 (min-width 970) — re-check if a column is added.
 - **The Main sheet changed shape on 2026-10-28 (afternoon).** The future-date pre-fill went (only 22–28 Oct, 375 rows a
   day) and 33,220 EMPTY rows appeared below, filled only by formulas in the new columns — a null date passes
   "<= today", so the filtered fetch was 4.8 MB again. `loadWRet` now also asks `machine_number is not null`: 0.85 MB.
