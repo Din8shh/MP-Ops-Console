@@ -865,6 +865,27 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     `WRET_NO_TERR` row ("Territory not on sheet"), always last, never ranked, raw cell kept as `terrRaw` and named in
     the details panel and CSV. Live 28 Oct: 28 machines. A retailer cell of "0" is no shop: those machines group per
     territory as "No retailer named" instead of one phantom retailer spanning the programme.
+- **Page 3, the Machine map** (`wmap`, `#/machine-map`, rail "Map"; `wmapBodyHTML` / `drawWheatMap`, built 2026-10-28).
+  Wheat admin only. Every machine at its LAST PING position on the HR + PB district outlines (`states/HR|PB/mapdata.js`
+  via `ensureGeo`; no tile service).
+  · **It shares the Territory page's filters** — one `wt*` scope, `wterrAgg` feeds both, and `wtControlsHTML` draws
+    both pages' controls (the map without a sort). Picking Kaithal on one page is Kaithal on the other. The same KPI
+    strip sits above it; the phone shows only its "worked yesterday" card (`wtStripHTML(…, cardOnly)`).
+  · Pin colour: green sprayed yesterday · dark grey sprayed earlier · light grey not yet; RED RING = no operator mapped;
+    faded = last ping 3+ days ago (`wmStale`); one pin with a count for machines at the SAME position (`wmGroups`).
+  · Card: machine, operator (with number), season acres to yesterday, retailer · territory · last seen, **Details**
+    (the shared machine panel) and **Navigate** (`navHref`: Google Maps DIRECTIONS; the machine panel's Navigate now
+    uses it too). Desktop: hover shows it, click keeps it. Phone: tap → docked at the map's foot; the tap goes to the
+    NEAREST pin within 22px, as on the Kharif pin map.
+  · **Pins keep one screen size under zoom**: `applyTransform` now divides `data-r` / `data-sw` by the zoom, as it
+    already did `data-fs`, so zooming in SEPARATES neighbours. Sizes are px × `mapK` — HR + PB is a tall map, so a
+    desktop unit is ~0.5px and fixed unit sizes came out as 2px dots.
+  · A filter change re-fits the map to the machines in view (`WM.sig`); leaving the page resets it. It reuses the
+    shared pan/zoom engine and sets the shared `W`/`H` — safe only because Kharif and Wheat never share a page load.
+  · `drawWheatMap` clears only the host's DIRECT svg children: the first build removed every svg in the box, which
+    took the zoom-reset button's icon with it.
+  · Positions are approximate (longitude has 2 decimals, ~1 km) and the page says so; machines with no usable position
+    (5 on 28 Oct) are named under the map and open their details.
 - **The Main sheet changed shape on 2026-10-28 (afternoon).** The future-date pre-fill went (only 22–28 Oct, 375 rows a
   day) and 33,220 EMPTY rows appeared below, filled only by formulas in the new columns — a null date passes
   "<= today", so the filtered fetch was 4.8 MB again. `loadWRet` now also asks `machine_number is not null`: 0.85 MB.
