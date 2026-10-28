@@ -16,7 +16,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;height:100%}
@@ -125,6 +125,34 @@
     .mWx{display:none !important}
     .mNavItem{flex-direction:row !important;min-height:44px !important;gap:7px !important;padding:0 !important}
   }
+  /* ── WHEAT: the v2 visual refresh (design "Ops Console Refresh v2", 2026-10-28) ──────────────────────────────
+     Wheat is first; Kharif and IoT are untouched. render() sets html[data-proj] from the PIN's project, and the Wheat
+     pages and shell are written in the v2 tokens directly (W2 in the script). These rules only carry the refresh into
+     the pieces Wheat SHARES with Kharif and that are written inline in the warm palette — the filter sheet, the
+     machine panel's call rows, the map's zoom buttons — by remapping the warm neutrals onto the cool ones. One type
+     family (IBM Plex Sans, tabular figures); Mono stays for machine numbers and phone numbers. */
+  html[data-proj="wheat"] body{font-family:'IBM Plex Sans',system-ui,sans-serif;color:#15181C;background:#F3F6FB;font-variant-numeric:tabular-nums}
+  html[data-proj="wheat"] #app [style*="Noto Sans"]{font-family:'IBM Plex Sans',system-ui,sans-serif !important}
+  html[data-proj="wheat"] #app [style*="#E9E6DF"]{border-color:#E4E7EA !important}
+  html[data-proj="wheat"] #app [style*="color:#1B1A17"]{color:#15181C !important}
+  html[data-proj="wheat"] #app [style*="color:#6E6A62"],html[data-proj="wheat"] #app [style*="color:#46433d"]{color:#5B636D !important}
+  html[data-proj="wheat"] #app [style*="background:#F2F0EB"]{background:#EEF0F2 !important}
+  html[data-proj="wheat"] #app [style*="background:#FBFAF8"],html[data-proj="wheat"] #app [style*="background:#F6F5F2"]{background:#F8F9FA !important}
+  html[data-proj="wheat"] #app [style*="background:#1B1A17"]{background:linear-gradient(135deg,#243447,#16352D) !important}
+  html[data-proj="wheat"] #app [style*="#EFEDE7"],html[data-proj="wheat"] #app [style*="#F4F2EE"],html[data-proj="wheat"] #app [style*="#F2F0EB"]{border-color:#EEF0F2 !important}
+  html[data-proj="wheat"] #app [style*="color:#9C988F"]{color:#5B636D !important}
+  html[data-proj="wheat"] .mLbl{font-size:12px;font-weight:600;letter-spacing:.02em;color:#5B636D;text-transform:none}
+  html[data-proj="wheat"] .mCap{font-size:12.5px;color:#5B636D}
+  html[data-proj="wheat"] :focus-visible{outline-color:#15181C}
+  /* The labelled rail (232px): a group title, then icon + full name per page. */
+  .w2Nav{display:flex;align-items:center;gap:10px;width:100%;height:36px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:rgba(255,255,255,.78);font:500 14px 'IBM Plex Sans',system-ui,sans-serif;cursor:pointer;text-align:left;flex-shrink:0}
+  .w2Nav svg{width:18px;height:18px;color:rgba(255,255,255,.5);flex-shrink:0}
+  .w2Nav:hover{background:rgba(255,255,255,.06)}
+  .w2Nav.on{background:linear-gradient(90deg,rgba(245,130,31,.30),rgba(31,174,67,.14));color:#fff;font-weight:600}
+  .w2Nav.on svg{color:#FFB273}
+  .w2Row{transition:background .12s ease}
+  .w2Row:hover{background:#FAFBFB !important}
+  @media (max-height:620px){ .w2Conf{display:none} }
 </style>
 <!-- ── Google Analytics 4 (usage tracking) ─────────────────────────────────────
      1. Create a GA4 property → Admin → Data streams → Web → copy the Measurement ID
@@ -156,6 +184,29 @@ let BASE = MP_BASE, COORDS = MP_COORDS;   // ACTIVE geometry — defaults to MP;
 
 /* ============================= state ============================= */
 const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#159234', open:'#4C7399', openD:'#3A5B7D', act:'#15A24A', idle:'#E0A008', brk:'#DC3A2B', ink:'#1B1A17', ink2:'#6E6A62', ink3:'#9C988F', line:'#E9E6DF', line2:'#F2F0EB', softO:'#FBEDDF', softG:'#E6F5EA', softB:'#EAF0F6', softR:'#FBEAE7', softA:'#FBF1DA' };
+// ── Wheat v2 tokens (design "Ops Console Refresh v2", 2026-10-28). Wheat's pages and shell are drawn in these; Kharif
+// keeps C. Cool neutrals, one type family with tabular figures, tinted KPI tiles. ink3 is DECORATIVE only (3.1:1).
+const W2 = { ink:'#15181C', ink2:'#5B636D', ink3:'#8C939B', line:'#E4E7EA', line2:'#EEF0F2', card:'#E8ECF1', head:'#F8F9FA', track:'#EAEEF3',
+  act:'#12924A', actD:'#0F7A3D', idle:'#D69A00', idleD:'#8A6200', brk:'#D23B2C', brkD:'#B42D20',
+  font:"'IBM Plex Sans',system-ui,sans-serif", shadow:'0 1px 2px rgba(20,30,45,0.04),0 10px 28px -16px rgba(20,30,45,0.14)',
+  dark:'linear-gradient(135deg,#243447,#16352D)', page:'linear-gradient(160deg,#FFF6EC 0%,#F3F6FB 38%,#F1F8F4 100%)' };
+// The tinted tile for a KPI label — the design's tone(): each kind of figure keeps one hue wherever it appears.
+function w2tone(l){
+  const T=(a,b,c,d)=>({ bg:`linear-gradient(150deg,${a} 0%,#FFFFFF 75%)`, bd:b, vc:c, dot:d });
+  return l==='Breakdown' ? T('#FDECEA','#F4D8D4',W2.brkD,W2.brk) : l==='Idle' ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle)
+    : /^Acres/.test(l) ? T('#E8F2FC','#D2E3F4','#1D4F80','#3B82C4') : /^(MTD|Scanned)/.test(l) ? T('#F0ECFC','#DED7F4','#4A3A8C','#7A63D1')
+    : /^(Deployed|Machines)/.test(l) ? T('#FFF0E2','#F5DEC7','#8A430A',C.orange) : /^(Operators|Retailers|Territories)/.test(l) ? T('#E6F6F1','#CBEAE0','#0E6B57','#1A9E80')
+    : /^(IoT|Pinged)/.test(l) ? T('#ECEFFD','#D8DEF6','#2F3F8F','#5468D4') : T('#F4F6F8',W2.card,W2.ink,W2.ink3);
+}
+// A segmented control and a select in the v2 shape. `mob` = a finger: 44px targets, 16px in a field.
+const w2seg = (on,mob) => `border:0;cursor:pointer;font:500 ${mob?14:13.5}px ${W2.font};${mob?'min-height:44px;flex:1;':''}padding:${mob?'0 12px':'6px 14px'};border-radius:${mob?9:7}px;background:${on?'#fff':'transparent'};color:${on?W2.ink:W2.ink2};box-shadow:${on?'0 1px 2px rgba(20,24,28,0.12)':'none'}`;
+const w2segBox = mob => `display:flex;gap:2px;background:${W2.track};padding:3px;border-radius:${mob?12:10}px`;
+const w2sel = mob => `height:${mob?48:34}px;border:1px solid ${W2.line};border-radius:${mob?12:10}px;background:#fff;padding:0 ${mob?32:28}px 0 12px;font:${mob?16:14}px ${W2.font};color:${W2.ink};cursor:pointer`;
+const w2card = (r=16) => `background:#fff;border:1px solid ${W2.card};border-radius:${r}px;box-shadow:${W2.shadow}`;
+const w2lbl = t => `<span style="font-size:12.5px;font-weight:500;color:${W2.ink2};white-space:nowrap">${t}</span>`;
+const w2num = (sz,w=600,col) => `font-size:${sz}px;font-weight:${w};font-variant-numeric:tabular-nums;letter-spacing:${sz>=26?'-0.01em':'0'};line-height:1.1${col?';color:'+col:''}`;
+const w2unit = (t='ac',sz=13) => `<span style="font-size:${sz}px;color:${W2.ink2};font-weight:500"> ${t}</span>`;
+const isWheat = () => curProject().id==='wheat';
 // A real phone gets the mobile view automatically and renders it full-bleed (no preview bezel).
 // The same breakpoint drives both, so `device` and the chrome never disagree.
 // A phone held sideways is 932×430 — wider than 820px, so the width test alone dropped it onto the DESKTOP
@@ -3161,7 +3212,30 @@ const RAIL_GROUPS = [
   [['insights',I.insights],['snake',I.snake],['product',I.product],['mpprod',I.mpprod],['leader',I.leader]],
 ];
 
+// The Wheat rail (v2): 232px, labelled, one group per programme. Short names (RAIL_LBL), as the design has them;
+// the full name is the button's title and the page header.
+function w2RailHTML(){
+  const P=curProject(), v=state.view;
+  const items=RAIL_GROUPS.flat().filter(([k])=>!roleHidesView(k));
+  const btn=(k,ic)=>`<button data-act="view" data-view="${k}" title="${E(NAV_TITLE[k]||k)}"${v===k?' aria-current="page"':''} class="w2Nav${v===k?' on':''}">${ic}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(RAIL_LBL[k]||NAV_TITLE[k]||k)}</span></button>`;
+  const foot=(act,ic,t)=>`<button data-act="${act}" class="w2Nav" style="color:rgba(255,255,255,.7)">${ic}<span>${t}</span></button>`;
+  return `<aside style="width:232px;flex-shrink:0;background:linear-gradient(185deg,#1F2B3A 0%,#182C33 60%,#14302A 100%);color:#fff;display:flex;flex-direction:column;padding:20px 14px 16px;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:0 6px 20px;flex-shrink:0">
+      <div aria-hidden="true" style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;letter-spacing:.02em;flex-shrink:0">UPL</div>
+      <div style="display:flex;flex-direction:column;min-width:0"><span style="font-size:15px;font-weight:600">Ops Console</span><span style="font-size:12px;color:rgba(255,255,255,.62);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(P.short)} · AFS</span></div>
+    </div>
+    <nav aria-label="Pages" style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:1px">
+      <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,.55);letter-spacing:.08em;padding:0 10px 6px;text-transform:uppercase">${E(P.short)}</div>
+      ${items.map(([k,ic])=>btn(k,ic)).join('')}
+    </nav>
+    <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:12px;display:flex;flex-direction:column;gap:1px;flex-shrink:0">
+      ${foot('device',I.mobile,'Phone view')}${foot('logout',I.logout,'Log out')}
+      <div class="w2Conf" style="font:500 10.5px 'IBM Plex Mono',monospace;letter-spacing:.18em;color:rgba(255,255,255,.4);padding:10px 10px 0">CONFIDENTIAL</div>
+    </div>
+  </aside>`;
+}
 function railHTML(){
+  if(isWheat()) return w2RailHTML();
   const v=state.view;
   return `<aside style="width:74px;flex-shrink:0;background:#1B1A17;display:flex;flex-direction:column;align-items:center;padding:16px 0;overflow:hidden">
     <div class="railLogo">UPL</div>
@@ -3186,6 +3260,17 @@ function topbarHTML(v){
     : (state.view==='wterr'||state.view==='wmap') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
     : iot ? (IOT.loaded ? `${fmt(IOT.tamper.filter(r=>gateAllowsState(r.st)).length)} potential tamper · ${fmt(IOT.risk.filter(r=>gateAllowsState(r.st)).length)} at risk` : 'IoT sheet')
     : v.freshCount;
+  if(isWheat()) return `<header style="height:68px;flex-shrink:0;background-color:#fff;background-image:linear-gradient(90deg,#F5821F,#1FAE43);background-size:100% 3px;background-repeat:no-repeat;border-bottom:1px solid ${W2.line};display:flex;align-items:center;gap:20px;padding:0 32px">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+      <div style="font-size:17px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(curProject().head(scope))}</div>
+      <div style="font-size:13px;color:${W2.ink2}">${E(curProject().sub)}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;padding-left:20px;border-left:1px solid ${W2.line}">
+      <span style="width:8px;height:8px;border-radius:50%;background:${v.statusDot};box-shadow:0 0 0 3px ${v.statusRing}"></span>
+      <div style="display:flex;flex-direction:column;line-height:1.25"><span style="font-size:14px;font-weight:600">${E(v.statusLabel)}</span><span style="font-size:12px;color:${W2.ink2}">${E(fresh)}</span></div>
+      <button data-act="refresh" title="Refresh" aria-label="Refresh" style="width:36px;height:36px;margin-left:6px;border:1px solid ${W2.line};border-radius:10px;background:#fff;color:${W2.ink};display:flex;align-items:center;justify-content:center;cursor:pointer">${I.refresh(state.refreshing?'animation:spin 0.7s linear':'')}</button>
+    </div>
+  </header>`;
   return `<header style="height:58px;flex-shrink:0;background:#FFFFFF;border-bottom:1px solid #E9E6DF;display:flex;align-items:center;gap:18px;padding:0 22px">
     <div style="min-width:0">
       <div style="font-size:14.5px;font-weight:700;letter-spacing:-.01em;line-height:1.1">${E(curProject().head(scope))}</div>
@@ -8162,14 +8247,14 @@ function wplanCSV(){
 }
 // The filter controls, shared by the desktop bar and the phone's Filters sheet (same ids → same change handlers).
 function wpFilterFields(A, mob){
-  const P=curProject(), sel=ctlSel(mob);
+  const P=curProject(), sel=w2sel(mob);
   const lab=(t,inner,span)=>mob
     ? `<div style="display:flex;flex-direction:column;gap:6px;min-width:0${span?';grid-column:1/-1':''}"><span class="mLbl">${t}</span>${inner}</div>`
-    : `<div style="display:flex;align-items:center;gap:7px"><span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#6E6A62;text-transform:uppercase">${t}</span>${inner}</div>`;
-  const dd=(id,allT,opts,cur,dis)=>`<div style="position:relative"><select id="${id}"${dis?' disabled':''} style="${sel}${mob?';width:100%':';max-width:190px'}${dis?';opacity:.55;cursor:not-allowed':''}">${optionsHTML([{v:'',t:allT}].concat(opts.map(o=>({v:o,t:o}))),cur)}</select>${I.caret}</div>`;
+    : `<div style="display:flex;align-items:center;gap:8px">${w2lbl(t)}${inner}</div>`;
+  const dd=(id,allT,opts,cur,dis)=>`<div style="position:relative"><select id="${id}"${dis?' disabled':''} style="${sel}${mob?';width:100%':';width:150px'}${dis?';opacity:.55;cursor:not-allowed':''}">${optionsHTML([{v:'',t:allT}].concat(opts.map(o=>({v:o,t:o}))),cur)}</select>${I.caret}</div>`;
   return [
-    A.lockSt || A.stOpts.length<2 ? '' : lab('State',`<div style="position:relative"><select id="wpStSel" style="${sel}${mob?';width:100%':''}">${optionsHTML([{v:'',t:P.allLabel}].concat(A.stOpts.map(c=>({v:c,t:STATE_NAMES[c]||c}))),A.st)}</select>${I.caret}</div>`, true),
-    A.lockOrg ? '' : lab('Company',`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${['ALL','UPL','SWAL'].map(c=>`<button data-act="wporg" data-org="${c}" aria-pressed="${A.org===c}" style="${css(seg(A.org===c,mob))}${mob?';flex:1':''}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`, true),
+    A.lockSt || A.stOpts.length<2 ? '' : lab('State',`<div style="position:relative"><select id="wpStSel" style="${sel}${mob?';width:100%':';width:160px'}">${optionsHTML([{v:'',t:P.allLabel}].concat(A.stOpts.map(c=>({v:c,t:STATE_NAMES[c]||c}))),A.st)}</select>${I.caret}</div>`, true),
+    A.lockOrg ? '' : lab('Company',`<div style="${w2segBox(mob)}">${['ALL','UPL','SWAL'].map(c=>`<button data-act="wporg" data-org="${c}" aria-pressed="${A.org===c}" style="${w2seg(A.org===c,mob)}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`, true),
     lab('Territory', dd('wpTerrSel','All territories',A.terrs,A.terr)),
     lab('TM', dd('wpTmSel','All TMs',A.tms,A.tm)),
     lab('FO', dd('wpFoSel','All FOs',A.fos,A.fo)),
@@ -8182,117 +8267,143 @@ function wpSheetHTML(){
   const foot=`<div style="display:flex;gap:10px">${A.nF?`<button data-act="wpclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Show ${fmt(A.rows.length)} retailer${A.rows.length===1?'':'s'}</button></div>`;
   return mSheetHTML('Filters', `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px">${wpFilterFields(A,true)}</div>`, 'sheetclose', foot);
 }
-// The small pieces the Wheat pages share (Retailer summary, Territory summary), so a figure looks the same on both.
+// The small pieces every Wheat page shares (Retailers, Territories, Map), so a figure looks the same on all three.
 function wpBits(mob){
-  const orgChip = c => `<span style="display:inline-block;padding:1px 7px;border-radius:5px;font-size:${mob?11:9.5}px;font-weight:700;letter-spacing:.03em;background:${c==='UPL'?C.softO:c==='SWAL'?C.softG:'#F2F0EB'};color:${c==='UPL'?C.orangeD:c==='SWAL'?C.greenD:'#46433d'}">${c}</span>`;
-  const meter = (p,w) => `<span style="display:block;height:4px;border-radius:2px;background:#EFEDE7;overflow:hidden${w?';width:'+w:''}"><span style="display:block;height:100%;width:${p==null?0:Math.max(p>0?2:0,Math.min(100,p))}%;background:#46433d;border-radius:2px"></span></span>`;
-  const unit = `<span style="font-size:11px;color:#9C988F;font-weight:500"> ac</span>`;
-  const tile=(lab,val,sub,opt={})=>`<div style="${mob?(opt.span?'grid-column:1/-1;':'')+'background:#fff;padding:12px 14px;min-width:0':'flex:'+(opt.wide?'1.7 1 260px':'1 1 130px')+';padding:13px 16px;border-right:1px solid #EFEDE7;min-width:0'}${opt.warn?';background:#FFF8E6':''}">
-      <div style="font-size:10.5px;font-weight:600;letter-spacing:.06em;color:#6E6A62;text-transform:uppercase">${lab}</div>
-      <div style="font-family:'IBM Plex Mono';font-size:${opt.wide?22:19}px;font-weight:700;margin-top:4px;color:${C.ink}">${val}</div>
-      ${sub?`<div style="font-size:11.5px;color:${opt.warn?'#8A5A00':'#6E6A62'};margin-top:3px;line-height:1.4">${sub}</div>`:''}${opt.after||''}</div>`;
-  const tel = (p,lab) => p.mob && realTel(p.mob) ? `<a href="tel:${p.mob}" aria-label="Call ${E(lab)} ${E(p.n)}" style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:11px;background:#F2F0EB;color:#1B1A17;flex-shrink:0">${I.phone}</a>` : '';
-  return { orgChip, meter, unit, tile, tel };
+  const orgCol = c => c==='UPL'?C.orange:c==='SWAL'?C.green:W2.ink2;
+  const orgChip = c => `<span style="display:inline-block;flex-shrink:0;padding:1px 6px;border-radius:5px;font-size:${mob?11.5:11}px;font-weight:600;background:${c==='UPL'?'#FDEEDF':c==='SWAL'?'#E3F4E8':W2.line2};color:${c==='UPL'?'#A8520C':c==='SWAL'?'#127A33':W2.ink2}">${c}</span>`;
+  // An honest bar: its width IS the percentage; a non-zero value keeps a 3px sliver so it never reads as nothing.
+  const meter = (p,w,col) => `<span style="display:block;height:4px;border-radius:2px;background:${W2.line2};overflow:hidden${w?';width:'+w:''}"><span style="display:block;height:100%;width:${p==null?0:Math.min(100,Math.max(0,p))}%;min-width:${p>0?3:0}px;background:${col||W2.ink2};border-radius:2px"></span></span>`;
+  const unit = w2unit();
+  const tel = (p,lab) => p.mob && realTel(p.mob) ? `<a href="tel:${p.mob}" aria-label="Call ${E(lab)} ${E(p.n)}" style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:12px;border:1px solid ${W2.line};background:#fff;color:${W2.ink};flex-shrink:0">${I.phone}</a>` : '';
+  // One KPI tile, tinted by what it counts (w2tone). `warn` = the sheet is stale: amber, whatever the tile.
+  const tile = (lab,val,unitT,sub,opt={}) => { const t=opt.warn?w2tone('Idle'):w2tone(lab);
+    return mob
+      ? `<div style="padding:12px 16px;border-bottom:1px solid ${W2.line2};border-right:1px solid ${W2.line2};background:${t.bg};display:flex;flex-direction:column;gap:2px;min-width:0">
+          <span style="font-size:12px;font-weight:500;color:${W2.ink2}">${E(lab)}</span>
+          <span style="${w2num(22,600,opt.warn?W2.idleD:t.vc)}">${val}${unitT?w2unit(unitT,12):''}</span>
+          ${sub?`<span style="font-size:12.5px;color:${opt.warn?W2.idleD:W2.ink2};line-height:1.35">${sub}</span>`:''}</div>`
+      : `<div style="background:${t.bg};border:1px solid ${t.bd};border-radius:16px;box-shadow:${W2.shadow};padding:18px;display:flex;flex-direction:column;gap:6px;min-width:0">
+          <div style="font-size:12.5px;font-weight:500;color:${W2.ink2}">${E(lab)}</div>
+          <div style="${w2num(28,600,opt.warn?W2.idleD:t.vc)}">${val}${unitT?w2unit(unitT):''}</div>
+          ${sub?`<div style="font-size:13px;color:${opt.warn?W2.idleD:W2.ink2};line-height:1.4">${sub}</div>`:''}</div>`; };
+  // Search box with its icon inside; the input keeps the page's id so the existing handler reads it.
+  const search = (id,ph,val) => `<div style="position:relative;${mob?'flex:1;min-width:0':'width:320px'}">${I.search}<input id="${id}" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${ph}" value="${E(val||'')}" aria-label="Search" style="width:100%;height:${mob?48:38}px;border:1px solid ${W2.line};border-radius:${mob?12:10}px;background:#fff;padding:0 12px 0 34px;font:${mob?16:14}px ${W2.font};color:${W2.ink}"></div>`;
+  const csv = (act,title) => `<button data-act="${act}" title="${title}" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;height:${mob?48:38}px;padding:0 ${mob?16:14}px;border:0;border-radius:${mob?12:10}px;background:${W2.dark};color:#fff;box-shadow:0 6px 16px -8px rgba(22,53,45,0.6);font:500 ${mob?15:14}px ${W2.font};cursor:pointer;white-space:nowrap"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>CSV</button>`;
+  const ghost = (act,t) => `<button data-act="${act}" style="height:${mob?48:38}px;padding:0 14px;border:1px solid ${W2.line};border-radius:${mob?12:10}px;background:#fff;color:${W2.ink};font:500 ${mob?15:14}px ${W2.font};cursor:pointer;white-space:nowrap">${t}</button>`;
+  const filtersBtn = (act,n) => `<button data-act="${act}" aria-label="Filters${n?`, ${n} active`:''}" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;height:48px;padding:0 14px;border:1px solid ${n?W2.ink:W2.line};border-radius:12px;background:#fff;color:${W2.ink};font:500 15px ${W2.font};cursor:pointer">${I.filter}Filters${n?` <span style="min-width:20px;height:20px;border-radius:10px;background:${W2.ink};color:#fff;font-size:12px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px">${n}</span>`:''}</button>`;
+  const stamp = act => `<span style="font-size:12.5px;color:${W2.ink2}">Main sheet · checked ${E(WRET.at||'—')}${mob?'':` · <button data-act="${act}" title="Reload the sheet" style="border:none;background:none;padding:0;font:inherit;color:${W2.ink};text-decoration:underline;text-underline-offset:2px;cursor:pointer">refresh</button>`}</span>`;
+  const sortSel = (id,label,sorts,cur) => `<div style="position:relative;${mob?'flex:1;min-width:0':''}"><select id="${id}" aria-label="${label}" style="${w2sel(mob)}${mob?';width:100%':''}">${optionsHTML(sorts.map(([v,t])=>({v,t:'Sort: '+t})),cur)}</select>${I.caret}</div>`;
+  const cardBox = (inner, extra='') => `<div style="${w2card(mob?18:16)};${extra}">${inner}</div>`;
+  const msg = (inner, pad) => cardBox(`<div style="padding:${pad||'44px 20px'};text-align:center;color:${W2.ink2};font-size:14px;line-height:1.55">${inner}</div>`, `margin-top:${mob?12:16}px`);
+  // The table's header cell; a sortable one is a button that names its order.
+  const th = (act,sort) => (k,t,right) => k ? `<button data-act="${act}" data-k="${k}" aria-sort="${sort===k?'descending':'none'}" style="border:none;background:none;padding:0;font:inherit;color:${sort===k?W2.ink:W2.ink2};cursor:pointer;text-align:${right?'right':'left'};${right?'justify-self:end':''}">${t}${sort===k?' ↓':''}</button>` : `<span${right?' style="text-align:right"':''}>${t}</span>`;
+  const chev = open => `<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${W2.ink3}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:3px;transition:transform .15s;transform:rotate(${open?90:0}deg)"><path d="M9 6l6 6-6 6"/></svg>`;
+  return { orgCol, orgChip, meter, unit, tel, tile, search, csv, ghost, filtersBtn, stamp, sortSel, cardBox, msg, th, chev };
 }
 function wplanBodyHTML(mob){
   const S=state;
-  if(!isAdmin()) return `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:48px 22px;text-align:center;color:#46433d;font-size:13.5px;line-height:1.55">
-      <div style="font-size:15px;font-weight:700;margin-bottom:6px">The Wheat dashboard is being rebuilt</div>
-      Pages for this login will appear here as they are finalised.</div>`;
+  const B=wpBits(mob);
+  if(!isAdmin()) return B.msg(`<div style="font-size:16px;font-weight:600;color:${W2.ink};margin-bottom:6px">The Wheat dashboard is being rebuilt</div>Pages for this login will appear here as they are finalised.`);
   if(!WRET.loaded){
     if(!WRET.loading && !WRET.error) setTimeout(loadWRet,0);
     const msg = WRET.error ? 'Could not load the wheat retailer sheet.' : 'Loading the retailer summary…';
-    return `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:60px 20px;text-align:center;color:#6E6A62;font-size:13px">
-      ${WRET.error?'⚠ ':''}${msg}${WRET.error?`<div style="margin-top:14px"><button data-act="wpretry" style="min-height:${mob?44:32}px;padding:0 16px;border:none;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Retry</button></div>`:''}</div>`;
+    return B.msg(`${WRET.error?'⚠ ':''}${msg}${WRET.error?`<div style="margin-top:14px"><button data-act="wpretry" style="min-height:${mob?48:38}px;padding:0 18px;border:0;border-radius:10px;background:${W2.dark};color:#fff;font:500 14px ${W2.font};cursor:pointer">Retry</button></div>`:''}`, '60px 20px');
   }
   const A=wplanAgg();
   if(S._wpSig!==A.sig){ S._wpSig=A.sig; S.wpLimit=WP_PAGE; }   // a new filter / sort restarts the phone's paging
-  const { orgChip, meter, unit } = wpBits(mob);
+  const { orgChip, meter, orgCol, tile, tel } = B;
   const stale = WRET.lastDate && WRET.lastDate < WRET.yday;
   const dataLine = !WRET.lastDate ? 'no acres on the sheet yet' : stale ? `⚠ the sheet's acres stop at ${wpDate(WRET.lastDate)}` : `sheet has acres up to ${wpDate(WRET.lastDate)}`;
   const firstDate = WRET.log && WRET.log.firstDate ? wpDate(WRET.log.firstDate) : '';
-  // ── KPI strip. Top-left answers "how far against plan"; then the day, the scans, and the size of what is shown.
-  const { tile } = wpBits(mob);
-  const kpis = `<div style="${mob?'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:#E9E6DF':'display:flex;flex-wrap:wrap;background:#fff'};border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;margin-top:14px">
-      ${tile('Acres sprayed vs plan', acF(A.acAll)+unit, `<b style="color:${C.ink}">${pctF(A.pct)}</b> of ${fmt(A.plan)} ac plan · all days${firstDate?' since '+firstDate:''}`, {wide:1, span:1, after:`<div style="margin-top:8px">${meter(A.pct)}</div>`})}
-      ${tile('Acres yesterday', acF(A.acY)+unit, `${wpDate(WRET.yday)} · ${dataLine}`, {warn:stale})}
-      ${tile('Scanned acres', acF(A.scAll)+unit, `${acF(A.scY)} ac yesterday`)}
-      ${tile('Retailers', fmt(A.rows.length), `${fmt(A.nTerr)} ${A.nTerr===1?'territory':'territories'}`)}
-      ${tile('Machines', fmt(A.n), 'mapped to these retailers')}
-    </div>`;
+  // ── KPI strip. The hero answers "how far against plan"; then the day, the scans, and the size of what is shown.
+  const heroBar = `<div style="height:6px;background:${W2.line2};border-radius:3px;overflow:hidden"><div style="width:${Math.min(100,A.pct||0)}%;min-width:${A.pct>0?6:0}px;height:100%;background:linear-gradient(90deg,#F5821F,#1FAE43);border-radius:3px"></div></div>`;
+  const heroSub = `<b style="color:${W2.ink};font-weight:600">${pctF(A.pct)}</b> of ${fmt(A.plan)} ac plan · all days${firstDate?' since '+firstDate:''}`;
+  const tiles = [
+    tile('Acres yesterday', acF(A.acY), 'ac', `${wpDate(WRET.yday)} · ${dataLine}`, {warn:stale}),
+    tile('Scanned acres', acF(A.scAll), 'ac', `${acF(A.scY)} ac yesterday`),
+    tile('Retailers', fmt(A.rows.length), '', `${fmt(A.nTerr)} ${A.nTerr===1?'territory':'territories'}`),
+    tile('Machines', fmt(A.n), '', 'mapped to these retailers'),
+  ];
+  const kpis = mob
+    ? B.cardBox(`<div style="padding:16px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(160deg,#FFF3E8 0%,#FFFFFF 70%)">
+          <div style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Acres sprayed vs plan</div>
+          <div><span style="${w2num(40,600)};letter-spacing:-0.02em;line-height:1">${acF(A.acAll)}</span>${w2unit('ac',15)}</div>
+          ${heroBar}<div style="font-size:13.5px;color:${W2.ink2}">${heroSub}</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid ${W2.line2}">${tiles.join('')}</div>`, 'overflow:hidden')
+    : `<div style="display:grid;grid-template-columns:1.7fr repeat(4,minmax(0,1fr));gap:12px;margin-top:16px">
+        <div style="background:linear-gradient(160deg,#FFF3E8 0%,#FFFFFF 60%);border:1px solid #F3DFCB;border-radius:16px;box-shadow:${W2.shadow};padding:18px 20px;display:flex;flex-direction:column;gap:8px;min-width:0">
+          <div style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Acres sprayed vs plan</div>
+          <div><span style="${w2num(36,600)};letter-spacing:-0.02em;line-height:1">${acF(A.acAll)}</span>${w2unit('ac',14)}</div>
+          ${heroBar}<div style="font-size:13.5px;color:${W2.ink2}">${heroSub}</div></div>
+        ${tiles.join('')}</div>`;
   // ── Controls.
-  const search = `<input id="wpSearch" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Search retailer, machine, person" value="${E(S.wpQ||'')}" aria-label="Search" style="height:${mob?44:32}px;border:1px solid #E9E6DF;border-radius:${mob?10:8}px;padding:0 11px;font-family:'Noto Sans';font-size:${mob?16:12.5}px;${mob?'flex:1;min-width:0':'width:240px'}">`;
-  const csvBtn=`<button data-act="wpcsv" title="Download the ${fmt(A.n)} machines shown, with their retailer, as CSV" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;height:${mob?44:32}px;padding:0 13px;background:#1B1A17;color:#fff;border:none;border-radius:${mob?10:8}px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">⤓ CSV</button>`;
-  const clearBtn = A.narrowed?`<button data-act="wpclear" style="border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#46433d;font-size:12px;font-weight:600;height:${mob?44:32}px;padding:0 12px;cursor:pointer">Clear</button>`:'';
-  const stamp=`<span style="font-size:11px;color:#6E6A62">Main sheet · checked ${E(WRET.at||'—')}${mob?'':' '+refreshLink('wpretry','Reload the sheet',false)}</span>`;
-  const sortSel=`<div style="position:relative"><select id="wpSortSel" aria-label="Sort retailers by" style="${ctlSel(mob)}${mob?';width:100%':''}">${optionsHTML(WP_SORTS.map(([v,t])=>({v,t:'Sort: '+t})),A.sort)}</select>${I.caret}</div>`;
+  const search = B.search('wpSearch', mob?'Search retailer, machine…':'Search retailer, machine, person', S.wpQ);
+  const csvBtn = B.csv('wpcsv', `Download the ${fmt(A.n)} machines shown, with their retailer, as CSV`);
+  const clearBtn = A.narrowed ? B.ghost('wpclear','Clear') : '';
+  const sortSel = B.sortSel('wpSortSel','Sort retailers by',WP_SORTS,A.sort);
   const controls = mob
-    ? `<div style="display:flex;gap:8px">${search}<button data-act="wpsheet" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 13px;border:1px solid ${A.nF?'#1B1A17':'#E9E6DF'};border-radius:10px;background:#fff;color:#1B1A17;font-size:13px;font-weight:600;cursor:pointer">Filters${A.nF?` <span style="min-width:20px;height:20px;border-radius:10px;background:#1B1A17;color:#fff;font-size:11px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px">${A.nF}</span>`:''}</button></div>
-       <div style="display:grid;grid-template-columns:minmax(0,1fr) auto${A.narrowed?' auto':''};gap:8px;margin-top:8px">${sortSel}${A.narrowed?clearBtn:''}${csvBtn}</div>
-       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px">${stamp}</div>`
-    : `<div style="display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap">${wpFilterFields(A,false)}</div>
-       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">${search}${clearBtn}<div style="flex:1"></div>${stamp}${csvBtn}</div>`;
+    ? `<div style="display:flex;gap:8px">${search}${B.filtersBtn('wpsheet',A.nF)}</div>
+       <div style="display:flex;gap:8px;margin-top:8px">${sortSel}${clearBtn}${csvBtn}</div>`
+    : `<div style="display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap">${wpFilterFields(A,false)}</div>
+       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px">${search}${clearBtn}<div style="flex:1"></div>${B.stamp('wpretry')}${csvBtn}</div>`;
   const showSt = !A.st;
   const where = r => `${E(r.territory)}${showSt?' · '+E(STATE_NAMES[r.st]||r.st):''}`;
-  const names = (l,max) => !l.length ? `<span style="color:#9C988F;font-style:italic">none</span>` : E(l.slice(0,max).map(p=>p.n).join(', '))+(l.length>max?` <span style="color:#6E6A62">+${l.length-max}</span>`:'');
-  const { tel } = wpBits(mob);
-  const empty = `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:40px 18px;text-align:center;color:#46433d;font-size:13px;margin-top:14px">No retailers match these filters.${A.narrowed?`<div style="margin-top:12px"><button data-act="wpclear" style="min-height:${mob?44:32}px;padding:0 14px;border:1px solid #E9E6DF;border-radius:9px;background:#fff;color:#1B1A17;font-size:12.5px;font-weight:600;cursor:pointer">Clear filters</button></div>`:''}</div>`;
+  const none = `<i style="color:${W2.ink2}">not assigned</i>`;
+  const names = (l,max) => !l.length ? `<i style="color:${W2.ink2}">none</i>` : E(l.slice(0,max).map(p=>p.n).join(', '))+(l.length>max?` <span style="color:${W2.ink2}">+${l.length-max}</span>`:'');
+  const empty = B.msg(`No retailers match these filters.${A.narrowed?`<div style="margin-top:12px">${B.ghost('wpclear','Clear filters')}</div>`:''}`, '40px 18px');
   const sortName = (WP_SORTS.find(([k])=>k===A.sort)||[])[1]||'';
   const partialNote = (A.am||A.ci) ? ' · AM / CI filter: only their machines, and the retailer figures follow them' : '';
   let list;
   if(!A.rows.length) list=empty;
   else if(mob){
     const shown=A.rows.slice(0, S.wpLimit||WP_PAGE);
-    list = `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:18px 2px 8px"><span style="font-size:14px;font-weight:700">Retailers</span><span class="mCap">by ${E(sortName.toLowerCase())}</span></div>`
+    const stat=(v,l)=>`<div style="display:flex;flex-direction:column;min-width:0"><span style="${w2num(17)}">${v}</span><span style="font-size:12.5px;color:${W2.ink2}">${l}</span></div>`;
+    list = `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:18px 2px 10px"><span style="font-size:16px;font-weight:600">Retailers · ${fmt(A.rows.length)}</span><span style="font-size:12.5px;color:${W2.ink2}">by ${E(sortName.toLowerCase())}</span></div>`
       + shown.map(r=>{
         const open = !!S.wpOpen[r.key] || r.mcHit;
-        const fo={n:r.foName,mob:r.foMob}, tm={n:r.tmName,mob:r.tmMob};
-        const pRow=(lab,p)=>`<div style="display:flex;align-items:center;gap:8px;min-height:44px"><span class="mCap" style="width:24px;flex-shrink:0">${lab}</span><span style="flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.n?E(p.n):'<span style="color:#9C988F;font-weight:400;font-style:italic">not assigned</span>'}</span>${tel(p,lab)}</div>`;
-        return `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:13px 14px;margin-bottom:10px">
-          <div style="display:flex;align-items:flex-start;gap:8px"><div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:700;line-height:1.3">${E(r.party)}</div><div class="mCap" style="margin-top:2px">${where(r)}</div></div>${orgChip(r.org)}</div>
-          <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-top:11px"><span style="font-family:'IBM Plex Mono';font-size:20px;font-weight:700">${acF(r.acAll)}</span><span style="font-size:12.5px;color:#46433d">of ${fmt(r.plan)} ac plan</span><span style="flex:1"></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${pctF(r.pct)}</span></div>
-          <div style="margin-top:6px">${meter(r.pct)}</div>
-          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:11px">
-            <div><div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${acF(r.acY)}</div><div class="mCap">ac yesterday</div></div>
-            <div><div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${acF(r.scAll)}</div><div class="mCap">ac scanned</div></div>
-            <div><div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${fmt(r.n)}${r.n<r.nAll?`<span style="font-size:11px;font-weight:500;color:#6E6A62"> of ${r.nAll}</span>`:''}</div><div class="mCap">machine${r.n===1?'':'s'}</div></div>
-          </div>
-          <div style="border-top:1px solid #F2F0EB;margin-top:10px;padding-top:2px">${pRow('FO',fo)}${pRow('TM',tm)}
-            <div style="font-size:12px;color:#46433d;line-height:1.5;padding:4px 0 2px"><span class="mCap">CI</span> ${names(r.cis,3)}<br><span class="mCap">AM</span> ${names(r.ams,3)}</div></div>
-          <button data-act="wpexp" data-k="${E(r.key)}" aria-expanded="${open}" style="width:100%;min-height:44px;margin-top:8px;border:1px solid #E9E6DF;border-radius:10px;background:${open?'#F6F5F2':'#fff'};color:#1B1A17;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${open?'Hide':'Show'} ${r.n} machine${r.n===1?'':'s'} <span style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>
-          ${open?`<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">${r.list.map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:9px 12px;border:1px solid #EFEDE7;border-radius:10px;background:#FBFAF8;text-align:left;cursor:pointer;font-family:inherit;color:#1B1A17">
-              <span style="flex:1;min-width:0"><span style="display:block;font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${E(m.mc)}</span><span class="mCap" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.opName?E(m.opName):'No operator'}${m.co?' · CI '+E(m.co):''}</span></span>
-              <span style="text-align:right;flex-shrink:0"><span style="display:block;font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${acF(m.acAll)} ac</span><span class="mCap" style="display:block">${acF(m.acY)} yesterday</span></span><span aria-hidden="true" style="color:#9C988F">›</span></button>`).join('')}</div>`:''}
-        </div>`; }).join('')
-      + (A.rows.length>shown.length ? `<button data-act="wpmore" style="width:100%;min-height:48px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#1B1A17;font-size:13.5px;font-weight:600;cursor:pointer">Load more · ${fmt(shown.length)} of ${fmt(A.rows.length)} shown</button>` : '');
+        const pRow=(lab,p,last)=>`<div style="display:flex;align-items:center;gap:10px;min-height:52px;${last?'':'border-bottom:1px solid '+W2.line2}"><span style="width:28px;font-size:12px;font-weight:600;color:${W2.ink2};flex-shrink:0">${lab}</span><span style="flex:1;min-width:0;font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.n?E(p.n):none}</span>${tel(p,lab)}</div>`;
+        return B.cardBox(`<div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:16px;font-weight:600;line-height:1.3">${E(r.party)}</span><span style="font-size:13.5px;color:${W2.ink2}">${where(r)}</span></div>${orgChip(r.org)}</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span style="${w2num(22)}">${acF(r.acAll)}</span> <span style="font-size:13.5px;color:${W2.ink2}">of ${fmt(r.plan)} ac plan</span></span><span style="${w2num(14)}">${pctF(r.pct)}</span></div>
+            ${meter(r.pct,'',orgCol(r.org))}</div>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${stat(acF(r.acY),'ac yesterday')}${stat(acF(r.scAll),'ac scanned')}${stat(fmt(r.n)+(r.n<r.nAll?`<span style="font-size:12px;font-weight:500;color:${W2.ink2}"> of ${r.nAll}</span>`:''),'machine'+(r.n===1?'':'s'))}</div>
+          <div style="border-top:1px solid ${W2.line2}">${pRow('FO',{n:r.foName,mob:r.foMob})}${pRow('TM',{n:r.tmName,mob:r.tmMob},1)}
+            <div style="font-size:13px;color:${W2.ink2};line-height:1.55;padding:6px 0 0"><b style="font-weight:600">CI</b> <span style="color:${W2.ink}">${names(r.cis,3)}</span><br><b style="font-weight:600">AM</b> <span style="color:${W2.ink}">${names(r.ams,3)}</span></div></div>
+          <button data-act="wpexp" data-k="${E(r.key)}" aria-expanded="${open}" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:${open?W2.head:'#fff'};color:${W2.ink};font:500 14px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${open?'Hide':'Show'} ${r.n} machine${r.n===1?'':'s'} <span aria-hidden="true" style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>
+          ${open?`<div style="display:flex;flex-direction:column;gap:8px">${r.list.map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:${W2.head};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
+              <span style="flex:1;min-width:0"><span style="display:block;font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.opName?E(m.opName):'No operator'}${m.co?' · CI '+E(m.co):''}</span></span>
+              <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${acF(m.acAll)} ac</span><span style="display:block;font-size:12.5px;color:${W2.ink2}">${acF(m.acY)} yesterday</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`).join('')}</div>`:''}
+        </div>`, 'margin-bottom:12px'); }).join('')
+      + (A.rows.length>shown.length ? `<button data-act="wpmore" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:#fff;color:${W2.ink};font:500 14px ${W2.font};cursor:pointer">Load more · ${fmt(shown.length)} of ${fmt(A.rows.length)} shown</button>` : '')
+      + `<div style="font-size:12.5px;color:${W2.ink2};margin-top:10px">${B.stamp('wpretry')}</div>`;
   } else {
-    const cols='minmax(170px,1.5fr) 64px 84px 80px 86px 96px 80px minmax(140px,1fr) minmax(150px,1.1fr)';
-    const hd=(k,t,right)=>k?`<button data-act="wpsort" data-k="${k}" aria-sort="${A.sort===k?'descending':'none'}" style="border:none;background:none;padding:0;font:inherit;letter-spacing:inherit;text-transform:inherit;color:${A.sort===k?C.ink:'#6E6A62'};cursor:pointer;text-align:${right?'right':'left'};${right?'justify-self:end':''}">${t}${A.sort===k?' ↓':''}</button>`:`<span>${t}</span>`;
-    const th=`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:9px 16px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;position:sticky;top:0;z-index:1">
+    const cols='minmax(190px,2fr) 70px 84px 80px 84px 120px 72px minmax(140px,1.25fr) minmax(160px,1.45fr)';
+    const hd=B.th('wpsort',A.sort);
+    const head=`<div style="display:grid;grid-template-columns:${cols};gap:14px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2};position:sticky;top:0;z-index:1">
       ${hd('party','Retailer')}${hd('n','Machines',1)}${hd('plan','Plan ac',1)}${hd('acY','Yesterday',1)}${hd('acAll','Overall ac',1)}${hd('pct','% of plan',1)}${hd('scAll','Scanned',1)}${hd('','FO · TM')}${hd('','CI · AM')}</div>`;
-    const numC=(v,b)=>`<span style="font-family:'IBM Plex Mono';font-size:12.5px;${b?'font-weight:700;':''}text-align:right">${v}</span>`;
-    const pctC=p=>`<span style="text-align:right"><span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600">${pctF(p)}</span><span style="display:block;margin-top:4px">${meter(p)}</span></span>`;
-    const pl=(lab,v)=>`<div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-size:10px;font-weight:700;color:#6E6A62;letter-spacing:.04em">${lab}</span> ${v}</div>`;
+    const numC=(v,b)=>`<span style="text-align:right;font-variant-numeric:tabular-nums${b?';font-weight:600':''}">${v}</span>`;
+    const pctC=(p,col)=>`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums;font-weight:500">${pctF(p)}</span>${meter(p,'100%',col)}</div>`;
+    const pl=(lab,v)=>`<div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-size:11.5px;font-weight:600;color:${W2.ink2}">${lab}</span> ${v}</div>`;
     const body=A.rows.map(r=>{
       const open = !!S.wpOpen[r.key] || r.mcHit;
-      return `<div data-act="wpexp" data-k="${E(r.key)}" role="button" aria-expanded="${open}" tabindex="0" style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 16px;border-top:1px solid #EFEDE7;align-items:center;cursor:pointer;background:${open?'#F6F5F2':'#fff'}">
-        <div style="min-width:0;display:flex;gap:8px;align-items:flex-start"><span aria-hidden="true" style="color:#6E6A62;font-size:11px;margin-top:2px;display:inline-block;transform:rotate(${open?90:0}deg)">▶</span><div style="min-width:0"><div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${E(r.party)}">${E(r.party)}</div><div style="font-size:11px;color:#6E6A62;margin-top:2px;display:flex;gap:6px;align-items:center">${orgChip(r.org)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${where(r)}</span></div></div></div>
-        ${numC(fmt(r.n)+(r.n<r.nAll?`<span style="color:#9C988F;font-weight:400"> /${r.nAll}</span>`:''),1)}${numC(fmt(r.plan))}${numC(acF(r.acY))}${numC(acF(r.acAll),1)}${pctC(r.pct)}${numC(acF(r.scAll))}
-        <div style="min-width:0">${pl('FO',r.foName?`<span title="${E(r.foMob)}">${E(r.foName)}</span>`:'<i style="color:#9C988F">not assigned</i>')}${pl('TM',r.tmName?`<span title="${E(r.tmMob)}">${E(r.tmName)}</span>`:'<i style="color:#9C988F">not assigned</i>')}</div>
-        <div style="min-width:0">${pl('CI',names(r.cis,2))}${pl('AM',names(r.ams,2))}</div></div>`
-      + (open ? r.list.map(m=>`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:8px 16px;border-top:1px solid #F4F2EE;align-items:center;background:#FDFCFA">
-        <div style="min-width:0;padding-left:22px"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700;color:${C.ink};text-decoration:underline;text-decoration-color:#D5D0C6;text-underline-offset:3px">${E(m.mc)}</button><div style="font-size:11px;color:#6E6A62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.opName?E(m.opName):'<i>No operator</i>'}${m.village?' · '+E(m.village):''}</div></div>
-        <span></span>${numC(`<span style="color:#6E6A62" title="Retailer plan ÷ ${r.nAll} machines">${fmt(m.planShare)}</span>`)}${numC(acF(m.acY))}${numC(acF(m.acAll),1)}${pctC(m.planShare>0?100*m.acAll/m.planShare:null)}${numC(acF(m.scAll))}
-        <span></span><div style="min-width:0">${pl('CI',m.co?`<span title="${E(m.coMob)}">${E(m.co)}</span>`:'<i style="color:#9C988F">none</i>')}${pl('AM',m.am?`<span title="${E(m.amNum)}">${E(m.am)}</span>`:'<i style="color:#9C988F">none</i>')}</div></div>`).join('') : '');
+      return `<div class="w2Row" data-act="wpexp" data-k="${E(r.key)}" role="button" aria-expanded="${open}" tabindex="0" style="display:grid;grid-template-columns:${cols};gap:14px;padding:12px 22px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;cursor:pointer;background:${open?W2.head:'#fff'}">
+        <div style="min-width:0;display:flex;gap:8px;align-items:flex-start">${B.chev(open)}<div style="display:flex;flex-direction:column;gap:3px;min-width:0"><span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${E(r.party)}">${E(r.party)}</span><span style="display:flex;align-items:center;gap:8px;font-size:13px;color:${W2.ink2};min-width:0">${orgChip(r.org)}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${where(r)}</span></span></div></div>
+        ${numC(fmt(r.n)+(r.n<r.nAll?`<span style="color:${W2.ink2};font-weight:400"> /${r.nAll}</span>`:''))}${numC(fmt(r.plan),1)}${numC(acF(r.acY))}${numC(acF(r.acAll))}${pctC(r.pct,orgCol(r.org))}${numC(acF(r.scAll))}
+        <div style="min-width:0;display:flex;flex-direction:column;gap:2px">${pl('FO',r.foName?`<span title="${E(r.foMob)}">${E(r.foName)}</span>`:none)}${pl('TM',r.tmName?`<span title="${E(r.tmMob)}">${E(r.tmName)}</span>`:none)}</div>
+        <div style="min-width:0;display:flex;flex-direction:column;gap:2px">${pl('CI',names(r.cis,2))}${pl('AM',names(r.ams,2))}</div></div>`
+      + (open ? r.list.map(m=>`<div style="display:grid;grid-template-columns:${cols};gap:14px;padding:10px 22px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;background:#FBFCFD">
+        <div style="min-width:0;padding-left:22px"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font:600 13px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</button><div style="font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.opName?E(m.opName):'<i>No operator</i>'}${m.village?' · '+E(m.village):''}</div></div>
+        <span></span>${numC(`<span style="color:${W2.ink2}" title="Retailer plan ÷ ${r.nAll} machines">${fmt(m.planShare)}</span>`)}${numC(acF(m.acY))}${numC(acF(m.acAll))}${pctC(m.planShare>0?100*m.acAll/m.planShare:null,orgCol(m.org||r.org))}${numC(acF(m.scAll))}
+        <span></span><div style="min-width:0;display:flex;flex-direction:column;gap:2px">${pl('CI',m.co?`<span title="${E(m.coMob)}">${E(m.co)}</span>`:`<i style="color:${W2.ink2}">none</i>`)}${pl('AM',m.am?`<span title="${E(m.amNum)}">${E(m.am)}</span>`:`<i style="color:${W2.ink2}">none</i>`)}</div></div>`).join('') : '');
     }).join('');
-    list=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;margin-top:14px">
-      <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7"><div style="font-size:13px;font-weight:700">Retailers · ${fmt(A.rows.length)}</div><div style="font-size:11.5px;color:#6E6A62;margin-top:2px">Sorted by ${E(sortName.toLowerCase())} · click a retailer for his machines, a machine number for its details · a machine's plan is the retailer's plan ÷ his machines${partialNote}</div></div>
-      <div style="overflow-x:auto"><div style="min-width:1040px">${th}${body}</div></div></div>`;
+    list = B.cardBox(`<div style="padding:18px 22px;border-bottom:1px solid ${W2.line2}"><div style="font-size:16px;font-weight:600">Retailers · ${fmt(A.rows.length)}</div><div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">Sorted by ${E(sortName.toLowerCase())} · click a retailer for his machines, a machine number for its details · a machine’s plan is the retailer’s plan ÷ his machines${partialNote}</div></div>
+      <div style="overflow-x:auto"><div style="min-width:1080px">${head}${body}</div></div>`, 'overflow:hidden;margin-top:16px');
   }
   // Phone: the answer first (Mobile First — content before controls), then the controls that narrow the list below.
-  return mob ? kpis.replace('margin-top:14px','margin-top:0') + `<div style="margin-top:14px">${controls}</div>` + list : controls + kpis + list;
+  return mob ? kpis + `<div style="margin-top:12px">${controls}</div>` + list : controls + kpis + list;
 }
-function wplanViewHTML(v){ return `<section style="padding:18px 22px">${wplanBodyHTML(false)}</section>`; }
+function wplanViewHTML(v){ return `<section style="padding:24px 32px">${wplanBodyHTML(false)}</section>`; }
 // Machine details (the drawer on desktop, the sheet on a phone) — opened from a machine row with `wpmc`.
 function wpMachineHTML(m, mob){
   const r=m.retailer, phoneIcon=I.phone;
@@ -8440,14 +8551,14 @@ function wterrCSV(){
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
 }
 function wtFilterFields(A, mob){
-  const P=curProject(), sel=ctlSel(mob);
+  const P=curProject(), sel=w2sel(mob);
   const lab=(t,inner,span)=>mob
     ? `<div style="display:flex;flex-direction:column;gap:6px;min-width:0${span?';grid-column:1/-1':''}"><span class="mLbl">${t}</span>${inner}</div>`
-    : `<div style="display:flex;align-items:center;gap:7px"><span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#6E6A62;text-transform:uppercase">${t}</span>${inner}</div>`;
-  const dd=(id,allT,opts,cur)=>`<div style="position:relative"><select id="${id}" style="${sel}${mob?';width:100%':';max-width:200px'}">${optionsHTML([{v:'',t:allT}].concat(opts.map(o=>({v:o,t:o}))),cur)}</select>${I.caret}</div>`;
+    : `<div style="display:flex;align-items:center;gap:8px">${w2lbl(t)}${inner}</div>`;
+  const dd=(id,allT,opts,cur)=>`<div style="position:relative"><select id="${id}" style="${sel}${mob?';width:100%':';width:170px'}">${optionsHTML([{v:'',t:allT}].concat(opts.map(o=>({v:o,t:o}))),cur)}</select>${I.caret}</div>`;
   return [
-    A.lockSt || A.stOpts.length<2 ? '' : lab('State',`<div style="position:relative"><select id="wtStSel" style="${sel}${mob?';width:100%':''}">${optionsHTML([{v:'',t:P.allLabel}].concat(A.stOpts.map(c=>({v:c,t:STATE_NAMES[c]||c}))),A.st)}</select>${I.caret}</div>`, true),
-    A.lockOrg ? '' : lab('Company',`<div style="display:flex;background:#F2F0EB;border-radius:8px;padding:3px;gap:2px">${['ALL','UPL','SWAL'].map(c=>`<button data-act="wtorg" data-org="${c}" aria-pressed="${A.org===c}" style="${css(seg(A.org===c,mob))}${mob?';flex:1':''}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`, true),
+    A.lockSt || A.stOpts.length<2 ? '' : lab('State',`<div style="position:relative"><select id="wtStSel" style="${sel}${mob?';width:100%':';width:160px'}">${optionsHTML([{v:'',t:P.allLabel}].concat(A.stOpts.map(c=>({v:c,t:STATE_NAMES[c]||c}))),A.st)}</select>${I.caret}</div>`, true),
+    A.lockOrg ? '' : lab('Company',`<div style="${w2segBox(mob)}">${['ALL','UPL','SWAL'].map(c=>`<button data-act="wtorg" data-org="${c}" aria-pressed="${A.org===c}" style="${w2seg(A.org===c,mob)}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`, true),
     lab('Territory', dd('wtTerrSel','All territories',A.terrs,A.terr)),
     lab('TM', dd('wtTmSel','All TMs',A.tms,A.tm)),
   ].filter(Boolean).join('');
@@ -8464,23 +8575,21 @@ function wtSpark(series, days, w){
   if(!s.length) return '';
   const lab=`Acres by day, ${wpDate(d[0])} to ${wpDate(d[d.length-1])}: `+s.map((v,i)=>`${wpDate(d[i])} ${acF(v)}`).join(', ');
   return `<span role="img" aria-label="${E(lab)}" style="display:flex;align-items:flex-end;gap:2px;height:24px;${w?'width:'+w:'flex:1;min-width:0'}">${s.map((v,i)=>
-    `<span style="flex:1;max-width:${w?9:18}px;min-width:3px;height:${v>0?Math.max(3,Math.round(24*v/mx)):1}px;border-radius:1.5px;background:${v>0?(i===s.length-1?C.ink:'#A9A49A'):'#E4E1DA'}"></span>`).join('')}</span>`;
+    `<span style="flex:1;max-width:${w?9:18}px;min-width:3px;height:${v>0?Math.max(3,Math.round(24*v/mx)):1}px;border-radius:1.5px;background:${v>0?(i===s.length-1?W2.act:'#9FB4C8'):'#E1E5EA'}"></span>`).join('')}</span>`;
 }
 // The Territory page's controls — shared with the Wheat map, which reads the same filters (agreed 2026-10-28), so a
 // territory picked on one page is still picked on the other. The map has no table, so no sort.
 function wtControlsHTML(A, mob, withSort){
-  const S=state;
-  const search = `<input id="wtSearch" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Search territory, TM, machine, person" value="${E(S.wtQ||'')}" aria-label="Search" style="height:${mob?44:32}px;border:1px solid #E9E6DF;border-radius:${mob?10:8}px;padding:0 11px;font-family:'Noto Sans';font-size:${mob?16:12.5}px;${mob?'flex:1;min-width:0':'width:260px'}">`;
-  const csvBtn=`<button data-act="wtcsv" title="Download the ${fmt(A.n)} machines shown, with their territory and TM, as CSV" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;height:${mob?44:32}px;padding:0 13px;background:#1B1A17;color:#fff;border:none;border-radius:${mob?10:8}px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">⤓ CSV</button>`;
-  const clearBtn = A.narrowed?`<button data-act="wtclear" style="border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#46433d;font-size:12px;font-weight:600;height:${mob?44:32}px;padding:0 12px;cursor:pointer">Clear</button>`:'';
-  const stamp=`<span style="font-size:11px;color:#6E6A62">Main sheet · checked ${E(WRET.at||'—')}${mob?'':' '+refreshLink('wpretry','Reload the sheet',false)}</span>`;
-  const sortSel=!withSort?'':`<div style="position:relative"><select id="wtSortSel" aria-label="Sort territories by" style="${ctlSel(mob)}${mob?';width:100%':''}">${optionsHTML(WT_SORTS.map(([v,t])=>({v,t:'Sort: '+t})),A.sort)}</select>${I.caret}</div>`;
+  const S=state, B=wpBits(mob);
+  const search = B.search('wtSearch', mob?'Search territory, TM, machine…':'Search territory, TM, machine, person', S.wtQ);
+  const csvBtn = B.csv('wtcsv', `Download the ${fmt(A.n)} machines shown, with their territory and TM, as CSV`);
+  const clearBtn = A.narrowed ? B.ghost('wtclear','Clear') : '';
+  const sortSel = withSort ? B.sortSel('wtSortSel','Sort territories by',WT_SORTS,A.sort) : '';
   return mob
-    ? `<div style="display:flex;gap:8px">${search}<button data-act="wtsheet" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;height:44px;padding:0 13px;border:1px solid ${A.nF?'#1B1A17':'#E9E6DF'};border-radius:10px;background:#fff;color:#1B1A17;font-size:13px;font-weight:600;cursor:pointer">Filters${A.nF?` <span style="min-width:20px;height:20px;border-radius:10px;background:#1B1A17;color:#fff;font-size:11px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px">${A.nF}</span>`:''}</button></div>
-       <div style="display:grid;grid-template-columns:${withSort?'minmax(0,1fr) ':''}auto${A.narrowed?' auto':''};gap:8px;margin-top:8px;${withSort?'':'justify-content:end'}">${sortSel}${A.narrowed?clearBtn:''}${csvBtn}</div>
-       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px">${stamp}</div>`
-    : `<div style="display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap">${wtFilterFields(A,false)}</div>
-       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">${search}${clearBtn}<div style="flex:1"></div>${stamp}${csvBtn}</div>`;
+    ? `<div style="display:flex;gap:8px">${search}${B.filtersBtn('wtsheet',A.nF)}</div>
+       <div style="display:flex;gap:8px;margin-top:8px;${withSort?'':'justify-content:flex-end'}">${sortSel}${clearBtn}${csvBtn}</div>`
+    : `<div style="display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap">${wtFilterFields(A,false)}</div>
+       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px">${search}${clearBtn}<div style="flex:1"></div>${B.stamp('wpretry')}${csvBtn}</div>`;
 }
 function wterrBodyHTML(mob){
   const S=state;
@@ -8488,125 +8597,135 @@ function wterrBodyHTML(mob){
   if(!WRET.loaded) return wplanBodyHTML(mob);  // same loading / error card, same loader
   const A=wterrAgg();
   if(S._wtSig!==A.sig){ S._wtSig=A.sig; S.wtLimit=WT_PAGE; }
-  const { orgChip, meter, tel } = wpBits(mob);
+  const B=wpBits(mob), { orgChip, meter, tel } = B;
   const stale = WRET.lastDate && WRET.lastDate < WRET.yday;
   const kpis = wtStripHTML(A, mob, stale);
-  // ── The day-by-day trend for everything in view. Bars (one per day, a count of acres), yesterday dark.
+  // ── The day-by-day trend for everything in view. Bars (one per day, a count of acres), yesterday in the Active green.
   const n=A.days.length, mx=Math.max(...A.tot,0), every=n<=10?1:Math.ceil(n/(mob?6:12)), showVal=n<=(mob?10:21);
-  const trend = !n ? '' : `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:${mob?'13px 14px':'14px 16px'};margin-top:14px">
-      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:13.5px;font-weight:700">Acres sprayed by day</span><span style="font-size:11.5px;color:#6E6A62">${wpDate(A.days[0])} – ${wpDate(A.days[n-1])} · ${A.narrowed?'what is in view':'every territory'}</span></div>
-      <div role="img" aria-label="${E('Acres sprayed by day: '+A.days.map((d,i)=>wpDate(d)+' '+acF(A.tot[i])).join(', '))}" style="display:flex;align-items:flex-end;gap:${n>30?2:mob?4:8}px;height:${mob?120:132}px;margin-top:12px;padding-top:16px">
+  const trend = !n ? '' : B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?15:16}px;font-weight:600">Acres sprayed by day</span><span style="font-size:13px;color:${W2.ink2}">${wpDate(A.days[0])} – ${wpDate(A.days[n-1])} · ${A.narrowed?'what is in view':'every territory'}</span></div>
+      <div role="img" aria-label="${E('Acres sprayed by day: '+A.days.map((d,i)=>wpDate(d)+' '+acF(A.tot[i])).join(', '))}" style="display:flex;align-items:flex-end;gap:${n>30?2:mob?4:8}px;height:${mob?124:140}px;margin-top:12px;padding-top:18px">
         ${A.tot.map((v,i)=>`<div style="flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center">
-          ${showVal&&v>0?`<span style="font-family:'IBM Plex Mono';font-size:${mob?11:10.5}px;font-weight:600;color:#46433d;margin-bottom:3px">${acF(v)}</span>`:''}
-          <span style="display:block;width:100%;max-width:44px;height:${v>0?Math.max(3,Math.round(80*v/mx)):0}%;min-height:${v>0?3:1}px;border-radius:3px 3px 0 0;background:${v>0?(i===n-1?C.ink:'#A9A49A'):'#E4E1DA'}"></span></div>`).join('')}
+          ${showVal&&v>0?`<span style="font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;color:${i===n-1?W2.actD:W2.ink2};margin-bottom:3px">${acF(v)}</span>`:''}
+          <span style="display:block;width:100%;max-width:44px;height:${v>0?Math.max(3,Math.round(80*v/mx)):0}%;min-height:${v>0?3:1}px;border-radius:4px 4px 0 0;background:${v>0?(i===n-1?W2.act:'#9FB4C8'):'#E1E5EA'}"></span></div>`).join('')}
       </div>
-      <div style="display:flex;gap:${n>30?2:mob?4:8}px;border-top:1px solid #E4E1DA;padding-top:5px">${A.days.map((d,i)=>`<span style="flex:1;min-width:0;text-align:center;font-size:${mob?11:10.5}px;color:${i===n-1?C.ink:'#6E6A62'};font-weight:${i===n-1?700:400};white-space:nowrap;overflow:visible">${(i%every===0&&(n-1-i)>=every/2)||i===n-1?(i===n-1?'Yest.':wpDate(d).replace(' ',' ')):''}</span>`).join('')}</div>
-    </div>`;
+      <div style="display:flex;gap:${n>30?2:mob?4:8}px;border-top:1px solid ${W2.line};padding-top:6px">${A.days.map((d,i)=>`<span style="flex:1;min-width:0;text-align:center;font-size:12px;color:${i===n-1?W2.ink:W2.ink2};font-weight:${i===n-1?600:400};white-space:nowrap;overflow:visible">${(i%every===0&&(n-1-i)>=every/2)||i===n-1?(i===n-1?'Yest.':wpDate(d)):''}</span>`).join('')}</div>
+    </div>`, `margin-top:${mob?12:16}px`);
   const controls = wtControlsHTML(A, mob, true);
   const showSt = !A.st;
   const stName = r => r.st ? STATE_NAMES[r.st]||r.st : 'HR + PB';
-  const tmLine = r => !r.tms.length ? `<i style="color:#9C988F">no TM on the sheet</i>` : E(r.tms.map(p=>p.n).join(', '));
-  const noneNote = r => r.none ? `<div style="font-size:11px;color:#8A5A00;margin-top:3px;line-height:1.4">⚠ The sheet's territory is "0", blank or not a Wheat territory — fix on the sheet</div>` : '';
-  const empty = `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:40px 18px;text-align:center;color:#46433d;font-size:13px;margin-top:14px">No territories match these filters.${A.narrowed?`<div style="margin-top:12px"><button data-act="wtclear" style="min-height:${mob?44:32}px;padding:0 14px;border:1px solid #E9E6DF;border-radius:9px;background:#fff;color:#1B1A17;font-size:12.5px;font-weight:600;cursor:pointer">Clear filters</button></div>`:''}</div>`;
+  const tmLine = r => !r.tms.length ? `<i style="color:${W2.ink2}">no TM on the sheet</i>` : E(r.tms.map(p=>p.n).join(', '));
+  const noneNote = r => r.none ? `<div style="font-size:12.5px;color:${W2.idleD};margin-top:3px;line-height:1.4">⚠ The sheet's territory is "0", blank or not a Wheat territory — fix on the sheet</div>` : '';
+  const empty = B.msg(`No territories match these filters.${A.narrowed?`<div style="margin-top:12px">${B.ghost('wtclear','Clear filters')}</div>`:''}`, '40px 18px');
   const sortName = (WT_SORTS.find(([k])=>k===A.sort)||[])[1]||'';
   let list;
   if(!A.rows.length) list=empty;
   else if(mob){
     const shown=A.rows.slice(0, S.wtLimit||WT_PAGE);
-    list = `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:18px 2px 8px"><span style="font-size:14px;font-weight:700">Territories</span><span class="mCap">by ${E(sortName.toLowerCase())}</span></div>`
+    const stat=(v,l)=>`<div style="display:flex;flex-direction:column;min-width:0"><span style="${w2num(17)}">${v}</span><span style="font-size:12.5px;color:${W2.ink2}">${l}</span></div>`;
+    list = `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:18px 2px 10px"><span style="font-size:16px;font-weight:600">Territories · ${fmt(A.rows.filter(r=>!r.none).length)}</span><span style="font-size:12.5px;color:${W2.ink2}">by ${E(sortName.toLowerCase())}</span></div>`
       + shown.map(r=>{
         const open = !!S.wtOpen[r.key] || r.mcHit;
-        const tmRow=p=>`<div style="display:flex;align-items:center;gap:8px;min-height:44px"><span class="mCap" style="width:24px;flex-shrink:0">TM</span><span style="flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(p.n)}</span>${tel(p,'TM')}</div>`;
-        const mcBtn=m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:9px 12px;border:1px solid #EFEDE7;border-radius:10px;background:#FBFAF8;text-align:left;cursor:pointer;font-family:inherit;color:#1B1A17">
-            <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${E(m.mc)}</span>${orgChip(m.org)}</span><span class="mCap" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.opName?E(m.opName):'No operator'} · ${E(m.party)}</span></span>
-            <span style="text-align:right;flex-shrink:0"><span style="display:block;font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${acF(wtAc(m))} ac</span><span class="mCap" style="display:block">${acF(m.acY)} yesterday</span></span><span aria-hidden="true" style="color:#9C988F">›</span></button>`;
-        return `<div style="background:#fff;border:1px solid ${r.none?'#F0DDB0':'#E9E6DF'};border-radius:14px;padding:13px 14px;margin-bottom:10px">
-          <div style="font-size:15px;font-weight:700;line-height:1.3">${E(r.name)}</div>
-          <div class="mCap" style="margin-top:2px">${showSt?E(stName(r))+' · ':''}${fmt(r.n)}${r.n<r.nAll?' of '+fmt(r.nAll):''} machine${r.n===1?'':'s'}</div>${noneNote(r)}
-          <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin-top:11px"><span style="font-family:'IBM Plex Mono';font-size:20px;font-weight:700">${acF(r.acAll)}</span><span style="font-size:12.5px;color:#46433d">of ${fmt(r.plan)} ac plan</span><span style="flex:1"></span><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${pctF(r.pct)}</span></div>
-          <div style="margin-top:6px">${meter(r.pct)}</div>
-          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:11px">
-            <div><div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${acF(r.acY)}</div><div class="mCap">ac yesterday</div></div>
-            <div><div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${acF(r.scAll)}</div><div class="mCap">ac scanned</div></div>
-            <div><div style="font-family:'IBM Plex Mono';font-size:14px;font-weight:700">${fmt(r.op)}<span style="font-size:11px;font-weight:500;color:#6E6A62"> of ${fmt(r.n)}</span></div><div class="mCap">operator mapped</div></div>
-          </div>
-          <div style="display:flex;align-items:flex-end;gap:10px;margin-top:11px">${wtSpark(r.series,A.days,'')}<span class="mCap" style="flex-shrink:0;white-space:nowrap">last ${Math.min(WT_SPARK,A.days.length)} days</span></div>
-          <div style="border-top:1px solid #F2F0EB;margin-top:10px;padding-top:2px">${r.tms.length?r.tms.map(tmRow).join(''):`<div class="mCap" style="padding:10px 0">No TM on the sheet</div>`}</div>
-          <button data-act="wtexp" data-k="${E(r.key)}" aria-expanded="${open}" style="width:100%;min-height:44px;margin-top:8px;border:1px solid #E9E6DF;border-radius:10px;background:${open?'#F6F5F2':'#fff'};color:#1B1A17;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${open?'Hide':'Show'} ${r.n} machine${r.n===1?'':'s'} <span style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>
-          ${open?`<div style="margin-top:8px;display:flex;flex-direction:column;gap:6px">${r.tmGroups.map(g=>(r.tmGroups.length>1?`<div class="mLbl" style="margin:6px 2px 0">TM · ${g.n?E(g.n):'not on the sheet'} · ${g.list.length}</div>`:'')+g.list.map(mcBtn).join('')).join('')}</div>`:''}
-        </div>`; }).join('')
-      + (A.rows.length>shown.length ? `<button data-act="wtmore" style="width:100%;min-height:48px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#1B1A17;font-size:13.5px;font-weight:600;cursor:pointer">Load more · ${fmt(shown.length)} of ${fmt(A.rows.length)} shown</button>` : '');
+        const tmRow=(p,last)=>`<div style="display:flex;align-items:center;gap:10px;min-height:52px;${last?'':'border-bottom:1px solid '+W2.line2}"><span style="width:28px;font-size:12px;font-weight:600;color:${W2.ink2};flex-shrink:0">TM</span><span style="flex:1;min-width:0;font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(p.n)}</span>${tel(p,'TM')}</div>`;
+        const mcBtn=m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:${W2.head};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
+            <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${orgChip(m.org)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.opName?E(m.opName):'No operator'} · ${E(m.party)}</span></span>
+            <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${acF(wtAc(m))} ac</span><span style="display:block;font-size:12.5px;color:${W2.ink2}">${acF(m.acY)} yesterday</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`;
+        return B.cardBox(`<div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div><div style="font-size:16px;font-weight:600;line-height:1.3">${E(r.name)}</div>
+            <div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">${showSt?E(stName(r))+' · ':''}${fmt(r.n)}${r.n<r.nAll?' of '+fmt(r.nAll):''} machine${r.n===1?'':'s'}</div>${noneNote(r)}</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span style="${w2num(22)}">${acF(r.acAll)}</span> <span style="font-size:13.5px;color:${W2.ink2}">of ${fmt(r.plan)} ac plan</span></span><span style="${w2num(14)}">${pctF(r.pct)}</span></div>
+            ${meter(r.pct,'',W2.act)}</div>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${stat(acF(r.acY),'ac yesterday')}${stat(acF(r.scAll),'ac scanned')}${stat(fmt(r.op)+`<span style="font-size:12px;font-weight:500;color:${W2.ink2}"> of ${fmt(r.n)}</span>`,'operator mapped')}</div>
+          <div style="display:flex;align-items:flex-end;gap:10px">${wtSpark(r.series,A.days,'')}<span style="flex-shrink:0;white-space:nowrap;font-size:12.5px;color:${W2.ink2}">last ${Math.min(WT_SPARK,A.days.length)} days</span></div>
+          <div style="border-top:1px solid ${W2.line2}">${r.tms.length?r.tms.map((p,i)=>tmRow(p,i===r.tms.length-1)).join(''):`<div style="font-size:13px;color:${W2.ink2};padding:12px 0">No TM on the sheet</div>`}</div>
+          <button data-act="wtexp" data-k="${E(r.key)}" aria-expanded="${open}" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:${open?W2.head:'#fff'};color:${W2.ink};font:500 14px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${open?'Hide':'Show'} ${r.n} machine${r.n===1?'':'s'} <span aria-hidden="true" style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>
+          ${open?`<div style="display:flex;flex-direction:column;gap:8px">${r.tmGroups.map(g=>(r.tmGroups.length>1?`<div class="mLbl" style="margin:6px 2px 0">TM · ${g.n?E(g.n):'not on the sheet'} · ${g.list.length}</div>`:'')+g.list.map(mcBtn).join('')).join('')}</div>`:''}
+        </div>`, `margin-bottom:12px${r.none?';border-color:#F1E2BC':''}`); }).join('')
+      + (A.rows.length>shown.length ? `<button data-act="wtmore" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:#fff;color:${W2.ink};font:500 14px ${W2.font};cursor:pointer">Load more · ${fmt(shown.length)} of ${fmt(A.rows.length)} shown</button>` : '')
+      + `<div style="margin-top:10px">${B.stamp('wpretry')}</div>`;
   } else {
-    const cols='minmax(220px,1.7fr) 70px 84px 116px 84px 80px 128px 132px';
-    const hd=(k,t,right)=>k?`<button data-act="wtsort" data-k="${k}" aria-sort="${A.sort===k?'descending':'none'}" style="border:none;background:none;padding:0;font:inherit;letter-spacing:inherit;text-transform:inherit;color:${A.sort===k?C.ink:'#6E6A62'};cursor:pointer;text-align:${right?'right':'left'};${right?'justify-self:end':''}">${t}${A.sort===k?' ↓':''}</button>`:`<span>${t}</span>`;
-    const th=`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:9px 16px;background:#FBFAF8;border-bottom:1px solid #EFEDE7;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;position:sticky;top:0;z-index:1">
+    const cols='minmax(220px,1.7fr) 74px 90px 124px 86px 84px 130px 136px';
+    const hd=B.th('wtsort',A.sort);
+    const head=`<div style="display:grid;grid-template-columns:${cols};gap:14px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2};position:sticky;top:0;z-index:1">
       ${hd('name','Territory · TM')}${hd('n','Machines',1)}${hd('plan','Plan ac',1)}${hd('acAll','Sprayed ac',1)}${hd('acY','Yesterday',1)}${hd('scAll','Scanned',1)}${hd('opPct','Operator mapped',1)}${hd('',`Last ${Math.min(WT_SPARK,A.days.length)} days`)}</div>`;
-    const numC=(v,b)=>`<span style="font-family:'IBM Plex Mono';font-size:12.5px;${b?'font-weight:700;':''}text-align:right">${v}</span>`;
-    const sprayC=(v,p)=>`<span style="text-align:right"><span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700">${acF(v)}</span><span style="font-size:11px;color:#6E6A62"> · ${pctF(p)}</span><span style="display:block;margin-top:4px">${meter(p)}</span></span>`;
-    const opC=(k,nn)=>`<span style="text-align:right"><span style="font-family:'IBM Plex Mono';font-size:12.5px;font-weight:600">${fmt(k)}<span style="color:#6E6A62;font-weight:400"> of ${fmt(nn)}</span></span><span style="display:block;margin-top:4px">${meter(nn?100*k/nn:null)}</span></span>`;
+    const numC=(v,b)=>`<span style="text-align:right;font-variant-numeric:tabular-nums${b?';font-weight:600':''}">${v}</span>`;
+    const sprayC=(v,p)=>`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums"><b style="font-weight:600">${acF(v)}</b><span style="font-size:12.5px;color:${W2.ink2}"> · ${pctF(p)}</span></span>${meter(p,'100%',W2.act)}</div>`;
+    const opC=(k,nn)=>`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums;font-weight:500">${fmt(k)}<span style="color:${W2.ink2};font-weight:400"> of ${fmt(nn)}</span></span>${meter(nn?100*k/nn:null,'100%','#1A9E80')}</div>`;
     const body=A.rows.map(r=>{
       const open = !!S.wtOpen[r.key] || r.mcHit;
-      const mRow=m=>`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:8px 16px;border-top:1px solid #F4F2EE;align-items:center;background:#FDFCFA">
-        <div style="min-width:0;padding-left:22px"><div style="display:flex;align-items:center;gap:6px"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700;color:${C.ink};text-decoration:underline;text-decoration-color:#D5D0C6;text-underline-offset:3px">${E(m.mc)}</button>${orgChip(m.org)}</div><div style="font-size:11px;color:#6E6A62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${E(m.party)}">${E(m.party)}</div></div>
-        <span></span>${numC(`<span style="color:#6E6A62" title="Retailer plan ÷ his ${m.retailer.list.length} machines">${fmt(m.planShare)}</span>`)}${numC(acF(wtAc(m)),1)}${numC(acF(m.acY))}${numC(acF(m.scAll))}
-        <span style="text-align:right;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.opName||m.opNum?E(m.opName||m.opNum):'<span style="color:#B4462F">✕ No operator</span>'}</span>${wtSpark(A.days.map(d=>m.days[d]||0),A.days,'120px')}</div>`;
-      return `<div data-act="wtexp" data-k="${E(r.key)}" role="button" aria-expanded="${open}" tabindex="0" style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 16px;border-top:1px solid #EFEDE7;align-items:center;cursor:pointer;background:${open?'#F6F5F2':r.none?'#FFFBF2':'#fff'}">
-        <div style="min-width:0;display:flex;gap:8px;align-items:flex-start"><span aria-hidden="true" style="color:#6E6A62;font-size:11px;margin-top:2px;display:inline-block;transform:rotate(${open?90:0}deg)">▶</span><div style="min-width:0"><div style="font-size:13px;font-weight:700">${E(r.name)}${showSt?` <span style="font-weight:400;color:#6E6A62;font-size:11.5px">· ${E(stName(r))}</span>`:''}</div><div style="font-size:11.5px;color:#46433d;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-size:10px;font-weight:700;color:#6E6A62;letter-spacing:.04em">TM</span> ${tmLine(r)}</div>${noneNote(r)}</div></div>
-        ${numC(fmt(r.n)+(r.n<r.nAll?`<span style="color:#9C988F;font-weight:400"> /${r.nAll}</span>`:''),1)}${numC(fmt(r.plan))}${sprayC(r.acAll,r.pct)}${numC(acF(r.acY))}${numC(acF(r.scAll))}${opC(r.op,r.n)}${wtSpark(r.series,A.days,'120px')}</div>`
-      + (open ? r.tmGroups.map(g=>(r.tmGroups.length>1?`<div style="padding:7px 16px 5px 54px;border-top:1px solid #F4F2EE;background:#FBFAF8;font-size:11px;color:#46433d"><span style="font-size:10px;font-weight:700;color:#6E6A62;letter-spacing:.06em">TM</span> <b>${g.n?E(g.n):'not on the sheet'}</b>${g.mob&&realTel(g.mob)?` · <a href="tel:${g.mob}" style="color:#46433d;font-family:'IBM Plex Mono'">${E(g.mob)}</a>`:''} · ${g.list.length} machine${g.list.length===1?'':'s'}</div>`:'')+g.list.map(mRow).join('')).join('') : '');
+      const mRow=m=>`<div style="display:grid;grid-template-columns:${cols};gap:14px;padding:10px 22px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;background:#FBFCFD">
+        <div style="min-width:0;padding-left:22px"><div style="display:flex;align-items:center;gap:6px"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font:600 13px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</button>${orgChip(m.org)}</div><div style="font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${E(m.party)}">${E(m.party)}</div></div>
+        <span></span>${numC(`<span style="color:${W2.ink2}" title="Retailer plan ÷ his ${m.retailer.list.length} machines">${fmt(m.planShare)}</span>`)}${numC(acF(wtAc(m)),1)}${numC(acF(m.acY))}${numC(acF(m.scAll))}
+        <span style="text-align:right;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.opName||m.opNum?E(m.opName||m.opNum):`<span style="color:${W2.brkD}">✕ No operator</span>`}</span>${wtSpark(A.days.map(d=>m.days[d]||0),A.days,'124px')}</div>`;
+      return `<div class="w2Row" data-act="wtexp" data-k="${E(r.key)}" role="button" aria-expanded="${open}" tabindex="0" style="display:grid;grid-template-columns:${cols};gap:14px;padding:12px 22px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;cursor:pointer;background:${open?W2.head:r.none?'#FFFBF2':'#fff'}">
+        <div style="min-width:0;display:flex;gap:8px;align-items:flex-start">${B.chev(open)}<div style="min-width:0"><div style="font-weight:600">${E(r.name)}${showSt?` <span style="font-weight:400;color:${W2.ink2};font-size:13px">· ${E(stName(r))}</span>`:''}</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-size:11.5px;font-weight:600">TM</b> <span style="color:${W2.ink}">${tmLine(r)}</span></div>${noneNote(r)}</div></div>
+        ${numC(fmt(r.n)+(r.n<r.nAll?`<span style="color:${W2.ink2};font-weight:400"> /${r.nAll}</span>`:''))}${numC(fmt(r.plan),1)}${sprayC(r.acAll,r.pct)}${numC(acF(r.acY))}${numC(acF(r.scAll))}${opC(r.op,r.n)}${wtSpark(r.series,A.days,'124px')}</div>`
+      + (open ? r.tmGroups.map(g=>(r.tmGroups.length>1?`<div style="padding:8px 22px 6px 52px;border-bottom:1px solid ${W2.line2};background:${W2.head};font-size:13px;color:${W2.ink2}"><b style="font-size:11.5px;font-weight:600">TM</b> <b style="color:${W2.ink};font-weight:600">${g.n?E(g.n):'not on the sheet'}</b>${g.mob&&realTel(g.mob)?` · <a href="tel:${g.mob}" style="color:${W2.ink2};font-family:'IBM Plex Mono'">${E(g.mob)}</a>`:''} · ${g.list.length} machine${g.list.length===1?'':'s'}</div>`:'')+g.list.map(mRow).join('')).join('') : '');
     }).join('');
-    list=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;margin-top:14px">
-      <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7"><div style="font-size:13px;font-weight:700">Territories · ${fmt(A.rows.filter(r=>!r.none).length)}${A.none?` <span style="font-weight:500;color:#8A5A00">+ ${fmt(A.none.n)} machines without a territory</span>`:''}</div><div style="font-size:11.5px;color:#6E6A62;margin-top:2px">Sorted by ${E(sortName.toLowerCase())} · click a territory for its machines, a machine number for its details · plan is each retailer's plan, split over his machines</div></div>
-      <div style="overflow-x:auto"><div style="min-width:1000px">${th}${body}</div></div></div>`;
+    list = B.cardBox(`<div style="padding:18px 22px;border-bottom:1px solid ${W2.line2}"><div style="font-size:16px;font-weight:600">Territories · ${fmt(A.rows.filter(r=>!r.none).length)}${A.none?` <span style="font-weight:500;font-size:14px;color:${W2.idleD}">+ ${fmt(A.none.n)} machines without a territory</span>`:''}</div><div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">Sorted by ${E(sortName.toLowerCase())} · click a territory for its machines, a machine number for its details · plan is each retailer’s plan, split over his machines</div></div>
+      <div style="overflow-x:auto"><div style="min-width:1040px">${head}${body}</div></div>`, 'overflow:hidden;margin-top:16px');
   }
-  return mob ? kpis + trend + `<div style="margin-top:14px">${controls}</div>` + list : controls + kpis + trend + list;
+  return mob ? kpis + trend + `<div style="margin-top:12px">${controls}</div>` + list : controls + kpis + trend + list;
 }
-// The KPI strip, in the Kharif console's own order and look (asked 2026-10-28): did the fleet work → season to date →
-// the territories reached → Idle → acres yesterday → MTD → the fleet (machines, UPL/SWAL) → operators → IoT → pings.
+// The KPI strip, in the Kharif console's order (asked 2026-10-28) and the v2 design's layout: the hero answers "did the
+// fleet work" with the season under it, then four tiles, then the fleet and the three connection figures.
 // Wheat differences, each agreed: the fleet is EVERY machine on the sheet (no deployed flag; handover lags the acres);
 // no Breakdown (breakdown_id's meaning is unconfirmed — 7 machines carrying one sprayed yesterday), so Idle is simply
-// "did not run"; no last season, so the season tile carries acres against the PLAN instead; no machine plan on the
-// fleet tile. Pinged counts machines whose last ping is yesterday or later — the sheet keeps only the latest ping.
+// "did not run"; no last season, so the season line carries acres against the PLAN, in a neutral pill (there is no
+// direction to colour); no machine plan on the fleet tile. Pinged counts machines whose last ping is yesterday or
+// later — the sheet keeps only the latest ping.
 function wtStripHTML(A, mob, stale, cardOnly){
   const pctW = A.n ? Math.round(100*A.worked/A.n) : 0, idle = A.n - A.worked, day = wpDate(WRET.yday);
-  const fleet = { deployed:A.n, plan:null, upl:A.upl, swal:A.swal, open:A.open, org:A.org==='ALL'?'Both':A.org, handed:null, label:'Machines on the sheet' };
-  const tiles = [
-    { label:'Territories sprayed', val:`${fmt(A.nSprayedY)}`, sub:`of ${fmt(A.nNamed)}`, col:C.ink, ph:1 },
-    { label:'Idle', val:fmt(idle), col:C.idle, ph:1 },
-    { label:'Acres '+day, val:acF(A.acY), unit:'ac', col:C.ink, ph:1, warn:stale },
-    { label:'MTD acres', val:acF(A.mtd), unit:'ac', col:C.ink },
-    { kind:'fleet', ph:1 },
-    { label:'Operators mapped', val:`${fmt(A.op)}/${fmt(A.n)}`, col:A.op===A.n?C.greenD:C.ink },
-    { label:'IoT acres y’day', val:acF(A.iotY), unit:'ac', col:C.orangeD },
-    { label:'Pinged since y’day', val:fmt(A.pinged), col:'#3A6FA0' },
-  ];
-  const seasonSub = `${pctF(A.pct)} of ${fmt(A.plan)} ac plan`;
   const staleTxt = stale ? `⚠ the sheet's acres stop at ${wpDate(WRET.lastDate)}` : '';
-  if(mob){
-    return `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:12px 14px;margin-bottom:9px">
-        <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap"><span style="${css(mono22(C.act))}">${fmt(A.worked)}</span><span style="font-size:13px;color:#46433d">of ${fmt(A.n)} worked yesterday</span></div>
-        <div style="font-size:12px;color:#6E6A62;margin-top:2px">${pctW}% of machines · ${acF(A.acY)} ac · ${day}</div>
-        ${staleTxt?`<div style="font-size:12px;color:#8A5A00;margin-top:4px">${staleTxt}</div>`:''}
-        <div style="border-top:1px solid #F2F0EB;margin-top:10px;padding-top:9px;font-size:12px;color:#46433d;line-height:1.45"><b style="font-family:'IBM Plex Mono'">${acF(A.acAll)} ac</b> season to ${day}<br><span style="color:#6E6A62">${seasonSub}</span></div>
+  const tiles = [
+    { label:'Territories sprayed', val:fmt(A.nSprayedY), unit:`of ${fmt(A.nNamed)}` },
+    { label:'Idle', val:fmt(idle) },
+    { label:'Acres '+day, val:acF(A.acY), unit:'ac', warn:stale },
+    { label:'MTD acres', val:acF(A.mtd), unit:'ac' },
+    { kind:'fleet' },
+    { label:'Operators mapped', val:`${fmt(A.op)}/${fmt(A.n)}` },
+    { label:'IoT acres y’day', val:acF(A.iotY), unit:'ac' },
+    { label:'Pinged since y’day', val:fmt(A.pinged) },
+  ];
+  const parts = A.org==='ALL' ? [['UPL',A.upl,C.orange],['SWAL',A.swal,C.green],...(A.open>0?[['Open',A.open,C.open]]:[])]
+    : [[A.org, A.org==='UPL'?A.upl:A.swal, A.org==='UPL'?C.orange:C.green]];
+  const fleetInner = (sz) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Machines on the sheet</span></div>
+      <div style="${w2num(sz)}">${fmt(A.n)}</div>
+      <div style="display:flex;gap:2px;height:6px;border-radius:3px;overflow:hidden;background:${W2.line2}">${parts.map(([,k,c])=>`<div style="flex:${k};background:${c}"></div>`).join('')}</div>
+      <div style="display:flex;gap:12px;font-size:12.5px;color:${W2.ink2};flex-wrap:wrap">${parts.map(([o,k,c])=>`<span style="display:flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:8px;height:8px;border-radius:2px;background:${c}"></span>${o} <b style="color:${W2.ink};font-weight:600">${fmt(k)}</b></span>`).join('')}</div>`;
+  const tileHTML = (k, sz) => { const t = k.warn ? w2tone('Idle') : w2tone(k.label);
+    return `<div style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;color:${W2.ink2};white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:${t.dot};flex-shrink:0"></span>${E(k.label)}</div>
+      <div style="${w2num(sz,600,k.warn?W2.idleD:t.vc)};white-space:nowrap">${k.val}${k.unit?w2unit(k.unit,sz>24?13:12):''}</div>
+      ${k.warn?`<div style="font-size:12.5px;color:${W2.idleD}">${staleTxt}</div>`:''}`; };
+  const box = (k, extra='') => { const t = k.kind==='fleet' ? { bg:'linear-gradient(150deg,#FFF1E5 0%,#FFFFFF 55%,#EEF8F1 100%)', bd:'#F1E2D3' } : k.warn ? w2tone('Idle') : w2tone(k.label);
+    return `background:${t.bg};border:1px solid ${t.bd};${extra}`; };
+  const planPill = `<span style="font-size:13px;font-weight:600;padding:3px 8px;border-radius:6px;background:${W2.line2};color:${W2.ink};white-space:nowrap">${pctF(A.pct)} of plan</span>`;
+  const hero = (big) => `<div style="display:flex;flex-direction:column;gap:${big?6:8}px">
+        <div style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Worked yesterday</div>
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="${w2num(big?44:40,600,W2.actD)};letter-spacing:-0.02em;line-height:1">${fmt(A.worked)}</span><span style="font-size:${big?16:15}px;color:${W2.ink2}">of ${fmt(A.n)} machines</span></div>
+        <div style="height:6px;background:${W2.line2};border-radius:3px;overflow:hidden;margin-top:${big?6:0}px"><div style="width:${pctW}%;min-width:${A.worked?4:0}px;height:100%;background:${W2.act};border-radius:3px"></div></div>
+        <div style="font-size:13.5px;color:${W2.ink2}">${pctW}% of machines · ${acF(A.acY)} ac sprayed · ${day}</div>
+        ${staleTxt?`<div style="font-size:13px;color:${W2.idleD}">${staleTxt}</div>`:''}
       </div>
-      ${cardOnly?'':`<div style="display:flex;gap:9px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;padding:0 28px 3px 0;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)">
-        ${tiles.filter(k=>k.ph).map(k=>k.kind==='fleet'
-          ? `<div style="flex-shrink:0;scroll-snap-align:start;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px">${fleetTileInner(fleet,true)}</div>`
-          : `<div style="flex-shrink:0;scroll-snap-align:start;min-width:92px;background:${k.warn?'#FFF8E6':'#fff'};border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px"><div style="white-space:nowrap"><span style="${css(mono22(k.col))}">${k.val}</span>${k.sub?`<span style="font-size:12px;color:#6E6A62"> ${k.sub}</span>`:''}</div><div style="font-size:11px;font-weight:600;letter-spacing:.03em;color:#6E6A62;text-transform:uppercase;margin-top:4px;white-space:nowrap">${E(k.label)}</div></div>`).join('')}
+      <div style="border-top:1px solid ${W2.line2};padding-top:${big?14:12}px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Season to ${day}</span><span style="${w2num(big?22:20)}">${acF(A.acAll)}${w2unit()}</span></div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${planPill}<span style="font-size:12.5px;color:${W2.ink2};white-space:nowrap">of ${fmt(A.plan)} ac plan</span></div>
+      </div>`;
+  if(mob){
+    return `<div style="background:linear-gradient(160deg,#EEF8F2 0%,#FFFFFF 60%);border:1px solid ${W2.card};border-radius:18px;box-shadow:${W2.shadow};padding:16px;display:flex;flex-direction:column;gap:10px">${hero(false)}</div>
+      ${cardOnly?'':`<div style="display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;margin:12px -16px 0;padding:0 16px 2px;scrollbar-width:none">
+        ${tiles.map(k=>`<div style="flex:none;scroll-snap-align:start;${k.kind==='fleet'?'width:200px':'width:136px'};${box(k)}border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:${k.kind==='fleet'?6:4}px">${k.kind==='fleet'?fleetInner(22):tileHTML(k,22)}</div>`).join('')}
       </div>`}`;
   }
-  // The Kharif strip scrolls sideways; here it WRAPS, so no figure is ever off-screen on a laptop. Each cell draws its own
-  // right and bottom hairline (box-shadow), which the container's overflow clips at the outer edge.
-  const cell = (inner, extra='') => `<div style="flex:1 0 auto;min-width:118px;padding:13px 16px;box-shadow:1px 1px 0 #EFEDE7;${extra}">${inner}</div>`;
-  return `<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;display:flex;flex-wrap:wrap;overflow:hidden;margin-top:14px">
-    ${cell(`<div style="display:flex;align-items:baseline;gap:5px;white-space:nowrap"><span style="${css(mono22(C.act))}">${fmt(A.worked)}</span><span style="font-size:11px;color:#6E6A62">of ${fmt(A.n)} · ${pctW}%</span></div>${kpiLbl('Worked yesterday')}`, 'min-width:150px')}
-    ${cell(`<div style="display:flex;align-items:baseline;gap:5px;white-space:nowrap"><span style="${css(mono22(C.ink))}">${acF(A.acAll)}</span><span style="font-size:10.5px;color:#B6B1A8">ac</span></div>${kpiLbl('Season to '+day)}<div style="font-size:10.5px;color:#6E6A62;margin-top:3px;white-space:nowrap">${seasonSub}</div>`, 'min-width:190px')}
-    ${tiles.map(k=>k.kind==='fleet' ? cell(fleetTileInner(fleet,false),'min-width:170px') : cell(`
-      <div style="display:flex;align-items:baseline;gap:5px;white-space:nowrap"><span style="${css(mono22(k.col))}">${k.val}</span>${k.sub?`<span style="font-size:11px;color:#6E6A62">${k.sub}</span>`:''}${k.unit?`<span style="font-size:10.5px;color:#B6B1A8">${k.unit}</span>`:''}</div>
-      ${kpiLbl(E(k.label))}${k.warn?`<div style="font-size:10.5px;color:#8A5A00;margin-top:3px;white-space:nowrap">${staleTxt}</div>`:''}`, k.warn?'background:#FFF8E6':'')).join('')}
-  </div>`;
+  // Desktop: the hero spans both rows; four tiles over the fleet + three. The grid wraps to three columns below ~1100px.
+  const card = (k) => `<div style="${box(k)}border-radius:14px;box-shadow:${W2.shadow};padding:14px 16px;display:flex;flex-direction:column;gap:${k.kind==='fleet'?8:6}px;min-width:0">${k.kind==='fleet'?fleetInner(26):tileHTML(k,26)}</div>`;
+  return `<div style="display:grid;grid-template-columns:minmax(260px,1.55fr) repeat(4,minmax(0,1fr));gap:12px;margin-top:16px">
+      <div style="grid-row:span 2;background:linear-gradient(160deg,#EEF8F2 0%,#FFFFFF 55%);border:1px solid ${W2.card};border-radius:16px;box-shadow:${W2.shadow};padding:20px 22px;display:flex;flex-direction:column;justify-content:space-between;gap:16px;min-width:0">${hero(true)}</div>
+      ${tiles.map(card).join('')}
+    </div>`;
 }
-function wterrViewHTML(v){ return `<section style="padding:18px 22px">${wterrBodyHTML(false)}</section>`; }
+function wterrViewHTML(v){ return `<section style="padding:24px 32px">${wterrBodyHTML(false)}</section>`; }
 /* ===================== Wheat North — Machine map (view key `wmap`) =====================
    Page 3 of the Wheat rebuild (agreed 2026-10-28). Every machine at its LAST PING position, on the Haryana + Punjab
    district outlines, under the Territory page's own filters (one shared `wt*` scope: wterrAgg feeds both pages).
@@ -8658,24 +8777,24 @@ function wmapBodyHTML(mob){
   const ready=wmGeo();
   const dot=(c,ring,fade)=>`<span aria-hidden="true" style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${c};${ring?'box-shadow:0 0 0 2px '+C.brk+';':'border:1.5px solid #fff;box-sizing:border-box;'}${fade?'opacity:.4;':''}flex-shrink:0"></span>`;
   const key=(c,t,ring,fade)=>`<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">${dot(c,ring,fade)}${t}</span>`;
-  const legend=`<div style="display:flex;flex-wrap:wrap;gap:8px 16px;font-size:${mob?12:11.5}px;color:#46433d">
+  const legend=`<div style="display:flex;flex-wrap:wrap;gap:8px 18px;font-size:${mob?13:13.5}px;color:${W2.ink}">
       ${key(WM_TONE.y,'Sprayed yesterday')}${key(WM_TONE.s,'Sprayed earlier')}${key(WM_TONE.n,'Not sprayed yet')}${key('#fff','No operator mapped',true)}${key(WM_TONE.s,'Last ping 3+ days ago',false,true)}
       <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap"><span aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:#6E6A62;color:#fff;font-size:9.5px;font-weight:700;font-family:'IBM Plex Mono'">3</span>Machines at one spot</span></div>`;
-  const notes=`<div style="font-size:11.5px;color:#6E6A62;line-height:1.5;margin-top:8px">Positions are each machine's last ping and are approximate: the sheet's longitude has 2 decimals (about 1 km east–west).${off.length?` <b style="color:#46433d">${fmt(off.length)} machine${off.length===1?' has':'s have'} no usable position</b> and ${off.length===1?'is':'are'} not on the map: ${off.slice(0,8).map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;font:inherit;font-family:'IBM Plex Mono';color:#1B1A17;text-decoration:underline;text-decoration-color:#D5D0C6;cursor:pointer;${mob?'min-height:44px':''}">${E(m.mc)}</button>`).join(', ')}${off.length>8?` +${off.length-8}`:''}.`:''}</div>`;
-  const head=`<div style="display:flex;align-items:center;gap:10px;padding:${mob?'12px 14px':'12px 16px'};border-bottom:1px solid #EFEDE7;flex-wrap:wrap">
-      <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:700">Machines on the map · ${fmt(placed)}</div><div style="font-size:11.5px;color:#6E6A62;margin-top:1px">${A.narrowed?'what the filters show':'every machine'} · ${mob?'tap':'point at'} a pin for its card</div></div>
+  const notes=`<div style="font-size:13px;color:${W2.ink2};line-height:1.5;margin-top:10px;border-top:1px solid ${W2.line2};padding-top:10px">Positions are each machine's last ping and are approximate: the sheet's longitude has 2 decimals (about 1 km east–west).${off.length?` <b style="color:#46433d">${fmt(off.length)} machine${off.length===1?' has':'s have'} no usable position</b> and ${off.length===1?'is':'are'} not on the map: ${off.slice(0,8).map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;font:inherit;font-family:'IBM Plex Mono';color:#1B1A17;text-decoration:underline;text-decoration-color:#D5D0C6;cursor:pointer;${mob?'min-height:44px':''}">${E(m.mc)}</button>`).join(', ')}${off.length>8?` +${off.length-8}`:''}.`:''}</div>`;
+  const head=`<div style="display:flex;align-items:center;gap:10px;padding:${mob?'14px 16px':'14px 18px'};border-bottom:1px solid ${W2.line2};flex-wrap:wrap">
+      <div style="flex:1;min-width:0"><div style="font-size:${mob?15:16}px;font-weight:600">Machines on the map · ${fmt(placed)}</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${A.narrowed?'what the filters show':'every machine'} · ${mob?'tap':'point at'} a pin for its card</div></div>
       ${mob?'':zoomCtrlsFor(false)}</div>`;
   const box = !ready
     ? `<div style="height:${mob?'300px':'520px'};display:flex;align-items:center;justify-content:center;color:#6E6A62;font-size:13px">Loading the map…</div>`
     : !placed ? `<div style="padding:48px 18px;text-align:center;color:#46433d;font-size:13px">No machine in view has a position.${A.narrowed?`<div style="margin-top:12px"><button data-act="wtclear" style="min-height:${mob?44:32}px;padding:0 14px;border:1px solid #E9E6DF;border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;cursor:pointer">Clear filters</button></div>`:''}</div>`
-    : `<div id="wmHost" style="position:relative;background:#FBFAF8;${mob?`aspect-ratio:${WM.W}/${WM.H};max-height:60vh;width:100%`:'height:clamp(460px,72vh,840px)'};overflow:hidden">${mob?zoomOverlayFor(true):''}</div>`;
-  const map=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;margin-top:14px">${head}${box}
-      <div style="padding:${mob?'12px 14px':'12px 16px'};border-top:1px solid #EFEDE7">${legend}${notes}</div></div>`;
+    : `<div id="wmHost" style="position:relative;background:radial-gradient(ellipse at 50% 40%,#F2F7FC 0%,#FFFFFF 75%);${mob?`aspect-ratio:${WM.W}/${WM.H};max-height:60vh;width:100%`:'height:clamp(460px,72vh,840px)'};overflow:hidden">${mob?zoomOverlayFor(true):''}</div>`;
+  const map=`<div style="${w2card(mob?18:16)};overflow:hidden;margin-top:${mob?12:16}px">${head}${box}
+      <div style="padding:${mob?'14px 16px':'14px 18px'};border-top:1px solid ${W2.line2}">${legend}${notes}</div></div>`;
   const controls = wtControlsHTML(A, mob, false);
-  return mob ? wtStripHTML(A, mob, stale, true) + `<div style="margin-top:14px">${controls}</div>` + map
+  return mob ? wtStripHTML(A, mob, stale, true) + `<div style="margin-top:12px">${controls}</div>` + map
              : controls + wtStripHTML(A, mob, stale) + map;
 }
-function wmapViewHTML(v){ return `<section style="padding:18px 22px">${wmapBodyHTML(false)}</section>`; }
+function wmapViewHTML(v){ return `<section style="padding:24px 32px">${wmapBodyHTML(false)}</section>`; }
 // The card for one position: every machine there, each with its operator, season acres and a Details link; one
 // Navigate for the spot. Built as HTML into the map host, outside render(), and replaced on the next paint.
 function wmCardHTML(g, mob){
@@ -10325,12 +10444,14 @@ function contentHTML(v){
    main, so it is there on every view including the chromeless ones), the foot of the phone's
    scroller, and the PIN gate card. Single source of truth — change the wording here only. */
 const FOOTNOTE = 'Built with tokens, Powered by Claude. By din8sh.';
-const footnoteHTML = mob => `<div style="flex-shrink:0;text-align:center;color:#9C988F;${mob
+const footnoteHTML = mob => isWheat()
+  ? `<div style="flex-shrink:0;text-align:center;color:${W2.ink2};font-size:12px;padding:${mob?'18px 0 2px':'10px 22px'}">${FOOTNOTE}</div>`
+  : `<div style="flex-shrink:0;text-align:center;color:#9C988F;${mob
   ? "padding:18px 0 2px;font-size:10px"
   : "padding:7px 22px;font-size:10.5px;background:#F6F5F2;border-top:1px solid #E9E6DF"}">${FOOTNOTE}</div>`;
 
 function desktopHTML(v){
-  return `<div style="height:100vh;display:flex;background:#F6F5F2;color:#1B1A17;overflow:hidden">
+  return `<div style="height:100vh;display:flex;background:${isWheat()?W2.page:'#F6F5F2'};color:${isWheat()?W2.ink:'#1B1A17'};overflow:hidden">
     ${railHTML()}
     <div style="flex:1;display:flex;flex-direction:column;min-width:0">
       ${topbarHTML(v)}${CHROMELESS.has(state.view)?'':filterBarHTML(v)}${CHROMELESS.has(state.view)?'':kpiStripHTML(v)}${CHROMELESS.has(state.view)?'':glossHTML(false)}
@@ -10490,12 +10611,15 @@ function norunBodyHTML(v, mob){
 // links to where a reader of this page usually goes next, filtered by what the role may see. Phone only.
 const M_NEXT = { norun:['machines','bm'], map:['tables','machines'], tables:['machines','am'], machines:['tables','weather'],
   weather:['machines','map'], am:['bm','machines'], bm:['machines','tables'], pending:['am'], recap:['insights','machines'],
-  insights:['snake','recap'], snake:['insights','product'], product:['mpprod','snake'], mpprod:['product'], leader:['recap'] };
+  insights:['snake','recap'], snake:['insights','product'], product:['mpprod','snake'], mpprod:['product'], leader:['recap'],
+  wplan:['wterr'], wterr:['wmap'], wmap:['wplan'] };
 function mNextHTML(view){
   const ks=(M_NEXT[view]||[]).filter(k=>!roleHidesView(k));
   const brk = view==='machines' && !state.health.includes('Breakdown')
     ? `<button data-act="health" data-h="Breakdown" style="min-height:44px;padding:0 13px;border:1px solid #E9E6DF;border-radius:11px;background:#fff;font-size:13px;color:#1B1A17;cursor:pointer">Breakdowns only</button>` : '';
   if(!ks.length && !brk) return '';
+  // Wheat v2: one full-width row per next page — "Next · Territories ›".
+  if(isWheat()) return `<div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">${ks.map(k=>`<button data-act="view" data-view="${k}" style="display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 16px;${w2card(16)};font:500 15px ${W2.font};color:${W2.ink};cursor:pointer;text-align:left"><span><span style="color:${W2.ink2}">Next</span> · ${E(NAV_TITLE[k]||k)}</span><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${W2.ink2}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>`;
   return `<div style="margin-top:18px"><div class="mLbl" style="margin-bottom:8px">Next</div><div style="display:flex;gap:8px;flex-wrap:wrap">${brk}${ks.map(k=>`<button data-act="view" data-view="${k}" style="min-height:44px;padding:0 13px;border:1px solid #E9E6DF;border-radius:11px;background:#fff;font-size:13px;color:#1B1A17;cursor:pointer">${E(NAV_TITLE[k]||k)} →</button>`).join('')}</div></div>`;
 }
 // "All pages" (plan I1/I2): EVERY page the role has, in the desktop rail's groups and order under the same
@@ -10517,6 +10641,13 @@ function mBottomNavHTML(){
   const all=mViews(), nPrim=all.length<=M_PRIMARY+1?all.length:M_PRIMARY, prim=all.slice(0,nPrim), hasMore=all.length>nPrim;
   if(all.length<2) return '';   // one view (Wheat's planning stage): a bar with a single tab is furniture
   const restActive=all.slice(nPrim).some(x=>x.k===state.view);
+  if(isWheat()){   // v2: the active tab's icon sits in a tinted pill, and the label carries the weight
+    const wItem=(active,icon,label,attrs)=>`<button class="mNavItem" ${attrs}${active?' aria-current="page"':''} style="flex:1;min-height:56px;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:6px 0 4px;cursor:pointer;color:${active?'#7A3B06':W2.ink2};font:${active?600:500} 12px ${W2.font}"><span style="display:flex;align-items:center;justify-content:center;width:52px;height:28px;border-radius:14px;background:${active?'linear-gradient(120deg,#FFE7D2,#DDF3E4)':'transparent'}">${icon}</span>${label}</button>`;
+    return `<nav aria-label="Views" style="flex-shrink:0;background:rgba(255,255,255,.96);border-top:1px solid ${W2.line};display:flex;padding:4px 6px env(safe-area-inset-bottom);z-index:9">
+      ${prim.map(x=>wItem(state.view===x.k, x.icon(), x.label, `data-act="view" data-view="${x.k}"`)).join('')}
+      ${hasMore?wItem(restActive, I.more, 'All pages', `data-act="sheet" data-sheet="more"`):''}
+    </nav>`;
+  }
   const item=(active,inner,attrs)=>`<button class="mNavItem" ${attrs}${active?' aria-current="page"':''} style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:7px 0 0;background:none;border:none;cursor:pointer;color:${active?'#1B1A17':'#6E6A62'};font-size:11px;font-weight:${active?700:500};min-height:56px">${inner}</button>`;
   return `<nav aria-label="Views" style="flex-shrink:0;background:#fff;border-top:1px solid #E9E6DF;display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:9">
     ${prim.map(x=>item(state.view===x.k, `${x.icon()}<span>${x.label}</span>`, `data-act="view" data-view="${x.k}"`)).join('')}
@@ -10739,12 +10870,13 @@ function mobileHTML(v){
         <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">${escalationHTML(d, I.phoneS, true)}</div>
       </div>
     </div>` : '';
+  const pageBg = isWheat() ? W2.page : '#F6F5F2';
   const outer = ph
-    ? `height:100dvh;width:100%;background:#F6F5F2`
+    ? `height:100dvh;width:100%;background:${pageBg}`
     : `height:100vh;width:100%;background:#E7E4DE;display:flex;align-items:center;justify-content:center;padding:18px`;
   const shell = ph
-    ? `width:100%;height:100%;background:#F6F5F2;overflow:hidden;position:relative;display:flex;flex-direction:column`
-    : `width:392px;height:840px;max-height:96vh;background:#F6F5F2;border-radius:44px;border:11px solid #15140F;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 30px 90px rgba(0,0,0,.32)`;
+    ? `width:100%;height:100%;background:${pageBg};overflow:hidden;position:relative;display:flex;flex-direction:column`
+    : `width:392px;height:840px;max-height:96vh;background:${pageBg};border-radius:44px;border:11px solid #15140F;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 30px 90px rgba(0,0,0,.32)`;
   // The notch cut-out and the "switch to desktop" button are preview-frame affordances: a real
   // phone has its own notch, and the desktop layout is a fixed 100vh grid it cannot usefully show.
   const notch = ph ? '' : `<div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:118px;height:25px;background:#15140F;border-radius:0 0 16px 16px;z-index:8"></div>`;
@@ -10766,7 +10898,18 @@ function mobileHTML(v){
   return `<div style="${outer}">
     <div class="mShell" style="${shell}">
       ${notch}
-      <div style="padding:${ph?'calc(env(safe-area-inset-top) + 12px) 16px 12px':'30px 18px 12px'};background:#fff;border-bottom:1px solid #E9E6DF;flex-shrink:0">
+      ${isWheat() ? `<div style="padding:${ph?'calc(env(safe-area-inset-top) + 8px) 12px 10px 16px':'30px 12px 10px 16px'};background:#fff;border-bottom:1px solid ${W2.line};flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div aria-hidden="true" style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;flex-shrink:0">UPL</div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+            <h1 style="margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(headTitle)}</h1>
+            <!-- the status line doubles as the refresh control: it is the thing you look at when the numbers seem old -->
+            <div data-act="refresh" role="button" tabindex="0" aria-label="${E(v.statusAria)}" style="display:flex;align-items:center;gap:5px;padding:2px 0;cursor:pointer;font-size:12.5px;color:${W2.ink2};min-width:0">${S.refreshing?I.refresh('animation:spin 1s linear infinite;width:12px;height:12px'):`<span style="width:7px;height:7px;border-radius:50%;background:${v.statusDot};flex-shrink:0"></span>`}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(v.statusTime)} · ${E(headSub)}</span></div>
+          </div>
+          ${toDesktop}
+          <button data-act="logout" title="Log out" aria-label="Log out" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:1px solid ${W2.line};border-radius:12px;background:#fff;color:${W2.ink};cursor:pointer;flex-shrink:0">${I.logout}</button>
+        </div>
+      </div>` : `      <div style="padding:${ph?'calc(env(safe-area-inset-top) + 12px) 16px 12px':'30px 18px 12px'};background:#fff;border-bottom:1px solid #E9E6DF;flex-shrink:0">
         <div style="display:flex;align-items:center;gap:9px">
           <div style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;letter-spacing:.02em;color:#fff;flex-shrink:0" aria-hidden="true">UPL</div>
           <div style="flex:1;min-width:0"><h1 style="margin:0;font-size:14px;font-weight:700;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(headTitle)}</h1><div class="mCap" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(headSub)}</div></div>
@@ -10775,7 +10918,7 @@ function mobileHTML(v){
           ${OWN_PAGES.has(S.view)?'':filterBtn}${toDesktop}
           <button data-act="logout" title="Log out" aria-label="Log out" style="min-width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:1px solid #E9E6DF;border-radius:11px;background:#fff;color:#6E6A62;cursor:pointer;flex-shrink:0">${I.logout}</button>
         </div>
-      </div>
+      </div>`}
       <!-- phone: no padding-top on the scroller — sticky offsets resolve against the padding box,
            so a top pad would pin the tab bar below the edge and leak rows through the gap. -->
       <div data-scroll="main:${S.view}" style="flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:${ph?'0':'14px'} 16px ${ph?'calc(env(safe-area-inset-bottom) + 28px)':'24px'}">
@@ -10869,6 +11012,7 @@ function render(){
   const ae=document.activeElement; const focusId=ae&&ae.id; const selStart=ae&&ae.selectionStart;
   const ovKey = state.device==='mobile' ? (state.selected?'d:'+state.selected.mc:'')+(state.sheet?'s:'+state.sheet:'') : '';
   _ovFresh = !!ovKey && ovKey!==_ovKey; _ovKey=ovKey;
+  document.documentElement.dataset.proj = curProject().id;   // the Wheat v2 skin keys off this (see <style>)
   const v=vals();
   app.innerHTML = state.device==='mobile' ? mobileHTML(v) : desktopHTML(v);
   app.querySelectorAll('[data-scroll]').forEach(el=>{

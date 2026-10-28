@@ -893,6 +893,25 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   unconfirmed), `Spruce` / `Feego` / `FEEGO_EDGE` (scanned acres by product; they sum to `scanned_acres`).
   `Latest_Longitude` is now numeric but rounded to 2 decimals (~1 km). 372 machines / plan 2,79,375 ac.
 
+## Wheat v2 visual refresh (design "Ops Console Refresh v2", 2026-10-28)
+Wheat is the first project on the Claude Design refresh (project b803ccee…, file `Ops Console Refresh v2.dc.html`):
+calm cool-neutral surfaces, IBM Plex Sans with tabular figures (Mono only for machine / phone numbers), tinted KPI
+tiles, a 232px labelled dark rail, a 68px header with the brand stripe, and a pill-marked phone tab bar. **Kharif and
+IoT are untouched**; roll out to them the same way when asked.
+- **Tokens are `W2`** (next to `C`), with `w2tone(label)` deciding a KPI tile's tint by what it counts (acres blue,
+  MTD / scanned violet, machines orange, operators / retailers / territories teal, IoT / pings indigo, Idle amber,
+  stale = amber whatever the tile), and `w2seg` / `w2sel` / `w2card` / `w2num` for controls and figures.
+- **The Wheat page builders are written in W2 directly** (`wpBits` holds the shared pieces: tile, search, CSV,
+  filters button, stamp, sortable header, chevron). The shared shell branches on `isWheat()`: `w2RailHTML`, the
+  `topbarHTML` / `footnoteHTML` / phone header / `mBottomNavHTML` / `mNextHTML` branches, and `W2.page` behind both.
+- **`render()` sets `html[data-proj]`**; the `html[data-proj="wheat"]` block in `<style>` remaps the warm inline
+  neutrals of the pieces Wheat SHARES with Kharif (the filter sheet, the machine panel's call rows, zoom buttons) onto
+  the cool ones and swaps Noto Sans for Plex. It is a backstop like the phone one — new Wheat code uses W2, not it.
+- The Territory / Map strip follows the design's Map KPI grid: hero "Worked yesterday" spanning two rows with the
+  season under it (a NEUTRAL "% of plan" pill — Wheat has no last season, so there is no direction to colour), four
+  tiles, then the fleet tile and the three connection figures. Phone: the hero card, then the tiles scroll sideways.
+- Every Wheat phone page ends in a "Next · <page>" row (`M_NEXT`: Retailers → Territories → Map → Retailers).
+
 ## IoT device monitoring (project `iot`, added 2026-10-15)
 A third PIN-picked project, for the IoT team rather than a programme: three state technicians and the IoT head they
 report to. It reads its **own workbook**, "IOT Tampered data" (`PROJECTS.iot.iot.sheetId` =
