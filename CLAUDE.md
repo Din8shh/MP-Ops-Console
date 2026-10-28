@@ -851,8 +851,15 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   · Columns: machines · plan · acres sprayed (with % of plan) · yesterday · scanned · **operator mapped** (n of N) · a
     14-day mini trend. A page-level "Acres sprayed by day" bar chart runs from the sheet's first date to YESTERDAY.
     Handover, `breakdown_id` and the Spruce / Feego split are deliberately NOT shown (by request); no map.
-  · KPI strip: Acres sprayed vs plan · Acres yesterday (with the change on the day before; amber if the sheet is stale) ·
-    Territories that sprayed yesterday (n of the named ones) · Operator mapped (n of N machines) · Scanned acres.
+  · **KPI strip = the Kharif strip** (`wtStripHTML`, changed 2026-10-28 by request), same order and look: Worked
+    yesterday (n of N, %) · Season to <yesterday> (with % of plan — there is no last Wheat season to compare) ·
+    Territories sprayed · Idle · Acres yesterday (amber if the sheet is stale) · MTD acres · the fleet tile ("Machines on
+    the sheet", UPL/SWAL bar, no plan) · Operators mapped · IoT acres y'day · Pinged since y'day. The fleet is EVERY
+    machine on the sheet; there is NO Breakdown (breakdown_id unconfirmed — 7 machines carrying one sprayed), so Idle =
+    did not run. Pinged = last ping on/after yesterday (the sheet keeps only the latest). On desktop the strip WRAPS
+    rather than scrolling sideways; the phone shows the status card + four cards (territories, idle, acres, fleet) as
+    Kharif does. Scanned acres moved to the table only. **This page's acres read THROUGH YESTERDAY** (`wtAc`), so the
+    strip, the day chart and the rows agree; the Retailer page still counts every day including today's part.
   · **Territory clean-up lives in `wretBuild`** and so applies to BOTH pages: sheet names kept, one spelling each
     (titleCase folds ABOHAR; `WRET_TERR` folds Hissar → Hisar). "0", "-", blank and `WRET_TERR_BAD` (Shimla) become ONE
     `WRET_NO_TERR` row ("Territory not on sheet"), always last, never ranked, raw cell kept as `terrRaw` and named in

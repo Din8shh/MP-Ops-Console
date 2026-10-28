@@ -3287,7 +3287,7 @@ function fleetTileInner(f, mob){
   const planPct = f.plan ? Math.round(100*f.deployed/f.plan) : null;
   const handed = f.handed!=null;
   return `<div style="display:flex;align-items:baseline;gap:5px;white-space:nowrap"><span style="${css(mono22(C.ink))}">${fmt(f.deployed)}</span>${handed?`<span style="font-size:11px;color:#6E6A62">${fmt(f.handed)} handed over</span>`:f.plan?`<span style="font-size:11px;color:#6E6A62">of ${fmt(f.plan)} planned</span>`:''}</div>
-    ${kpiLbl(handed?`Machines · ${f.deployed?Math.round(100*f.handed/f.deployed):0}% handed over`:`Deployed${planPct!=null?' · '+planPct+'%':''}`)}
+    ${kpiLbl(f.label ? E(f.label) : handed?`Machines · ${f.deployed?Math.round(100*f.handed/f.deployed):0}% handed over`:`Deployed${planPct!=null?' · '+planPct+'%':''}`)}
     <div style="display:flex;gap:2px;height:4px;margin-top:6px;border-radius:2px;overflow:hidden;background:#F2F0EB;min-width:${mob?150:140}px">${parts.map(([o,n])=>`<span style="display:block;width:${100*n/tot}%;background:${col(o)}"></span>`).join('')}</div>
     <div style="display:flex;gap:9px;margin-top:5px;font-size:${mob?11:10.5}px;color:#46433d;white-space:nowrap">${parts.map(([o,n])=>`<span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${col(o)};margin-right:4px"></span>${o} <b style="font-family:'IBM Plex Mono'">${fmt(n)}</b></span>`).join('')}</div>`;
 }
@@ -8360,6 +8360,9 @@ function wpPhoneSheetHTML(m, ph){
    · Handover and breakdown_id are deliberately NOT shown (by request); scanned acres are shown as one total.
    · The trend runs from the sheet's first date to YESTERDAY: today's row is still being written. */
 const WT_PAGE = 30;
+// Season acres on this page read THROUGH YESTERDAY, the console's standing season rule (today's row is still being
+// written), so the strip, the day chart and every row add up to the same total.
+const wtAc = m => Object.keys(m.days).reduce((a,d)=>d<=WRET.yday?a+m.days[d]:a,0);
 const WT_SPARK = 14;   // days in a row's mini trend
 const WT_SORTS = [['plan','Plan acres'],['acAll','Acres sprayed'],['acY','Acres yesterday'],['scAll','Scanned acres'],['opPct','Operator mapped %'],['n','Machines'],['name','Territory name']];
 function wtDays(){   // the trend axis: first sheet date → yesterday (or the last data day, if the sheet stopped earlier)
@@ -8396,7 +8399,7 @@ function wterrAgg(){
     let list = gHit ? g.all : g.all.filter(m=>[m.mc,m.opName,m.opNum,m.party,m.co,m.coMob,m.am,m.amNum,m.village,m.retailer.foName].some(hit));
     if(!list.length) return null;
     list=list.slice().sort((a,b)=>b.acAll-a.acAll||a.mc.localeCompare(b.mc));
-    const op=list.filter(m=>m.opNum||m.opName).length, plan=sumOf(list,m=>m.planShare), acAll=sumOf(list,m=>m.acAll);
+    const op=list.filter(m=>m.opNum||m.opName).length, plan=sumOf(list,m=>m.planShare), acAll=sumOf(list,m=>wtAc(m));
     // Machines grouped by TM, biggest group first; a machine whose retailer has no TM sits in its own group, last.
     const byTm={}; list.forEach(m=>{ const n=tmOf(m).n||''; (byTm[n]||(byTm[n]={ ...tmOf(m), list:[] })).list.push(m); });
     const tmGroups=Object.values(byTm).sort((a,b)=>(!a.n)-(!b.n) || b.list.length-a.list.length || String(a.n).localeCompare(String(b.n)));
@@ -8415,16 +8418,19 @@ function wterrAgg(){
     nF, narrowed: nF>0 || !!q, n:mcs.length, plan, acAll, acY:sumOf(rows,r=>r.acY), scAll:sumOf(rows,r=>r.scAll), scY:sumOf(rows,r=>r.scY),
     acPrev: days.length>1 ? tot[tot.length-2] : null, prevDay: days.length>1 ? days[days.length-2] : '',
     op:sumOf(rows,r=>r.op), pct: plan>0 ? 100*acAll/plan : null,
+    worked: mcs.filter(m=>m.acY>0).length, iotY: sumOf(mcs,m=>m.iotY), upl: mcs.filter(m=>m.org==='UPL').length, swal: mcs.filter(m=>m.org==='SWAL').length,
+    open: mcs.filter(m=>m.org!=='UPL'&&m.org!=='SWAL').length, pinged: mcs.filter(m=>m.lastPing&&m.lastPing>=WRET.yday).length,
+    mtd: sumOf(mcs,m=>Object.keys(m.days).reduce((a,d)=>d.slice(0,7)===WRET.yday.slice(0,7)&&d<=WRET.yday?a+m.days[d]:a,0)),
     nNamed: named.length, nSprayedY: named.filter(r=>r.acY>0).length, none: rows.find(r=>r.none)||null,
     sig: [st,org,terr,tm,q,sort].join('|') };
 }
 function wterrCSV(){
   const A=wterrAgg();
   const head=['State','Territory','TM','TM mobile','Machine','Retailer','Company','Machine plan acres (retailer plan ÷ machines)',
-    `Acres yesterday (${WRET.yday})`,'Acres overall',`Scanned yesterday (${WRET.yday})`,'Scanned overall','Operator','Operator mobile',
+    `Acres yesterday (${WRET.yday})`,`Season acres to ${WRET.yday}`,`Scanned yesterday (${WRET.yday})`,'Scanned overall','Operator','Operator mobile',
     'CI','CI mobile','AM','AM mobile','FO','FO mobile','Territory on sheet'];
   const lines=[head.join(',')].concat(A.rows.flatMap(r=>r.list.map(m=>[STATE_NAMES[r.st]||r.st, r.name, m.retailer.tmName, m.retailer.tmMob, m.mc, m.party, m.org,
-    Math.round(m.planShare*10)/10, m.acY, m.acAll, m.scY, m.scAll, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, m.retailer.foName, m.retailer.foMob, m.terrRaw].map(csvCell).join(','))));
+    Math.round(m.planShare*10)/10, m.acY, wtAc(m), m.scY, m.scAll, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, m.retailer.foName, m.retailer.foMob, m.terrRaw].map(csvCell).join(','))));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_territory-summary_${A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
@@ -8462,21 +8468,9 @@ function wterrBodyHTML(mob){
   if(!WRET.loaded) return wplanBodyHTML(mob);  // same loading / error card, same loader
   const A=wterrAgg();
   if(S._wtSig!==A.sig){ S._wtSig=A.sig; S.wtLimit=WT_PAGE; }
-  const { orgChip, meter, unit, tile, tel } = wpBits(mob);
+  const { orgChip, meter, tel } = wpBits(mob);
   const stale = WRET.lastDate && WRET.lastDate < WRET.yday;
-  const firstDate = WRET.log && WRET.log.firstDate ? wpDate(WRET.log.firstDate) : '';
-  const opP = A.n ? 100*A.op/A.n : null;
-  const dY = A.acPrev==null ? '' : A.acY===A.acPrev ? ` · same as ${wpDate(A.prevDay)}`
-    : ` · <b style="color:${C.ink}">${A.acY>A.acPrev?'▲':'▼'} ${acF(Math.abs(A.acY-A.acPrev))}</b> on ${wpDate(A.prevDay)}`;
-  // ── KPI strip: how far against plan (top-left) → yesterday, with its change → how widely it reached → the one
-  // readiness gap that stops a machine spraying (no operator) → scans.
-  const kpis = `<div style="${mob?'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:#E9E6DF':'display:flex;flex-wrap:wrap;background:#fff'};border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;margin-top:${mob?0:14}px">
-      ${tile('Acres sprayed vs plan', acF(A.acAll)+unit, `<b style="color:${C.ink}">${pctF(A.pct)}</b> of ${fmt(A.plan)} ac plan · all days${firstDate?' since '+firstDate:''}`, {wide:1, span:1, after:`<div style="margin-top:8px">${meter(A.pct)}</div>`})}
-      ${tile('Acres yesterday', acF(A.acY)+unit, stale ? `⚠ ${wpDate(WRET.yday)} · the sheet's acres stop at ${wpDate(WRET.lastDate)}` : `${wpDate(WRET.yday)}${dY}`, {warn:stale})}
-      ${tile('Territories that sprayed', `${fmt(A.nSprayedY)}<span style="font-size:13px;color:#6E6A62;font-weight:500"> of ${fmt(A.nNamed)}</span>`, `yesterday, ${wpDate(WRET.yday)}`)}
-      ${tile('Operator mapped', `${fmt(A.op)}<span style="font-size:13px;color:#6E6A62;font-weight:500"> of ${fmt(A.n)}</span>`, `machines · ${pctF(opP)} · ${fmt(A.n-A.op)} have none`, {after:`<div style="margin-top:8px">${meter(opP)}</div>`})}
-      ${tile('Scanned acres', acF(A.scAll)+unit, `${acF(A.scY)} ac yesterday`)}
-    </div>`;
+  const kpis = wtStripHTML(A, mob, stale);
   // ── The day-by-day trend for everything in view. Bars (one per day, a count of acres), yesterday dark.
   const n=A.days.length, mx=Math.max(...A.tot,0), every=n<=10?1:Math.ceil(n/(mob?6:12)), showVal=n<=(mob?10:21);
   const trend = !n ? '' : `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:${mob?'13px 14px':'14px 16px'};margin-top:14px">
@@ -8516,7 +8510,7 @@ function wterrBodyHTML(mob){
         const tmRow=p=>`<div style="display:flex;align-items:center;gap:8px;min-height:44px"><span class="mCap" style="width:24px;flex-shrink:0">TM</span><span style="flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(p.n)}</span>${tel(p,'TM')}</div>`;
         const mcBtn=m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:9px 12px;border:1px solid #EFEDE7;border-radius:10px;background:#FBFAF8;text-align:left;cursor:pointer;font-family:inherit;color:#1B1A17">
             <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${E(m.mc)}</span>${orgChip(m.org)}</span><span class="mCap" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.opName?E(m.opName):'No operator'} · ${E(m.party)}</span></span>
-            <span style="text-align:right;flex-shrink:0"><span style="display:block;font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${acF(m.acAll)} ac</span><span class="mCap" style="display:block">${acF(m.acY)} yesterday</span></span><span aria-hidden="true" style="color:#9C988F">›</span></button>`;
+            <span style="text-align:right;flex-shrink:0"><span style="display:block;font-family:'IBM Plex Mono';font-size:13px;font-weight:700">${acF(wtAc(m))} ac</span><span class="mCap" style="display:block">${acF(m.acY)} yesterday</span></span><span aria-hidden="true" style="color:#9C988F">›</span></button>`;
         return `<div style="background:#fff;border:1px solid ${r.none?'#F0DDB0':'#E9E6DF'};border-radius:14px;padding:13px 14px;margin-bottom:10px">
           <div style="font-size:15px;font-weight:700;line-height:1.3">${E(r.name)}</div>
           <div class="mCap" style="margin-top:2px">${showSt?E(stName(r))+' · ':''}${fmt(r.n)}${r.n<r.nAll?' of '+fmt(r.nAll):''} machine${r.n===1?'':'s'}</div>${noneNote(r)}
@@ -8545,7 +8539,7 @@ function wterrBodyHTML(mob){
       const open = !!S.wtOpen[r.key] || r.mcHit;
       const mRow=m=>`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:8px 16px;border-top:1px solid #F4F2EE;align-items:center;background:#FDFCFA">
         <div style="min-width:0;padding-left:22px"><div style="display:flex;align-items:center;gap:6px"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font-family:'IBM Plex Mono';font-size:12.5px;font-weight:700;color:${C.ink};text-decoration:underline;text-decoration-color:#D5D0C6;text-underline-offset:3px">${E(m.mc)}</button>${orgChip(m.org)}</div><div style="font-size:11px;color:#6E6A62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${E(m.party)}">${E(m.party)}</div></div>
-        <span></span>${numC(`<span style="color:#6E6A62" title="Retailer plan ÷ his ${m.retailer.list.length} machines">${fmt(m.planShare)}</span>`)}${numC(acF(m.acAll),1)}${numC(acF(m.acY))}${numC(acF(m.scAll))}
+        <span></span>${numC(`<span style="color:#6E6A62" title="Retailer plan ÷ his ${m.retailer.list.length} machines">${fmt(m.planShare)}</span>`)}${numC(acF(wtAc(m)),1)}${numC(acF(m.acY))}${numC(acF(m.scAll))}
         <span style="text-align:right;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.opName||m.opNum?E(m.opName||m.opNum):'<span style="color:#B4462F">✕ No operator</span>'}</span>${wtSpark(A.days.map(d=>m.days[d]||0),A.days,'120px')}</div>`;
       return `<div data-act="wtexp" data-k="${E(r.key)}" role="button" aria-expanded="${open}" tabindex="0" style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 16px;border-top:1px solid #EFEDE7;align-items:center;cursor:pointer;background:${open?'#F6F5F2':r.none?'#FFFBF2':'#fff'}">
         <div style="min-width:0;display:flex;gap:8px;align-items:flex-start"><span aria-hidden="true" style="color:#6E6A62;font-size:11px;margin-top:2px;display:inline-block;transform:rotate(${open?90:0}deg)">▶</span><div style="min-width:0"><div style="font-size:13px;font-weight:700">${E(r.name)}${showSt?` <span style="font-weight:400;color:#6E6A62;font-size:11.5px">· ${E(stName(r))}</span>`:''}</div><div style="font-size:11.5px;color:#46433d;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-size:10px;font-weight:700;color:#6E6A62;letter-spacing:.04em">TM</span> ${tmLine(r)}</div>${noneNote(r)}</div></div>
@@ -8557,6 +8551,51 @@ function wterrBodyHTML(mob){
       <div style="overflow-x:auto"><div style="min-width:1000px">${th}${body}</div></div></div>`;
   }
   return mob ? kpis + trend + `<div style="margin-top:14px">${controls}</div>` + list : controls + kpis + trend + list;
+}
+// The KPI strip, in the Kharif console's own order and look (asked 2026-10-28): did the fleet work → season to date →
+// the territories reached → Idle → acres yesterday → MTD → the fleet (machines, UPL/SWAL) → operators → IoT → pings.
+// Wheat differences, each agreed: the fleet is EVERY machine on the sheet (no deployed flag; handover lags the acres);
+// no Breakdown (breakdown_id's meaning is unconfirmed — 7 machines carrying one sprayed yesterday), so Idle is simply
+// "did not run"; no last season, so the season tile carries acres against the PLAN instead; no machine plan on the
+// fleet tile. Pinged counts machines whose last ping is yesterday or later — the sheet keeps only the latest ping.
+function wtStripHTML(A, mob, stale){
+  const pctW = A.n ? Math.round(100*A.worked/A.n) : 0, idle = A.n - A.worked, day = wpDate(WRET.yday);
+  const fleet = { deployed:A.n, plan:null, upl:A.upl, swal:A.swal, open:A.open, org:A.org==='ALL'?'Both':A.org, handed:null, label:'Machines on the sheet' };
+  const tiles = [
+    { label:'Territories sprayed', val:`${fmt(A.nSprayedY)}`, sub:`of ${fmt(A.nNamed)}`, col:C.ink, ph:1 },
+    { label:'Idle', val:fmt(idle), col:C.idle, ph:1 },
+    { label:'Acres '+day, val:acF(A.acY), unit:'ac', col:C.ink, ph:1, warn:stale },
+    { label:'MTD acres', val:acF(A.mtd), unit:'ac', col:C.ink },
+    { kind:'fleet', ph:1 },
+    { label:'Operators mapped', val:`${fmt(A.op)}/${fmt(A.n)}`, col:A.op===A.n?C.greenD:C.ink },
+    { label:'IoT acres y’day', val:acF(A.iotY), unit:'ac', col:C.orangeD },
+    { label:'Pinged since y’day', val:fmt(A.pinged), col:'#3A6FA0' },
+  ];
+  const seasonSub = `${pctF(A.pct)} of ${fmt(A.plan)} ac plan`;
+  const staleTxt = stale ? `⚠ the sheet's acres stop at ${wpDate(WRET.lastDate)}` : '';
+  if(mob){
+    return `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:12px 14px;margin-bottom:9px">
+        <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap"><span style="${css(mono22(C.act))}">${fmt(A.worked)}</span><span style="font-size:13px;color:#46433d">of ${fmt(A.n)} worked yesterday</span></div>
+        <div style="font-size:12px;color:#6E6A62;margin-top:2px">${pctW}% of machines · ${acF(A.acY)} ac · ${day}</div>
+        ${staleTxt?`<div style="font-size:12px;color:#8A5A00;margin-top:4px">${staleTxt}</div>`:''}
+        <div style="border-top:1px solid #F2F0EB;margin-top:10px;padding-top:9px;font-size:12px;color:#46433d;line-height:1.45"><b style="font-family:'IBM Plex Mono'">${acF(A.acAll)} ac</b> season to ${day}<br><span style="color:#6E6A62">${seasonSub}</span></div>
+      </div>
+      <div style="display:flex;gap:9px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;padding:0 28px 3px 0;-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent)">
+        ${tiles.filter(k=>k.ph).map(k=>k.kind==='fleet'
+          ? `<div style="flex-shrink:0;scroll-snap-align:start;background:#fff;border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px">${fleetTileInner(fleet,true)}</div>`
+          : `<div style="flex-shrink:0;scroll-snap-align:start;min-width:92px;background:${k.warn?'#FFF8E6':'#fff'};border:1px solid #E9E6DF;border-radius:12px;padding:11px 13px"><div style="white-space:nowrap"><span style="${css(mono22(k.col))}">${k.val}</span>${k.sub?`<span style="font-size:12px;color:#6E6A62"> ${k.sub}</span>`:''}</div><div style="font-size:11px;font-weight:600;letter-spacing:.03em;color:#6E6A62;text-transform:uppercase;margin-top:4px;white-space:nowrap">${E(k.label)}</div></div>`).join('')}
+      </div>`;
+  }
+  // The Kharif strip scrolls sideways; here it WRAPS, so no figure is ever off-screen on a laptop. Each cell draws its own
+  // right and bottom hairline (box-shadow), which the container's overflow clips at the outer edge.
+  const cell = (inner, extra='') => `<div style="flex:1 0 auto;min-width:118px;padding:13px 16px;box-shadow:1px 1px 0 #EFEDE7;${extra}">${inner}</div>`;
+  return `<div style="background:#FBFAF8;border:1px solid #E9E6DF;border-radius:14px;display:flex;flex-wrap:wrap;overflow:hidden;margin-top:14px">
+    ${cell(`<div style="display:flex;align-items:baseline;gap:5px;white-space:nowrap"><span style="${css(mono22(C.act))}">${fmt(A.worked)}</span><span style="font-size:11px;color:#6E6A62">of ${fmt(A.n)} · ${pctW}%</span></div>${kpiLbl('Worked yesterday')}`, 'min-width:150px')}
+    ${cell(`<div style="display:flex;align-items:baseline;gap:5px;white-space:nowrap"><span style="${css(mono22(C.ink))}">${acF(A.acAll)}</span><span style="font-size:10.5px;color:#B6B1A8">ac</span></div>${kpiLbl('Season to '+day)}<div style="font-size:10.5px;color:#6E6A62;margin-top:3px;white-space:nowrap">${seasonSub}</div>`, 'min-width:190px')}
+    ${tiles.map(k=>k.kind==='fleet' ? cell(fleetTileInner(fleet,false),'min-width:170px') : cell(`
+      <div style="display:flex;align-items:baseline;gap:5px;white-space:nowrap"><span style="${css(mono22(k.col))}">${k.val}</span>${k.sub?`<span style="font-size:11px;color:#6E6A62">${k.sub}</span>`:''}${k.unit?`<span style="font-size:10.5px;color:#B6B1A8">${k.unit}</span>`:''}</div>
+      ${kpiLbl(E(k.label))}${k.warn?`<div style="font-size:10.5px;color:#8A5A00;margin-top:3px;white-space:nowrap">${staleTxt}</div>`:''}`, k.warn?'background:#FFF8E6':'')).join('')}
+  </div>`;
 }
 function wterrViewHTML(v){ return `<section style="padding:18px 22px">${wterrBodyHTML(false)}</section>`; }
 /* ===================== IoT device monitoring (project 'iot') =====================
