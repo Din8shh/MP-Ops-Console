@@ -745,6 +745,8 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | **Wheat** `admin` (`wh-admin`, 4040) | All / UPL / SWAL / Open | HR + PB, switchable | the Retailer summary (the only Wheat page while it is rebuilt) |
 | **Wheat** `wstate` × HR / PB (4811 / 4711) | All / UPL / SWAL | one, locked | **none yet** — a "being rebuilt" message until their pages are decided |
 | **Wheat** `wsales` × HR / PB (4822 / 4722) | All / UPL / SWAL | one, locked | **none yet** — same message |
+| **Wheat** `wteam` (company teams): HR UPL 4831 · HR SWAL 4832 · PB UPL 4731 · PB SWAL 4732 | one, forced | one, locked | Retailers, Territories, FOs in the **team form** (see Wheat team view) |
+| **Wheat** `wteam` leaders: UPL 4050 · SWAL 4060 | one, forced | HR + PB, switchable | same three pages, team form |
 | **IoT** `admin` (`iot-admin`, 7314 — Amit Kumar, IoT head; 2601 retired 2026-10-16) | n/a | all, switchable | Potential tamper, At risk, **Team overview** |
 | **IoT** `iottech` × Rohit (RJ, 2611) / Manish (HR+PB, 2621) / Vishal (MP+GJ+TG+MH+AP, 2631) | n/a | his own, locked or switchable within them | Potential tamper, At risk |
 | **Partner** `bayer` (3906) | n/a | n/a | **none in the console** — a handoff to `bayer/` (see Partner pages) |
@@ -949,6 +951,25 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     onboarded filter (`wfoOn`, a segmented control with counts; Clear resets it). Own sort (`wfoSort`) and open rows.
   · Reconciles with the sheet except UPL_2826, listed twice on 28 Oct (read once): 89 bookings / 727 ac through 28 Oct.
   · Desktop table fits unscrolled at 1280 (min-width 940); KPI strip is `.wfoKpi` (6 across, 3 below 1240px).
+- **The Wheat team view (role `wteam`, asked by Dinesh 2026-10-29).** Six PINs for the UPL and SWAL teams: one per company per
+  state (HR UPL 4831, HR SWAL 4832, PB UPL 4731, PB SWAL 4732) and one per company for its leaders across HR + PB (UPL 4050,
+  SWAL 4060, State control shown). The company is forced (`allow` = their own), so the Company control is gone and every
+  count — the header's "N retailers · N machines" too — is their company only (`all` in `wplanAgg` / `wterrAgg` now honours
+  `lockOrg`; the admin is unaffected). `wSees()` (= admin or team) replaced `isAdmin()` on the Wheat loader, the three pages,
+  the header and the filter sheets; AM and Map stay admin-only (not in the team's `views`; `#/area-managers` bounces).
+  · **Only five figures** (`wTeamPageHTML` / `wTeamTree` / `wTeamStripHTML` / `wTeamListHTML` / `wTeamCSV`, after the FO page):
+    machines, ran on the day, operator mapped, acres on the day, and **target = the retailer plan** (split over his machines as
+    everywhere) with season acres against it. Strip: hero "Acres sprayed vs target" + Machines · Ran · Operators mapped · Acres
+    (`.wteamKpi`, hero on its own row below 1240px). Scanned, IoT, live, breakdown, last 7 days, the day chart, the AM / CI
+    filters and columns, onboarding, bookings and the Nurture Partner card are NOT shown to these logins.
+  · One tree renderer for all three pages: Retailer → machines · Territory → machines (under each TM) · TM → FO → machines. It
+    reuses each page's own expand acts / open state / sort state (`wpexp`/`wtexp`/`wfoexp`, `wpSort`/`wtSort`/`wfoSort`) with
+    `WTEAM_SORTS` (default Target acres); the aggregates clamp those keys to their own lists, and the tree sorts itself.
+  · Strip and rows all come from `wTeamFigs` (acres via `wtAc`), so they reconcile. Checked 29 Oct on the live sheet: HR UPL
+    65 machines / 110 ac of 63,375 target / 5 ran / 53 mapped / 35.1 ac on 28 Oct, the same on all three pages; UPL leaders 157
+    machines / 468 ac / 1,56,075 / 16 ran / 112 mapped / 184 ac = the admin's pages filtered to UPL; PB SWAL CSV 106 machines,
+    all SWAL / Punjab. Phone checked at 390 and 320 px (no sideways scroll). Machine panel: "target" wording, Operator tile in
+    place of Scanned. Phone "Next" rows show the first page the login has (`M_NEXT` lists fallbacks, Wheat takes one).
 - **The Main sheet changed shape on 2026-10-28 (afternoon).** The future-date pre-fill went (only 22–28 Oct, 375 rows a
   day) and 33,220 EMPTY rows appeared below, filled only by formulas in the new columns — a null date passes
   "<= today", so the filtered fetch was 4.8 MB again. `loadWRet` now also asks `machine_number is not null`: 0.85 MB.
