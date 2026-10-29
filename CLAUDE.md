@@ -915,6 +915,22 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   · `#/area-managers` is also Kharif's `am` address: `viewOfHash` now picks the slug's view the PROJECT can show.
   · Columns: CIs · machines · plan · sprayed (% of plan) · yesterday · ran yesterday (n of N) · scanned · last 14 days.
     The desktop table fits unscrolled at 1280 (min-width 970) — re-check if a column is added.
+- **Page 5, the TM · FO summary** (`wfo`, `#/field-officers`, rail "FOs"; `wfoAgg` / `wfoBodyHTML` / `wfoCSV`, built
+  2026-10-29). Wheat admin only. One row per TM → his FOs → their machines (the shared details panel).
+  · **Onboarded = the sheet's `FO onboarded` column** (Onboarded / Yet to Onboard; one value per FO on every row and day).
+    Live 29 Oct: 81 of 101 FOs. The "FO details" tab (gid `616818231`, the booking app's user list) is NOT read.
+  · FOs create bookings in the **Nurture Partner** app (`WFO_APP`, Play Store link on the page, with the yet-to-onboard count).
+  · **Bookings on the sheet are COMPLETED ones only**: `number_of_bookings` is non-zero on exactly the machine-days with
+    acres (86 of 86). Parsed per day into `m.bdays`; `wDaySync` sets `bkAll` / `bkY`. **"Bookings given" and "Booked acres"
+    are PLACEHOLDER columns (a dash, "coming soon") by request** until that data exists — fill `given` / `bookedAc` in
+    `wfoAgg`'s `figs` and the CSV's two blank columns.
+  · FO keyed on his NUMBER (FO and TM are retailer fields; no retailer carries two). FO "0" / blank / "Vacent" = one
+    "FO not named" row under its TM, never counted as onboarded (the sheet marks those rows Onboarded anyway). An FO whose
+    number is the TM's own is tagged "TM himself". One FO under two TMs shows under both, counted once in the strip.
+  · Reads the wt* scope (Day · State · Company · Territory · TM · AM, shared with Territory / AM / Map) plus a page-local
+    onboarded filter (`wfoOn`, a segmented control with counts; Clear resets it). Own sort (`wfoSort`) and open rows.
+  · Reconciles with the sheet except UPL_2826, listed twice on 28 Oct (read once): 89 bookings / 727 ac through 28 Oct.
+  · Desktop table fits unscrolled at 1280 (min-width 940); KPI strip is `.wfoKpi` (6 across, 3 below 1240px).
 - **The Main sheet changed shape on 2026-10-28 (afternoon).** The future-date pre-fill went (only 22–28 Oct, 375 rows a
   day) and 33,220 EMPTY rows appeared below, filled only by formulas in the new columns — a null date passes
   "<= today", so the filtered fetch was 4.8 MB again. `loadWRet` now also asks `machine_number is not null`: 0.85 MB.

@@ -135,6 +135,8 @@
      win: below 1240px the hero takes its own row and the tiles go four across, the scanning row wraps at 150px a tile. */
   .wtKpi{display:grid;grid-template-columns:minmax(260px,1.55fr) repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
   .wtKpiHero{grid-row:span 2}
+  .wfoKpi{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-top:16px}
+  @media (max-width:1240px){ .wfoKpi{grid-template-columns:repeat(3,minmax(0,1fr))} }
   .wtScan{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:12px}
   @media (max-width:1240px){ .wtKpi{grid-template-columns:repeat(4,minmax(0,1fr))} .wtKpiHero{grid-row:auto;grid-column:1/-1}
     .wtScan{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))} }
@@ -202,7 +204,7 @@ function w2tone(l){
   const T=(a,b,c,d)=>({ bg:`linear-gradient(150deg,${a} 0%,#FFFFFF 75%)`, bd:b, vc:c, dot:d });
   return l==='Breakdown' ? T('#FDECEA','#F4D8D4',W2.brkD,W2.brk) : l==='Idle' ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle)
     : /^Acres/.test(l) ? T('#E8F2FC','#D2E3F4','#1D4F80','#3B82C4') : /^(MTD|Scan|Spruce|Feego)/.test(l) ? T('#F0ECFC','#DED7F4','#4A3A8C','#7A63D1')
-    : /^(Deployed|Machines)/.test(l) ? T('#FFF0E2','#F5DEC7','#8A430A',C.orange) : /^(Operators|Retailers|Territories)/.test(l) ? T('#E6F6F1','#CBEAE0','#0E6B57','#1A9E80')
+    : /^(Deployed|Machines)/.test(l) ? T('#FFF0E2','#F5DEC7','#8A430A',C.orange) : /^(Operators|Retailers|Territories|FOs)/.test(l) ? T('#E6F6F1','#CBEAE0','#0E6B57','#1A9E80')
     : /^(IoT|Pinged)/.test(l) ? T('#ECEFFD','#D8DEF6','#2F3F8F','#5468D4') : T('#F4F6F8',W2.card,W2.ink,W2.ink3);
 }
 // A segmented control and a select in the v2 shape. `mob` = a finger: 44px targets, 16px in a field.
@@ -227,6 +229,7 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
   wDay:'', wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
+  wfoSort:'bk', wfoOpen:{}, wfoOn:'',   // Wheat TM → FO page: its own sort, open rows and onboarded filter; the rest is the wt* scope
   wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
   iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60,   // IoT pages — page-local, shared by the three of them
   // Cumulative (snake) view: its own independent scope — region + a day-level fiscal range stored as offsets
@@ -339,8 +342,8 @@ const PROJECTS = {
             // ROWS (`gid` blank → applyRows([])), and no weather is fetched: nothing on these pages reads either.
             gid:'', demo:[], states:['HR','PB'], fullDeploy:[],
             ret:{ sheetId:'1Tz3OAhykHa144JAufDRwK_G2_LuG0QXxwOsQqhR9mfc', gid:'486286189', name:'Main sheet' },
-            home:'wplan', views:['wplan','wterr','wam','wmap'], bar:['wplan','wterr','wam','wmap'],
-            only:['fo','retailer','wplan','wterr','wam','wmap'], kharifTabs:false,
+            home:'wplan', views:['wplan','wterr','wam','wfo','wmap'], bar:['wplan','wterr','wam','wfo','wmap'],
+            only:['fo','retailer','wplan','wterr','wam','wfo','wmap'], kharifTabs:false,
             head:sc=>`Wheat Spray Operations · ${sc==='India'?'North':sc}`, sub:'Wheat Spray Programme · Haryana · Punjab',
             mHead:sc=>`Wheat Spray · ${sc==='India'?'North':sc}`, mSub:'Wheat North · AFS' },
   // IoT device monitoring (2026-10-15). Not a programme but a team: the three state IoT technicians and the IoT head
@@ -725,7 +728,7 @@ function wretBuild(grid){
     coMob:ix('ci_contact'), co:ix('ci_name'), amNum:ix('am_contact'), am:ix('am_name'), sh:ix('sh_name'), shMob:ix('sh_contact'),
     st:ix('state'), ac:ix('rabi_achieved_acres'), iot:ix('iot_acres'), book:ix('number_of_bookings'),
     lat:ix('latest_latitude'), lon:ix('latest_longitude'), ping:ix('last_pinged_date'), scan:ix('scanned_acres'),
-    spruce:ix('spruce'), feego:ix('feego'), fedge:ix('feego_edge') };
+    spruce:ix('spruce'), feego:ix('feego'), fedge:ix('feego_edge'), foOn:ix('fo onboarded') };
   const miss=['mc','party','terr','date','plan','ac','scan'].filter(k=>C[k]<0);
   if(miss.length) throw new Error('wheat retailer sheet: missing column(s) '+miss.join(', '));
   const blank=v=>{ v=txt(v).replace(/\s+/g,' '); return (v==='0'||v==='-')?'':v; };
@@ -755,12 +758,17 @@ function wretBuild(grid){
         opName:titleCase(blank(g('opName'))), opNum:ph(g('opNum')), co:person(g('co')), coMob:ph(g('coMob')),
         am:person(g('am')), amNum:ph(g('amNum')), sh:person(g('sh')), shMob:ph(g('shMob')),
         lat: lat!=null&&lon!=null?lat:null, lon: lat!=null&&lon!=null?lon:null, lastPing:day(g('ping')),
-        acAll:0, acY:0, scAll:0, scY:0, iotAll:0, iotY:0, days:{}, sdays:{} };
+        // FO onboarded: the sheet's own status for the machine's FO (one value per FO on every row, checked 2026-10-29).
+        foOn: /^onboarded$/i.test(txt(g('foOn')).trim()),
+        acAll:0, acY:0, scAll:0, scY:0, iotAll:0, iotY:0, bkAll:0, bkY:0, days:{}, sdays:{}, bdays:{} };
     }
     const ac=num(g('ac')), sc=num(g('scan')), io=num(g('iot')), bk=num(g('book'));
     if(ac||sc||io||bk){ if(dt>lastDate) lastDate=dt; }
     m.acAll+=ac; m.scAll+=sc; m.iotAll+=io;
     if(ac) m.days[dt]=(m.days[dt]||0)+ac;
+    // COMPLETED bookings: number_of_bookings is non-zero on exactly the machine-days that carry acres (86 of 86, checked
+    // 2026-10-29) — a booking reaches the sheet on the day it is sprayed. Bookings GIVEN are not on the sheet yet.
+    if(bk) m.bdays[dt]=(m.bdays[dt]||0)+bk;
     // Scanned acres split by product (Spruce + Feego + Feego Edge = scanned_acres on every row, checked 2026-10-29),
     // kept per day with IoT acres so the Territory / AM / Map strip can read them THROUGH YESTERDAY like the acres.
     const sp=num(g('spruce')), fe=num(g('feego')), fx=num(g('fedge'));
@@ -819,11 +827,12 @@ function wDaySync(){
   if(WRET._dayM===WRET.machines && WRET._dayD===d) return;
   WRET._dayM=WRET.machines; WRET._dayD=d; WRET.yday=d;
   WRET.machines.forEach(m=>{
-    let ac=0, sc=0, io=0;
+    let ac=0, sc=0, io=0, bk=0;
     for(const k in m.days) if(k<=d) ac+=m.days[k];
+    for(const k in m.bdays) if(k<=d) bk+=m.bdays[k];
     for(const k in m.sdays) if(k<=d){ sc+=m.sdays[k][0]; io+=m.sdays[k][4]; }
     const v=m.sdays[d]||[];
-    Object.assign(m,{ acAll:ac, scAll:sc, iotAll:io, acY:m.days[d]||0, scY:v[0]||0, iotY:v[4]||0 });
+    Object.assign(m,{ acAll:ac, scAll:sc, iotAll:io, acY:m.days[d]||0, scY:v[0]||0, iotY:v[4]||0, bkAll:bk, bkY:m.bdays[d]||0 });
   });
 }
 const wIsYday = () => WRET.yday===WRET.ydayCal;
@@ -2255,7 +2264,7 @@ function isAdmin(){ return !!(GATE.cur && GATE.cur.role==='admin'); }
 // 'mpprod' is the exception to that constraint rather than a breach of it: its tab holds Madhya Pradesh and
 // nothing else, and it renders NO state picker, so it cannot widen anybody's scope. It is safe to grant to a
 // state-locked MP login, and is granted to exactly those two plus leadership.
-const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wmap'];   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
+const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wfo','wmap'];   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
 function roleHidesView(view){
   // The PROJECT is the outer gate and runs first, so it binds admin too: a Wheat login never sees a Kharif-tab
   // view, and the Wheat-only views never appear under Kharif.
@@ -2275,10 +2284,10 @@ function roleHidesView(view){
 }
 // Views that render their OWN controls and so drop the shared machine filter bar + KPI strip (desktop) and the
 // weather banner + KPI cards (mobile): the standalone rollup/insight pages.
-const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wmap','iottamper','iotrisk','iotteam']);
+const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','iottamper','iotrisk','iotteam']);
 // Pages with no machine rows behind them (Wheat plan, the IoT pages): the machine search and the phone's filter
 // button go, because neither can reach anything on them.
-const OWN_PAGES = new Set(['wplan','wterr','wam','wmap','iottamper','iotrisk','iotteam']);
+const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','iottamper','iotrisk','iotteam']);
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
@@ -3235,7 +3244,7 @@ const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" 
 // keys and mean nothing to a reader hunting for the cumulative chart.
 const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', norun:'Didn’t run',
   am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Daily recap', leader:'Leaders',
-  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wmap:'Machine map',
+  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wfo:'TM · FO summary', wmap:'Machine map',
   iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotteam:'IoT team overview' };
 // The word under each rail icon: short enough for a 64px button at 9.5px. One word where the title is long.
 // ONE NAME TABLE (plan I4). NAV_TITLE is the full name — page heading, browser title, the phone's All pages sheet.
@@ -3243,13 +3252,13 @@ const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machin
 // the same short form in all three. M_VIEWS takes its labels from here.
 const RAIL_LBL = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', am:'AMs', bm:'BMs', norun:'Didn’t run',
   pending:'Pending', recap:'Recap', leader:'Leaders', product:'Products', mpprod:'MP products', snake:'Cumulative', fo:'FOs',
-  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wmap:'Map', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
+  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
 // Rail order, in labelled groups (a hairline between them): the project's own pages, then what happened TODAY,
 // then the PEOPLE tables, then the SEASON reading. Insights used to lead the rail; it now leads the Season group.
 // Group names, index for index with RAIL_GROUPS (the first group is the project's own pages and has none).
 const RAIL_GROUP_NAMES = ['', 'Today', 'People', 'Season'];
 const RAIL_GROUPS = [
-  [['wplan',I.retailer],['wterr',I.tables],['wam',I.am],['wmap',I.map],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am]],
+  [['wplan',I.retailer],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am]],
   [['norun',I.risk],['map',I.map],['machines',I.machines],['weather',I.weather],['recap',I.recap]],
   [['tables',I.tables],['am',I.am],['bm',I.bm],['fo',I.fo],['retailer',I.retailer],['pending',I.pending]],
   [['insights',I.insights],['snake',I.snake],['product',I.product],['mpprod',I.mpprod],['leader',I.leader]],
@@ -3294,13 +3303,13 @@ function topbarHTML(v){
   // The Wheat Retailer summary reads its own sheet: the header names the PAGE's own state scope, the machine search goes,
   // and the stamp counts retailers on the plan rather than machines.
   const wp = state.view==='wplan' && WRET.loaded && isAdmin() ? wplanAgg() : null;
-  const wt = (state.view==='wterr'||state.view==='wam'||state.view==='wmap') && WRET.loaded && isAdmin() ? wterrAgg() : null;
+  const wt = (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap') && WRET.loaded && isAdmin() ? wterrAgg() : null;
   const iot = curProject().iot ? iotScope() : null;
   const scope = state.view==='wplan' ? (wp ? (wp.st||wp.lockSt||'India') : (state.wpSt||'India'))
-    : (state.view==='wterr'||state.view==='wam'||state.view==='wmap') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
+    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
     : iot ? (iot.st||iot.lockSt||'India') : v.scopeLabel;
   const fresh = state.view==='wplan' ? (wp ? `${fmt(wp.all.length)} retailers · ${fmt(wp.allMc)} machines` : 'Retailer summary')
-    : (state.view==='wterr'||state.view==='wam'||state.view==='wmap') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
+    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
     : iot ? (IOT.loaded ? `${fmt(IOT.tamper.filter(r=>gateAllowsState(r.st)).length)} potential tamper · ${fmt(IOT.risk.filter(r=>gateAllowsState(r.st)).length)} at risk` : 'IoT sheet')
     : v.freshCount;
   if(isWheat()) return `<header style="height:68px;flex-shrink:0;background-color:#fff;background-image:linear-gradient(90deg,#F5821F,#1FAE43);background-size:100% 3px;background-repeat:no-repeat;border-bottom:1px solid ${W2.line};display:flex;align-items:center;gap:20px;padding:0 32px">
@@ -8565,7 +8574,7 @@ function wterrAgg(){
   const rows=Object.values(G).map(g=>{
     const tmsAll=wpPeople(g.all.map(m=>({tm:tmOf(m).n, tmMob:tmOf(m).mob})),'tm','tmMob');
     const gHit = !q || hit(g.name) || tmsAll.some(p=>hit(p.n)||hit(p.mob));
-    let list = gHit ? g.all : g.all.filter(m=>[m.mc,m.opName,m.opNum,m.party,m.co,m.coMob,m.am,m.amNum,m.village,m.retailer.foName].some(hit));
+    let list = gHit ? g.all : g.all.filter(m=>[m.mc,m.opName,m.opNum,m.party,m.co,m.coMob,m.am,m.amNum,m.village,m.retailer.foName,m.retailer.foMob].some(hit));
     if(!list.length) return null;
     list=list.slice().sort((a,b)=>b.acAll-a.acAll||a.mc.localeCompare(b.mc));
     const op=list.filter(m=>m.opNum||m.opName).length, plan=sumOf(list,m=>m.planShare), acAll=sumOf(list,m=>wtAc(m));
@@ -8622,7 +8631,7 @@ function wtFilterFields(A, mob){
 }
 function wtSheetHTML(){
   const A=wterrAgg();
-  const foot=`<div style="display:flex;gap:10px">${A.nF||wDayOn()?`<button data-act="wtclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">${state.view==='wam'?`Show ${fmt(A.n)} machine${A.n===1?'':'s'}`:`Show ${fmt(A.rows.length)} territor${A.rows.length===1?'y':'ies'}`}</button></div>`;
+  const foot=`<div style="display:flex;gap:10px">${A.nF||wDayOn()?`<button data-act="wtclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">${state.view==='wam'||state.view==='wfo'?`Show ${fmt(A.n)} machine${A.n===1?'':'s'}`:`Show ${fmt(A.rows.length)} territor${A.rows.length===1?'y':'ies'}`}</button></div>`;
   return mSheetHTML('Filters', `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px">${wtFilterFields(A,true)}</div>`, 'sheetclose', foot);
 }
 // A row's mini trend: the last WT_SPARK days, one bar each, yesterday dark. Scaled to the row's own best day, so it
@@ -8911,6 +8920,169 @@ function wamBodyHTML(mob){
       <div style="overflow-x:auto"><div style="min-width:970px">${head}${body}</div></div>`, 'overflow:hidden;margin-top:16px');
   }
   return mob ? kpis + `<div style="margin-top:12px">${controls}</div>` + list : controls + kpis + list;
+}
+/* ===================== Wheat North — TM → FO summary (view key `wfo`) =====================
+   Page 5 of the Wheat rebuild (asked 2026-10-29). One row per TERRITORY MANAGER, opening to his FOs, each FO to his
+   machines; a machine opens the shared details panel. Questions: which of a TM's FOs are onboarded on the booking app,
+   and how many bookings and acres each FO's machines have completed.
+   · Onboarded is the sheet's own `FO onboarded` column (Onboarded / Yet to Onboard) — one value per FO on every row and
+     every day (checked 2026-10-29: 82 onboarded, 19 yet, 101 FOs under 37 TMs). FOs create bookings in the Nurture
+     Partner app (WFO_APP), which the page links to.
+   · FO and TM are RETAILER fields (no retailer carries two of either, checked 2026-10-29). An FO is keyed on his NUMBER,
+     so two FOs with one name stay apart; one FO under two TMs appears under both and is counted once in the strip.
+   · A machine whose FO cell is "0", blank or "Vacent" has no FO: it sits in one "FO not named" row under its TM, never
+     ranked and never counted as onboarded — the sheet marks those rows "Onboarded" anyway (a formula artefact).
+   · An FO whose number is the TM's own (the TM acts as FO, 30 machines) is shown as an FO, tagged "TM himself".
+   · Bookings: the sheet carries COMPLETED bookings only (number_of_bookings sits on exactly the machine-days that carry
+     acres). "Bookings given" and "Booked acres" are PLACEHOLDER columns (by request) until that data exists; fill them
+     from wfoAgg's `given` / `bookedAc`, which are null today and printed as a dash.
+   · Filters are the Territory / AM / Map pages' (one wt* scope, wterrAgg), plus the page-local onboarded filter
+     (state.wfoOn). Acres and bookings read THROUGH the Day filter's day, like every Wheat page. */
+const WFO_APP = { name:'Nurture Partner', url:'https://play.google.com/store/apps/details?id=nurture.partner' };
+const WFO_SORTS = [['bk','Bookings completed'],['acAll','Acres completed'],['acY','Acres yesterday'],['onPct','Onboarded %'],['nFo','FOs'],['n','Machines'],['name','Name']];
+const WFO_NO_FO = 'FO not named on sheet', WFO_NO_TM = 'TM not on sheet';
+const wfoNoFo = n => !n || /^vac[ae]nt$/i.test(n);
+function wfoAgg(){
+  const A=wterrAgg(), S=state, sumOf=(l,f)=>l.reduce((a,x)=>a+f(x),0);
+  const sort = WFO_SORTS.some(([k])=>k===S.wfoSort) ? S.wfoSort : 'bk';
+  const on = ['on','off'].includes(S.wfoOn) ? S.wfoOn : '';
+  const figs = list => ({ list:list.slice().sort((a,b)=>b.bkAll-a.bkAll||wtAc(b)-wtAc(a)||a.mc.localeCompare(b.mc)), n:list.length,
+    ret:new Set(list.map(m=>m.rkey)).size, bk:sumOf(list,m=>m.bkAll), bkY:sumOf(list,m=>m.bkY), acAll:sumOf(list,m=>wtAc(m)), acY:sumOf(list,m=>m.acY),
+    given:null, bookedAc:null });   // placeholders: bookings given / booked acres are not on the sheet yet
+  const order = (a,b) => (!!a.none-!!b.none) || (sort==='name' ? String(a.name).localeCompare(String(b.name))
+    : ((b[sort]==null?-1:b[sort])-(a[sort]==null?-1:a[sort])) || b.acAll-a.acAll || String(a.name).localeCompare(String(b.name)));
+  const T={};
+  A.rows.flatMap(r=>r.list).forEach(m=>{ const r=m.retailer;
+    const tk = r.tmName ? 'tm:'+(r.tmMob||r.tmName.toLowerCase()) : '~none';
+    const t = T[tk]||(T[tk]={ key:tk, name:r.tmName||WFO_NO_TM, mob:r.tmMob, none:!r.tmName, fo:{} });
+    const noFo = wfoNoFo(r.foName) && !r.foMob, fk = noFo ? '~nofo' : 'fo:'+(r.foMob||r.foName.toLowerCase());
+    const f = t.fo[fk]||(t.fo[fk]={ key:tk+'|'+fk, fk, name:noFo?WFO_NO_FO:(r.foName||r.foMob), mob:r.foMob, none:noFo, on:false,
+      self:!!(r.foMob&&r.foMob===r.tmMob), all:[] });
+    if(m.foOn && !noFo) f.on=true; f.all.push(m); });
+  // The strip's onboarding counts: every named FO in the wt* scope, once each, BEFORE the onboarded filter (they are its counts).
+  const allF={}; Object.values(T).forEach(t=>Object.values(t.fo).forEach(f=>{ if(!f.none) allF[f.fk]=allF[f.fk]||f.on; }));
+  const foN=Object.keys(allF).length, foOn=Object.values(allF).filter(Boolean).length;
+  const keep = f => !on || (!f.none && (on==='on')===f.on);
+  const rows=Object.values(T).map(t=>{
+    const fos=Object.values(t.fo).filter(keep).map(f=>({ ...f, ...figs(f.all), onPct:f.none?null:f.on?100:0, nFo:null })).sort(order);
+    if(!fos.length) return null;
+    const named=fos.filter(f=>!f.none), nOn=named.filter(f=>f.on).length;
+    return { ...t, fos, ...figs(fos.flatMap(f=>f.all)), nFo:named.length, nOn, onPct:named.length?100*nOn/named.length:null };
+  }).filter(Boolean).sort(order);
+  const mcs=rows.flatMap(r=>r.list);
+  return { A, rows, sort, on, foN, foOn, foOff:foN-foOn, tmN:rows.filter(r=>!r.none).length,
+    noFoMc: mcs.filter(m=>{ const r=m.retailer; return wfoNoFo(r.foName)&&!r.foMob; }).length,
+    n:mcs.length, bk:sumOf(mcs,m=>m.bkAll), bkY:sumOf(mcs,m=>m.bkY), acAll:sumOf(mcs,m=>wtAc(m)), acY:sumOf(mcs,m=>m.acY),
+    open: k => !!S.wfoOpen[k] || !!A.q };
+}
+function wfoCSV(){
+  const W=wfoAgg(), d=WRET.yday, w=wIsYday()?'yesterday':'on day';
+  const head=['TM','TM mobile','FO','FO mobile','FO onboarded','Machine','Retailer','State','Territory','Company','Bookings given','Booked acres',
+    `Bookings completed to ${d}`,`Acres completed to ${d}`,`Bookings completed ${w} (${d})`,`Acres ${w} (${d})`,'Operator','Operator mobile'];
+  const lines=[head.join(',')].concat(W.rows.flatMap(r=>r.fos.flatMap(f=>f.list.map(m=>[r.none?'':r.name, r.mob, f.none?'':f.name, f.mob,
+    f.none?'':f.on?'Onboarded':'Yet to onboard', m.mc, m.party, STATE_NAMES[m.st]||m.st, m.territory, m.org, '', '',
+    m.bkAll, Math.round(wtAc(m)*10)/10, m.bkY, m.acY, m.opName, m.opNum].map(csvCell).join(',')))));
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
+  a.download=`Wheat-North_tm-fo-summary_${W.A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
+}
+function wfoBodyHTML(mob){
+  if(!isAdmin() || !WRET.loaded) return wplanBodyHTML(mob);   // the "being rebuilt" / loading / error card, same loader
+  const W=wfoAgg(), A=W.A, B=wpBits(mob), { orgChip, meter, tel } = B;
+  const day=wpDate(WRET.yday), dw=wDayWord(), dash=`<span style="color:${W2.ink3}">—</span>`;
+  const onChip = f => f.none ? '' : f.on
+    ? `<span style="display:inline-block;flex-shrink:0;padding:2px 7px;border-radius:6px;font-size:12px;font-weight:600;background:#E3F4E8;color:#127A33;white-space:nowrap">✓ Onboarded</span>`
+    : `<span style="display:inline-block;flex-shrink:0;padding:2px 7px;border-radius:6px;font-size:12px;font-weight:600;background:#FDF4DF;color:${W2.idleD};white-space:nowrap">Yet to onboard</span>`;
+  const selfTag = f => f.self ? `<span style="font-size:11.5px;font-weight:600;color:${W2.ink2};border:1px solid ${W2.line};border-radius:5px;padding:0 5px;white-space:nowrap">TM himself</span>` : '';
+  // ── KPI strip: onboarding first (the page's question), then the four booking figures, given/booked as placeholders.
+  const onPct = W.foN ? 100*W.foOn/W.foN : null;
+  const soon = 'not on the sheet yet';
+  const tiles = [
+    B.tile('FOs onboarded', `${fmt(W.foOn)}${w2unit('of '+fmt(W.foN),mob?12:13)}`, '', `${meter(onPct,'100%','#1A9E80')}<span style="display:block;margin-top:6px">${pctF(onPct)} of FOs</span>`),
+    B.tile('Yet to onboard', fmt(W.foOff), '', W.foOff?'FOs not on the app yet':'every FO is on the app', { warn:W.foOff>0 }),
+    B.tile('Bookings given', dash, '', soon),
+    B.tile('Booked acres', dash, '', soon),
+    B.tile('Bookings completed', fmt(W.bk), '', `${fmt(W.bkY)} ${dw}`),
+    B.tile('Acres completed', acF(W.acAll), 'ac', `${acF(W.acY)} ac ${dw}`),
+  ];
+  const strip = mob
+    ? B.cardBox(`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:0 -1px -1px 0">${tiles.join('')}</div>`, 'overflow:hidden')
+    : `<div class="wfoKpi">${tiles.join('')}</div>`;
+  // ── The booking app: where FOs create bookings. A plain link — opens Google Play (the app on an Android phone).
+  const play = `<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3.5v17l9-8.5z" fill="#2E9BF0"/><path d="M4 3.5l12 7-3 2z" fill="#34C26B"/><path d="M4 20.5l12-7-3-2z" fill="#E8453C"/><path d="M16 10.5l4 2.2c.6.4.6 1.2 0 1.6l-4 2.2-3-3.5z" fill="#F7B92B"/></svg>`;
+  const app = B.cardBox(`<div style="padding:${mob?'14px 16px':'14px 20px'};display:flex;align-items:center;gap:${mob?12:16}px;flex-wrap:wrap">
+      <div style="flex:1;min-width:${mob?0:240}px"><div style="font-size:15px;font-weight:600">FOs create bookings in the ${E(WFO_APP.name)} app</div>
+        <div style="font-size:13px;color:${W2.ink2};margin-top:2px;line-height:1.45">${W.foOff?`${fmt(W.foOff)} FO${W.foOff===1?' is':'s are'} yet to onboard — share this link with them.`:'Share this link with a new FO.'} Android · Google Play</div></div>
+      <a href="${WFO_APP.url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:${mob?48:40}px;padding:0 16px;border:1px solid ${W2.line};border-radius:${mob?12:10}px;background:#fff;color:${W2.ink};font:500 ${mob?15:14}px ${W2.font};text-decoration:none;white-space:nowrap${mob?';width:100%':''}">${play}Open in Google Play</a>
+    </div>`, `margin-top:${mob?12:16}px`);
+  // ── The onboarded filter: segmented, with counts — it is also the breakdown of the first tile.
+  // On a phone the count goes under the label and "Yet to onboard" shortens, so the three fit at 320px.
+  const segs = [['','All FOs','All',W.foN],['on','Onboarded','Onboarded',W.foOn],['off','Yet to onboard','Not yet',W.foOff]];
+  const onSeg = `<div role="group" aria-label="Onboarded on the app" style="${w2segBox(mob)}${mob?'':';display:inline-flex'}">${segs.map(([v,t,tm,k])=>
+    `<button data-act="wfoon" data-v="${v}" aria-pressed="${W.on===v}" aria-label="${t}, ${k}" style="${w2seg(W.on===v,mob)};white-space:nowrap${mob?';padding:4px 6px;line-height:1.25':''}">${mob?tm:t}${mob?'<br>':' '}<span style="color:${W2.ink2};font-weight:400">${fmt(k)}</span></button>`).join('')}</div>`;
+  const controls = wtControlsHTML(A, mob, true, { sort:['wfoSortSel','Sort TMs and FOs by',WFO_SORTS,W.sort], csv:'wfocsv',
+    csvTitle:`Download the ${fmt(W.n)} machines shown, with their TM, FO and onboarded status, as CSV`, ph:['Search TM, FO, machine…','Search TM, FO, machine, retailer, person'] });
+  const sortName = ((WFO_SORTS.find(([k])=>k===W.sort)||[])[1]||'').toLowerCase();
+  const noneNote = t => `<div style="font-size:12.5px;color:${W2.idleD};margin-top:3px;line-height:1.4">⚠ ${t} — fix on the sheet</div>`;
+  const empty = B.msg(`No FOs match these filters.${A.narrowed||W.on?`<div style="margin-top:12px">${B.ghost('wtclear','Clear filters')}</div>`:''}`, '40px 18px');
+  const onTxt = r => r.nFo ? `${fmt(r.nOn)}<span style="color:${W2.ink2};font-weight:400"> of ${fmt(r.nFo)}</span>` : dash;
+  let list;
+  if(!W.rows.length) list=empty;
+  else if(mob){
+    const stat=(v,l)=>`<div style="display:flex;flex-direction:column;min-width:0"><span style="${w2num(17)}">${v}</span><span style="font-size:12.5px;color:${W2.ink2}">${l}</span></div>`;
+    const stats=x=>`<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 8px">${stat(fmt(x.bk),'bookings done')}${stat(acF(x.acAll),'acres done')}${stat(acF(x.acY),'ac '+dw)}${stat(dash,'bookings given')}${stat(dash,'booked acres')}${stat(fmt(x.n),'machine'+(x.n===1?'':'s'))}</div>`;
+    const mcBtn=m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:#fff;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
+        <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${orgChip(m.org)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(m.party)} · ${E(m.territory)}</span></span>
+        <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${fmt(m.bkAll)} bkg · ${acF(wtAc(m))} ac</span><span style="display:block;font-size:12.5px;color:${m.acY>0?W2.actD:W2.ink2}">${m.acY>0?acF(m.acY)+' ac '+dw:'none '+dw}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`;
+    const toggle=(k,open,t)=>`<button data-act="wfoexp" data-k="${E(k)}" aria-expanded="${open}" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:${open?W2.head:'#fff'};color:${W2.ink};font:500 14px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${open?'Hide':'Show'} ${t} <span aria-hidden="true" style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>`;
+    const foBox=f=>{ const open=W.open(f.key);
+      return `<div style="border:1px solid ${f.none?'#F1E2BC':W2.line2};border-radius:14px;background:${f.none?'#FFFBF2':W2.head};padding:12px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:${W2.ink2}">FO</div>
+          <div style="font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(f.name)}</div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">${onChip(f)}${selfTag(f)}<span style="font-size:12.5px;color:${W2.ink2}">${fmt(f.ret)} retailer${f.ret===1?'':'s'}</span></div>
+          ${f.none?noneNote('The sheet names no FO for these machines'):''}</div>${f.none?'':tel({n:f.name,mob:f.mob},'FO')}</div>
+        ${stats(f)}
+        ${toggle(f.key,open,`${f.n} machine${f.n===1?'':'s'}`)}
+        ${open?`<div style="display:flex;flex-direction:column;gap:8px">${f.list.map(mcBtn).join('')}</div>`:''}</div>`; };
+    list = `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:18px 2px 10px"><span style="font-size:16px;font-weight:600">Territory managers · ${fmt(W.tmN)}</span><span style="font-size:12.5px;color:${W2.ink2}">by ${E(sortName)}</span></div>`
+      + W.rows.map(r=>{ const open=W.open(r.key), onP=r.onPct;
+        return B.cardBox(`<div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:flex-start;gap:10px"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:${W2.ink2}">TM</div><div style="font-size:16px;font-weight:600;line-height:1.3">${E(r.name)}</div>
+            <div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">${fmt(r.nFo)} FO${r.nFo===1?'':'s'} · ${fmt(r.ret)} retailer${r.ret===1?'':'s'} · ${fmt(r.n)} machine${r.n===1?'':'s'}</div>${r.none?noneNote('These retailers have no TM on the sheet'):''}</div>${r.none?'':tel({n:r.name,mob:r.mob},'TM')}</div>
+          ${r.nFo?`<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span style="${w2num(20)}">${fmt(r.nOn)}</span> <span style="font-size:13.5px;color:${W2.ink2}">of ${fmt(r.nFo)} FOs onboarded</span></span><span style="${w2num(14)}">${pctF(onP)}</span></div>${meter(onP,'','#1A9E80')}</div>`:''}
+          ${stats(r)}
+          ${toggle(r.key,open,`${r.nFo} FO${r.nFo===1?'':'s'}${r.fos.some(f=>f.none)?' + no FO':''}`)}
+          ${open?`<div style="display:flex;flex-direction:column;gap:10px">${r.fos.map(foBox).join('')}</div>`:''}
+        </div>`, `margin-bottom:12px${r.none?';border-color:#F1E2BC':''}`); }).join('')
+      + `<div style="margin-top:10px">${B.stamp('wpretry')}</div>`;
+  } else {
+    const cols='minmax(190px,1.6fr) 108px 62px 64px 72px 72px 90px 92px 76px';
+    const hd=B.th('wfosort',W.sort);
+    const soonH=t=>`<span style="text-align:right" title="Not on the sheet yet — this column fills when the booking data arrives">${t}<span style="display:block;font-size:11px;font-weight:500;color:${W2.ink3}">coming soon</span></span>`;
+    const head=`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 18px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2};position:sticky;top:0;z-index:1;align-items:end">
+      ${hd('name','TM · FO')}${hd('onPct','Onboarded',1)}${hd('','Retailers',1)}${hd('n','Machines',1)}${soonH('Bookings given')}${soonH('Booked acres')}${hd('bk','Bookings completed',1)}${hd('acAll','Acres completed',1)}${hd('acY',wDayHead(),1)}</div>`;
+    const numC=(v,b)=>`<span style="text-align:right;font-variant-numeric:tabular-nums${b?';font-weight:600':''}">${v}</span>`;
+    const phone=mob=>mob&&realTel(mob)?` · <a href="tel:${mob}" onclick="event.stopPropagation()" style="color:${W2.ink2};font-family:'IBM Plex Mono'">${E(mob)}</a>`:'';
+    const onC=r=>r.nFo?`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums;font-weight:500">${onTxt(r)}</span>${meter(r.onPct,'100%','#1A9E80')}</div>`:numC(dash);
+    const figs=x=>`${numC(dash)}${numC(dash)}${numC(fmt(x.bk),1)}${numC(acF(x.acAll),1)}${numC(acF(x.acY))}`;
+    const mRow=m=>`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 18px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;background:#FBFCFD">
+        <div style="min-width:0;padding-left:40px"><div style="display:flex;align-items:center;gap:6px"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font:600 13px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</button>${orgChip(m.org)}</div><div style="font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${E(m.party)}">${E(m.party)} · ${E(m.territory)}</div></div>
+        <span></span><span></span><span></span>${numC(dash)}${numC(dash)}${numC(fmt(m.bkAll))}${numC(acF(wtAc(m)))}${numC(acF(m.acY))}</div>`;
+    const fRow=f=>{ const open=W.open(f.key);
+      return `<div class="w2Row" data-act="wfoexp" data-k="${E(f.key)}" role="button" aria-expanded="${open}" tabindex="0" style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 18px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;cursor:pointer;background:${open?'#F3F6F9':f.none?'#FFFBF2':W2.head}">
+        <div style="min-width:0;padding-left:20px;display:flex;gap:8px;align-items:flex-start">${B.chev(open)}<div style="min-width:0"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="font-size:11.5px;font-weight:600;color:${W2.ink2}">FO</b> <b style="font-weight:600">${E(f.name)}</b><span style="font-size:13px;color:${W2.ink2}">${phone(f.mob)}</span></div>${f.self?`<div style="margin-top:3px">${selfTag(f)}</div>`:''}${f.none?noneNote('No FO named for these machines'):''}</div></div>
+        <span style="text-align:right">${f.none?dash:onChip(f)}</span>${numC(fmt(f.ret))}${numC(fmt(f.n))}${figs(f)}</div>`
+        + (open ? f.list.map(mRow).join('') : ''); };
+    const body=W.rows.map(r=>{ const open=W.open(r.key);
+      return `<div class="w2Row" data-act="wfoexp" data-k="${E(r.key)}" role="button" aria-expanded="${open}" tabindex="0" style="display:grid;grid-template-columns:${cols};gap:12px;padding:12px 18px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;cursor:pointer;background:${open?W2.head:r.none?'#FFFBF2':'#fff'}">
+        <div style="min-width:0;display:flex;gap:8px;align-items:flex-start">${B.chev(open)}<div style="min-width:0"><div style="font-weight:600">${E(r.name)}<span style="font-weight:400;font-size:13px;color:${W2.ink2}">${phone(r.mob)}</span></div>${r.none?noneNote('These retailers have no TM on the sheet'):`<div style="font-size:13px;color:${W2.ink2};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.fos.map(f=>E(f.none?'no FO':f.name)).join(', ')}</div>`}</div></div>
+        ${onC(r)}${numC(fmt(r.ret))}${numC(fmt(r.n))}${figs(r)}</div>`
+      + (open ? r.fos.map(fRow).join('') : ''); }).join('');
+    list = B.cardBox(`<div style="padding:18px 22px;border-bottom:1px solid ${W2.line2};display:flex;align-items:center;gap:12px 20px;flex-wrap:wrap"><div style="flex:1;min-width:280px"><div style="font-size:16px;font-weight:600">Territory managers · ${fmt(W.tmN)}${W.noFoMc?` <span style="font-weight:500;font-size:14px;color:${W2.idleD}">+ ${fmt(W.noFoMc)} machines with no FO named</span>`:''}</div><div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">Sorted by ${E(sortName)} · click a TM for his FOs, an FO for his machines · bookings and acres to ${E(day)}</div></div>${onSeg}</div>
+      <div style="overflow-x:auto"><div style="min-width:940px">${head}${body}</div></div>`, 'overflow:hidden;margin-top:16px');
+  }
+  return mob ? strip + app + `<div style="margin-top:12px">${controls}</div><div style="margin-top:12px">${onSeg}</div>` + list
+    : controls + strip + app + list;
 }
 /* ===================== Wheat North — Machine map (view key `wmap`) =====================
    Page 3 of the Wheat rebuild (agreed 2026-10-28). Every machine at its LAST PING position, on the Haryana + Punjab
@@ -10620,6 +10792,7 @@ function contentHTML(v){
     case 'wplan': return wplanViewHTML(v);
     case 'wterr': return wterrViewHTML(v);
     case 'wam': return `<section style="padding:24px 32px">${wamBodyHTML(false)}</section>`;
+    case 'wfo': return `<section style="padding:24px 32px">${wfoBodyHTML(false)}</section>`;
     case 'wmap': return wmapViewHTML(v);
     case 'iottamper': case 'iotrisk': case 'iotteam': return `<section style="padding:18px 22px">${iotBodyHTML(state.view,false)}</section>`;
     case 'recap': return recapViewHTML(v);
@@ -10663,6 +10836,7 @@ const M_VIEWS = [
   { k:'wplan',    label:RAIL_LBL.wplan, icon:()=>I.retailer },   // Wheat Retailer summary only (project `only`)
   { k:'wterr',    label:RAIL_LBL.wterr, icon:()=>I.tables },     // Wheat Territory summary
   { k:'wam',      label:RAIL_LBL.wam,   icon:()=>I.am },         // Wheat Area manager summary
+  { k:'wfo',      label:RAIL_LBL.wfo,   icon:()=>I.fo },         // Wheat TM → FO summary
   { k:'wmap',     label:RAIL_LBL.wmap,  icon:()=>I.map },        // Wheat Machine map
   { k:'iottamper',label:RAIL_LBL.iottamper, icon:()=>I.tamper },   // IoT project only
   { k:'iotrisk',  label:RAIL_LBL.iotrisk,   icon:()=>I.risk },
@@ -10800,7 +10974,7 @@ function norunBodyHTML(v, mob){
 const M_NEXT = { norun:['machines','bm'], map:['tables','machines'], tables:['machines','am'], machines:['tables','weather'],
   weather:['machines','map'], am:['bm','machines'], bm:['machines','tables'], pending:['am'], recap:['insights','machines'],
   insights:['snake','recap'], snake:['insights','product'], product:['mpprod','snake'], mpprod:['product'], leader:['recap'],
-  wplan:['wterr'], wterr:['wam'], wam:['wmap'], wmap:['wplan'] };
+  wplan:['wterr'], wterr:['wam'], wam:['wfo'], wfo:['wmap'], wmap:['wplan'] };
 function mNextHTML(view){
   const ks=(M_NEXT[view]||[]).filter(k=>!roleHidesView(k));
   const brk = view==='machines' && !state.health.includes('Breakdown')
@@ -10983,6 +11157,8 @@ function mobileHTML(v){
     body = wterrBodyHTML(true);
   } else if(S.view==='wam'){
     body = wamBodyHTML(true);
+  } else if(S.view==='wfo'){
+    body = wfoBodyHTML(true);
   } else if(S.view==='wmap'){
     body = wmapBodyHTML(true);
   } else if(S.view==='iottamper'||S.view==='iotrisk'||S.view==='iotteam'){
@@ -11153,7 +11329,7 @@ function mobileHTML(v){
       ${S.sheet==='more'    ? mSheetHTML('All pages', mMoreHTML(), 'sheetclose') : ''}
       ${S.sheet==='iotfilters' && curProject().iot ? iotSheetHTML() : ''}
       ${S.sheet==='wpfilters' && S.view==='wplan' && WRET.loaded && isAdmin() ? wpSheetHTML() : ''}
-      ${S.sheet==='wtfilters' && (S.view==='wterr'||S.view==='wam'||S.view==='wmap') && WRET.loaded && isAdmin() ? wtSheetHTML() : ''}
+      ${S.sheet==='wtfilters' && (S.view==='wterr'||S.view==='wam'||S.view==='wfo'||S.view==='wmap') && WRET.loaded && isAdmin() ? wtSheetHTML() : ''}
     </div>
   </div>`;
 }
@@ -11178,7 +11354,7 @@ function mPageScope(view){
     case 'snake':    return state.snState&&state.snState!=='ALL' ? nm(state.snState) : 'All India';
     case 'mpprod':   return state.mpTerr || 'Madhya Pradesh';
     case 'wplan':    return (lock||state.wpSt) ? nm(lock||state.wpSt) : 'HR + PB';
-    case 'wterr': case 'wam': case 'wmap': return (lock||state.wtSt) ? nm(lock||state.wtSt) : 'HR + PB';
+    case 'wterr': case 'wam': case 'wfo': case 'wmap': return (lock||state.wtSt) ? nm(lock||state.wtSt) : 'HR + PB';
     case 'iottamper': case 'iotrisk': case 'iotteam': { const sc=iotScope(); return sc.st ? iotStName(sc.st) : (isAdmin()?'All states':'My states'); }
     default:         return nm(lock||pick('st'));   // the fleet pages: the filter bar's state
   }
@@ -11227,7 +11403,7 @@ function render(){
    handling (histSync) owns the history ENTRIES; this only rewrites the address of the current one. A typed or
    pasted address is honoured at boot and on hashchange, and `render()`'s role guard still bounces a view the
    login may not see. */
-const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wam:'area-managers', wmap:'machine-map',
+const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wam:'area-managers', wfo:'field-officers', wmap:'machine-map',
   iottamper:'tamper', iotrisk:'at-risk', iotteam:'team', am:'area-managers', bm:'business-managers',
   leader:'leaders', product:'products', fo:'field-officers', recap:'daily-recap', norun:'didnt-run' };
 const slugOf = v => VIEW_SLUG[v]||v;
@@ -11361,6 +11537,7 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='wtTmSel') setState({wtTm:e.target.value, wtAm:''});
   else if(e.target.id==='wtAmSel') setState({wtAm:e.target.value});
   else if(e.target.id==='wamSortSel') setState({wamSort:e.target.value});
+  else if(e.target.id==='wfoSortSel') setState({wfoSort:e.target.value});
   else if(e.target.id==='wtSortSel') setState({wtSort:e.target.value});
   else if(e.target.id==='lbStateSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({lbSt:w, lbAll:false}); }   // page-local; never touches state.st
   else if(e.target.id==='insStateSel') setState({insSt:e.target.value, insAm:'', insCo:''});   // page-local; never touches state.st
@@ -11452,9 +11629,13 @@ app.addEventListener('click', e=>{
     case 'wpcsv': wplanCSV(); track('wplan_csv',{ st:state.wpSt||'all' }); break;
     case 'wtorg': setState({wtOrg:el.dataset.org, wtTerr:'', wtTm:'', wtAm:''}); break;
     case 'wday': setState({wDay:''}); break;
-    case 'wtclear': setState({wDay:'', wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
+    case 'wtclear': setState({wDay:'', wfoOn:'', wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
     case 'wamexp': { const k=el.dataset.k; setState(s=>({wamOpen:{...s.wamOpen, [k]:!s.wamOpen[k]}})); break; }
     case 'wamsort': setState({wamSort:el.dataset.k}); break;
+    case 'wfoexp': { const k=el.dataset.k; setState(s=>({wfoOpen:{...s.wfoOpen, [k]:!s.wfoOpen[k]}})); break; }
+    case 'wfosort': setState({wfoSort:el.dataset.k}); break;
+    case 'wfoon': setState({wfoOn:el.dataset.v}); break;
+    case 'wfocsv': wfoCSV(); track('wfo_csv',{ st:state.wtSt||'all' }); break;
     case 'wamcsv': wamCSV(); track('wam_csv',{ st:state.wtSt||'all' }); break;
     case 'wtexp': { const k=el.dataset.k; setState(s=>({wtOpen:{...s.wtOpen, [k]:!s.wtOpen[k]}})); break; }
     case 'wtsort': setState({wtSort:el.dataset.k}); break;
