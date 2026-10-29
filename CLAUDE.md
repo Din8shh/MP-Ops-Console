@@ -958,15 +958,15 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   `lockOrg`; the admin is unaffected). `wSees()` (= admin or team) replaced `isAdmin()` on the Wheat loader, the three pages,
   the header and the filter sheets; AM and Map stay admin-only (not in the team's `views`; `#/area-managers` bounces).
   · **Only five figures** (`wTeamPageHTML` / `wTeamTree` / `wTeamStripHTML` / `wTeamListHTML` / `wTeamCSV`, after the FO page):
-    machines, ran on the day, operator mapped, acres on the day, and **target = the retailer plan** (split over his machines as
-    everywhere) with season acres against it. Strip: hero "Acres sprayed vs target" + Machines · Ran · Operators mapped · Acres
+    machines, ran on the day, operator mapped, acres on the day, and **target = a flat 650 ac per machine** (`WTEAM_TGT`, Dinesh
+    2026-10-29; first built as the retailer plan ÷ machines; the admin pages keep the retailer plan) with season acres against it. Strip: hero "Acres sprayed vs target" + Machines · Ran · Operators mapped · Acres
     (`.wteamKpi`, hero on its own row below 1240px). Scanned, IoT, live, breakdown, last 7 days, the day chart, the AM / CI
     filters and columns, onboarding, bookings and the Nurture Partner card are NOT shown to these logins.
   · One tree renderer for all three pages: Retailer → machines · Territory → machines (under each TM) · TM → FO → machines. It
     reuses each page's own expand acts / open state / sort state (`wpexp`/`wtexp`/`wfoexp`, `wpSort`/`wtSort`/`wfoSort`) with
     `WTEAM_SORTS` (default Target acres); the aggregates clamp those keys to their own lists, and the tree sorts itself.
   · Strip and rows all come from `wTeamFigs` (acres via `wtAc`), so they reconcile. Checked 29 Oct on the live sheet: HR UPL
-    65 machines / 110 ac of 63,375 target / 5 ran / 53 mapped / 35.1 ac on 28 Oct, the same on all three pages; UPL leaders 157
+    65 machines / 110 ac of 63,375 target (retailer plan, before the 650 switch) / 5 ran / 53 mapped / 35.1 ac on 28 Oct, the same on all three pages; UPL leaders 157
     machines / 468 ac / 1,56,075 / 16 ran / 112 mapped / 184 ac = the admin's pages filtered to UPL; PB SWAL CSV 106 machines,
     all SWAL / Punjab. Phone checked at 390 and 320 px (no sideways scroll). Machine panel: "target" wording, Operator tile in
     place of Scanned. Phone "Next" rows show the first page the login has (`M_NEXT` lists fallbacks, Wheat takes one).
