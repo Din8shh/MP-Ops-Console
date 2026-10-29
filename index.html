@@ -226,7 +226,7 @@ const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
-  wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
+  wDay:'', wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
   wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
   iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60,   // IoT pages — page-local, shared by the three of them
   // Cumulative (snake) view: its own independent scope — region + a day-level fiscal range stored as offsets
@@ -805,7 +805,37 @@ function wretBuild(grid){
   placed.forEach(m=>{ const b=log.byState[m.st]||(log.byState[m.st]={machines:0,retailers:new Set(),acAll:0}); b.machines++; b.retailers.add(m.rkey); b.acAll+=m.acAll; });
   Object.values(log.byState).forEach(b=>{ b.retailers=b.retailers.size; b.acAll=Math.round(b.acAll*10)/10; });
   console.info('[MP-Ops] wheat retailer sheet →', log);
-  return { machines:placed, retailers, lastDate, yday, log };
+  return { machines:placed, retailers, lastDate, yday, ydayCal:yday, log };
+}
+/* The Wheat pages' DAY filter (state.wDay; '' = yesterday), shared by all four pages (asked 2026-10-29). Everything
+   that means "yesterday" on them reads WRET.yday and each machine's acY / scY / iotY, and every total reads acAll /
+   scAll / iotAll — so picking a day re-points those: the day figures become that day's and the totals stop at it, and
+   the pages read as they did that evening. Fields with no history (operator, CI/AM, last ping, position, handover) stay
+   TODAY's; the strip labels them so and drops "Pinged since y'day" on a past day. Range: first sheet date → yesterday. */
+function wDaySync(){
+  if(!WRET.loaded) return;
+  const lo=(WRET.log&&WRET.log.firstDate)||'', hi=WRET.ydayCal, w=state.wDay;
+  const d = w && w>=lo && w<=hi ? w : hi;
+  if(WRET._dayM===WRET.machines && WRET._dayD===d) return;
+  WRET._dayM=WRET.machines; WRET._dayD=d; WRET.yday=d;
+  WRET.machines.forEach(m=>{
+    let ac=0, sc=0, io=0;
+    for(const k in m.days) if(k<=d) ac+=m.days[k];
+    for(const k in m.sdays) if(k<=d){ sc+=m.sdays[k][0]; io+=m.sdays[k][4]; }
+    const v=m.sdays[d]||[];
+    Object.assign(m,{ acAll:ac, scAll:sc, iotAll:io, acY:m.days[d]||0, scY:v[0]||0, iotY:v[4]||0 });
+  });
+}
+const wIsYday = () => WRET.yday===WRET.ydayCal;
+const wDayWord = () => wIsYday() ? 'yesterday' : 'on '+wpDate(WRET.yday);   // "ac yesterday" / "ac on 25 Oct"
+const wDayHead = () => wIsYday() ? 'Yesterday' : wpDate(WRET.yday);
+const wDayOn = () => !!WRET.ydayCal && !wIsYday();                            // a past day is picked
+// The Day control: a Yesterday button and a date field, in the desktop bar and the phone's Filters sheet.
+function wDayFieldHTML(mob, lab){
+  const y=!wDayOn(), lo=(WRET.log&&WRET.log.firstDate)||'';
+  return lab('Day', `<div style="display:flex;gap:8px;align-items:center${mob?';width:100%':''}">
+      <div style="${w2segBox(mob)}${mob?';flex:1':''}"><button data-act="wday" aria-pressed="${y}" style="${w2seg(y,mob)}">Yesterday</button></div>
+      <input id="wDayInput" type="date" min="${lo}" max="${WRET.ydayCal||''}" value="${WRET.yday||''}" aria-label="Pick a day" style="${w2sel(mob)};padding:0 10px${mob?';flex:1;min-width:0':''}${y?'':`;border-color:${W2.ink};font-weight:600`}"></div>`, true);
 }
 async function loadWRet(){
   const P=curProject(); if(!P.ret || WRET.loading) return;
@@ -8187,7 +8217,7 @@ function productBodyHTML(mob){
    yesterday, and who to ring (FO / TM at the retailer, CI / AM at the machine). Wheat ADMIN only.
    · Plan acres are the retailer's placement figure, read once; a machine's plan is that figure ÷ the machines
      mapped to him (agreed), so a retailer row always equals the sum of its machine rows — under any filter.
-   · Overall = Rabi achieved acres summed over every date; Yesterday = the calendar's yesterday (IST). The KPI strip
+   · Overall = Rabi achieved acres summed up to the Day filter (yesterday by default; wDaySync); "Yesterday" = that day. The KPI strip
      names the last date the sheet carries acres for, and turns amber when that is older than yesterday — a sheet
      that was not refreshed must not read as a day nobody sprayed.
    · Retailer-level filters (State · Company · Territory · TM · FO) keep or drop a retailer; machine-level ones
@@ -8249,7 +8279,7 @@ function wplanAgg(){
 function wplanCSV(){
   const A=wplanAgg(), ppl=l=>l.map(p=>p.n).join(' / ');
   const head=['State','Territory','Company','Retailer','Retailer plan acres','Machines (retailer)','Machine','Machine plan acres (plan ÷ machines)',
-    `Acres yesterday (${WRET.yday})`,'Acres overall','% of machine plan',`Scanned yesterday (${WRET.yday})`,'Scanned overall','Village',
+    `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,'Acres overall','% of machine plan',`Scanned ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,'Scanned overall','Village',
     'Operator','Operator mobile','CI','CI mobile','AM','AM mobile','FO','FO mobile','TM','TM mobile','Last ping'];
   const lines=[head.join(',')].concat(A.rows.flatMap(r=>r.list.map(m=>[STATE_NAMES[r.st]||r.st, r.territory, r.org, r.party, r.planAc, r.nAll, m.mc,
     Math.round(m.planShare*10)/10, m.acY, m.acAll, m.planShare>0?Math.round(1000*m.acAll/m.planShare)/10:'', m.scY, m.scAll, m.village,
@@ -8266,6 +8296,7 @@ function wpFilterFields(A, mob){
     : `<div style="display:flex;align-items:center;gap:8px">${w2lbl(t)}${inner}</div>`;
   const dd=(id,allT,opts,cur,dis)=>`<div style="position:relative"><select id="${id}"${dis?' disabled':''} style="${sel}${mob?';width:100%':';width:150px'}${dis?';opacity:.55;cursor:not-allowed':''}">${optionsHTML([{v:'',t:allT}].concat(opts.map(o=>({v:o,t:o}))),cur)}</select>${I.caret}</div>`;
   return [
+    wDayFieldHTML(mob, lab),
     A.lockSt || A.stOpts.length<2 ? '' : lab('State',`<div style="position:relative"><select id="wpStSel" style="${sel}${mob?';width:100%':';width:160px'}">${optionsHTML([{v:'',t:P.allLabel}].concat(A.stOpts.map(c=>({v:c,t:STATE_NAMES[c]||c}))),A.st)}</select>${I.caret}</div>`, true),
     A.lockOrg ? '' : lab('Company',`<div style="${w2segBox(mob)}">${['ALL','UPL','SWAL'].map(c=>`<button data-act="wporg" data-org="${c}" aria-pressed="${A.org===c}" style="${w2seg(A.org===c,mob)}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`, true),
     lab('Territory', dd('wpTerrSel','All territories',A.terrs,A.terr)),
@@ -8277,7 +8308,7 @@ function wpFilterFields(A, mob){
 }
 function wpSheetHTML(){
   const A=wplanAgg();
-  const foot=`<div style="display:flex;gap:10px">${A.nF?`<button data-act="wpclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Show ${fmt(A.rows.length)} retailer${A.rows.length===1?'':'s'}</button></div>`;
+  const foot=`<div style="display:flex;gap:10px">${A.nF||wDayOn()?`<button data-act="wpclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Show ${fmt(A.rows.length)} retailer${A.rows.length===1?'':'s'}</button></div>`;
   return mSheetHTML('Filters', `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px">${wpFilterFields(A,true)}</div>`, 'sheetclose', foot);
 }
 // The small pieces every Wheat page shares (Retailers, Territories, Map), so a figure looks the same on all three.
@@ -8305,7 +8336,7 @@ function wpBits(mob){
   const ghost = (act,t) => `<button data-act="${act}" style="height:${mob?48:38}px;padding:0 14px;border:1px solid ${W2.line};border-radius:${mob?12:10}px;background:#fff;color:${W2.ink};font:500 ${mob?15:14}px ${W2.font};cursor:pointer;white-space:nowrap">${t}</button>`;
   const filtersBtn = (act,n) => `<button data-act="${act}" aria-label="Filters${n?`, ${n} active`:''}" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;height:48px;padding:0 14px;border:1px solid ${n?W2.ink:W2.line};border-radius:12px;background:#fff;color:${W2.ink};font:500 15px ${W2.font};cursor:pointer">${I.filter}Filters${n?` <span style="min-width:20px;height:20px;border-radius:10px;background:${W2.ink};color:#fff;font-size:12px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px">${n}</span>`:''}</button>`;
   const stamp = act => `<span style="font-size:12.5px;color:${W2.ink2}">Main sheet · checked ${E(WRET.at||'—')}${mob?'':` · <button data-act="${act}" title="Reload the sheet" style="border:none;background:none;padding:0;font:inherit;color:${W2.ink};text-decoration:underline;text-underline-offset:2px;cursor:pointer">refresh</button>`}</span>`;
-  const sortSel = (id,label,sorts,cur) => `<div style="position:relative;${mob?'flex:1;min-width:0':''}"><select id="${id}" aria-label="${label}" style="${w2sel(mob)}${mob?';width:100%':''}">${optionsHTML(sorts.map(([v,t])=>({v,t:'Sort: '+t})),cur)}</select>${I.caret}</div>`;
+  const sortSel = (id,label,sorts,cur) => `<div style="position:relative;${mob?'flex:1;min-width:0':''}"><select id="${id}" aria-label="${label}" style="${w2sel(mob)}${mob?';width:100%':''}">${optionsHTML(sorts.map(([v,t])=>({v,t:'Sort: '+t.replace(/yesterday/,wIsYday()?'yesterday':wpDate(WRET.yday))})),cur)}</select>${I.caret}</div>`;
   const cardBox = (inner, extra='') => `<div style="${w2card(mob?18:16)};${extra}">${inner}</div>`;
   const msg = (inner, pad) => cardBox(`<div style="padding:${pad||'44px 20px'};text-align:center;color:${W2.ink2};font-size:14px;line-height:1.55">${inner}</div>`, `margin-top:${mob?12:16}px`);
   // The table's header cell; a sortable one is a button that names its order.
@@ -8330,10 +8361,10 @@ function wplanBodyHTML(mob){
   const firstDate = WRET.log && WRET.log.firstDate ? wpDate(WRET.log.firstDate) : '';
   // ── KPI strip. The hero answers "how far against plan"; then the day, the scans, and the size of what is shown.
   const heroBar = `<div style="height:6px;background:${W2.line2};border-radius:3px;overflow:hidden"><div style="width:${Math.min(100,A.pct||0)}%;min-width:${A.pct>0?6:0}px;height:100%;background:linear-gradient(90deg,#F5821F,#1FAE43);border-radius:3px"></div></div>`;
-  const heroSub = `<b style="color:${W2.ink};font-weight:600">${pctF(A.pct)}</b> of ${fmt(A.plan)} ac plan · all days${firstDate?' since '+firstDate:''}`;
+  const heroSub = `<b style="color:${W2.ink};font-weight:600">${pctF(A.pct)}</b> of ${fmt(A.plan)} ac plan · ${wDayOn()?`${firstDate?firstDate+' – ':'to '}${wpDate(WRET.yday)}`:`all days${firstDate?' since '+firstDate:''}`}`;
   const tiles = [
-    tile('Acres yesterday', acF(A.acY), 'ac', `${wpDate(WRET.yday)} · ${dataLine}`, {warn:stale}),
-    tile('Scanned acres', acF(A.scAll), 'ac', `${acF(A.scY)} ac yesterday`),
+    tile('Acres '+wDayWord(), acF(A.acY), 'ac', `${wpDate(WRET.yday)} · ${dataLine}`, {warn:stale}),
+    tile('Scanned acres', acF(A.scAll), 'ac', `${acF(A.scY)} ac ${wDayWord()}`),
     tile('Retailers', fmt(A.rows.length), '', `${fmt(A.nTerr)} ${A.nTerr===1?'territory':'territories'}`),
     tile('Machines', fmt(A.n), '', 'mapped to these retailers'),
   ];
@@ -8352,10 +8383,10 @@ function wplanBodyHTML(mob){
   // ── Controls.
   const search = B.search('wpSearch', mob?'Search retailer, machine…':'Search retailer, machine, person', S.wpQ);
   const csvBtn = B.csv('wpcsv', `Download the ${fmt(A.n)} machines shown, with their retailer, as CSV`);
-  const clearBtn = A.narrowed ? B.ghost('wpclear','Clear') : '';
+  const clearBtn = A.narrowed||wDayOn() ? B.ghost('wpclear','Clear') : '';
   const sortSel = B.sortSel('wpSortSel','Sort retailers by',WP_SORTS,A.sort);
   const controls = mob
-    ? `<div style="display:flex;gap:8px">${search}${B.filtersBtn('wpsheet',A.nF)}</div>
+    ? `<div style="display:flex;gap:8px">${search}${B.filtersBtn('wpsheet',A.nF+(wDayOn()?1:0))}</div>
        <div style="display:flex;gap:8px;margin-top:8px">${sortSel}${clearBtn}${csvBtn}</div>`
     : `<div style="display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap">${wpFilterFields(A,false)}</div>
        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px">${search}${clearBtn}<div style="flex:1"></div>${B.stamp('wpretry')}${csvBtn}</div>`;
@@ -8380,13 +8411,13 @@ function wplanBodyHTML(mob){
           <div style="display:flex;flex-direction:column;gap:6px">
             <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span style="${w2num(22)}">${acF(r.acAll)}</span> <span style="font-size:13.5px;color:${W2.ink2}">of ${fmt(r.plan)} ac plan</span></span><span style="${w2num(14)}">${pctF(r.pct)}</span></div>
             ${meter(r.pct,'',orgCol(r.org))}</div>
-          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${stat(acF(r.acY),'ac yesterday')}${stat(acF(r.scAll),'ac scanned')}${stat(fmt(r.n)+(r.n<r.nAll?`<span style="font-size:12px;font-weight:500;color:${W2.ink2}"> of ${r.nAll}</span>`:''),'machine'+(r.n===1?'':'s'))}</div>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${stat(acF(r.acY),'ac '+wDayWord())}${stat(acF(r.scAll),'ac scanned')}${stat(fmt(r.n)+(r.n<r.nAll?`<span style="font-size:12px;font-weight:500;color:${W2.ink2}"> of ${r.nAll}</span>`:''),'machine'+(r.n===1?'':'s'))}</div>
           <div style="border-top:1px solid ${W2.line2}">${pRow('FO',{n:r.foName,mob:r.foMob})}${pRow('TM',{n:r.tmName,mob:r.tmMob},1)}
             <div style="font-size:13px;color:${W2.ink2};line-height:1.55;padding:6px 0 0"><b style="font-weight:600">CI</b> <span style="color:${W2.ink}">${names(r.cis,3)}</span><br><b style="font-weight:600">AM</b> <span style="color:${W2.ink}">${names(r.ams,3)}</span></div></div>
           <button data-act="wpexp" data-k="${E(r.key)}" aria-expanded="${open}" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:${open?W2.head:'#fff'};color:${W2.ink};font:500 14px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${open?'Hide':'Show'} ${r.n} machine${r.n===1?'':'s'} <span aria-hidden="true" style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>
           ${open?`<div style="display:flex;flex-direction:column;gap:8px">${r.list.map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:${W2.head};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
               <span style="flex:1;min-width:0"><span style="display:block;font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.opName?E(m.opName):'No operator'}${m.co?' · CI '+E(m.co):''}</span></span>
-              <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${acF(m.acAll)} ac</span><span style="display:block;font-size:12.5px;color:${W2.ink2}">${acF(m.acY)} yesterday</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`).join('')}</div>`:''}
+              <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${acF(m.acAll)} ac</span><span style="display:block;font-size:12.5px;color:${W2.ink2}">${acF(m.acY)} ${wDayWord()}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`).join('')}</div>`:''}
         </div>`, 'margin-bottom:12px'); }).join('')
       + (A.rows.length>shown.length ? `<button data-act="wpmore" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:#fff;color:${W2.ink};font:500 14px ${W2.font};cursor:pointer">Load more · ${fmt(shown.length)} of ${fmt(A.rows.length)} shown</button>` : '')
       + `<div style="font-size:12.5px;color:${W2.ink2};margin-top:10px">${B.stamp('wpretry')}</div>`;
@@ -8394,7 +8425,7 @@ function wplanBodyHTML(mob){
     const cols='minmax(190px,2fr) 70px 84px 80px 84px 120px 72px minmax(140px,1.25fr) minmax(160px,1.45fr)';
     const hd=B.th('wpsort',A.sort);
     const head=`<div style="display:grid;grid-template-columns:${cols};gap:14px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2};position:sticky;top:0;z-index:1">
-      ${hd('party','Retailer')}${hd('n','Machines',1)}${hd('plan','Plan ac',1)}${hd('acY','Yesterday',1)}${hd('acAll','Overall ac',1)}${hd('pct','% of plan',1)}${hd('scAll','Scanned',1)}${hd('','FO · TM')}${hd('','CI · AM')}</div>`;
+      ${hd('party','Retailer')}${hd('n','Machines',1)}${hd('plan','Plan ac',1)}${hd('acY',wDayHead(),1)}${hd('acAll','Overall ac',1)}${hd('pct','% of plan',1)}${hd('scAll','Scanned',1)}${hd('','FO · TM')}${hd('','CI · AM')}</div>`;
     const numC=(v,b)=>`<span style="text-align:right;font-variant-numeric:tabular-nums${b?';font-weight:600':''}">${v}</span>`;
     const pctC=(p,col)=>`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums;font-weight:500">${pctF(p)}</span>${meter(p,'100%',col)}</div>`;
     const pl=(lab,v)=>`<div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-size:11.5px;font-weight:600;color:${W2.ink2}">${lab}</span> ${v}</div>`;
@@ -8429,8 +8460,8 @@ function wpMachineHTML(m, mob){
     : `<div style="padding:12px 14px;border:1px solid #EFEDE7;border-radius:10px;font-size:12px;color:#46433d;line-height:1.5">Position not shown: the sheet has no usable position for this machine.${m.lastPing?`<br><span style="color:#6E6A62">Last ping ${wpDate(m.lastPing)}</span>`:''}</div>`;
   return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
       ${stat('Acres overall',acF(m.acAll),`${pctF(p)} of its ${fmt(m.planShare)} ac plan`)}
-      ${stat('Acres yesterday',acF(m.acY),wpDate(WRET.yday))}
-      ${stat('Scanned overall',acF(m.scAll),`${acF(m.scY)} ac yesterday`)}
+      ${stat('Acres '+wDayWord(),acF(m.acY),wpDate(WRET.yday))}
+      ${stat('Scanned overall',acF(m.scAll),`${acF(m.scY)} ac ${wDayWord()}`)}
       ${stat('Days sprayed',fmt(days.length),last?'last on '+wpDate(last):'none yet')}
     </div>
     <div style="font-size:11px;color:#6E6A62;margin-top:8px">Plan = retailer's ${fmt(r.planAc)} ac ÷ ${r.list.length} machine${r.list.length===1?'':'s'}</div>
@@ -8566,7 +8597,7 @@ function wterrAgg(){
 function wterrCSV(){
   const A=wterrAgg();
   const head=['State','Territory','TM','TM mobile','Machine','Retailer','Company','Machine plan acres (retailer plan ÷ machines)',
-    `Acres yesterday (${WRET.yday})`,`Season acres to ${WRET.yday}`,`Scanned yesterday (${WRET.yday})`,'Scanned overall','Operator','Operator mobile',
+    `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Season acres to ${WRET.yday}`,`Scanned ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,'Scanned overall','Operator','Operator mobile',
     'CI','CI mobile','AM','AM mobile','FO','FO mobile','Territory on sheet'];
   const lines=[head.join(',')].concat(A.rows.flatMap(r=>r.list.map(m=>[STATE_NAMES[r.st]||r.st, r.name, m.retailer.tmName, m.retailer.tmMob, m.mc, m.party, m.org,
     Math.round(m.planShare*10)/10, m.acY, wtAc(m), m.scY, m.scAll, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, m.retailer.foName, m.retailer.foMob, m.terrRaw].map(csvCell).join(','))));
@@ -8581,6 +8612,7 @@ function wtFilterFields(A, mob){
     : `<div style="display:flex;align-items:center;gap:8px">${w2lbl(t)}${inner}</div>`;
   const dd=(id,allT,opts,cur)=>`<div style="position:relative"><select id="${id}" style="${sel}${mob?';width:100%':';width:170px'}">${optionsHTML([{v:'',t:allT}].concat(opts.map(o=>({v:o,t:o}))),cur)}</select>${I.caret}</div>`;
   return [
+    wDayFieldHTML(mob, lab),
     A.lockSt || A.stOpts.length<2 ? '' : lab('State',`<div style="position:relative"><select id="wtStSel" style="${sel}${mob?';width:100%':';width:160px'}">${optionsHTML([{v:'',t:P.allLabel}].concat(A.stOpts.map(c=>({v:c,t:STATE_NAMES[c]||c}))),A.st)}</select>${I.caret}</div>`, true),
     A.lockOrg ? '' : lab('Company',`<div style="${w2segBox(mob)}">${['ALL','UPL','SWAL'].map(c=>`<button data-act="wtorg" data-org="${c}" aria-pressed="${A.org===c}" style="${w2seg(A.org===c,mob)}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`, true),
     lab('Territory', dd('wtTerrSel','All territories',A.terrs,A.terr)),
@@ -8590,7 +8622,7 @@ function wtFilterFields(A, mob){
 }
 function wtSheetHTML(){
   const A=wterrAgg();
-  const foot=`<div style="display:flex;gap:10px">${A.nF?`<button data-act="wtclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">${state.view==='wam'?`Show ${fmt(A.n)} machine${A.n===1?'':'s'}`:`Show ${fmt(A.rows.length)} territor${A.rows.length===1?'y':'ies'}`}</button></div>`;
+  const foot=`<div style="display:flex;gap:10px">${A.nF||wDayOn()?`<button data-act="wtclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">${state.view==='wam'?`Show ${fmt(A.n)} machine${A.n===1?'':'s'}`:`Show ${fmt(A.rows.length)} territor${A.rows.length===1?'y':'ies'}`}</button></div>`;
   return mSheetHTML('Filters', `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px">${wtFilterFields(A,true)}</div>`, 'sheetclose', foot);
 }
 // A row's mini trend: the last WT_SPARK days, one bar each, yesterday dark. Scaled to the row's own best day, so it
@@ -8609,10 +8641,10 @@ function wtControlsHTML(A, mob, withSort, o){
   const S=state, B=wpBits(mob); o=o||{};
   const search = B.search('wtSearch', o.ph ? o.ph[mob?0:1] : mob?'Search territory, TM, machine…':'Search territory, TM, machine, person', S.wtQ);
   const csvBtn = B.csv(o.csv||'wtcsv', o.csvTitle||`Download the ${fmt(A.n)} machines shown, with their territory and TM, as CSV`);
-  const clearBtn = A.narrowed ? B.ghost('wtclear','Clear') : '';
+  const clearBtn = A.narrowed||wDayOn() ? B.ghost('wtclear','Clear') : '';
   const sortSel = o.sort ? B.sortSel(...o.sort) : withSort ? B.sortSel('wtSortSel','Sort territories by',WT_SORTS,A.sort) : '';
   return mob
-    ? `<div style="display:flex;gap:8px">${search}${B.filtersBtn('wtsheet',A.nF)}</div>
+    ? `<div style="display:flex;gap:8px">${search}${B.filtersBtn('wtsheet',A.nF+(wDayOn()?1:0))}</div>
        <div style="display:flex;gap:8px;margin-top:8px;${withSort?'':'justify-content:flex-end'}">${sortSel}${clearBtn}${csvBtn}</div>`
     : `<div style="display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap">${wtFilterFields(A,false)}</div>
        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px">${search}${clearBtn}<div style="flex:1"></div>${B.stamp('wpretry')}${csvBtn}</div>`;
@@ -8635,7 +8667,7 @@ function wterrBodyHTML(mob){
           ${showVal&&v>0?`<span style="font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;color:${i===n-1?W2.actD:W2.ink2};margin-bottom:3px">${acF(v)}</span>`:''}
           <span style="display:block;width:100%;max-width:44px;height:${v>0?Math.max(3,Math.round(80*v/mx)):0}%;min-height:${v>0?3:1}px;border-radius:4px 4px 0 0;background:${v>0?(i===n-1?W2.act:'#9FB4C8'):'#E1E5EA'}"></span></div>`).join('')}
       </div>
-      <div style="display:flex;gap:${n>30?2:mob?4:8}px;border-top:1px solid ${W2.line};padding-top:6px">${A.days.map((d,i)=>`<span style="flex:1;min-width:0;text-align:center;font-size:12px;color:${i===n-1?W2.ink:W2.ink2};font-weight:${i===n-1?600:400};white-space:nowrap;overflow:visible">${(i%every===0&&(n-1-i)>=every/2)||i===n-1?(i===n-1?'Yest.':wpDate(d)):''}</span>`).join('')}</div>
+      <div style="display:flex;gap:${n>30?2:mob?4:8}px;border-top:1px solid ${W2.line};padding-top:6px">${A.days.map((d,i)=>`<span style="flex:1;min-width:0;text-align:center;font-size:12px;color:${i===n-1?W2.ink:W2.ink2};font-weight:${i===n-1?600:400};white-space:nowrap;overflow:visible">${(i%every===0&&(n-1-i)>=every/2)||i===n-1?(i===n-1?(wIsYday()?'Yest.':wpDate(d)):wpDate(d)):''}</span>`).join('')}</div>
     </div>`, `margin-top:${mob?12:16}px`);
   const controls = wtControlsHTML(A, mob, true);
   const showSt = !A.st;
@@ -8655,14 +8687,14 @@ function wterrBodyHTML(mob){
         const tmRow=(p,last)=>`<div style="display:flex;align-items:center;gap:10px;min-height:52px;${last?'':'border-bottom:1px solid '+W2.line2}"><span style="width:28px;font-size:12px;font-weight:600;color:${W2.ink2};flex-shrink:0">TM</span><span style="flex:1;min-width:0;font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(p.n)}</span>${tel(p,'TM')}</div>`;
         const mcBtn=m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:${W2.head};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
             <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${orgChip(m.org)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.opName?E(m.opName):'No operator'} · ${E(m.party)}</span></span>
-            <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${acF(wtAc(m))} ac</span><span style="display:block;font-size:12.5px;color:${W2.ink2}">${acF(m.acY)} yesterday</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`;
+            <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${acF(wtAc(m))} ac</span><span style="display:block;font-size:12.5px;color:${W2.ink2}">${acF(m.acY)} ${wDayWord()}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`;
         return B.cardBox(`<div style="padding:16px;display:flex;flex-direction:column;gap:12px">
           <div><div style="font-size:16px;font-weight:600;line-height:1.3">${E(r.name)}</div>
             <div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">${showSt?E(stName(r))+' · ':''}${fmt(r.n)}${r.n<r.nAll?' of '+fmt(r.nAll):''} machine${r.n===1?'':'s'}</div>${noneNote(r)}</div>
           <div style="display:flex;flex-direction:column;gap:6px">
             <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span style="${w2num(22)}">${acF(r.acAll)}</span> <span style="font-size:13.5px;color:${W2.ink2}">of ${fmt(r.plan)} ac plan</span></span><span style="${w2num(14)}">${pctF(r.pct)}</span></div>
             ${meter(r.pct,'',W2.act)}</div>
-          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${stat(acF(r.acY),'ac yesterday')}${stat(acF(r.scAll),'ac scanned')}${stat(fmt(r.op)+`<span style="font-size:12px;font-weight:500;color:${W2.ink2}"> of ${fmt(r.n)}</span>`,'operator mapped')}</div>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${stat(acF(r.acY),'ac '+wDayWord())}${stat(acF(r.scAll),'ac scanned')}${stat(fmt(r.op)+`<span style="font-size:12px;font-weight:500;color:${W2.ink2}"> of ${fmt(r.n)}</span>`,'operator mapped')}</div>
           <div style="display:flex;align-items:flex-end;gap:10px">${wtSpark(r.series,A.days,'')}<span style="flex-shrink:0;white-space:nowrap;font-size:12.5px;color:${W2.ink2}">last ${Math.min(WT_SPARK,A.days.length)} days</span></div>
           <div style="border-top:1px solid ${W2.line2}">${r.tms.length?r.tms.map((p,i)=>tmRow(p,i===r.tms.length-1)).join(''):`<div style="font-size:13px;color:${W2.ink2};padding:12px 0">No TM on the sheet</div>`}</div>
           <button data-act="wtexp" data-k="${E(r.key)}" aria-expanded="${open}" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:${open?W2.head:'#fff'};color:${W2.ink};font:500 14px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${open?'Hide':'Show'} ${r.n} machine${r.n===1?'':'s'} <span aria-hidden="true" style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>
@@ -8674,7 +8706,7 @@ function wterrBodyHTML(mob){
     const cols='minmax(220px,1.7fr) 74px 90px 124px 86px 84px 130px 136px';
     const hd=B.th('wtsort',A.sort);
     const head=`<div style="display:grid;grid-template-columns:${cols};gap:14px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2};position:sticky;top:0;z-index:1">
-      ${hd('name','Territory · TM')}${hd('n','Machines',1)}${hd('plan','Plan ac',1)}${hd('acAll','Sprayed ac',1)}${hd('acY','Yesterday',1)}${hd('scAll','Scanned',1)}${hd('opPct','Operator mapped',1)}${hd('',`Last ${Math.min(WT_SPARK,A.days.length)} days`)}</div>`;
+      ${hd('name','Territory · TM')}${hd('n','Machines',1)}${hd('plan','Plan ac',1)}${hd('acAll','Sprayed ac',1)}${hd('acY',wDayHead(),1)}${hd('scAll','Scanned',1)}${hd('opPct','Operator mapped',1)}${hd('',`Last ${Math.min(WT_SPARK,A.days.length)} days`)}</div>`;
     const numC=(v,b)=>`<span style="text-align:right;font-variant-numeric:tabular-nums${b?';font-weight:600':''}">${v}</span>`;
     const sprayC=(v,p)=>`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums"><b style="font-weight:600">${acF(v)}</b><span style="font-size:12.5px;color:${W2.ink2}"> · ${pctF(p)}</span></span>${meter(p,'100%',W2.act)}</div>`;
     const opC=(k,nn)=>`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums;font-weight:500">${fmt(k)}<span style="color:${W2.ink2};font-weight:400"> of ${fmt(nn)}</span></span>${meter(nn?100*k/nn:null,'100%','#1A9E80')}</div>`;
@@ -8702,7 +8734,7 @@ function wterrBodyHTML(mob){
 // direction to colour); no machine plan on the fleet tile. Pinged counts machines whose last ping is yesterday or
 // later — the sheet keeps only the latest ping.
 function wtStripHTML(A, mob, stale, cardOnly){
-  const pctW = A.n ? Math.round(100*A.worked/A.n) : 0, idle = A.n - A.worked, day = wpDate(WRET.yday);
+  const pctW = A.n ? Math.round(100*A.worked/A.n) : 0, idle = A.n - A.worked, day = wpDate(WRET.yday), past = wDayOn();
   const staleTxt = stale ? `⚠ the sheet's acres stop at ${wpDate(WRET.lastDate)}` : '';
   const tiles = [
     { label:'Territories sprayed', val:fmt(A.nSprayedY), unit:`of ${fmt(A.nNamed)}` },
@@ -8710,9 +8742,10 @@ function wtStripHTML(A, mob, stale, cardOnly){
     { label:'Acres '+day, val:acF(A.acY), unit:'ac', warn:stale, sub:`${acF(A.acAll)} ac total` },
     { label:'MTD acres', val:acF(A.mtd), unit:'ac' },
     { kind:'fleet' },
-    { label:'Operators mapped', val:`${fmt(A.op)}/${fmt(A.n)}` },
-    { label:'IoT acres y’day', val:acF(A.iotY), unit:'ac', sub:`${acF(A.ioT)} ac total` },
-    { label:'Pinged since y’day', val:fmt(A.pinged) },
+    { label:'Operators mapped'+(past?' today':''), val:`${fmt(A.op)}/${fmt(A.n)}` },
+    { label:past?'IoT acres '+day:'IoT acres y’day', val:acF(A.iotY), unit:'ac', sub:`${acF(A.ioT)} ac total` },
+    // The sheet keeps only the LATEST ping, so a past day cannot say who pinged then: the tile goes.
+    ...(past?[]:[{ label:'Pinged since y’day', val:fmt(A.pinged) }]),
   ];
   // Scanning: totals and Scan % read through yesterday, as the sprayed acres do; each yesterday tile carries its total.
   const scanTiles = [
@@ -8724,7 +8757,7 @@ function wtStripHTML(A, mob, stale, cardOnly){
   ];
   const parts = A.org==='ALL' ? [['UPL',A.upl,C.orange],['SWAL',A.swal,C.green],...(A.open>0?[['Open',A.open,C.open]]:[])]
     : [[A.org, A.org==='UPL'?A.upl:A.swal, A.org==='UPL'?C.orange:C.green]];
-  const fleetInner = (sz) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Machines on the sheet</span></div>
+  const fleetInner = (sz) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Machines on the sheet${past?' today':''}</span></div>
       <div style="${w2num(sz)}">${fmt(A.n)}</div>
       <div style="display:flex;gap:2px;height:6px;border-radius:3px;overflow:hidden;background:${W2.line2}">${parts.map(([,k,c])=>`<div style="flex:${k};background:${c}"></div>`).join('')}</div>
       <div style="display:flex;gap:12px;font-size:12.5px;color:${W2.ink2};flex-wrap:wrap">${parts.map(([o,k,c])=>`<span style="display:flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:8px;height:8px;border-radius:2px;background:${c}"></span>${o} <b style="color:${W2.ink};font-weight:600">${fmt(k)}</b></span>`).join('')}</div>`;
@@ -8737,7 +8770,7 @@ function wtStripHTML(A, mob, stale, cardOnly){
     return `background:${t.bg};border:1px solid ${t.bd};${extra}`; };
   const planPill = `<span style="font-size:13px;font-weight:600;padding:3px 8px;border-radius:6px;background:${W2.line2};color:${W2.ink};white-space:nowrap">${pctF(A.pct)} of plan</span>`;
   const hero = (big) => `<div style="display:flex;flex-direction:column;gap:${big?6:8}px">
-        <div style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Worked yesterday</div>
+        <div style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Worked ${wDayWord()}</div>
         <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="${w2num(big?44:40,600,W2.actD)};letter-spacing:-0.02em;line-height:1">${fmt(A.worked)}</span><span style="font-size:${big?16:15}px;color:${W2.ink2}">of ${fmt(A.n)} machines</span></div>
         <div style="height:6px;background:${W2.line2};border-radius:3px;overflow:hidden;margin-top:${big?6:0}px"><div style="width:${pctW}%;min-width:${A.worked?4:0}px;height:100%;background:${W2.act};border-radius:3px"></div></div>
         <div style="font-size:13.5px;color:${W2.ink2}">${pctW}% of machines · ${acF(A.acY)} ac sprayed · ${day}</div>
@@ -8803,7 +8836,7 @@ function wamAgg(){
 function wamCSV(){
   const W=wamAgg();
   const head=['AM','AM mobile','CI','CI mobile','Machine','State','Territory','Retailer','Company','Machine plan acres (retailer plan ÷ machines)',
-    `Acres yesterday (${WRET.yday})`,`Season acres to ${WRET.yday}`,'Scanned overall','Operator','Operator mobile'];
+    `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Season acres to ${WRET.yday}`,'Scanned overall','Operator','Operator mobile'];
   const lines=[head.join(',')].concat(W.rows.flatMap(r=>r.subs.flatMap(c=>c.list.map(m=>[m.am, m.amNum, m.co, m.coMob, m.mc, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.org,
     Math.round(m.planShare*10)/10, m.acY, wtAc(m), m.scAll, m.opName, m.opNum].map(csvCell).join(',')))));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
@@ -8829,12 +8862,12 @@ function wamBodyHTML(mob){
     const stat=(v,l)=>`<div style="display:flex;flex-direction:column;min-width:0"><span style="${w2num(17)}">${v}</span><span style="font-size:12.5px;color:${W2.ink2}">${l}</span></div>`;
     const mcBtn=m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:#fff;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
         <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${orgChip(m.org)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.opName?E(m.opName):'No operator'} · ${E(m.territory)}</span></span>
-        <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${acF(wtAc(m))} ac</span><span style="display:block;font-size:12.5px;color:${m.acY>0?W2.actD:W2.ink2}">${m.acY>0?acF(m.acY)+' yesterday':'idle yesterday'}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`;
+        <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${acF(wtAc(m))} ac</span><span style="display:block;font-size:12.5px;color:${m.acY>0?W2.actD:W2.ink2}">${m.acY>0?acF(m.acY)+' '+wDayWord():'idle '+wDayWord()}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`;
     const toggle=(k,open,t)=>`<button data-act="wamexp" data-k="${E(k)}" aria-expanded="${open}" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:${open?W2.head:'#fff'};color:${W2.ink};font:500 14px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${open?'Hide':'Show'} ${t} <span aria-hidden="true" style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>`;
     const subBox=(c,r)=>{ const open=W.open(c.key);
       return `<div style="border:1px solid ${W2.line2};border-radius:14px;background:${W2.head};padding:12px;display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:${W2.ink2}">${r.none?'Territory':'CI'}</div><div style="font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(c.name)}</div>${c.dup&&c.mob?`<div style="font:12.5px 'IBM Plex Mono',monospace;color:${W2.ink2}">${E(c.mob)}</div>`:''}</div>${r.none?'':tel({n:c.name,mob:c.mob},'CI')}</div>
-        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${stat(acF(c.acAll),'ac sprayed')}${stat(acF(c.acY),'ac yesterday')}${stat(ranTxt(c),'ran yesterday')}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${stat(acF(c.acAll),'ac sprayed')}${stat(acF(c.acY),'ac '+wDayWord())}${stat(ranTxt(c),'ran '+wDayWord())}</div>
         ${toggle(c.key,open,`${c.n} machine${c.n===1?'':'s'}`)}
         ${open?`<div style="display:flex;flex-direction:column;gap:8px">${c.list.map(mcBtn).join('')}</div>`:''}</div>`; };
     list = `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin:18px 2px 10px"><span style="font-size:16px;font-weight:600">Area managers · ${fmt(W.named.length)}</span><span style="font-size:12.5px;color:${W2.ink2}">by ${E(sortName)}</span></div>`
@@ -8845,7 +8878,7 @@ function wamBodyHTML(mob){
           <div style="display:flex;flex-direction:column;gap:6px">
             <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span style="${w2num(22)}">${acF(r.acAll)}</span> <span style="font-size:13.5px;color:${W2.ink2}">of ${fmt(r.plan)} ac plan</span></span><span style="${w2num(14)}">${pctF(r.pct)}</span></div>
             ${meter(r.pct,'',W2.act)}</div>
-          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${stat(acF(r.acY),'ac yesterday')}${stat(ranTxt(r),'ran yesterday')}${stat(acF(r.scAll),'ac scanned')}</div>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${stat(acF(r.acY),'ac '+wDayWord())}${stat(ranTxt(r),'ran '+wDayWord())}${stat(acF(r.scAll),'ac scanned')}</div>
           <div style="display:flex;align-items:flex-end;gap:10px">${wtSpark(r.series,W.days,'')}<span style="flex-shrink:0;white-space:nowrap;font-size:12.5px;color:${W2.ink2}">last ${Math.min(WT_SPARK,W.days.length)} days</span></div>
           ${toggle(r.key,open,r.none?`${r.n} machines by territory`:subN(r))}
           ${open?`<div style="display:flex;flex-direction:column;gap:10px">${r.subs.map(c=>subBox(c,r)).join('')}</div>`:''}
@@ -8855,7 +8888,7 @@ function wamBodyHTML(mob){
     const cols='minmax(190px,1.6fr) 40px 66px 76px 116px 76px 104px 70px 100px';
     const hd=B.th('wamsort',W.sort);
     const head=`<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 18px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2};position:sticky;top:0;z-index:1">
-      ${hd('name','Area manager · CI')}${hd('','CIs',1)}${hd('n','Machines',1)}${hd('plan','Plan ac',1)}${hd('acAll','Sprayed ac',1)}${hd('acY','Yesterday',1)}${hd('ranPct','Ran yesterday',1)}${hd('scAll','Scanned',1)}${hd('',`Last ${Math.min(WT_SPARK,W.days.length)} days`)}</div>`;
+      ${hd('name','Area manager · CI')}${hd('','CIs',1)}${hd('n','Machines',1)}${hd('plan','Plan ac',1)}${hd('acAll','Sprayed ac',1)}${hd('acY',wDayHead(),1)}${hd('ranPct','Ran '+wDayWord(),1)}${hd('scAll','Scanned',1)}${hd('',`Last ${Math.min(WT_SPARK,W.days.length)} days`)}</div>`;
     const numC=(v,b)=>`<span style="text-align:right;font-variant-numeric:tabular-nums${b?';font-weight:600':''}">${v}</span>`;
     const sprayC=(v,p)=>`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums"><b style="font-weight:600">${acF(v)}</b><span style="font-size:12.5px;color:${W2.ink2}"> · ${pctF(p)}</span></span>${meter(p,'100%',W2.act)}</div>`;
     const ranC=r=>`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums;font-weight:500">${ranTxt(r)}</span>${meter(r.ranPct,'100%',W2.act)}</div>`;
@@ -8931,9 +8964,9 @@ function wmapBodyHTML(mob){
   const dot=(c,ring,fade)=>`<span aria-hidden="true" style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${c};${ring?'box-shadow:0 0 0 2px '+C.brk+';':'border:1.5px solid #fff;box-sizing:border-box;'}${fade?'opacity:.4;':''}flex-shrink:0"></span>`;
   const key=(c,t,ring,fade)=>`<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">${dot(c,ring,fade)}${t}</span>`;
   const legend=`<div style="display:flex;flex-wrap:wrap;gap:8px 18px;font-size:${mob?13:13.5}px;color:${W2.ink}">
-      ${key(WM_TONE.y,'Sprayed yesterday')}${key(WM_TONE.s,'Sprayed earlier')}${key(WM_TONE.n,'Not sprayed yet')}${key('#fff','No operator mapped',true)}${key(WM_TONE.s,'Last ping 3+ days ago',false,true)}
+      ${key(WM_TONE.y,'Sprayed '+wDayWord())}${key(WM_TONE.s,'Sprayed earlier')}${key(WM_TONE.n,'Not sprayed yet')}${key('#fff','No operator mapped',true)}${key(WM_TONE.s,'Last ping 3+ days ago',false,true)}
       <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap"><span aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:#6E6A62;color:#fff;font-size:9.5px;font-weight:700;font-family:'IBM Plex Mono'">3</span>Machines at one spot</span></div>`;
-  const notes=`<div style="font-size:13px;color:${W2.ink2};line-height:1.5;margin-top:10px;border-top:1px solid ${W2.line2};padding-top:10px">Positions are each machine's last ping and are approximate: the sheet's longitude has 2 decimals (about 1 km east–west).${off.length?` <b style="color:#46433d">${fmt(off.length)} machine${off.length===1?' has':'s have'} no usable position</b> and ${off.length===1?'is':'are'} not on the map: ${off.slice(0,8).map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;font:inherit;font-family:'IBM Plex Mono';color:#1B1A17;text-decoration:underline;text-decoration-color:#D5D0C6;cursor:pointer;${mob?'min-height:44px':''}">${E(m.mc)}</button>`).join(', ')}${off.length>8?` +${off.length-8}`:''}.`:''}</div>`;
+  const notes=`<div style="font-size:13px;color:${W2.ink2};line-height:1.5;margin-top:10px;border-top:1px solid ${W2.line2};padding-top:10px">${wDayOn()?`Pin colours are ${wpDate(WRET.yday)}'s acres; positions and pings are today's (the sheet keeps no history of them). `:''}Positions are each machine's last ping and are approximate: the sheet's longitude has 2 decimals (about 1 km east–west).${off.length?` <b style="color:#46433d">${fmt(off.length)} machine${off.length===1?' has':'s have'} no usable position</b> and ${off.length===1?'is':'are'} not on the map: ${off.slice(0,8).map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;font:inherit;font-family:'IBM Plex Mono';color:#1B1A17;text-decoration:underline;text-decoration-color:#D5D0C6;cursor:pointer;${mob?'min-height:44px':''}">${E(m.mc)}</button>`).join(', ')}${off.length>8?` +${off.length-8}`:''}.`:''}</div>`;
   const head=`<div style="display:flex;align-items:center;gap:10px;padding:${mob?'14px 16px':'14px 18px'};border-bottom:1px solid ${W2.line2};flex-wrap:wrap">
       <div style="flex:1;min-width:0"><div style="font-size:${mob?15:16}px;font-weight:600">Machines on the map · ${fmt(placed)}</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${A.narrowed?'what the filters show':'every machine'} · ${mob?'tap':'point at'} a pin for its card</div></div>
       ${mob?'':zoomCtrlsFor(false)}</div>`;
@@ -8957,7 +8990,7 @@ function wmCardHTML(g, mob){
       <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:${mob?14:13}px;font-weight:700">${E(m.mc)}</span>${wpBits(mob).orgChip(m.org)}<span style="flex:1"></span>
         <button data-act="wpmc" data-mc="${E(m.mc)}" style="border:1px solid #E9E6DF;background:#fff;border-radius:8px;min-height:${mob?44:28}px;padding:0 10px;font-size:12px;font-weight:600;color:#1B1A17;cursor:pointer">Details</button></div>
       <div style="font-size:12px;margin-top:4px;color:#46433d">${op?`Operator <b>${E(m.opName||'name not on sheet')}</b>${m.opNum&&realTel(m.opNum)?` · <a href="tel:${m.opNum}" style="color:#46433d;font-family:'IBM Plex Mono'">${E(m.opNum)}</a>`:''}`:`<span style="color:#B4462F;font-weight:600">✕ No operator mapped</span>`}</div>
-      <div style="font-size:12px;margin-top:2px;color:#46433d"><b style="font-family:'IBM Plex Mono'">${acF(wtAc(m))} ac</b> season to ${day} · ${acF(m.acY)} yesterday</div>
+      <div style="font-size:12px;margin-top:2px;color:#46433d"><b style="font-family:'IBM Plex Mono'">${acF(wtAc(m))} ac</b> season to ${day} · ${acF(m.acY)} ${wDayWord()}</div>
       <div style="font-size:11px;margin-top:2px;color:${wmStale(m)?'#8A5A00':'#6E6A62'}">${E(m.party)} · ${E(m.territory)}${m.lastPing?` · last seen ${wpDate(m.lastPing)}`:''}</div></div>`; };
   return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:${many?2:6}px">${many?`<span style="font-size:13px;font-weight:700;flex:1">${g.list.length} machines at this spot</span>`:'<span style="flex:1"></span>'}
       <button data-wmclose="1" aria-label="Close" style="width:${mob?44:26}px;height:${mob?44:26}px;margin:${mob?'-8px -8px 0 0':'-4px -6px 0 0'};border:none;background:none;color:#6E6A62;cursor:pointer;display:flex;align-items:center;justify-content:center">${I.closeS}</button></div>
@@ -11170,6 +11203,7 @@ function render(){
   const ovKey = state.device==='mobile' ? (state.selected?'d:'+state.selected.mc:'')+(state.sheet?'s:'+state.sheet:'') : '';
   _ovFresh = !!ovKey && ovKey!==_ovKey; _ovKey=ovKey;
   document.documentElement.dataset.proj = curProject().id;   // the Wheat v2 skin keys off this (see <style>)
+  if(isWheat()) wDaySync();   // the Wheat Day filter re-points every machine's day figures before anything is built
   const v=vals();
   app.innerHTML = state.device==='mobile' ? mobileHTML(v) : desktopHTML(v);
   app.querySelectorAll('[data-scroll]').forEach(el=>{
@@ -11321,6 +11355,7 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='wpAmSel') setState({wpAm:e.target.value, wpCi:''});
   else if(e.target.id==='wpCiSel') setState({wpCi:e.target.value});
   else if(e.target.id==='wpSortSel') setState({wpSort:e.target.value});
+  else if(e.target.id==='wDayInput'){ const v=e.target.value; if(v) setState({wDay: v===WRET.ydayCal?'':v}); }   // shared by the four Wheat pages
   else if(e.target.id==='wtStSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({wtSt:w, wtTerr:'', wtTm:'', wtAm:''}); }
   else if(e.target.id==='wtTerrSel') setState({wtTerr:e.target.value, wtTm:'', wtAm:''});
   else if(e.target.id==='wtTmSel') setState({wtTm:e.target.value, wtAm:''});
@@ -11399,7 +11434,7 @@ app.addEventListener('click', e=>{
     case 'mppretry': MPP.loaded=false; MPP.error=false; loadMPProduct(); break;
     case 'mpco': setState({mpCo:el.dataset.co}); track('mpprod_company',{co:el.dataset.co}); break;
     case 'wporg': setState({wpOrg:el.dataset.org, wpTerr:'', wpTm:'', wpFo:''}); break;
-    case 'wpclear': setState({wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:''}); break;
+    case 'wpclear': setState({wDay:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:''}); break;
     case 'wpretry': loadWRet(); break;
     case 'wpexp': { const k=el.dataset.k; setState(s=>({wpOpen:{...s.wpOpen, [k]:!s.wpOpen[k]}})); break; }
     case 'wpmc': { const m=WRET.machines.find(x=>x.mc===el.dataset.mc); if(m){ setState({selected:m}); track('machine_open',{ machine:m.mc, project:'wheat' }); } break; }
@@ -11416,7 +11451,8 @@ app.addEventListener('click', e=>{
     case 'iotcsv': iotCSV(state.view); track('iot_csv',{ view:state.view, st:state.iotSt||'all' }); break;
     case 'wpcsv': wplanCSV(); track('wplan_csv',{ st:state.wpSt||'all' }); break;
     case 'wtorg': setState({wtOrg:el.dataset.org, wtTerr:'', wtTm:'', wtAm:''}); break;
-    case 'wtclear': setState({wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
+    case 'wday': setState({wDay:''}); break;
+    case 'wtclear': setState({wDay:'', wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
     case 'wamexp': { const k=el.dataset.k; setState(s=>({wamOpen:{...s.wamOpen, [k]:!s.wamOpen[k]}})); break; }
     case 'wamsort': setState({wamSort:el.dataset.k}); break;
     case 'wamcsv': wamCSV(); track('wam_csv',{ st:state.wtSt||'all' }); break;

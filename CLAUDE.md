@@ -866,6 +866,15 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     `wtScan` reads `m.sdays` (per-day scanned / Spruce / Feego / Feego Edge / IoT). Spruce + Feego + Feego Edge =
     scanned_acres on every row (checked 2026-10-29). Strip grid geometry is the `.wtKpi` / `.wtScan` classes, which go
     four across with the hero on its own row below 1240px; the phone map shows only the hero card, as before.
+- **The Day filter (added 2026-10-29, by request)** — `state.wDay` ('' = yesterday), ONE value shared by all four Wheat
+  pages: a Yesterday button + a date field (first sheet date → yesterday) first in both filter bars and both phone Filters
+  sheets (`wDayFieldHTML`). `wDaySync()` runs at the top of `render()` and re-points `WRET.yday` and every machine's
+  `acY / scY / iotY` (that day) and `acAll / scAll / iotAll` (TOTALS UP TO that day), so every existing figure follows
+  with no per-page code; the Retailer page's "overall" therefore now stops at yesterday too, where it used to include
+  today's part-row. `WRET.ydayCal` is the calendar's yesterday. Wording goes through `wDayWord()` ("yesterday" /
+  "on 25 Oct") and `wDayHead()`. **No-history fields stay today's**: "Operators mapped today", "Machines on the sheet
+  today", "Pinged since y'day" hidden, and a line on the map says pin colours are that day's but positions today's. A
+  past day counts as one on the phone Filters badge, and Clear / Reset return to yesterday.
   · **Territory clean-up lives in `wretBuild`** and so applies to BOTH pages: sheet names kept, one spelling each
     (titleCase folds ABOHAR; `WRET_TERR` folds Hissar → Hisar). "0", "-", blank and `WRET_TERR_BAD` (Shimla) become ONE
     `WRET_NO_TERR` row ("Territory not on sheet"), always last, never ranked, raw cell kept as `terrRaw` and named in
