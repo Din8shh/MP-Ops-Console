@@ -131,6 +131,13 @@
      the pieces Wheat SHARES with Kharif and that are written inline in the warm palette — the filter sheet, the
      machine panel's call rows, the map's zoom buttons — by remapping the warm neutrals onto the cool ones. One type
      family (IBM Plex Sans, tabular figures); Mono stays for machine numbers and phone numbers. */
+  /* Wheat Territory / AM / Map KPI strip (wtStripHTML). Geometry lives here, not inline, so the narrow-laptop form can
+     win: below 1240px the hero takes its own row and the tiles go four across, the scanning row wraps at 150px a tile. */
+  .wtKpi{display:grid;grid-template-columns:minmax(260px,1.55fr) repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
+  .wtKpiHero{grid-row:span 2}
+  .wtScan{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:12px}
+  @media (max-width:1240px){ .wtKpi{grid-template-columns:repeat(4,minmax(0,1fr))} .wtKpiHero{grid-row:auto;grid-column:1/-1}
+    .wtScan{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))} }
   html[data-proj="wheat"] body{font-family:'IBM Plex Sans',system-ui,sans-serif;color:#15181C;background:#F3F6FB;font-variant-numeric:tabular-nums}
   html[data-proj="wheat"] #app [style*="Noto Sans"]{font-family:'IBM Plex Sans',system-ui,sans-serif !important}
   html[data-proj="wheat"] #app [style*="#E9E6DF"]{border-color:#E4E7EA !important}
@@ -194,7 +201,7 @@ const W2 = { ink:'#15181C', ink2:'#5B636D', ink3:'#8C939B', line:'#E4E7EA', line
 function w2tone(l){
   const T=(a,b,c,d)=>({ bg:`linear-gradient(150deg,${a} 0%,#FFFFFF 75%)`, bd:b, vc:c, dot:d });
   return l==='Breakdown' ? T('#FDECEA','#F4D8D4',W2.brkD,W2.brk) : l==='Idle' ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle)
-    : /^Acres/.test(l) ? T('#E8F2FC','#D2E3F4','#1D4F80','#3B82C4') : /^(MTD|Scanned)/.test(l) ? T('#F0ECFC','#DED7F4','#4A3A8C','#7A63D1')
+    : /^Acres/.test(l) ? T('#E8F2FC','#D2E3F4','#1D4F80','#3B82C4') : /^(MTD|Scan|Spruce|Feego)/.test(l) ? T('#F0ECFC','#DED7F4','#4A3A8C','#7A63D1')
     : /^(Deployed|Machines)/.test(l) ? T('#FFF0E2','#F5DEC7','#8A430A',C.orange) : /^(Operators|Retailers|Territories)/.test(l) ? T('#E6F6F1','#CBEAE0','#0E6B57','#1A9E80')
     : /^(IoT|Pinged)/.test(l) ? T('#ECEFFD','#D8DEF6','#2F3F8F','#5468D4') : T('#F4F6F8',W2.card,W2.ink,W2.ink3);
 }
@@ -717,7 +724,8 @@ function wretBuild(grid){
     org:ix('organisation'), date:ix('selected_date'), opNum:ix('operator_number'), opName:ix('operator_name'),
     coMob:ix('ci_contact'), co:ix('ci_name'), amNum:ix('am_contact'), am:ix('am_name'), sh:ix('sh_name'), shMob:ix('sh_contact'),
     st:ix('state'), ac:ix('rabi_achieved_acres'), iot:ix('iot_acres'), book:ix('number_of_bookings'),
-    lat:ix('latest_latitude'), lon:ix('latest_longitude'), ping:ix('last_pinged_date'), scan:ix('scanned_acres') };
+    lat:ix('latest_latitude'), lon:ix('latest_longitude'), ping:ix('last_pinged_date'), scan:ix('scanned_acres'),
+    spruce:ix('spruce'), feego:ix('feego'), fedge:ix('feego_edge') };
   const miss=['mc','party','terr','date','plan','ac','scan'].filter(k=>C[k]<0);
   if(miss.length) throw new Error('wheat retailer sheet: missing column(s) '+miss.join(', '));
   const blank=v=>{ v=txt(v).replace(/\s+/g,' '); return (v==='0'||v==='-')?'':v; };
@@ -747,12 +755,16 @@ function wretBuild(grid){
         opName:titleCase(blank(g('opName'))), opNum:ph(g('opNum')), co:person(g('co')), coMob:ph(g('coMob')),
         am:person(g('am')), amNum:ph(g('amNum')), sh:person(g('sh')), shMob:ph(g('shMob')),
         lat: lat!=null&&lon!=null?lat:null, lon: lat!=null&&lon!=null?lon:null, lastPing:day(g('ping')),
-        acAll:0, acY:0, scAll:0, scY:0, iotAll:0, iotY:0, days:{} };
+        acAll:0, acY:0, scAll:0, scY:0, iotAll:0, iotY:0, days:{}, sdays:{} };
     }
     const ac=num(g('ac')), sc=num(g('scan')), io=num(g('iot')), bk=num(g('book'));
     if(ac||sc||io||bk){ if(dt>lastDate) lastDate=dt; }
     m.acAll+=ac; m.scAll+=sc; m.iotAll+=io;
     if(ac) m.days[dt]=(m.days[dt]||0)+ac;
+    // Scanned acres split by product (Spruce + Feego + Feego Edge = scanned_acres on every row, checked 2026-10-29),
+    // kept per day with IoT acres so the Territory / AM / Map strip can read them THROUGH YESTERDAY like the acres.
+    const sp=num(g('spruce')), fe=num(g('feego')), fx=num(g('fedge'));
+    if(sc||sp||fe||fx||io) m.sdays[dt]=[sc,sp,fe,fx,io];
     if(dt===yday){ m.acY+=ac; m.scY+=sc; m.iotY+=io; }
   }
   // State from the territory; else the nearest HR/PB district centre to the last ping (150 km); else the sheet's column.
@@ -8486,6 +8498,13 @@ function wtDays(){   // the trend axis: first sheet date → yesterday (or the l
   const out=[]; for(let t=Date.parse(a+'T00:00:00Z'), e=Date.parse(b+'T00:00:00Z'); t<=e; t+=864e5) out.push(new Date(t).toISOString().slice(0,10));
   return out;
 }
+// Scanned / Spruce / Feego / Feego Edge / IoT acres: yesterday, and the total through yesterday (wtAc's rule).
+function wtScan(list){
+  const K=['sc','sp','fe','fx','io'], o={}; K.forEach(k=>{ o[k+'Y']=0; o[k+'T']=0; });
+  list.forEach(m=>Object.keys(m.sdays).forEach(d=>{ if(d>WRET.yday) return; const v=m.sdays[d];
+    K.forEach((k,i)=>{ o[k+'T']+=v[i]; if(d===WRET.yday) o[k+'Y']+=v[i]; }); }));
+  return o;
+}
 function wterrAgg(){
   const S=state, lockSt=gateCanSwitchStates()?'':gateDefaultState();
   const lockOrg=(o=>(o==='UPL'||o==='SWAL')?o:'')(gateDefaultOrg());
@@ -8540,6 +8559,7 @@ function wterrAgg(){
     worked: mcs.filter(m=>m.acY>0).length, iotY: sumOf(mcs,m=>m.iotY), upl: mcs.filter(m=>m.org==='UPL').length, swal: mcs.filter(m=>m.org==='SWAL').length,
     open: mcs.filter(m=>m.org!=='UPL'&&m.org!=='SWAL').length, pinged: mcs.filter(m=>m.lastPing&&m.lastPing>=WRET.yday).length,
     mtd: sumOf(mcs,m=>Object.keys(m.days).reduce((a,d)=>d.slice(0,7)===WRET.yday.slice(0,7)&&d<=WRET.yday?a+m.days[d]:a,0)),
+    ...wtScan(mcs),
     nNamed: named.length, nSprayedY: named.filter(r=>r.acY>0).length, none: rows.find(r=>r.none)||null,
     sig: [st,org,terr,tm,am,q,sort].join('|') };
 }
@@ -8687,12 +8707,20 @@ function wtStripHTML(A, mob, stale, cardOnly){
   const tiles = [
     { label:'Territories sprayed', val:fmt(A.nSprayedY), unit:`of ${fmt(A.nNamed)}` },
     { label:'Idle', val:fmt(idle) },
-    { label:'Acres '+day, val:acF(A.acY), unit:'ac', warn:stale },
+    { label:'Acres '+day, val:acF(A.acY), unit:'ac', warn:stale, sub:`${acF(A.acAll)} ac total` },
     { label:'MTD acres', val:acF(A.mtd), unit:'ac' },
     { kind:'fleet' },
     { label:'Operators mapped', val:`${fmt(A.op)}/${fmt(A.n)}` },
-    { label:'IoT acres y’day', val:acF(A.iotY), unit:'ac' },
+    { label:'IoT acres y’day', val:acF(A.iotY), unit:'ac', sub:`${acF(A.ioT)} ac total` },
     { label:'Pinged since y’day', val:fmt(A.pinged) },
+  ];
+  // Scanning: totals and Scan % read through yesterday, as the sprayed acres do; each yesterday tile carries its total.
+  const scanTiles = [
+    { label:'Scanned acres', val:acF(A.scT), unit:'ac', sub:`${acF(A.scY)} ac on ${day}` },
+    { label:'Scan %', val:pctF(A.acAll>0 ? 100*A.scT/A.acAll : null), sub:`of ${acF(A.acAll)} ac sprayed` },
+    { label:'Spruce '+day, val:acF(A.spY), unit:'ac', sub:`${acF(A.spT)} ac total` },
+    { label:'Feego '+day, val:acF(A.feY), unit:'ac', sub:`${acF(A.feT)} ac total` },
+    { label:'Feego Edge '+day, val:acF(A.fxY), unit:'ac', sub:`${acF(A.fxT)} ac total` },
   ];
   const parts = A.org==='ALL' ? [['UPL',A.upl,C.orange],['SWAL',A.swal,C.green],...(A.open>0?[['Open',A.open,C.open]]:[])]
     : [[A.org, A.org==='UPL'?A.upl:A.swal, A.org==='UPL'?C.orange:C.green]];
@@ -8703,6 +8731,7 @@ function wtStripHTML(A, mob, stale, cardOnly){
   const tileHTML = (k, sz) => { const t = k.warn ? w2tone('Idle') : w2tone(k.label);
     return `<div style="display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;color:${W2.ink2};white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:${t.dot};flex-shrink:0"></span>${E(k.label)}</div>
       <div style="${w2num(sz,600,k.warn?W2.idleD:t.vc)};white-space:nowrap">${k.val}${k.unit?w2unit(k.unit,sz>24?13:12):''}</div>
+      ${k.sub?`<div style="font-size:12.5px;color:${W2.ink2};white-space:nowrap">${k.sub}</div>`:''}
       ${k.warn?`<div style="font-size:12.5px;color:${W2.idleD}">${staleTxt}</div>`:''}`; };
   const box = (k, extra='') => { const t = k.kind==='fleet' ? { bg:'linear-gradient(150deg,#FFF1E5 0%,#FFFFFF 55%,#EEF8F1 100%)', bd:'#F1E2D3' } : k.warn ? w2tone('Idle') : w2tone(k.label);
     return `background:${t.bg};border:1px solid ${t.bd};${extra}`; };
@@ -8721,15 +8750,16 @@ function wtStripHTML(A, mob, stale, cardOnly){
   if(mob){
     return `<div style="background:linear-gradient(160deg,#EEF8F2 0%,#FFFFFF 60%);border:1px solid ${W2.card};border-radius:18px;box-shadow:${W2.shadow};padding:16px;display:flex;flex-direction:column;gap:10px">${hero(false)}</div>
       ${cardOnly?'':`<div style="display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;margin:12px -16px 0;padding:0 16px 2px;scrollbar-width:none">
-        ${tiles.map(k=>`<div style="flex:none;scroll-snap-align:start;${k.kind==='fleet'?'width:200px':'width:136px'};${box(k)}border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:${k.kind==='fleet'?6:4}px">${k.kind==='fleet'?fleetInner(22):tileHTML(k,22)}</div>`).join('')}
+        ${tiles.concat(scanTiles).map(k=>`<div style="flex:none;scroll-snap-align:start;${k.kind==='fleet'?'width:200px':'width:156px'};${box(k)}border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:${k.kind==='fleet'?6:4}px">${k.kind==='fleet'?fleetInner(22):tileHTML(k,22)}</div>`).join('')}
       </div>`}`;
   }
-  // Desktop: the hero spans both rows; four tiles over the fleet + three. The grid wraps to three columns below ~1100px.
+  // Desktop: the hero spans both rows; four tiles over the fleet + three; the scanning row below. Narrow form: .wtKpi.
   const card = (k) => `<div style="${box(k)}border-radius:14px;box-shadow:${W2.shadow};padding:14px 16px;display:flex;flex-direction:column;gap:${k.kind==='fleet'?8:6}px;min-width:0">${k.kind==='fleet'?fleetInner(26):tileHTML(k,26)}</div>`;
-  return `<div style="display:grid;grid-template-columns:minmax(260px,1.55fr) repeat(4,minmax(0,1fr));gap:12px;margin-top:16px">
-      <div style="grid-row:span 2;background:linear-gradient(160deg,#EEF8F2 0%,#FFFFFF 55%);border:1px solid ${W2.card};border-radius:16px;box-shadow:${W2.shadow};padding:20px 22px;display:flex;flex-direction:column;justify-content:space-between;gap:16px;min-width:0">${hero(true)}</div>
+  return `<div class="wtKpi">
+      <div class="wtKpiHero" style="background:linear-gradient(160deg,#EEF8F2 0%,#FFFFFF 55%);border:1px solid ${W2.card};border-radius:16px;box-shadow:${W2.shadow};padding:20px 22px;display:flex;flex-direction:column;justify-content:space-between;gap:16px;min-width:0">${hero(true)}</div>
       ${tiles.map(card).join('')}
-    </div>`;
+    </div>
+    <div class="wtScan">${scanTiles.map(card).join('')}</div>`;
 }
 function wterrViewHTML(v){ return `<section style="padding:24px 32px">${wterrBodyHTML(false)}</section>`; }
 /* ===================== Wheat North — Area manager summary (view key `wam`) =====================

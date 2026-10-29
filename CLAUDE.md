@@ -860,6 +860,12 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     rather than scrolling sideways; the phone shows the status card + four cards (territories, idle, acres, fleet) as
     Kharif does. Scanned acres moved to the table only. **This page's acres read THROUGH YESTERDAY** (`wtAc`), so the
     strip, the day chart and the rows agree; the Retailer page still counts every day including today's part.
+  · **Scanning row (added 2026-10-29, by request)** under the strip on Territory / AM / Map: Scanned acres (total, with
+    yesterday under it) · Scan % = scanned ÷ ACRES SPRAYED (not plan; agreed) · Spruce / Feego / Feego Edge yesterday.
+    **Every "yesterday" tile carries its total** under it (Acres and IoT too). Totals read through yesterday like `wtAc`;
+    `wtScan` reads `m.sdays` (per-day scanned / Spruce / Feego / Feego Edge / IoT). Spruce + Feego + Feego Edge =
+    scanned_acres on every row (checked 2026-10-29). Strip grid geometry is the `.wtKpi` / `.wtScan` classes, which go
+    four across with the hero on its own row below 1240px; the phone map shows only the hero card, as before.
   · **Territory clean-up lives in `wretBuild`** and so applies to BOTH pages: sheet names kept, one spelling each
     (titleCase folds ABOHAR; `WRET_TERR` folds Hissar → Hisar). "0", "-", blank and `WRET_TERR_BAD` (Shimla) become ONE
     `WRET_NO_TERR` row ("Territory not on sheet"), always last, never ranked, raw cell kept as `terrRaw` and named in
