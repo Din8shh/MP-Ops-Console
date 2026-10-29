@@ -853,8 +853,9 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     Handover, `breakdown_id` and the Spruce / Feego split are deliberately NOT shown (by request); no map.
   · **KPI strip = the Kharif strip** (`wtStripHTML`, changed 2026-10-28 by request), same order and look: Worked
     yesterday (n of N, %) · Season to <yesterday> (with % of plan — there is no last Wheat season to compare) ·
-    Territories sprayed · Idle · Acres yesterday (amber if the sheet is stale) · MTD acres · the fleet tile ("Machines on
-    the sheet", UPL/SWAL bar, no plan) · Operators mapped · IoT acres y'day · Pinged since y'day. The fleet is EVERY
+    Territories sprayed · Idle · Acres yesterday (amber if the sheet is stale) · Operators mapped · Acres per machine ·
+    Acres / machine / day · IoT acres y'day · IoT tagged y'day · Pinged since y'day (MTD and the fleet tile were REMOVED
+    2026-10-29, see below). The fleet is EVERY
     machine on the sheet; there is NO Breakdown (breakdown_id unconfirmed — 7 machines carrying one sprayed), so Idle =
     did not run. Pinged = last ping on/after yesterday (the sheet keeps only the latest). On desktop the strip WRAPS
     rather than scrolling sideways; the phone shows the status card + four cards (territories, idle, acres, fleet) as
@@ -866,6 +867,23 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     `wtScan` reads `m.sdays` (per-day scanned / Spruce / Feego / Feego Edge / IoT). Spruce + Feego + Feego Edge =
     scanned_acres on every row (checked 2026-10-29). Strip grid geometry is the `.wtKpi` / `.wtScan` classes, which go
     four across with the hero on its own row below 1240px; the phone map shows only the hero card, as before.
+- **Changes asked by Dinesh on 2026-10-29 (Retailer / Territory / AM pages and the strip)**. Definitions he chose:
+  · **IoT acres** = `IOT_acres` (every acre the device measured); **IoT tagged acres** = `IOT_tagged_Acres` (a new column:
+    the device's acres linked to a booking, 106 of 986 ac through 28 Oct). Both kept per day in `m.sdays` ([4] and [5]).
+  · **Acres per machine** = season acres ÷ machines that ran at least once (to the Day filter's day). **Acres / machine /
+    day** = that ÷ the season's CALENDAR days (first sheet date → the day), idle days counted.
+  · **Live** = last ping on/after the calendar's yesterday (`wtLive`; the sheet keeps only the latest ping, so always today's
+    status). **Breakdown** = that day's row carries a `breakdown_id` (`m.brkDays`, per day; 75 machines on 29 Oct, and some
+    of them still spray — Dinesh accepted that).
+  · Retailer table: + "Last 7 days" (`m.ac7`, the 7 days ending the picked day) and "IoT ac" (overall); phone cards too.
+  · Territory and AM tables: "Sprayed ac" renamed **Overall ac**; + "Machines ran" (that day / overall) and "Live ·
+    breakdown" (`wtCounts`, `wtRanCell`, `wtLiveCell`; machine rows `wtMcRanCell` / `wtMcLiveCell`); AM also gets the
+    operator-mapped bar (always n of n under an AM, by how the sheet links the chain). Phone cards: a 6-figure grid plus an
+    operator-mapped bar (`mOpBar`). CSVs add last ping, live and breakdown ID (Territory / AM) and last 7 days / IoT (Retailer).
+  · Strip: MTD and "Machines on the sheet" removed; tiles in two `.wtRow` grids beside the hero (4, then 5 — 4 on a past day);
+    Scanned shows the DAY on top with the total under it (also on the Retailer strip). Tile labels may wrap.
+  · Seen on 29 Oct ~1:40 pm: the Main sheet briefly held only 35 rows (28 Oct only) while being rebuilt — the page shows
+    whatever the sheet holds, so a sudden drop to ~34 machines is the sheet, not the console.
 - **The Day filter (added 2026-10-29, by request)** — `state.wDay` ('' = yesterday), ONE value shared by all four Wheat
   pages: a Yesterday button + a date field (first sheet date → yesterday) first in both filter bars and both phone Filters
   sheets (`wDayFieldHTML`). `wDaySync()` runs at the top of `render()` and re-points `WRET.yday` and every machine's
@@ -907,14 +925,14 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     371 on 28 Oct). They are ONE last row, "No AM — operator not mapped", never ranked, opening by TERRITORY. The chain
     is a strict tree (no CI under two AMs), but AM does NOT follow territory or TM, so this page nests under neither.
   · **CIs are keyed on the NUMBER**: two different "Bhupinder Singh"s sit under Sampat; when names collide the number is
-    printed under the name. SH is not shown (by request). "Operators mapped" is left out of the rows: under an AM it is
-    always n of n.
+    printed under the name. SH is not shown (by request). "Operator mapped" was added to the rows on
+    2026-10-29 (by request), though under an AM it is always n of n.
   · **It reads the Territory / Map scope (`wt*`), and that scope now has an AM filter** (`wtAm`, after TM, shown on all
     three pages; a parent change clears it). So the KPI strip is the same strip with the same numbers. Own sort
     (`wamSort`) and open rows (`wamOpen`); a search opens every row.
   · `#/area-managers` is also Kharif's `am` address: `viewOfHash` now picks the slug's view the PROJECT can show.
-  · Columns: CIs · machines · plan · sprayed (% of plan) · yesterday · ran yesterday (n of N) · scanned · last 14 days.
-    The desktop table fits unscrolled at 1280 (min-width 970) — re-check if a column is added.
+  · Columns: CIs · machines · plan · overall (% of plan) · yesterday · machines ran · live · breakdown · operator mapped ·
+    scanned · last 14 days (2026-10-29). The desktop table is min-width 1230, so it scrolls sideways below ~1500px.
 - **Page 5, the TM · FO summary** (`wfo`, `#/field-officers`, rail "FOs"; `wfoAgg` / `wfoBodyHTML` / `wfoCSV`, built
   2026-10-29). Wheat admin only. One row per TM → his FOs → their machines (the shared details panel).
   · **Onboarded = the sheet's `FO onboarded` column** (Onboarded / Yet to Onboard; one value per FO on every row and day).
