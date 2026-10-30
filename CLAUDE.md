@@ -853,22 +853,27 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   · Columns: machines · plan · acres sprayed (with % of plan) · yesterday · scanned · **operator mapped** (n of N) · a
     14-day mini trend. A page-level "Acres sprayed by day" bar chart runs from the sheet's first date to YESTERDAY.
     Handover, `breakdown_id` and the Spruce / Feego split are deliberately NOT shown (by request); no map.
-  · **KPI strip = the Kharif strip** (`wtStripHTML`, changed 2026-10-28 by request), same order and look: Worked
-    yesterday (n of N, %) · Season to <yesterday> (with % of plan — there is no last Wheat season to compare) ·
-    Territories sprayed · Idle · Acres yesterday (amber if the sheet is stale) · Operators mapped · Acres per machine ·
-    Acres / machine / day · IoT acres y'day · IoT tagged y'day · Pinged since y'day (MTD and the fleet tile were REMOVED
-    2026-10-29, see below). The fleet is EVERY
-    machine on the sheet; there is NO Breakdown (breakdown_id unconfirmed — 7 machines carrying one sprayed), so Idle =
-    did not run. Pinged = last ping on/after yesterday (the sheet keeps only the latest). On desktop the strip WRAPS
-    rather than scrolling sideways; the phone shows the status card + four cards (territories, idle, acres, fleet) as
-    Kharif does. Scanned acres moved to the table only. **This page's acres read THROUGH YESTERDAY** (`wtAc`), so the
-    strip, the day chart and the rows agree; the Retailer page still counts every day including today's part.
-  · **Scanning row (added 2026-10-29, by request)** under the strip on Territory / AM / Map: Scanned acres (total, with
-    yesterday under it) · Scan % = scanned ÷ ACRES SPRAYED (not plan; agreed) · Spruce / Feego / Feego Edge yesterday.
-    **Every "yesterday" tile carries its total** under it (Acres and IoT too). Totals read through yesterday like `wtAc`;
-    `wtScan` reads `m.sdays` (per-day scanned / Spruce / Feego / Feego Edge / IoT). Spruce + Feego + Feego Edge =
-    scanned_acres on every row (checked 2026-10-29). Strip grid geometry is the `.wtKpi` / `.wtScan` classes, which go
-    four across with the hero on its own row below 1240px; the phone map shows only the hero card, as before.
+  · **KPI strip = two labelled pieces, Machines and Acres** (`wtStripHTML`, Territory / AM / Map; regrouped 2026-10-30 by request,
+    replacing the Kharif-order strip of 2026-10-28). **Machines** = tiles (Worked n of N with bar · Idle · Territories sprayed ·
+    Operators mapped · Pinged since <yesterday>). **Acres** = three cards side by side (`acresCards`, `.wtAcres`), each with the day
+    on the left and the total on the right:
+    **Acres sprayed** (Against plan % with bar · Per machine · Per machine per day) ·
+    **Scanned acres** (Scan % day and total · Split: bar + Spruce / Feego / Feego Edge rows, day and total) ·
+    **IoT acres** (bar + IoT tagged row, day and total).
+    **A figure that is PART of another stays INSIDE that card** (Dinesh, after two rounds: Scanned, IoT and the products as separate
+    tiles or groups read as unrelated numbers; he reads sprayed against scanned, Scan %, IoT and tagged, and the products as the
+    split of scanned). The split bar's segments are shares of the whole, in the same colours as the rows' swatches.
+    **Scan % is shown for the DAY and the total** (scanned ÷ sprayed each); on 25 Oct that is 48% (32 of 67) and 37% (49 of 134).
+    The date always reads "29 Oct", never "y'day". Geometry: `.wtGroups` / `.wtGrid` / `.wtAcres` in the stylesheet (three cards
+    down to about 1040px of window, wrapping at 240px; tiles wrap at 140px). Phone: tiles in two columns, the three cards stacked
+    and open; there is no fold, so the chart and list start lower (Acres is about 780px tall at 390px wide).
+    The phone MAP keeps its one "Worked yesterday" card (`cardOnly`), which still holds Season too. **The Retailer, FO and team
+    strips are separate and were not changed.** Definitions: the fleet is EVERY machine
+    on the sheet; there is NO Breakdown tile (breakdown_id unconfirmed — 7 machines carrying one sprayed), so Idle = did not
+    run. Pinged = last ping on/after yesterday (the sheet keeps only the latest), hidden on a past day. **This page's acres
+    read THROUGH YESTERDAY** (`wtAc`), so the strip, the day chart and the rows agree. Scan % = scanned ÷ ACRES SPRAYED (not
+    plan; agreed). Totals read through the day like `wtAc`; `wtScan` reads `m.sdays` (per-day scanned / Spruce / Feego /
+    Feego Edge / IoT). Spruce + Feego + Feego Edge = scanned_acres on every row (checked 2026-10-29).
 - **Changes asked by Dinesh on 2026-10-29 (Retailer / Territory / AM pages and the strip)**. Definitions he chose:
   · **IoT acres** = `IOT_acres` (every acre the device measured); **IoT tagged acres** = `IOT_tagged_Acres` (a new column:
     the device's acres linked to a booking, 106 of 986 ac through 28 Oct). Both kept per day in `m.sdays` ([4] and [5]).
@@ -882,8 +887,8 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     breakdown" (`wtCounts`, `wtRanCell`, `wtLiveCell`; machine rows `wtMcRanCell` / `wtMcLiveCell`); AM also gets the
     operator-mapped bar (always n of n under an AM, by how the sheet links the chain). Phone cards: a 6-figure grid plus an
     operator-mapped bar (`mOpBar`). CSVs add last ping, live and breakdown ID (Territory / AM) and last 7 days / IoT (Retailer).
-  · Strip: MTD and "Machines on the sheet" removed; tiles in two `.wtRow` grids beside the hero (4, then 5 — 4 on a past day);
-    Scanned shows the DAY on top with the total under it (also on the Retailer strip). Tile labels may wrap.
+  · Strip: MTD and "Machines on the sheet" removed; Scanned shows the DAY on top with the total under it (also on the
+    Retailer strip). Tile labels may wrap. Layout since 2026-10-30: the four groups above.
   · Seen on 29 Oct ~1:40 pm: the Main sheet briefly held only 35 rows (28 Oct only) while being rebuilt — the page shows
     whatever the sheet holds, so a sudden drop to ~34 machines is the sheet, not the console.
 - **The Day filter (added 2026-10-29, by request)** — `state.wDay` ('' = yesterday), ONE value shared by all four Wheat
@@ -991,9 +996,8 @@ IoT are untouched**; roll out to them the same way when asked.
 - **`render()` sets `html[data-proj]`**; the `html[data-proj="wheat"]` block in `<style>` remaps the warm inline
   neutrals of the pieces Wheat SHARES with Kharif (the filter sheet, the machine panel's call rows, zoom buttons) onto
   the cool ones and swaps Noto Sans for Plex. It is a backstop like the phone one — new Wheat code uses W2, not it.
-- The Territory / Map strip follows the design's Map KPI grid: hero "Worked yesterday" spanning two rows with the
-  season under it (a NEUTRAL "% of plan" pill — Wheat has no last season, so there is no direction to colour), four
-  tiles, then the fleet tile and the three connection figures. Phone: the hero card, then the tiles scroll sideways.
+- The Territory / AM / Map strip left the design's Map KPI grid on 2026-10-30: it is now the Machines and Acres pieces (see the
+  Territory page's notes). Wheat has no last season, so the season tile shows % of plan with no direction to colour.
 - Every Wheat phone page ends in a "Next · <page>" row (`M_NEXT`: Retailers → Territories → Map → Retailers).
 
 ## IoT device monitoring (project `iot`, added 2026-10-15)

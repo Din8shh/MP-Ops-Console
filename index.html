@@ -131,18 +131,17 @@
      the pieces Wheat SHARES with Kharif and that are written inline in the warm palette — the filter sheet, the
      machine panel's call rows, the map's zoom buttons — by remapping the warm neutrals onto the cool ones. One type
      family (IBM Plex Sans, tabular figures); Mono stays for machine numbers and phone numbers. */
-  /* Wheat Territory / AM / Map KPI strip (wtStripHTML). Geometry lives here, not inline, so the narrow-laptop form can
-     win: below 1240px the hero takes its own row with the two tile rows under it; the scanning row wraps at 150px a tile. */
-  .wtKpi{display:grid;grid-template-columns:minmax(260px,1.55fr) minmax(0,4fr);gap:12px;margin-top:16px}
-  .wtTiles{display:grid;grid-template-rows:1fr 1fr;gap:12px;min-width:0}
-  .wtRow{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:12px}
+  /* Wheat Territory / AM / Map KPI strip (wtStripHTML), labelled groups. Geometry lives here, not inline, so the
+     narrow-laptop form can win: below 1240px the tiles wrap at 140px and the acres cards at 240px. */
+  .wtGroups{display:grid;gap:14px;margin-top:16px}
+  .wtAcres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .wtGrid{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:12px}
   .wfoKpi{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-top:16px}
   .wteamKpi{display:grid;grid-template-columns:minmax(280px,1.6fr) repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
   @media (max-width:1240px){ .wteamKpi{grid-template-columns:repeat(4,minmax(0,1fr))} .wteamKpi>:first-child{grid-column:1/-1} }
   @media (max-width:1240px){ .wfoKpi{grid-template-columns:repeat(3,minmax(0,1fr))} }
-  .wtScan{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-top:12px}
-  @media (max-width:1240px){ .wtKpi{grid-template-columns:minmax(0,1fr)}
-    .wtScan{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))} }
+  @media (max-width:1240px){ .wtAcres{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+    .wtGrid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))} }
   html[data-proj="wheat"] body{font-family:'IBM Plex Sans',system-ui,sans-serif;color:#15181C;background:#F3F6FB;font-variant-numeric:tabular-nums}
   html[data-proj="wheat"] #app [style*="Noto Sans"]{font-family:'IBM Plex Sans',system-ui,sans-serif !important}
   html[data-proj="wheat"] #app [style*="#E9E6DF"]{border-color:#E4E7EA !important}
@@ -8773,76 +8772,103 @@ function wterrBodyHTML(mob){
   }
   return mob ? kpis + trend + `<div style="margin-top:12px">${controls}</div>` + list : controls + kpis + trend + list;
 }
-// The KPI strip, in the Kharif console's order (asked 2026-10-28) and the v2 design's layout: the hero answers "did the
-// fleet work" with the season under it, then two rows of tiles, then the scanning row.
+// The KPI strip, in two labelled pieces (asked by Dinesh 2026-10-30): Machines (did the fleet work) and Acres.
+// The ACRES piece is three cards read side by side, day on the left and total on the right of each: Acres sprayed (with its
+// plan and per-machine figures), Scanned acres, IoT acres. A figure that is PART of another sits INSIDE that card: the
+// Spruce / Feego / Feego Edge split and Scan % under Scanned, IoT tagged under IoT. Separate tiles read as unrelated numbers.
 // Wheat differences, each agreed: no Breakdown tile (breakdown_id's meaning is unconfirmed — 7 machines carrying one sprayed
-// yesterday; the tables count it), so Idle is simply "did not run"; no last season, so the season line carries acres
-// against the PLAN, in a neutral pill (there is no direction to colour). Pinged counts machines whose last ping is
-// yesterday or later — the sheet keeps only the latest ping.
-// Changed 2026-10-29 (by request): MTD acres and the "Machines on the sheet" tile went; added IoT tagged acres (the
-// device's acres linked to a booking), acres per machine (season acres ÷ machines that have run at least once) and acres
-// per machine per day (that ÷ the season's calendar days, first sheet date → the day); Scanned shows the day on top.
-// Row one has four tiles, row two five (four on a past day, without Pinged): two `.wtRow` grids beside the hero.
+// yesterday; the tables count it), so Idle is simply "did not run"; no last season, so the season tile carries acres
+// against the PLAN, with no direction to colour. Pinged counts machines whose last ping is yesterday or later — the sheet
+// keeps only the latest ping, so a past day cannot say who pinged then and the tile goes.
+// Acres per machine = season acres ÷ machines that have run at least once; per day = that ÷ the season's calendar days
+// (first sheet date → the day). Totals and Scan % read through the day, as the sprayed acres do.
+// Scan % follows the same rule: the day's scanned ÷ the day's sprayed, then the total's. `cardOnly` is the phone map's one
+// summary card, which keeps Worked and Season together.
 function wtStripHTML(A, mob, stale, cardOnly){
   const pctW = A.n ? Math.round(100*A.worked/A.n) : 0, idle = A.n - A.worked, day = wpDate(WRET.yday), past = wDayOn();
   const staleTxt = stale ? `⚠ the sheet's acres stop at ${wpDate(WRET.lastDate)}` : '';
   const nDays = A.days.length, perMc = A.ranAll ? A.acAll/A.ranAll : null, perDay = A.ranAll && nDays ? A.acAll/A.ranAll/nDays : null;
   const avgF = v => v==null ? '—' : acF(Math.round(v*10)/10);
-  const row1 = [
-    { label:'Territories sprayed', val:fmt(A.nSprayedY), unit:`of ${fmt(A.nNamed)}` },
-    { label:'Idle', val:fmt(idle) },
-    { label:'Acres '+day, val:acF(A.acY), unit:'ac', warn:stale, sub:`${acF(A.acAll)} ac total` },
-    { label:'Operators mapped'+(past?' today':''), val:`${fmt(A.op)}/${fmt(A.n)}` },
-  ];
-  const row2 = [
-    { label:'Acres per machine', val:avgF(perMc), unit:perMc==null?'':'ac', sub:`÷ ${fmt(A.ranAll)} that ran` },
-    { label:'Acres / machine / day', val:avgF(perDay), unit:perDay==null?'':'ac', sub:`÷ ${fmt(nDays)} day${nDays===1?'':'s'} of season` },
-    { label:past?'IoT acres '+day:'IoT acres y’day', val:acF(A.iotY), unit:'ac', sub:`${acF(A.ioT)} ac total` },
-    { label:past?'IoT tagged '+day:'IoT tagged y’day', val:acF(A.itY), unit:'ac', sub:`${acF(A.itT)} ac total` },
-    // The sheet keeps only the LATEST ping, so a past day cannot say who pinged then: the tile goes.
-    ...(past?[]:[{ label:'Pinged since y’day', val:fmt(A.pinged) }]),
-  ];
-  const tiles = row1.concat(row2);
-  // Scanning: totals and Scan % read through yesterday, as the sprayed acres do; each day tile carries its total.
-  const scanTiles = [
-    { label:'Scanned '+day, val:acF(A.scY), unit:'ac', sub:`${acF(A.scT)} ac total` },
-    { label:'Scan %', val:pctF(A.acAll>0 ? 100*A.scT/A.acAll : null), sub:`of ${acF(A.acAll)} ac sprayed` },
-    { label:'Spruce '+day, val:acF(A.spY), unit:'ac', sub:`${acF(A.spT)} ac total` },
-    { label:'Feego '+day, val:acF(A.feY), unit:'ac', sub:`${acF(A.feT)} ac total` },
-    { label:'Feego Edge '+day, val:acF(A.fxY), unit:'ac', sub:`${acF(A.fxT)} ac total` },
-  ];
-  const tileHTML = (k, sz) => { const t = k.warn ? w2tone('Idle') : w2tone(k.label);
-    return `<div style="display:flex;align-items:baseline;gap:7px;font-size:12.5px;font-weight:500;color:${W2.ink2};line-height:1.3"><span style="width:8px;height:8px;border-radius:50%;background:${t.dot};flex-shrink:0;transform:translateY(-1px)"></span>${E(k.label)}</div>
-      <div style="${w2num(sz,600,k.warn?W2.idleD:t.vc)};white-space:nowrap">${k.val}${k.unit?w2unit(k.unit,sz>24?13:12):''}</div>
-      ${k.sub?`<div style="font-size:12.5px;color:${W2.ink2};line-height:1.35">${k.sub}</div>`:''}
-      ${k.warn?`<div style="font-size:12.5px;color:${W2.idleD}">${staleTxt}</div>`:''}`; };
-  const box = (k, extra='') => { const t = k.warn ? w2tone('Idle') : w2tone(k.label);
-    return `background:${t.bg};border:1px solid ${t.bd};${extra}`; };
-  const planPill = `<span style="font-size:13px;font-weight:600;padding:3px 8px;border-radius:6px;background:${W2.line2};color:${W2.ink};white-space:nowrap">${pctF(A.pct)} of plan</span>`;
-  const hero = (big) => `<div style="display:flex;flex-direction:column;gap:${big?6:8}px">
+  const scanPct = pctF(A.acAll>0 ? 100*A.scT/A.acAll : null), scanPctY = pctF(A.acY>0 ? 100*A.scY/A.acY : null);
+  if(cardOnly){
+    const planPill = `<span style="font-size:13px;font-weight:600;padding:3px 8px;border-radius:6px;background:${W2.line2};color:${W2.ink};white-space:nowrap">${pctF(A.pct)} of plan</span>`;
+    return `<div style="background:linear-gradient(160deg,#EEF8F2 0%,#FFFFFF 60%);border:1px solid ${W2.card};border-radius:18px;box-shadow:${W2.shadow};padding:16px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;flex-direction:column;gap:8px">
         <div style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Worked ${wDayWord()}</div>
-        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="${w2num(big?44:40,600,W2.actD)};letter-spacing:-0.02em;line-height:1">${fmt(A.worked)}</span><span style="font-size:${big?16:15}px;color:${W2.ink2}">of ${fmt(A.n)} machines</span></div>
-        <div style="height:6px;background:${W2.line2};border-radius:3px;overflow:hidden;margin-top:${big?6:0}px"><div style="width:${pctW}%;min-width:${A.worked?4:0}px;height:100%;background:${W2.act};border-radius:3px"></div></div>
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="${w2num(40,600,W2.actD)};letter-spacing:-0.02em;line-height:1">${fmt(A.worked)}</span><span style="font-size:15px;color:${W2.ink2}">of ${fmt(A.n)} machines</span></div>
+        <div style="height:6px;background:${W2.line2};border-radius:3px;overflow:hidden"><div style="width:${pctW}%;min-width:${A.worked?4:0}px;height:100%;background:${W2.act};border-radius:3px"></div></div>
         <div style="font-size:13.5px;color:${W2.ink2}">${pctW}% of machines · ${acF(A.acY)} ac sprayed · ${day}</div>
         ${staleTxt?`<div style="font-size:13px;color:${W2.idleD}">${staleTxt}</div>`:''}
       </div>
-      <div style="border-top:1px solid ${W2.line2};padding-top:${big?14:12}px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Season to ${day}</span><span style="${w2num(big?22:20)}">${acF(A.acAll)}${w2unit()}</span></div>
+      <div style="border-top:1px solid ${W2.line2};padding-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Season to ${day}</span><span style="${w2num(20)}">${acF(A.acAll)}${w2unit()}</span></div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${planPill}<span style="font-size:12.5px;color:${W2.ink2};white-space:nowrap">of ${fmt(A.plan)} ac plan</span></div>
-      </div>`;
-  if(mob){
-    return `<div style="background:linear-gradient(160deg,#EEF8F2 0%,#FFFFFF 60%);border:1px solid ${W2.card};border-radius:18px;box-shadow:${W2.shadow};padding:16px;display:flex;flex-direction:column;gap:10px">${hero(false)}</div>
-      ${cardOnly?'':`<div style="display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;margin:12px -16px 0;padding:0 16px 2px;scrollbar-width:none">
-        ${tiles.concat(scanTiles).map(k=>`<div style="flex:none;scroll-snap-align:start;width:${k.label.length>20?176:156}px;${box(k)}border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:4px">${tileHTML(k,22)}</div>`).join('')}
-      </div>`}`;
+      </div></div>`;
   }
-  // Desktop: the hero spans both tile rows; the scanning row below. Narrow form: .wtKpi in the stylesheet.
-  const card = (k, cls) => `<div class="${cls||''}" style="${box(k)}border-radius:14px;box-shadow:${W2.shadow};padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0">${tileHTML(k,26)}</div>`;
-  return `<div class="wtKpi">
-      <div class="wtKpiHero" style="background:linear-gradient(160deg,#EEF8F2 0%,#FFFFFF 55%);border:1px solid ${W2.card};border-radius:16px;box-shadow:${W2.shadow};padding:20px 22px;display:flex;flex-direction:column;justify-content:space-between;gap:16px;min-width:0">${hero(true)}</div>
-      <div class="wtTiles"><div class="wtRow" style="--n:${row1.length}">${row1.map(k=>card(k)).join('')}</div><div class="wtRow" style="--n:${row2.length}">${row2.map(k=>card(k)).join('')}</div></div>
-    </div>
-    <div class="wtScan">${scanTiles.map(k=>card(k)).join('')}</div>`;
+  const machines = [
+    { label:'Worked', val:fmt(A.worked), unit:`of ${fmt(A.n)}`, sub:`${pctW}% of machines`, tone:'Ran', bar:pctW, wide:1 },
+    { label:'Idle', val:fmt(idle), sub:'did not run', tone:'Idle' },
+    { label:'Territories sprayed', val:fmt(A.nSprayedY), unit:`of ${fmt(A.nNamed)}`, tone:'Operators' },
+    { label:'Operators mapped'+(past?' today':''), val:fmt(A.op), unit:`of ${fmt(A.n)}`, tone:'Operators' },
+    ...(past?[]:[{ label:`Pinged since ${day}`, val:fmt(A.pinged), tone:'Operators' }]),
+  ];
+  const tone = k => k.warn ? w2tone('Idle') : w2tone(k.tone);
+  const tileHTML = (k, sz) => { const t = tone(k);
+    return `<div style="display:flex;align-items:baseline;gap:7px;font-size:12.5px;font-weight:500;color:${W2.ink2};line-height:1.3"><span style="width:8px;height:8px;border-radius:50%;background:${t.dot};flex-shrink:0;transform:translateY(-1px)"></span>${E(k.label)}</div>
+      <div style="${w2num(sz,600,k.warn?W2.idleD:t.vc)};white-space:nowrap">${k.val}${k.unit?w2unit(k.unit,12):''}</div>
+      ${k.bar!=null?`<div style="height:6px;background:${W2.line2};border-radius:3px;overflow:hidden"><div style="width:${Math.min(100,k.bar)}%;min-width:${k.bar>0?4:0}px;height:100%;background:${t.dot};border-radius:3px"></div></div>`:''}
+      ${k.sub?`<div style="font-size:12.5px;color:${W2.ink2};line-height:1.35">${k.sub}</div>`:''}
+      ${k.warn?`<div style="font-size:12.5px;color:${W2.idleD}">${staleTxt}</div>`:''}`; };
+  const box = k => { const t = tone(k); return `background:${t.bg};border:1px solid ${t.bd};`; };
+  const head = (title, note) => `<div style="display:flex;align-items:baseline;gap:4px 8px;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:14px;font-weight:600;color:${W2.ink}">${title}</span>${note?`<span style="font-size:12.5px;color:${W2.ink2}">${note}</span>`:''}</div>`;
+  const group = (title, note, inner) => `<section aria-label="${E(title)}" style="min-width:0">${head(title,note)}${inner}</section>`;
+  const machinesNote = `${fmt(A.n)} on the sheet · ${day}`;
+  // ── The acres piece. Numbers line up in the same two columns in every card, so a row reads straight across to its heading.
+  const toneAc = stale ? w2tone('Idle') : w2tone('Acres'), toneSc = w2tone('Scan'), toneIo = w2tone('IoT');
+  const rowCols = 'display:grid;grid-template-columns:minmax(0,1fr) 62px 62px;gap:8px;align-items:baseline';
+  const rule = `border-top:1px solid ${W2.line2};padding-top:10px`;
+  const big = mob ? 26 : 24;
+  const top = (t, dayV, totV, warn) => `<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px">
+      <div style="min-width:0"><div style="${w2num(big,600,warn?W2.idleD:t.vc)};white-space:nowrap">${dayV}${w2unit('ac',12)}</div><div style="font-size:12.5px;color:${W2.ink2}">on ${day}</div></div>
+      <div style="text-align:right;min-width:0"><div style="${w2num(18,600,W2.ink)};white-space:nowrap">${totV}${w2unit('ac',12)}</div><div style="font-size:12.5px;color:${W2.ink2}">total</div></div></div>`;
+  const colHead = title => `<div style="${rowCols};font-size:12.5px;color:${W2.ink2}"><span style="font-weight:600;color:${W2.ink}">${title}</span><span style="text-align:right">${day}</span><span style="text-align:right">Total</span></div>`;
+  const row = (label, dayV, totV, col) => `<div style="${rowCols};font-size:13.5px;color:${W2.ink}"><span style="display:flex;align-items:baseline;gap:6px;min-width:0">${col?`<span aria-hidden="true" style="width:9px;height:9px;border-radius:2px;background:${col};flex-shrink:0"></span>`:''}<span>${label}</span></span><span style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">${dayV}</span><span style="text-align:right;color:${W2.ink2};font-variant-numeric:tabular-nums">${totV}</span></div>`;
+  // A bar whose segments ARE the split: widths are shares of the whole, in the same colours as the rows' swatches.
+  const splitBar = (parts, whole, aria) => `<div role="img" aria-label="${E(aria)}" style="display:flex;gap:1px;height:8px;border-radius:4px;overflow:hidden;background:${W2.line2}">${parts.map(([v,col])=>`<span style="width:${whole>0?Math.min(100,100*v/whole):0}%;min-width:${v>0?3:0}px;background:${col}"></span>`).join('')}</div>`;
+  const stat = (label, note, val) => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13.5px;color:${W2.ink}"><span style="min-width:0">${label}${note?`<span style="display:block;font-size:12.5px;color:${W2.ink2}">${note}</span>`:''}</span><span style="font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">${val}</span></div>`;
+  const acCard = (t, title, inner) => `<div style="background:${t.bg};border:1px solid ${t.bd};border-radius:14px;box-shadow:${W2.shadow};padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0">
+      <div style="display:flex;align-items:baseline;gap:7px;font-size:14px;font-weight:600;color:${W2.ink}"><span style="width:8px;height:8px;border-radius:50%;background:${t.dot};flex-shrink:0;transform:translateY(-1px)"></span>${title}</div>${inner}</div>`;
+  const prodCols = ['#4A3A8C','#7A63D1','#BDB0EE'];
+  const prods = [['Spruce',A.spY,A.spT],['Feego',A.feY,A.feT],['Feego Edge',A.fxY,A.fxT]];
+  const acresCards = [
+    acCard(toneAc,'Acres sprayed', top(toneAc, acF(A.acY), acF(A.acAll), stale)
+      + (stale?`<div style="font-size:12.5px;color:${W2.idleD}">${staleTxt}</div>`:'')
+      + `<div style="${rule};display:flex;flex-direction:column;gap:6px">${stat('Against plan',`of ${fmt(A.plan)} ac`,pctF(A.pct))}${splitBar([[A.acAll,toneAc.dot]],A.plan,`${pctF(A.pct)} of the ${fmt(A.plan)} acre plan`)}</div>`
+      + `<div style="${rule};display:flex;flex-direction:column;gap:8px">${stat('Per machine',`÷ ${fmt(A.ranAll)} that ran`,`${avgF(perMc)}${perMc==null?'':' ac'}`)}${stat('Per machine per day',`÷ ${fmt(nDays)} day${nDays===1?'':'s'} of season`,`${avgF(perDay)}${perDay==null?'':' ac'}`)}</div>`),
+    acCard(toneSc,'Scanned acres', top(toneSc, acF(A.scY), acF(A.scT))
+      + `<div style="${rule};display:flex;flex-direction:column;gap:6px">${colHead('Scan %')}${row('of acres sprayed',scanPctY,scanPct)}</div>`
+      + `<div style="${rule};display:flex;flex-direction:column;gap:6px">${colHead(`Split of the ${acF(A.scY)} ac`)}
+          ${splitBar(prods.map((p,i)=>[p[1],prodCols[i]]),A.scY,`Scanned acres on ${day} by product: ${prods.map(p=>`${p[0]} ${acF(p[1])} ac`).join(', ')}`)}
+          ${prods.map((p,i)=>row(p[0],acF(p[1]),acF(p[2]),prodCols[i])).join('')}</div>`),
+    acCard(toneIo,'IoT acres', top(toneIo, acF(A.iotY), acF(A.ioT))
+      + `<div style="${rule};display:flex;flex-direction:column;gap:6px">${colHead(`Part of the ${acF(A.iotY)} ac`)}
+          ${splitBar([[A.itY,toneIo.dot]],A.iotY,`IoT tagged ${acF(A.itY)} of ${acF(A.iotY)} IoT acres on ${day}`)}
+          ${row('IoT tagged',acF(A.itY),acF(A.itT),toneIo.dot)}</div>`),
+  ];
+  if(mob){
+    // Two columns; a wide tile, or a last tile with no partner, takes the whole row.
+    const grid = list => { const paired = list.filter(k=>!k.wide).length;
+      return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">${list.map((k,i)=>`<div style="${k.wide||(i===list.length-1&&paired%2)?'grid-column:1/-1;':''}${box(k)}border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0">${tileHTML(k,22)}</div>`).join('')}</div>`; };
+    return `<div style="display:flex;flex-direction:column;gap:14px">
+        ${group('Machines',machinesNote,grid(machines))}
+        ${group('Acres','',`<div style="display:flex;flex-direction:column;gap:8px">${acresCards.join('')}</div>`)}
+      </div>`;
+  }
+  // Desktop: a row for Machines, the three acres cards under it. Geometry: .wtGroups in the stylesheet.
+  const grid = (list, cls='') => `<div class="wtGrid ${cls}" style="--n:${list.length}">${list.map(k=>`<div style="${box(k)}border-radius:14px;box-shadow:${W2.shadow};padding:12px 14px;display:flex;flex-direction:column;gap:5px;min-width:0">${tileHTML(k,24)}</div>`).join('')}</div>`;
+  return `<div class="wtGroups">
+      ${group('Machines',machinesNote,grid(machines))}
+      ${group('Acres','',`<div class="wtAcres">${acresCards.join('')}</div>`)}
+    </div>`;
 }
 function wterrViewHTML(v){ return `<section style="padding:24px 32px">${wterrBodyHTML(false)}</section>`; }
 /* ===================== Wheat North — Area manager summary (view key `wam`) =====================
