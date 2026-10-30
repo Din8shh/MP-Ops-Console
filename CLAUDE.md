@@ -982,9 +982,9 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     `state.wtmBrkOpen`, follows the page's filters): machine, ID, handover, retailer, territory, operator, TM, the day's acres. The IDs
     are the same on every date the sheet holds (first date 22 Oct), so no "since" is shown. Rows: Plan · Deployed · In transit · Breakdown columns
     (all sortable), machine rows show the stage and ID; phone cards a 6-figure grid. Machine panel: Handover + Breakdown stats, team
-    logins only. CSV: Handover status + Breakdown ID. **Ran, operators and the 650 ac target still count the whole plan.** The admin
-    pages do not show any of this yet. Checked on the sheet 30 Oct: UPL 157 = 127 + 8 + 22, SWAL 212 = 184 + 10 + 18 (17 blank in all),
-    breakdown 31 UPL + 43 SWAL on 29 Oct (5 of them sprayed). 14.5 ac were sprayed by machines not marked Done. Table fits unscrolled at 1280 (min-width 950).
+    logins only. CSV: Handover status + Breakdown ID. **Breakdown and Operators mapped count DEPLOYED machines only (`wTeamBrk`, `wTeamFigs`; Dinesh 2026-10-30): tiles, rows, list, CSV and panel.
+    Ran and the 650 ac target still count the whole plan.** The admin pages do not show any of this yet. Checked on the sheet 30 Oct: UPL 157 = 127 + 8 + 22, SWAL 212 = 184 + 10 + 18 (17 blank in all),
+    breakdown 31 UPL + 43 SWAL on 29 Oct (5 of them sprayed; before the deployed-only rule). After it, on the sheet of the evening of 30 Oct: UPL 27 of 127 and operators 98 of 127; SWAL 38 of 186 and operators 145 of 186 (the sheet had moved: 313 deployed then). 14.5 ac were sprayed by machines not marked Done. Table fits unscrolled at 1280 (min-width 950).
   · One tree renderer for all three pages: Retailer → machines · Territory → machines (under each TM) · TM → FO → machines. It
     reuses each page's own expand acts / open state / sort state (`wpexp`/`wtexp`/`wfoexp`, `wpSort`/`wtSort`/`wfoSort`) with
     `WTEAM_SORTS` (default Target acres); the aggregates clamp those keys to their own lists, and the tree sorts itself.

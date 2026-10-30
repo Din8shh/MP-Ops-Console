@@ -8494,7 +8494,7 @@ function wpMachineHTML(m, mob){
       ${stat('Acres '+wDayWord(),acF(m.acY),wpDate(WRET.yday))}
       ${wTeam() ? stat('Operator',m.opName||m.opNum?'Mapped':'Not mapped',m.opName||m.opNum?'':'no operator on the sheet') : stat('Scanned overall',acF(m.scAll),`${acF(m.scY)} ac ${wDayWord()}`)}
       ${stat('Days sprayed',fmt(days.length),last?'last on '+wpDate(last):'none yet')}
-      ${wTeam() ? stat('Handover',wStageWord(m),wDayOn()?'today':'')+stat('Breakdown',m.brk?'ID '+E(m.brkDays[WRET.yday]):'None',wpDate(WRET.yday)) : ''}
+      ${wTeam() ? stat('Handover',wStageWord(m),wDayOn()?'today':'')+stat('Breakdown',m.stage!=='dep'?'—':m.brk?'ID '+E(m.brkDays[WRET.yday]):'None',m.stage!=='dep'?'not deployed yet':wpDate(WRET.yday)) : ''}
     </div>
     <div style="font-size:11px;color:#6E6A62;margin-top:8px">${wTeam()?`Target = ${fmt(WTEAM_TGT)} ac per machine for the season`:`Plan = retailer's ${fmt(r.planAc)} ac plan ÷ ${r.list.length} machine${r.list.length===1?'':'s'}`}</div>
     ${sect('Village')}<div style="padding:12px 14px;border:1px solid #EFEDE7;border-radius:10px;font-size:13px;font-weight:600">${m.village?E(m.village):'<span style="color:#9C988F;font-weight:400;font-style:italic">Not on the sheet</span>'}</div>
@@ -9189,11 +9189,13 @@ function wStageH(m){
   return `<span style="color:${col}">${mark} ${word}</span>`;
 }
 const wStageWord = m => m.stage==='dep' ? 'Deployed' : m.stage==='transit' ? 'In transit' : 'Pending';
+// Breakdown and Operators mapped count DEPLOYED machines only (Dinesh 2026-10-30): a machine not handed over yet is neither.
+const wTeamBrk = m => m.brk && m.stage==='dep';
 function wTeamFigs(list){
-  const sumOf=f=>list.reduce((a,m)=>a+f(m),0), n=list.length, op=list.filter(m=>m.opNum||m.opName).length;
+  const sumOf=f=>list.reduce((a,m)=>a+f(m),0), n=list.length, op=list.filter(m=>m.stage==='dep'&&(m.opNum||m.opName)).length;
   const plan=n*WTEAM_TGT, acAll=sumOf(wtAc), stage=k=>list.filter(m=>m.stage===k).length;
-  return { n, dep:stage('dep'), transit:stage('transit'), wait:stage('wait'), brk:list.filter(m=>m.brk).length,
-    ranY:list.filter(m=>m.acY>0).length, op, opPct:n?100*op/n:null, acY:sumOf(m=>m.acY), plan, acAll, pct:plan>0?100*acAll/plan:null };
+  return { n, dep:stage('dep'), transit:stage('transit'), wait:stage('wait'), brk:list.filter(wTeamBrk).length,
+    ranY:list.filter(m=>m.acY>0).length, op, opPct:stage('dep')?100*op/stage('dep'):null, acY:sumOf(m=>m.acY), plan, acAll, pct:plan>0?100*acAll/plan:null };
 }
 // The page as a tree of nodes { key, label, name, org, mob, sub, people, warn, tag, none, f, nAll, open, kids | groups }.
 function wTeamTree(view){
@@ -9237,7 +9239,7 @@ function wTeamStripHTML(T, F, B, mob, stale, brkList){
   const day=wpDate(WRET.yday), dw=wDayWord(), firstDate=WRET.log&&WRET.log.firstDate ? wpDate(WRET.log.firstDate) : '';
   const nTerr=new Set(T.mcs.filter(m=>m.territory!==WRET_NO_TERR).map(m=>m.st+'|'+m.territory)).size;
   const ranP=F.n?Math.round(100*F.ranY/F.n):0;
-  const brkRan=T.mcs.filter(m=>m.brk&&m.acY>0).length;
+  const brkRan=T.mcs.filter(m=>wTeamBrk(m)&&m.acY>0).length;
   const tile=(lab,tone,val,of,sub,bar)=>{ const t=w2tone(tone);
     return `<div style="background:${t.bg};border:1px solid ${t.bd};border-radius:14px;${mob?'':`box-shadow:${W2.shadow};`}padding:12px 14px;display:flex;flex-direction:column;gap:${mob?4:5}px;min-width:0">
       <div style="display:flex;align-items:baseline;gap:7px;font-size:12.5px;font-weight:500;color:${W2.ink2};line-height:1.3"><span style="width:8px;height:8px;border-radius:50%;background:${t.dot};flex-shrink:0;transform:translateY(-1px)"></span>${E(lab)}</div>
@@ -9246,8 +9248,8 @@ function wTeamStripHTML(T, F, B, mob, stale, brkList){
       <div style="font-size:12.5px;color:${W2.ink2};line-height:1.35">${sub}</div></div>`; };
   const tiles=[
     tile('Ran '+dw,'Ran',F.ranY,F.n,`${ranP}% of machines`,ranP),
-    tile('Breakdown','Breakdown',F.brk,F.n,`on ${day}${brkRan?` · ${fmt(brkRan)} still sprayed`:''}`),
-    tile('Operators mapped'+(wDayOn()?' today':''),'Operators',F.op,F.n,F.n-F.op ? `${fmt(F.n-F.op)} not mapped` : 'every machine has one'),
+    tile('Breakdown','Breakdown',F.brk,F.dep,`of deployed · on ${day}${brkRan?` · ${fmt(brkRan)} still sprayed`:''}`),
+    tile('Operators mapped'+(wDayOn()?' today':''),'Operators',F.op,F.dep,F.dep-F.op ? `of deployed · ${fmt(F.dep-F.op)} not mapped` : 'every deployed machine has one'),
   ];
   const tM=w2tone('Machines'), parts=[['Deployed',F.dep,W2.act],['In transit',F.transit,'#3B82C4'],['Pending',F.wait,W2.ink3]];
   const pctOf=v=>F.n?Math.round(100*v/F.n):0;
@@ -9277,18 +9279,18 @@ function wTeamStripHTML(T, F, B, mob, stale, brkList){
     ? `<div style="display:flex;flex-direction:column;gap:14px">${group('Machines',day,mcInner+brkList)}${group('Acres','',acresCard)}</div>`
     : `<div class="wtGroups">${group('Machines',day,mcInner+brkList)}${group('Acres','',acresCard)}</div>`;
 }
-// The machines carrying a breakdown_id on the picked day, under the page's filters. Closed by default so the page's own list stays
+// The deployed machines carrying a breakdown_id on the picked day, under the page's filters. Closed by default so the page's own list stays
 // near the top. The sheet's ID is open on every date it holds, so there is no "since" to show. A machine opens the shared panel.
 function wTeamBrkHTML(T, B, mob){
   const day=wpDate(WRET.yday), open=!!state.wtmBrkOpen;
-  const list=T.mcs.filter(m=>m.brk).sort((a,b)=>String(a.territory).localeCompare(String(b.territory))||a.mc.localeCompare(b.mc));
-  if(!list.length) return B.msg(`No machine carries a breakdown ID on ${day}.`, '16px 18px');
+  const list=T.mcs.filter(wTeamBrk).sort((a,b)=>String(a.territory).localeCompare(String(b.territory))||a.mc.localeCompare(b.mc));
+  if(!list.length) return B.msg(`No deployed machine carries a breakdown ID on ${day}.`, '16px 18px');
   const noOp=`<span style="color:${W2.brkD}">✕ No operator</span>`, opOf=m=>m.opName||m.opNum?E(m.opName||m.opNum):noOp;
   const idH=m=>`<span style="color:${W2.brkD};font-weight:600;white-space:nowrap">! <span style="font-family:'IBM Plex Mono',monospace">${E(m.brkDays[WRET.yday])}</span></span>`;
   const sprayed=m=>m.acY>0?`<span style="color:${W2.actD}">✓ ${acF(m.acY)} ac</span>`:`<span style="color:${W2.ink2}">Idle</span>`;
   const head=`<button data-act="wtmbrk" aria-expanded="${open}" style="width:100%;min-height:56px;padding:12px ${mob?16:22}px;border:0;background:none;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
       <span style="flex:1;min-width:0"><span style="display:flex;align-items:baseline;gap:7px;font-size:16px;font-weight:600"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:${W2.brk};flex-shrink:0;transform:translateY(-1px)"></span>Breakdown machines · ${fmt(list.length)}</span>
-      <span style="display:block;font-size:13px;color:${W2.ink2};margin-top:2px">${day}${mob?'':' · each has a breakdown ID on the sheet'} · ${mob?'tap':'click'} a machine for who to call</span></span>
+      <span style="display:block;font-size:13px;color:${W2.ink2};margin-top:2px">${day}${mob?'':' · deployed machines with a breakdown ID on the sheet'} · ${mob?'tap':'click'} a machine for who to call</span></span>
       <span style="flex-shrink:0;font-size:14px;font-weight:500;white-space:nowrap">${open?'Hide':'Show'} <span aria-hidden="true" style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></span></button>`;
   if(!open) return B.cardBox(head, `margin-top:${mob?12:16}px;overflow:hidden`);
   if(mob) return B.cardBox(head+`<div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:8px">${list.map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:${W2.head};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
@@ -9316,10 +9318,10 @@ function wTeamListHTML(T, B, mob){
     const stat=(v,l)=>`<div style="display:flex;flex-direction:column;min-width:0"><span style="${w2num(17)}">${v}</span><span style="font-size:12.5px;color:${W2.ink2}">${l}</span></div>`;
     const of=(k,n)=>`${fmt(k)}<span style="font-size:12px;font-weight:500;color:${W2.ink2}"> /${fmt(n)}</span>`;
     const figs=x=>`<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span style="${w2num(22)}">${acF(x.f.acAll)}</span> <span style="font-size:13.5px;color:${W2.ink2}">of ${fmt(x.f.plan)} ac target</span></span><span style="${w2num(14)}">${pctF(x.f.pct)}</span></div>${meter(x.f.pct,'',W2.act)}</div>
-      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 8px">${stat(x.nAll>x.f.n?of(x.f.n,x.nAll):fmt(x.f.n),'plan')}${stat(fmt(x.f.dep),'deployed')}${stat(fmt(x.f.transit),'in transit')}${stat(`<span style="${x.f.brk?`color:${W2.brkD}`:''}">${fmt(x.f.brk)}</span>`,'breakdown')}${stat(of(x.f.ranY,x.f.n),'ran '+dw)}${stat(acF(x.f.acY),'ac '+dw)}</div>${mOpBar(x.f)}`;
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 8px">${stat(x.nAll>x.f.n?of(x.f.n,x.nAll):fmt(x.f.n),'plan')}${stat(fmt(x.f.dep),'deployed')}${stat(fmt(x.f.transit),'in transit')}${stat(`<span style="${x.f.brk?`color:${W2.brkD}`:''}">${fmt(x.f.brk)}</span>`,'breakdown')}${stat(of(x.f.ranY,x.f.n),'ran '+dw)}${stat(acF(x.f.acY),'ac '+dw)}</div>${mOpBar({op:x.f.op,n:x.f.dep})}`;
     const pRow=(p,last)=>`<div style="display:flex;align-items:center;gap:10px;min-height:52px;${last?'':'border-bottom:1px solid '+W2.line2}"><span style="width:28px;font-size:12px;font-weight:600;color:${W2.ink2};flex-shrink:0">${p.lab}</span><span style="flex:1;min-width:0;font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.n?E(p.n):none}</span>${tel(p,p.lab)}</div>`;
     const mcBtn=(m,inBox)=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:${inBox?'#fff':W2.head};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
-        <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${orgChip(m.org)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hasOp(m)?E(m.opName||m.opNum):`<span style="color:${W2.brkD}">No operator</span>`}${T.view==='wplan'?'':' · '+E(m.party)}</span><span style="display:block;font-size:12.5px">${wStageH(m)}${m.brk?` · <span style="color:${W2.brkD};font-weight:600">! Breakdown</span>`:''}</span></span>
+        <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${orgChip(m.org)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hasOp(m)?E(m.opName||m.opNum):m.stage==='dep'?`<span style="color:${W2.brkD}">No operator</span>`:'No operator yet'}${T.view==='wplan'?'':' · '+E(m.party)}</span><span style="display:block;font-size:12.5px">${wStageH(m)}${wTeamBrk(m)?` · <span style="color:${W2.brkD};font-weight:600">! Breakdown</span>`:''}</span></span>
         <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${acF(wtAc(m))} <span style="font-weight:400;color:${W2.ink2}">/ ${fmt(WTEAM_TGT)} ac</span></span><span style="display:block;font-size:12.5px;color:${m.acY>0?W2.actD:W2.ink2}">${m.acY>0?'✓ '+acF(m.acY)+' ac '+dw:'idle '+dw}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`;
     const tText=x=>x.kids ? `${x.kids.filter(k=>!k.none).length} FO${x.kids.filter(k=>!k.none).length===1?'':'s'}${x.kids.some(k=>k.none)?' + no FO':''}` : `${x.f.n} machine${x.f.n===1?'':'s'}`;
     const toggle=x=>`<button data-act="${T.act}" data-k="${E(x.key)}" aria-expanded="${x.open}" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:${x.open?W2.head:'#fff'};color:${W2.ink};font:500 14px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${x.open?'Hide':'Show'} ${tText(x)} <span aria-hidden="true" style="display:inline-block;transform:rotate(${x.open?180:0}deg)">▾</span></button>`;
@@ -9353,13 +9355,13 @@ function wTeamListHTML(T, B, mob){
       <div style="min-width:0;display:flex;gap:8px;align-items:flex-start;padding-left:${lv*20}px">${B.chev(x.open)}<div style="min-width:0">
         <div style="display:flex;align-items:center;gap:8px;min-width:0">${x.label?`<b style="font-size:11.5px;font-weight:600;color:${W2.ink2}">${x.label}</b>`:''}<span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${E(x.name)}">${E(x.name)}${phone(x.mob)}</span>${x.org?orgChip(x.org):''}${x.tag?tagH(x.tag):''}</div>
         ${sub?`<div style="font-size:13px;color:${W2.ink2};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div>`:''}${x.warn?warnH(x.warn):''}</div></div>
-      ${numC(fmt(x.f.n)+(x.nAll>x.f.n?`<span style="color:${W2.ink2};font-weight:400"> /${fmt(x.nAll)}</span>`:''))}${numC(fmt(x.f.dep),1)}${numC(fmt(x.f.transit))}${numC(`<span style="${x.f.brk?`color:${W2.brkD};font-weight:600`:`color:${W2.ink2}`}">${fmt(x.f.brk)}</span>`)}${ofC(x.f.ranY,x.f.n,W2.act)}${ofC(x.f.op,x.f.n,'#1A9E80')}${numC(acF(x.f.acY))}${numC(fmt(x.f.plan),1)}${vsC(x.f.acAll,x.f.pct)}</div>`; };
+      ${numC(fmt(x.f.n)+(x.nAll>x.f.n?`<span style="color:${W2.ink2};font-weight:400"> /${fmt(x.nAll)}</span>`:''))}${numC(fmt(x.f.dep),1)}${numC(fmt(x.f.transit))}${numC(`<span style="${x.f.brk?`color:${W2.brkD};font-weight:600`:`color:${W2.ink2}`}">${fmt(x.f.brk)}</span>`)}${ofC(x.f.ranY,x.f.n,W2.act)}${ofC(x.f.op,x.f.dep,'#1A9E80')}${numC(acF(x.f.acY))}${numC(fmt(x.f.plan),1)}${vsC(x.f.acAll,x.f.pct)}</div>`; };
   const mRow=(m,lv)=>`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;background:#FBFCFD">
       <div style="min-width:0;padding-left:${22+lv*20}px"><div style="display:flex;align-items:center;gap:6px"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font:600 13px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</button>${orgChip(m.org)}</div><div style="font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(T.view==='wplan'?(m.village||''):m.party)}</div></div>
       <span style="grid-column:span 3;text-align:right;font-size:13px;white-space:nowrap">${wStageH(m)}</span>
-      <span style="text-align:right;font-size:13px;white-space:nowrap;color:${W2.brkD};font-weight:600">${m.brk?`! <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">${E(m.brkDays[WRET.yday])}</span>`:''}</span>
+      <span style="text-align:right;font-size:13px;white-space:nowrap;color:${W2.brkD};font-weight:600">${wTeamBrk(m)?`! <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">${E(m.brkDays[WRET.yday])}</span>`:''}</span>
       <span style="text-align:right;font-size:13px;white-space:nowrap;color:${m.acY>0?W2.actD:W2.ink2}">${m.acY>0?'✓ Ran':'Idle'}</span>
-      <span style="text-align:right;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasOp(m)?E(m.opName||m.opNum):`<span style="color:${W2.brkD}">✕ No operator</span>`}</span>
+      <span style="text-align:right;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasOp(m)?E(m.opName||m.opNum):m.stage==='dep'?`<span style="color:${W2.brkD}">✕ No operator</span>`:`<span style="color:${W2.ink2}">Not deployed</span>`}</span>
       ${numC(acF(m.acY))}${numC(`<span style="color:${W2.ink2}" title="${WTEAM_TGT} ac per machine">${fmt(WTEAM_TGT)}</span>`)}${vsC(wtAc(m),mcPct(m))}</div>`;
   const lRow=(t,lv)=>`<div style="padding:8px 22px 6px ${52+lv*20}px;border-bottom:1px solid ${W2.line2};background:${W2.head};font-size:13px;color:${W2.ink2}">${E(t)}</div>`;
   const kids=(x,lv)=>!x.open ? '' : x.kids ? x.kids.map(k=>gRow(k,lv+1)+kids(k,lv+1)).join('')
@@ -9393,7 +9395,7 @@ function wTeamCSV(){
   const head=['State','Territory','Company','Retailer','FO','FO mobile','TM','TM mobile','Machine','Operator','Operator mobile','Handover status',`Breakdown ID ${w} (${d})`,
     `Ran ${w} (${d})`,`Acres ${w} (${d})`,`Target acres (${WTEAM_TGT} per machine)`,`Season acres to ${d}`,'% of target'];
   const lines=[head.join(',')].concat(T.mcs.map(m=>{ const r=m.retailer, ac=wtAc(m);
-    return [STATE_NAMES[m.st]||m.st, m.territory, m.org, r.party, r.foName, r.foMob, r.tmName, r.tmMob, m.mc, m.opName, m.opNum, wStageWord(m), m.brkDays[d]||'',
+    return [STATE_NAMES[m.st]||m.st, m.territory, m.org, r.party, r.foName, r.foMob, r.tmName, r.tmMob, m.mc, m.opName, m.opNum, wStageWord(m), wTeamBrk(m)?m.brkDays[d]:'',
       m.acY>0?'Yes':'No', m.acY, WTEAM_TGT, Math.round(ac*10)/10, Math.round(1000*ac/WTEAM_TGT)/10].map(csvCell).join(','); }));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_${T.file}_${T.A.org==='ALL'?'UPL-SWAL':T.A.org}_${T.A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
