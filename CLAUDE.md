@@ -969,14 +969,16 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   · **Only five figures** (`wTeamPageHTML` / `wTeamTree` / `wTeamStripHTML` / `wTeamListHTML` / `wTeamCSV`, after the FO page):
     machines, ran on the day, operator mapped, acres on the day, and **target = a flat 650 ac per machine** (`WTEAM_TGT`, Dinesh
     2026-10-29; first built as the retailer plan ÷ machines; the admin pages keep the retailer plan) with season acres against it. Strip: hero "Acres sprayed vs target" + Machines · Ran · Operators mapped · Acres
-    (`.wteamKpi`, hero on its own row below 1240px). Scanned, IoT, live, breakdown, last 7 days, the day chart, the AM / CI
+    (replaced 2026-10-30, see below). Scanned, IoT, live, last 7 days, the day chart, the AM / CI
     filters and columns, onboarding, bookings and the Nurture Partner card are NOT shown to these logins.
   · **Machine plan, deployed and breakdown (Dinesh 2026-10-30; replaces "only five figures" above).** Every machine on the sheet is the
     PLAN. `handover_status` (column K, one value per machine, no history) gives `m.stage` (`wStageOf`): `Done` = deployed (handed over),
     `In transit` / `In-Transit` = in transit, `Pending` and blank = pending. He named plan, in transit and deployed; the third bucket
-    was added so the three add up. Strip (`.wteamKpi`, 4 columns): hero + **Machine plan card** (`.wteamWide`, split bar, the three parts,
-    "N pending have no status"; on a past day "status is today's"), then Ran · Breakdown · Operators mapped · Acres. **Breakdown** = the
-    picked day's `breakdown_id` (`m.brk`), with the "Breakdown machines" card under the strip (`wTeamBrkHTML`, closed by default,
+    was added so the three add up. Strip = **the same two labelled pieces as the admin's** (`wTeamStripHTML`, `.wtGroups`, regrouped the same day by request). **Machines**
+    (`.wteamMc`): Machine plan card (split bar, the three parts; on a past day "status is today's"), Ran · Breakdown · Operators mapped,
+    then the breakdown list. **Acres**: one card, day on the left, total on the right, against target beside them. A blank status
+    simply reads Pending everywhere (Dinesh: no "no status" note). **Breakdown** = the
+    picked day's `breakdown_id` (`m.brk`), with the "Breakdown machines" card (`wTeamBrkHTML`, closed by default,
     `state.wtmBrkOpen`, follows the page's filters): machine, ID, handover, retailer, territory, operator, TM, the day's acres. The IDs
     are the same on every date the sheet holds (first date 22 Oct), so no "since" is shown. Rows: Plan · Deployed · In transit · Breakdown columns
     (all sortable), machine rows show the stage and ID; phone cards a 6-figure grid. Machine panel: Handover + Breakdown stats, team

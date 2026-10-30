@@ -138,8 +138,8 @@
   .wtAcSplit{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
   .wtGrid{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:12px}
   .wfoKpi{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-top:16px}
-  .wteamKpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
-  .wteamKpi>.wteamWide{grid-column:span 2}
+  .wteamMc{display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));gap:12px}
+  @media (max-width:1040px){ .wteamMc{grid-template-columns:repeat(3,minmax(0,1fr))} .wteamMc>:first-child{grid-column:1/-1} }
   @media (max-width:1240px){ .wfoKpi{grid-template-columns:repeat(3,minmax(0,1fr))} }
   @media (max-width:1240px){ .wtGrid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))} }
   @media (max-width:1180px){ .wtAcres{grid-template-columns:minmax(0,1fr)} }
@@ -8494,7 +8494,7 @@ function wpMachineHTML(m, mob){
       ${stat('Acres '+wDayWord(),acF(m.acY),wpDate(WRET.yday))}
       ${wTeam() ? stat('Operator',m.opName||m.opNum?'Mapped':'Not mapped',m.opName||m.opNum?'':'no operator on the sheet') : stat('Scanned overall',acF(m.scAll),`${acF(m.scY)} ac ${wDayWord()}`)}
       ${stat('Days sprayed',fmt(days.length),last?'last on '+wpDate(last):'none yet')}
-      ${wTeam() ? stat('Handover',wStageWord(m),`${m.handRaw?'sheet says "'+E(m.handRaw)+'"':'no status on the sheet'}${wDayOn()?' · today':''}`)+stat('Breakdown',m.brk?'ID '+E(m.brkDays[WRET.yday]):'None',wpDate(WRET.yday)) : ''}
+      ${wTeam() ? stat('Handover',wStageWord(m),wDayOn()?'today':'')+stat('Breakdown',m.brk?'ID '+E(m.brkDays[WRET.yday]):'None',wpDate(WRET.yday)) : ''}
     </div>
     <div style="font-size:11px;color:#6E6A62;margin-top:8px">${wTeam()?`Target = ${fmt(WTEAM_TGT)} ac per machine for the season`:`Plan = retailer's ${fmt(r.planAc)} ac plan ÷ ${r.list.length} machine${r.list.length===1?'':'s'}`}</div>
     ${sect('Village')}<div style="padding:12px 14px;border:1px solid #EFEDE7;border-radius:10px;font-size:13px;font-weight:600">${m.village?E(m.village):'<span style="color:#9C988F;font-weight:400;font-style:italic">Not on the sheet</span>'}</div>
@@ -9183,9 +9183,9 @@ function wfoBodyHTML(mob){
      Expanding and sorting reuse each page's own acts and state (wpexp / wtexp / wfoexp, wpSort / wtSort / wfoSort). */
 const WTEAM_TGT = 650; // the team view's target: acres per machine for the season
 const WTEAM_SORTS = [['plan','Target acres'],['acAll','Season acres'],['pct','% of target'],['acY','Acres yesterday'],['ranY','Ran yesterday'],['opPct','Operator mapped %'],['n','Machine plan'],['dep','Deployed'],['transit','In transit'],['brk','Breakdown'],['name','Name']];
-// A machine's stage as mark + word + colour. Blank on the sheet counts as pending (the plan card says how many) and reads "No status".
+// A machine's stage as mark + word + colour.
 function wStageH(m){
-  const [mark,word,col] = m.stage==='dep' ? ['✓','Deployed',W2.actD] : m.stage==='transit' ? ['→','In transit','#1D4F80'] : ['○',m.handRaw?'Pending':'No status',W2.ink2];
+  const [mark,word,col] = m.stage==='dep' ? ['✓','Deployed',W2.actD] : m.stage==='transit' ? ['→','In transit','#1D4F80'] : ['○','Pending',W2.ink2];
   return `<span style="color:${col}">${mark} ${word}</span>`;
 }
 const wStageWord = m => m.stage==='dep' ? 'Deployed' : m.stage==='transit' ? 'In transit' : 'Pending';
@@ -9229,37 +9229,53 @@ function wTeamTree(view){
   return { view, A, sort, nodes:order(nodes), mcs:W.rows.flatMap(r=>r.list), act:'wfoexp', sortAct:'wfosort', sortId:'wfoSortSel',
     head:'TM · FO', title:'Territory managers', count:nodes.filter(x=>!x.none).length, file:'tm-fo', hint:'click a TM for his FOs, an FO for his machines' };
 }
-// The strip: the target and the machine plan side by side (deployed / in transit / pending are parts of the plan, so they stay
-// INSIDE its card and add up to it), then four tiles. Column K has no history, so on a past day the split says it is today's.
-function wTeamStripHTML(T, F, B, mob, stale){
+// The strip, in the same two labelled pieces as the admin's (wtStripHTML), asked by Dinesh 2026-10-30. MACHINES: the plan card
+// (deployed / in transit / pending are parts of the plan, so they stay INSIDE it and add up to it), then Ran, Breakdown and
+// Operators mapped, with the breakdown machines' list under them. ACRES: one card, the day on the left, the total on the right, the target beside them. Column K has no
+// history, so on a past day the split says it is today's.
+function wTeamStripHTML(T, F, B, mob, stale, brkList){
   const day=wpDate(WRET.yday), dw=wDayWord(), firstDate=WRET.log&&WRET.log.firstDate ? wpDate(WRET.log.firstDate) : '';
   const nTerr=new Set(T.mcs.filter(m=>m.territory!==WRET_NO_TERR).map(m=>m.st+'|'+m.territory)).size;
   const ranP=F.n?Math.round(100*F.ranY/F.n):0;
   const brkRan=T.mcs.filter(m=>m.brk&&m.acY>0).length;
+  const tile=(lab,tone,val,of,sub,bar)=>{ const t=w2tone(tone);
+    return `<div style="background:${t.bg};border:1px solid ${t.bd};border-radius:14px;${mob?'':`box-shadow:${W2.shadow};`}padding:12px 14px;display:flex;flex-direction:column;gap:${mob?4:5}px;min-width:0">
+      <div style="display:flex;align-items:baseline;gap:7px;font-size:12.5px;font-weight:500;color:${W2.ink2};line-height:1.3"><span style="width:8px;height:8px;border-radius:50%;background:${t.dot};flex-shrink:0;transform:translateY(-1px)"></span>${E(lab)}</div>
+      <div style="${w2num(mob?22:24,600,t.vc)};white-space:nowrap">${fmt(val)}${w2unit('of '+fmt(of),12)}</div>
+      ${bar!=null?`<div style="height:6px;background:${W2.line2};border-radius:3px;overflow:hidden"><div style="width:${Math.min(100,bar)}%;min-width:${bar>0?4:0}px;height:100%;background:${t.dot};border-radius:3px"></div></div>`:''}
+      <div style="font-size:12.5px;color:${W2.ink2};line-height:1.35">${sub}</div></div>`; };
   const tiles=[
-    B.tile('Ran '+dw, `${fmt(F.ranY)}${w2unit('of '+fmt(F.n),mob?12:13)}`, '', `${ranP}% of machines`),
-    B.tile('Breakdown', `${fmt(F.brk)}${w2unit('of '+fmt(F.n),mob?12:13)}`, '', `on ${day}${brkRan?` · ${fmt(brkRan)} still sprayed`:''}`),
-    B.tile('Operators mapped'+(wDayOn()?' today':''), `${fmt(F.op)}${w2unit('of '+fmt(F.n),mob?12:13)}`, '', F.n-F.op ? `${fmt(F.n-F.op)} not mapped` : 'every machine has one'),
-    B.tile('Acres '+dw, acF(F.acY), 'ac', stale ? `⚠ the sheet's acres stop at ${wpDate(WRET.lastDate)}` : day, { warn:stale }),
+    tile('Ran '+dw,'Ran',F.ranY,F.n,`${ranP}% of machines`,ranP),
+    tile('Breakdown','Breakdown',F.brk,F.n,`on ${day}${brkRan?` · ${fmt(brkRan)} still sprayed`:''}`),
+    tile('Operators mapped'+(wDayOn()?' today':''),'Operators',F.op,F.n,F.n-F.op ? `${fmt(F.n-F.op)} not mapped` : 'every machine has one'),
   ];
-  const bar=`<div style="height:6px;background:${W2.line2};border-radius:3px;overflow:hidden"><div style="width:${Math.min(100,F.pct||0)}%;min-width:${F.pct>0?6:0}px;height:100%;background:linear-gradient(90deg,#F5821F,#1FAE43);border-radius:3px"></div></div>`;
-  const sub=`<b style="color:${W2.ink};font-weight:600">${pctF(F.pct)}</b> of ${fmt(F.plan)} ac target · ${WTEAM_TGT} ac per machine · ${firstDate?firstDate+' – ':'to '}${day}`;
-  const hero=sz=>`<div style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Acres sprayed vs target</div>
-    <div><span style="${w2num(sz,600)};letter-spacing:-0.02em;line-height:1">${acF(F.acAll)}</span>${w2unit('ac',sz>38?15:14)}</div>${bar}<div style="font-size:13.5px;color:${W2.ink2}">${sub}</div>`;
   const tM=w2tone('Machines'), parts=[['Deployed',F.dep,W2.act],['In transit',F.transit,'#3B82C4'],['Pending',F.wait,W2.ink3]];
-  const pctOf=v=>F.n?Math.round(100*v/F.n):0, blankN=T.mcs.filter(m=>m.stage==='wait'&&!m.handRaw).length;
-  const planNote=['Deployed = handed over', blankN?`${fmt(blankN)} pending have no status on the sheet`:'', wDayOn()?'status is today’s':''].filter(Boolean).join(' · ');
-  const planCard=sz=>`<div style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Machine plan</div>
-    <div><span style="${w2num(sz,600,tM.vc)};letter-spacing:-0.02em;line-height:1">${fmt(F.n)}</span>${w2unit('machines',sz>30?15:14)}<span style="font-size:13.5px;color:${W2.ink2}"> ${T.A.terr?'in '+E(T.A.terr):`in ${fmt(nTerr)} ${nTerr===1?'territory':'territories'}`}</span></div>
+  const pctOf=v=>F.n?Math.round(100*v/F.n):0;
+  const planCard=`<div style="background:${tM.bg};border:1px solid ${tM.bd};border-radius:14px;${mob?'':`box-shadow:${W2.shadow};`}padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0">
+    <div style="display:flex;align-items:baseline;gap:7px;font-size:14px;font-weight:600;color:${W2.ink}"><span style="width:8px;height:8px;border-radius:50%;background:${tM.dot};flex-shrink:0;transform:translateY(-1px)"></span>Machine plan</div>
+    <div><span style="${w2num(mob?26:24,600,tM.vc)};white-space:nowrap">${fmt(F.n)}</span>${w2unit('machines',12)}<span style="font-size:13px;color:${W2.ink2}"> ${T.A.terr?'in '+E(T.A.terr):`in ${fmt(nTerr)} ${nTerr===1?'territory':'territories'}`}</span></div>
     <div role="img" aria-label="${parts.map(p=>`${p[0]} ${fmt(p[1])}`).join(', ')} of ${fmt(F.n)} machines" style="display:flex;gap:1px;height:8px;border-radius:4px;overflow:hidden;background:${W2.line2}">${parts.map(([,v,c])=>`<span style="width:${pctOf(v)}%;min-width:${v>0?3:0}px;background:${c}"></span>`).join('')}</div>
-    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">${parts.map(([l,v,c])=>`<div style="min-width:0"><div style="display:flex;align-items:baseline;gap:5px;font-size:13px;color:${W2.ink}"><span aria-hidden="true" style="width:9px;height:9px;border-radius:2px;background:${c};flex-shrink:0"></span>${l}</div><div style="margin-top:2px"><span style="${w2num(mob?20:22,600)}">${fmt(v)}</span><span style="font-size:12.5px;color:${W2.ink2}"> · ${pctOf(v)}%</span></div></div>`).join('')}</div>
-    <div style="font-size:12.5px;color:${W2.ink2};line-height:1.4">${planNote}</div>`;
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">${parts.map(([l,v,c])=>`<div style="min-width:0"><div style="display:flex;align-items:baseline;gap:5px;font-size:13px;color:${W2.ink}"><span aria-hidden="true" style="width:9px;height:9px;border-radius:2px;background:${c};flex-shrink:0"></span>${l}</div><div style="margin-top:2px"><span style="${w2num(mob?20:18,600)}">${fmt(v)}</span><span style="font-size:12.5px;color:${W2.ink2}"> · ${pctOf(v)}%</span></div></div>`).join('')}</div>
+    <div style="font-size:12.5px;color:${W2.ink2};line-height:1.4">Deployed = handed over${wDayOn()?' · status is today’s':''}</div></div>`;
+  const tA=stale?w2tone('Idle'):w2tone('Acres');
+  const acresCard=`<div style="background:${tA.bg};border:1px solid ${tA.bd};border-radius:14px;${mob?'':`box-shadow:${W2.shadow};`}padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0">
+    <div style="display:flex;align-items:baseline;gap:7px;font-size:14px;font-weight:600;color:${W2.ink}"><span style="width:8px;height:8px;border-radius:50%;background:${tA.dot};flex-shrink:0;transform:translateY(-1px)"></span>Acres sprayed</div>
+    <div class="wtAcSplit" ${mob?`style="display:flex;flex-direction:column;gap:10px"`:''}>
+      <div style="min-width:0"><div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px">
+        <div style="min-width:0"><div style="${w2num(mob?26:24,600,stale?W2.idleD:tA.vc)};white-space:nowrap">${acF(F.acY)}${w2unit('ac',12)}</div><div style="font-size:12.5px;color:${W2.ink2}">on ${day}</div></div>
+        <div style="text-align:right;min-width:0"><div style="${w2num(18,600,W2.ink)};white-space:nowrap">${acF(F.acAll)}${w2unit('ac',12)}</div><div style="font-size:12.5px;color:${W2.ink2}">total${firstDate?` · ${firstDate} – ${day}`:''}</div></div></div>
+        ${stale?`<div style="font-size:12.5px;color:${W2.idleD};margin-top:6px">⚠ the sheet's acres stop at ${wpDate(WRET.lastDate)}</div>`:''}</div>
+      <div style="${mob?`border-top:1px solid ${W2.line2};padding-top:10px;`:`border-left:1px solid ${W2.line2};padding-left:18px;`}display:flex;flex-direction:column;gap:6px;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13.5px;color:${W2.ink}"><span style="min-width:0">Against target<span style="display:block;font-size:12.5px;color:${W2.ink2}">of ${fmt(F.plan)} ac · ${WTEAM_TGT} ac per machine</span></span><span style="font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">${pctF(F.pct)}</span></div>
+        <div role="img" aria-label="${pctF(F.pct)} of the ${fmt(F.plan)} acre target" style="height:8px;border-radius:4px;overflow:hidden;background:${W2.line2}"><div style="width:${Math.min(100,F.pct||0)}%;min-width:${F.pct>0?3:0}px;height:100%;background:${tA.dot}"></div></div></div></div></div>`;
+  const group=(title,note,inner)=>`<section aria-label="${E(title)}" style="min-width:0"><div style="display:flex;align-items:baseline;gap:4px 8px;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:14px;font-weight:600;color:${W2.ink}">${title}</span>${note?`<span style="font-size:12.5px;color:${W2.ink2}">${note}</span>`:''}</div>${inner}</section>`;
+  // Phone: the plan card across, Ran across, Breakdown and Operators side by side.
+  const mcInner = mob
+    ? `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px"><div style="grid-column:1/-1;display:flex;flex-direction:column;min-width:0">${planCard}</div><div style="grid-column:1/-1;display:flex;flex-direction:column;min-width:0">${tiles[0]}</div>${tiles[1]}${tiles[2]}</div>`
+    : `<div class="wteamMc">${planCard}${tiles.join('')}</div>`;
   return mob
-    ? B.cardBox(`<div style="padding:16px;display:flex;flex-direction:column;gap:8px;background:linear-gradient(160deg,#FFF3E8 0%,#FFFFFF 70%)">${hero(40)}</div>
-        <div style="padding:16px;display:flex;flex-direction:column;gap:8px;border-top:1px solid ${W2.line2};background:${tM.bg}">${planCard(30)}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid ${W2.line2}">${tiles.join('')}</div>`, 'overflow:hidden')
-    : `<div class="wteamKpi"><div class="wteamWide" style="background:linear-gradient(160deg,#FFF3E8 0%,#FFFFFF 60%);border:1px solid #F3DFCB;border-radius:16px;box-shadow:${W2.shadow};padding:18px 20px;display:flex;flex-direction:column;gap:8px;min-width:0">${hero(36)}</div>
-        <div class="wteamWide" style="background:${tM.bg};border:1px solid ${tM.bd};border-radius:16px;box-shadow:${W2.shadow};padding:18px 20px;display:flex;flex-direction:column;gap:8px;min-width:0">${planCard(30)}</div>${tiles.join('')}</div>`;
+    ? `<div style="display:flex;flex-direction:column;gap:14px">${group('Machines',day,mcInner+brkList)}${group('Acres','',acresCard)}</div>`
+    : `<div class="wtGroups">${group('Machines',day,mcInner+brkList)}${group('Acres','',acresCard)}</div>`;
 }
 // The machines carrying a breakdown_id on the picked day, under the page's filters. Closed by default so the page's own list stays
 // near the top. The sheet's ID is open on every date it holds, so there is no "since" to show. A machine opens the shared panel.
@@ -9368,8 +9384,8 @@ function wTeamPageHTML(view, mob){
          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px">${search}${clearBtn}<div style="flex:1"></div>${B.stamp('wpretry')}${csvBtn}</div>`;
   } else controls = wtControlsHTML(A, mob, true, { sort:[T.sortId, view==='wfo'?'Sort TMs and FOs by':'Sort territories by', WTEAM_SORTS, T.sort], csv:'wteamcsv', csvTitle:csvT,
     ph: view==='wfo' ? ['Search TM, FO, machine…','Search TM, FO, machine, retailer, person'] : null });
-  const strip=wTeamStripHTML(T, F, B, mob, stale), list=wTeamListHTML(T, B, mob), brk=wTeamBrkHTML(T, B, mob);
-  return mob ? strip + `<div style="margin-top:12px">${controls}</div>` + brk + list : controls + strip + brk + list;
+  const strip=wTeamStripHTML(T, F, B, mob, stale, wTeamBrkHTML(T, B, mob)), list=wTeamListHTML(T, B, mob);
+  return mob ? strip + `<div style="margin-top:12px">${controls}</div>` + list : controls + strip + list;
 }
 // One line per machine shown, with the same figures as the page.
 function wTeamCSV(){
