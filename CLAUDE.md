@@ -855,18 +855,22 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     Handover, `breakdown_id` and the Spruce / Feego split are deliberately NOT shown (by request); no map.
   · **KPI strip = two labelled pieces, Machines and Acres** (`wtStripHTML`, Territory / AM / Map; regrouped 2026-10-30 by request,
     replacing the Kharif-order strip of 2026-10-28). **Machines** = tiles (Worked n of N with bar · Idle · Territories sprayed ·
-    Operators mapped · Pinged since <yesterday>). **Acres** = three cards side by side (`acresCards`, `.wtAcres`), each with the day
+    Operators mapped · Pinged since <yesterday>). **Acres** = two cards (`acresCards`, `.wtAcres`), each with the day
     on the left and the total on the right:
-    **Acres sprayed** (Against plan % with bar · Per machine · Per machine per day) ·
-    **Scanned acres** (Scan % day and total · Split: bar + Spruce / Feego / Feego Edge rows, day and total) ·
-    **IoT acres** (bar + IoT tagged row, day and total).
-    **A figure that is PART of another stays INSIDE that card** (Dinesh, after two rounds: Scanned, IoT and the products as separate
-    tiles or groups read as unrelated numbers; he reads sprayed against scanned, Scan %, IoT and tagged, and the products as the
-    split of scanned). The split bar's segments are shares of the whole, in the same colours as the rows' swatches.
+    **Acres sprayed** (Of the <n> ac: bar + IoT tagged acres + % of sprayed, day and total · Compared with: IoT acres, day and
+    total · Against plan % with bar · Per machine · Per machine per day; `.wtAcSplit` lays these in two columns on desktop) ·
+    **Scanned acres** (Scan % day and total · Split: bar + Spruce / Feego / Feego Edge rows, day and total).
+    **A figure that is PART of another stays INSIDE that card** (Dinesh, over several rounds: separate tiles or groups read as
+    unrelated numbers; he reads sprayed against scanned, Scan % and IoT, the products as the split of scanned).
+    **IoT tagged is a part of ACRES SPRAYED, not of IoT acres** (Dinesh 2026-10-30: "acres sprayed is 100, how many of these 100
+    are IoT tagged"), so its bar and % are against sprayed: 16% on 29 Oct (69.3 of 421), 15% total (176 of 1,154). IoT acres is
+    only a comparison, because it can exceed sprayed (496 against 421 that day). Checked on the sheet 30 Oct: all 22 machine-days
+    with tagged acres also carry sprayed acres; 3 read slightly over (5.22 on 5, 11.35 on 11, 15.95 on 15.2; 1.3 ac in all),
+    so the bar is capped at 100%. The split bar's segments are shares of the whole, in the same colours as the rows' swatches.
     **Scan % is shown for the DAY and the total** (scanned ÷ sprayed each); on 25 Oct that is 48% (32 of 67) and 37% (49 of 134).
-    The date always reads "29 Oct", never "y'day". Geometry: `.wtGroups` / `.wtGrid` / `.wtAcres` in the stylesheet (three cards
-    down to about 1040px of window, wrapping at 240px; tiles wrap at 140px). Phone: tiles in two columns, the three cards stacked
-    and open; there is no fold, so the chart and list start lower (Acres is about 780px tall at 390px wide).
+    The date always reads "29 Oct", never "y'day". Geometry: `.wtGroups` / `.wtGrid` / `.wtAcres` / `.wtAcSplit` in the stylesheet
+    (the two cards stack below 1180px; tiles wrap at 140px). Phone: tiles in two columns, the two cards stacked and open; there
+    is no fold, so the chart and list start lower (Acres is about 750px tall at 390px wide).
     The phone MAP keeps its one "Worked yesterday" card (`cardOnly`), which still holds Season too. **The Retailer, FO and team
     strips are separate and were not changed.** Definitions: the fleet is EVERY machine
     on the sheet; there is NO Breakdown tile (breakdown_id unconfirmed — 7 machines carrying one sprayed), so Idle = did not
@@ -876,7 +880,7 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     Feego Edge / IoT). Spruce + Feego + Feego Edge = scanned_acres on every row (checked 2026-10-29).
 - **Changes asked by Dinesh on 2026-10-29 (Retailer / Territory / AM pages and the strip)**. Definitions he chose:
   · **IoT acres** = `IOT_acres` (every acre the device measured); **IoT tagged acres** = `IOT_tagged_Acres` (a new column:
-    the device's acres linked to a booking, 106 of 986 ac through 28 Oct). Both kept per day in `m.sdays` ([4] and [5]).
+    the part of the acres sprayed that carries an IoT tag, 106 of 733 ac sprayed through 28 Oct; see the KPI strip note). Both kept per day in `m.sdays` ([4] and [5]).
   · **Acres per machine** = season acres ÷ machines that ran at least once (to the Day filter's day). **Acres / machine /
     day** = that ÷ the season's CALENDAR days (first sheet date → the day), idle days counted.
   · **Live** = last ping on/after the calendar's yesterday (`wtLive`; the sheet keeps only the latest ping, so always today's

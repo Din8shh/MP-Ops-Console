@@ -132,16 +132,17 @@
      machine panel's call rows, the map's zoom buttons — by remapping the warm neutrals onto the cool ones. One type
      family (IBM Plex Sans, tabular figures); Mono stays for machine numbers and phone numbers. */
   /* Wheat Territory / AM / Map KPI strip (wtStripHTML), labelled groups. Geometry lives here, not inline, so the
-     narrow-laptop form can win: below 1240px the tiles wrap at 140px and the acres cards at 240px. */
+     narrow-laptop form can win: below 1240px the tiles wrap at 140px; below 1180px the two acres cards stack. */
   .wtGroups{display:grid;gap:14px;margin-top:16px}
-  .wtAcres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .wtAcres{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:12px}
+  .wtAcSplit{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px}
   .wtGrid{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:12px}
   .wfoKpi{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-top:16px}
   .wteamKpi{display:grid;grid-template-columns:minmax(280px,1.6fr) repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
   @media (max-width:1240px){ .wteamKpi{grid-template-columns:repeat(4,minmax(0,1fr))} .wteamKpi>:first-child{grid-column:1/-1} }
   @media (max-width:1240px){ .wfoKpi{grid-template-columns:repeat(3,minmax(0,1fr))} }
-  @media (max-width:1240px){ .wtAcres{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
-    .wtGrid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))} }
+  @media (max-width:1240px){ .wtGrid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))} }
+  @media (max-width:1180px){ .wtAcres{grid-template-columns:minmax(0,1fr)} }
   html[data-proj="wheat"] body{font-family:'IBM Plex Sans',system-ui,sans-serif;color:#15181C;background:#F3F6FB;font-variant-numeric:tabular-nums}
   html[data-proj="wheat"] #app [style*="Noto Sans"]{font-family:'IBM Plex Sans',system-ui,sans-serif !important}
   html[data-proj="wheat"] #app [style*="#E9E6DF"]{border-color:#E4E7EA !important}
@@ -774,7 +775,7 @@ function wretBuild(grid){
     if(bk) m.bdays[dt]=(m.bdays[dt]||0)+bk;
     // Scanned acres split by product (Spruce + Feego + Feego Edge = scanned_acres on every row, checked 2026-10-29),
     // kept per day with IoT acres so the Territory / AM / Map strip can read them THROUGH YESTERDAY like the acres.
-    // IOT_tagged_Acres = the device's acres that are linked to a booking (IOT_acres is every acre the device measured).
+    // IOT_tagged_Acres = the part of the acres sprayed that carries an IoT tag (IOT_acres is every acre the device measured).
     const sp=num(g('spruce')), fe=num(g('feego')), fx=num(g('fedge')), it=num(g('iotTag'));
     if(sc||sp||fe||fx||io||it) m.sdays[dt]=[sc,sp,fe,fx,io,it];
     // Breakdown = the day's row carries a breakdown_id (agreed 2026-10-29). It is kept per day: a few machines change.
@@ -8773,9 +8774,11 @@ function wterrBodyHTML(mob){
   return mob ? kpis + trend + `<div style="margin-top:12px">${controls}</div>` + list : controls + kpis + trend + list;
 }
 // The KPI strip, in two labelled pieces (asked by Dinesh 2026-10-30): Machines (did the fleet work) and Acres.
-// The ACRES piece is three cards read side by side, day on the left and total on the right of each: Acres sprayed (with its
-// plan and per-machine figures), Scanned acres, IoT acres. A figure that is PART of another sits INSIDE that card: the
-// Spruce / Feego / Feego Edge split and Scan % under Scanned, IoT tagged under IoT. Separate tiles read as unrelated numbers.
+// The ACRES piece is two cards, day on the left and total on the right of each: Acres sprayed and Scanned acres. A figure
+// that is PART of another sits INSIDE that card. IoT tagged is the part of the acres sprayed that carries an IoT tag (Dinesh:
+// "acres sprayed is 100, how many of these 100 are IoT tagged"), so its bar and % are against SPRAYED, not against IoT acres;
+// IoT acres sits beside it for comparison, not as a parent (it can exceed sprayed). Scan % and the Spruce / Feego / Feego
+// Edge split sit under Scanned. Separate tiles read as unrelated numbers.
 // Wheat differences, each agreed: no Breakdown tile (breakdown_id's meaning is unconfirmed — 7 machines carrying one sprayed
 // yesterday; the tables count it), so Idle is simply "did not run"; no last season, so the season tile carries acres
 // against the PLAN, with no direction to colour. Pinged counts machines whose last ping is yesterday or later — the sheet
@@ -8790,6 +8793,7 @@ function wtStripHTML(A, mob, stale, cardOnly){
   const nDays = A.days.length, perMc = A.ranAll ? A.acAll/A.ranAll : null, perDay = A.ranAll && nDays ? A.acAll/A.ranAll/nDays : null;
   const avgF = v => v==null ? '—' : acF(Math.round(v*10)/10);
   const scanPct = pctF(A.acAll>0 ? 100*A.scT/A.acAll : null), scanPctY = pctF(A.acY>0 ? 100*A.scY/A.acY : null);
+  const tagPct = pctF(A.acAll>0 ? 100*A.itT/A.acAll : null), tagPctY = pctF(A.acY>0 ? 100*A.itY/A.acY : null);
   if(cardOnly){
     const planPill = `<span style="font-size:13px;font-weight:600;padding:3px 8px;border-radius:6px;background:${W2.line2};color:${W2.ink};white-space:nowrap">${pctF(A.pct)} of plan</span>`;
     return `<div style="background:linear-gradient(160deg,#EEF8F2 0%,#FFFFFF 60%);border:1px solid ${W2.card};border-radius:18px;box-shadow:${W2.shadow};padding:16px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;flex-direction:column;gap:8px">
@@ -8842,17 +8846,22 @@ function wtStripHTML(A, mob, stale, cardOnly){
   const acresCards = [
     acCard(toneAc,'Acres sprayed', top(toneAc, acF(A.acY), acF(A.acAll), stale)
       + (stale?`<div style="font-size:12.5px;color:${W2.idleD}">${staleTxt}</div>`:'')
-      + `<div style="${rule};display:flex;flex-direction:column;gap:6px">${stat('Against plan',`of ${fmt(A.plan)} ac`,pctF(A.pct))}${splitBar([[A.acAll,toneAc.dot]],A.plan,`${pctF(A.pct)} of the ${fmt(A.plan)} acre plan`)}</div>`
-      + `<div style="${rule};display:flex;flex-direction:column;gap:8px">${stat('Per machine',`÷ ${fmt(A.ranAll)} that ran`,`${avgF(perMc)}${perMc==null?'':' ac'}`)}${stat('Per machine per day',`÷ ${fmt(nDays)} day${nDays===1?'':'s'} of season`,`${avgF(perDay)}${perDay==null?'':' ac'}`)}</div>`),
+      + `<div class="wtAcSplit" ${mob?`style="display:flex;flex-direction:column;gap:10px"`:''}>
+          <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+            <div style="${rule};display:flex;flex-direction:column;gap:6px">${colHead(`Of the ${acF(A.acY)} ac`)}
+              ${splitBar([[A.itY,toneIo.dot]],A.acY,`IoT tagged ${acF(A.itY)} of ${acF(A.acY)} acres sprayed on ${day}`)}
+              ${row('IoT tagged acres',acF(A.itY),acF(A.itT),toneIo.dot)}${row('of acres sprayed',tagPctY,tagPct)}</div>
+            <div style="${rule};display:flex;flex-direction:column;gap:6px">${colHead('Compared with')}${row('IoT acres',acF(A.iotY),acF(A.ioT))}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+            <div style="${rule};display:flex;flex-direction:column;gap:6px">${stat('Against plan',`of ${fmt(A.plan)} ac`,pctF(A.pct))}${splitBar([[A.acAll,toneAc.dot]],A.plan,`${pctF(A.pct)} of the ${fmt(A.plan)} acre plan`)}</div>
+            <div style="${rule};display:flex;flex-direction:column;gap:8px">${stat('Per machine',`÷ ${fmt(A.ranAll)} that ran`,`${avgF(perMc)}${perMc==null?'':' ac'}`)}${stat('Per machine per day',`÷ ${fmt(nDays)} day${nDays===1?'':'s'} of season`,`${avgF(perDay)}${perDay==null?'':' ac'}`)}</div>
+          </div></div>`),
     acCard(toneSc,'Scanned acres', top(toneSc, acF(A.scY), acF(A.scT))
       + `<div style="${rule};display:flex;flex-direction:column;gap:6px">${colHead('Scan %')}${row('of acres sprayed',scanPctY,scanPct)}</div>`
       + `<div style="${rule};display:flex;flex-direction:column;gap:6px">${colHead(`Split of the ${acF(A.scY)} ac`)}
           ${splitBar(prods.map((p,i)=>[p[1],prodCols[i]]),A.scY,`Scanned acres on ${day} by product: ${prods.map(p=>`${p[0]} ${acF(p[1])} ac`).join(', ')}`)}
           ${prods.map((p,i)=>row(p[0],acF(p[1]),acF(p[2]),prodCols[i])).join('')}</div>`),
-    acCard(toneIo,'IoT acres', top(toneIo, acF(A.iotY), acF(A.ioT))
-      + `<div style="${rule};display:flex;flex-direction:column;gap:6px">${colHead(`Part of the ${acF(A.iotY)} ac`)}
-          ${splitBar([[A.itY,toneIo.dot]],A.iotY,`IoT tagged ${acF(A.itY)} of ${acF(A.iotY)} IoT acres on ${day}`)}
-          ${row('IoT tagged',acF(A.itY),acF(A.itT),toneIo.dot)}</div>`),
   ];
   if(mob){
     // Two columns; a wide tile, or a last tile with no partner, takes the whole row.
