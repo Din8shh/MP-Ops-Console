@@ -971,6 +971,18 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     2026-10-29; first built as the retailer plan ÷ machines; the admin pages keep the retailer plan) with season acres against it. Strip: hero "Acres sprayed vs target" + Machines · Ran · Operators mapped · Acres
     (`.wteamKpi`, hero on its own row below 1240px). Scanned, IoT, live, breakdown, last 7 days, the day chart, the AM / CI
     filters and columns, onboarding, bookings and the Nurture Partner card are NOT shown to these logins.
+  · **Machine plan, deployed and breakdown (Dinesh 2026-10-30; replaces "only five figures" above).** Every machine on the sheet is the
+    PLAN. `handover_status` (column K, one value per machine, no history) gives `m.stage` (`wStageOf`): `Done` = deployed (handed over),
+    `In transit` / `In-Transit` = in transit, `Pending` and blank = pending. He named plan, in transit and deployed; the third bucket
+    was added so the three add up. Strip (`.wteamKpi`, 4 columns): hero + **Machine plan card** (`.wteamWide`, split bar, the three parts,
+    "N pending have no status"; on a past day "status is today's"), then Ran · Breakdown · Operators mapped · Acres. **Breakdown** = the
+    picked day's `breakdown_id` (`m.brk`), with the "Breakdown machines" card under the strip (`wTeamBrkHTML`, closed by default,
+    `state.wtmBrkOpen`, follows the page's filters): machine, ID, handover, retailer, territory, operator, TM, the day's acres. The IDs
+    are the same on every date the sheet holds (first date 22 Oct), so no "since" is shown. Rows: Plan · Deployed · In transit · Breakdown columns
+    (all sortable), machine rows show the stage and ID; phone cards a 6-figure grid. Machine panel: Handover + Breakdown stats, team
+    logins only. CSV: Handover status + Breakdown ID. **Ran, operators and the 650 ac target still count the whole plan.** The admin
+    pages do not show any of this yet. Checked on the sheet 30 Oct: UPL 157 = 127 + 8 + 22, SWAL 212 = 184 + 10 + 18 (17 blank in all),
+    breakdown 31 UPL + 43 SWAL on 29 Oct (5 of them sprayed). 14.5 ac were sprayed by machines not marked Done. Table fits unscrolled at 1280 (min-width 950).
   · One tree renderer for all three pages: Retailer → machines · Territory → machines (under each TM) · TM → FO → machines. It
     reuses each page's own expand acts / open state / sort state (`wpexp`/`wtexp`/`wfoexp`, `wpSort`/`wtSort`/`wfoSort`) with
     `WTEAM_SORTS` (default Target acres); the aggregates clamp those keys to their own lists, and the tree sorts itself.
