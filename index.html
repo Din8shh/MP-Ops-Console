@@ -9717,13 +9717,18 @@ async function loadIoT(){
     const acts=a?iotActionsBuild(a):null; IOT.actionsOk=!!acts; IOT.actions=acts||{}; iotMergeLocal();
     IOT.loaded=true;
     const days=IOT.tamper.map(x=>x.day).sort();
-    // The PIN roster pins each technician's states; the mapping tab is the programme's own statement of them.
-    const drift=Object.values(GATE.ROLES).filter(x=>x.project==='iot'&&x.tech).map(x=>{ const want=IOT.techs.filter(q=>q.name===x.tech).map(q=>q.st).sort().join(','), have=x.states.slice().sort().join(',');
-      return want&&want!==have ? `${x.tech}: PIN ${have} vs sheet ${want}` : ''; }).filter(Boolean);
+    // The mapping tab DECIDES each technician's states; the PIN row's list is only the fallback for a load where the
+    // tab could not be read or names him nowhere. It used to be the other way round, and on 2026-11-03 the tab moved
+    // Rohit RJ → PB (and Manish HR + PB → HR) while his PIN still showed him Rajasthan's cases. The role row is the
+    // object GATE.cur points at, so rewriting it re-scopes a logged-in technician on this very render.
+    const drift=Object.values(GATE.ROLES).filter(x=>x.project==='iot'&&x.tech).map(x=>{ x.pinStates||(x.pinStates=x.states.slice());
+      const want=[...new Set(IOT.techs.filter(q=>q.name.toLowerCase()===x.tech.toLowerCase()).map(q=>q.st))].sort(), have=x.pinStates.slice().sort().join(',');
+      x.states = want.length ? want : x.pinStates.slice(); x.switchStates = x.states.length>1;
+      return want.length&&want.join(',')!==have ? `${x.tech}: PIN ${have} → sheet ${want.join(',')}` : ''; }).filter(Boolean);
     IOT.log={ tamper:{ rows:IOT.tamper.length, machines:new Set(IOT.tamper.map(x=>x.mc)).size, from:days[0], to:days[days.length-1], dropped:lt },
       risk:{ rows:IOT.risk.length, machines:new Set(IOT.risk.map(x=>x.mc)).size, dropped:lr }, techs:IOT.techs.length,
       actions:IOT.actionsOk ? Object.keys(IOT.actions).length+' cases' : 'tab "'+src.actionsTab+'" not found yet', pinDrift:drift };
-    console.info('[MP-Ops] iot →', IOT.log); if(drift.length) console.warn('[MP-Ops] iot PIN states disagree with the mapping tab →', drift);
+    console.info('[MP-Ops] iot →', IOT.log); if(drift.length) console.info('[MP-Ops] iot technician states taken from the mapping tab →', drift);
     dataMode=cachedAt?'offline':'live'; lastUpdated=cachedAt?istTime(cachedAt):nowIST(); IOT.at=lastUpdated;
   }catch(e){ IOT.error=true; dataMode='error'; lastUpdated=nowIST(); console.error('iot load failed:', e); }
   finally{ IOT.loading=false; render(); }
@@ -12110,11 +12115,11 @@ const GATE = {
     'f9a75ecb0e5e127ed6917a563840dd2a33d661d385f9808f0547d188883a01d1': { id:'wh-swal',    project:'wheat', role:'wteam', org:'SWAL', allow:['SWAL'], states:['HR','PB'], switchStates:true, views:['wplan','wterr','wfo'], label:'Wheat North · SWAL leaders' }, // 4060
     'e807be55a1a69fc2e397a015cb10ff4fea21a5ea450d122a5bb2e0228667d5c1': { id:'wh-pb-sales', project:'wheat', role:'wsales', org:'Both', allow:['Both','UPL','SWAL'], states:['PB'], switchStates:false, views:['tables','am','fo','retailer'], label:'Wheat North · Punjab sales' }, // 4722
     // ── IoT device monitoring (project:'iot'). The IoT head is role 'admin' INSIDE the project (all states + the team
-    // overview); each technician is locked to the states the workbook's "IOT vs state mapping" tab gives him. That
-    // tab is the source of these state lists — if it is re-cut, re-cut them here too (the page warns on a mismatch).
+    // overview); each technician is locked to the states the workbook's "IOT vs state mapping" tab gives him. loadIoT
+    // re-reads them from that tab on every load; the lists below are only the fallback when the tab cannot be read.
     'b6f6b6715fae0829382e6f3bef5fffcf0e7e87bb2136e511774768204b1d120b': { id:'iot-admin',  project:'iot', role:'admin',   org:'Both', allow:['Both'], states:['*'], switchStates:true, label:'IoT · Amit Kumar (IoT head)' }, // 7314 (was 2601 until 2026-10-16)
-    'cc41d80b1697c04d19330fba23a82cfc68fb086e3445691578bfae3a3d6f3e57': { id:'iot-rohit',  project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['RJ'], switchStates:false, label:'IoT · Rohit Shivhare', tech:'Rohit Shivhare' }, // 2611
-    '511425f1125b98b09c7b636c27a56b0be1fff185717d5233144fd02ddf0cddab': { id:'iot-manish', project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['HR','PB'], switchStates:true, label:'IoT · Manish Kumar', tech:'Manish Kumar' }, // 2621
+    'cc41d80b1697c04d19330fba23a82cfc68fb086e3445691578bfae3a3d6f3e57': { id:'iot-rohit',  project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['PB'], switchStates:false, label:'IoT · Rohit Shivhare', tech:'Rohit Shivhare' }, // 2611
+    '511425f1125b98b09c7b636c27a56b0be1fff185717d5233144fd02ddf0cddab': { id:'iot-manish', project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['HR'], switchStates:false, label:'IoT · Manish Kumar', tech:'Manish Kumar' }, // 2621
     '72a1917673994c23e72b3f49c2134549aa2219dffd8c029a071efe9c437f7888': { id:'iot-vishal', project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['MP','GJ','TG','MH','AP'], switchStates:true, label:'IoT · Vishal Makwana', tech:'Vishal Makwana' }, // 2631
     'd95936051b112558c270fd675137155155c74b8f0721fde9007b53d40cedba2b': { id:'wh-hr-sales', project:'wheat', role:'wsales', org:'Both', allow:['Both','UPL','SWAL'], states:['HR'], switchStates:false, views:['tables','am','fo','retailer'], label:'Wheat North · Haryana sales' }, // 4822
     // ── External partners. A partner PIN is a HANDOFF, not a role: it never sets GATE.cur and never boots the console —

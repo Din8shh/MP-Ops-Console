@@ -748,7 +748,7 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | **Wheat** `wteam` (company teams): HR UPL 4831 · HR SWAL 4832 · PB UPL 4731 · PB SWAL 4732 | one, forced | one, locked | Retailers, Territories, FOs in the **team form** (see Wheat team view) |
 | **Wheat** `wteam` leaders: UPL 4050 · SWAL 4060 | one, forced | HR + PB, switchable | same three pages, team form |
 | **IoT** `admin` (`iot-admin`, 7314 — Amit Kumar, IoT head; 2601 retired 2026-10-16) | n/a | all, switchable | Potential tamper, At risk, **Team overview** |
-| **IoT** `iottech` × Rohit (RJ, 2611) / Manish (HR+PB, 2621) / Vishal (MP+GJ+TG+MH+AP, 2631) | n/a | his own, locked or switchable within them | Potential tamper, At risk |
+| **IoT** `iottech` × Rohit (PB, 2611) / Manish (HR, 2621) / Vishal (MP+GJ+TG+MH+AP, 2631) | n/a | **read from the mapping tab on every load** (the PIN row is the fallback) | Potential tamper, At risk |
 | **Partner** `bayer` (3906) | n/a | n/a | **none in the console** — a handoff to `bayer/` (see Partner pages) |
 
 The Wheat rows carry `project:'wheat'`; see **Projects** below. The Kharif admin (0088) does NOT see Wheat, and
@@ -1083,8 +1083,11 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
 - **Two sheet faults handled in code:** the tamper tab's `CI_name` / `CI_number` are SWAPPED (decided per row by
   which cell is digits, so a sheet fix needs no edit); state arrives as "Madhya pradesh" and "Madhya Pradesh"
   (both → MP). `-` means blank (254 tamper rows have no operator — printed "not mapped").
-- **State scope is the PIN's.** Technicians' `states` are copied from the mapping tab; the load log reports
-  `pinDrift` if the two ever disagree — re-cut the PIN rows then. AP is a valid state here (`IOT_ST_NAMES`) though
+- **State scope comes from the mapping tab (since 2026-11-03).** `loadIoT` rewrites each technician role's `states`
+  from "IOT vs state mapping" (by name), keeping the PIN row's list only as the fallback when the tab is unreadable
+  or names him nowhere; `pinDrift` logs where the two differ. It was the reverse until the tab moved Rohit RJ → PB and
+  Manish HR + PB → HR while the PINs kept showing the old states. A state nobody is mapped to (Rajasthan, now) is
+  seen by the IoT head only, under "No technician mapped". A NEW technician still needs a PIN row. AP is a valid state here (`IOT_ST_NAMES`) though
   it is not one of the console's seven. Scope is page-local (`iotSt`, `iotQ`, `itFrom`/`itTo`, `iotAct`) and shared
   by the three pages.
 - **The WRITE** is "Record action" on a machine (see above) → Action taken (per-kind list in `IOT_ACTIONS`), Open/Closed, remark
