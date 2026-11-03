@@ -777,7 +777,9 @@ function wretBuild(grid){
         acAll:0, acY:0, ac7:0, scAll:0, scY:0, iotAll:0, iotY:0, itAll:0, itY:0, bkAll:0, bkY:0, brk:false, days:{}, sdays:{}, bdays:{}, brkDays:{} };
       m.stage=wStageOf(m.handRaw, m.org);
     }
-    const ac=num(g('ac')), sc=num(g('scan')), io=num(g('iot')), bk=num(g('book'));
+    // SWAL ONLY (Dinesh 2026-11-03): a SWAL machine's acres sprayed ARE its IoT acres (IOT_acres), shown under the
+    // "Acres sprayed" name everywhere; UPL keeps Rabi_achieved_acres.
+    const io=num(g('iot')), ac=m.org==='SWAL'?io:num(g('ac')), sc=num(g('scan')), bk=num(g('book'));
     if(ac||sc||io||bk){ if(dt>lastDate) lastDate=dt; }
     m.acAll+=ac; m.scAll+=sc; m.iotAll+=io;
     if(ac) m.days[dt]=(m.days[dt]||0)+ac;
