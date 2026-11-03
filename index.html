@@ -234,7 +234,7 @@ const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:''
   wDay:'', wtmBrkOpen:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
   wfoSort:'bk', wfoOpen:{}, wfoOn:'',   // Wheat TM → FO page: its own sort, open rows and onboarded filter; the rest is the wt* scope
   wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
-  iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60,   // IoT pages — page-local, shared by the three of them
+  iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60, iotTs:'',   // IoT pages — page-local, shared by the three of them
   // Cumulative (snake) view: its own independent scope — region + a day-level fiscal range stored as offsets
   // (0 = Apr 1 … 364 = Mar 31). NOT tied to the machine filter bar. snTo defaults to today's fiscal offset
   // (set once SNAKE helpers exist — see snakeTodayOff), so the range always seeds to season-to-date, not FY end.
@@ -9551,7 +9551,7 @@ function drawWheatMap(){
    Source: the IoT team's own workbook (PROJECTS.iot.iot.sheetId), three tabs read + one written.
    · Tamper tab (gid 0, "Tampered cases and suspicious") — one row per IoT PING GAP on one machine. Shown as
      POTENTIAL tamper, never as tampering: a gap is evidence that wants a look, not a finding. The sheet's own
-     `status` column (NOT_RECOVERED / SUSPICIOUS_MOVEMENT) is deliberately NOT shown (by request, 2026-10-15) —
+     `status` column (NOT_RECOVERED / SUSPICIOUS_MOVEMENT) was hidden 2026-10-15 → 2026-11-03 and is now a filter + tag (by request) —
      its names do not mean what they say: every NOT_RECOVERED row has a recovery ping. The case DATE is column B,
      `last_ping_before_gap`; the map link is the RECOVERY lat/long (where the machine came back).
    · Battery tab (gid 504457328, "battery outage") — named "At risk machines" on every screen (by request). A
@@ -9568,7 +9568,7 @@ function drawWheatMap(){
 const IOT_ST = { 'madhya pradesh':'MP', maharashtra:'MH', telangana:'TG', gujarat:'GJ', rajasthan:'RJ', punjab:'PB', haryana:'HR', 'andhra pradesh':'AP' };
 const IOT_ST_NAMES = { ...STATE_NAMES, AP:'Andhra Pradesh' };
 const iotStName = c => IOT_ST_NAMES[c] || c;
-const IOT = { loading:false, loaded:false, error:false, at:'', tamper:[], risk:[], techs:[], head:null, actions:{}, actionsOk:false, local:[], log:null };
+const IOT = { loading:false, loaded:false, error:false, at:'', tamper:[], risk:[], techs:[], tsKeys:[], head:null, actions:{}, actionsOk:false, local:[], log:null };
 const IOT_PAGE = 60;
 const IOT_MINW = 1080;   // desktop tables are fixed grids: below this they scroll sideways rather than clip the Action column
 // The write endpoint: the /exec URL of apps-script/iot-actions.gs deployed FROM the IoT workbook. Blank ⇒ every
@@ -9610,8 +9610,10 @@ const iotStOf = v => IOT_ST[String(v||'').trim().toLowerCase()] || '';
 function iotTamperBuild(rows, log){
   const C=iotHead(rows,{ mc:x=>x.startsWith('machine'), t0:x=>x.startsWith('last_ping'), t1:x=>x.startsWith('first_ping'), gap:x=>x.startsWith('gap'),
     rlat:x=>x==='recovery_lat', rlon:x=>x.startsWith('recovery_lon'), llat:x=>x==='last_lat', llon:x=>x.startsWith('last_lon'), km:x=>x.startsWith('movement'),
-    op:x=>x==='operator_name', opMob:x=>x==='operator_mobile', ciA:x=>x==='ci_name', ciB:x=>x==='ci_number', st:x=>x==='state' });
+    op:x=>x==='operator_name', opMob:x=>x==='operator_mobile', ciA:x=>x==='ci_name', ciB:x=>x==='ci_number', st:x=>x==='state',
+    status:x=>x==='status', tech:x=>x.includes('technician') });
   const miss=['mc','t0','st'].filter(k=>C[k]<0); if(miss.length) throw new Error('tamper tab: missing column(s) '+miss.join(', '));
+  log.hasTech=C.tech>=0; log.hasStatus=C.status>=0;
   const out=[];
   for(const r of rows.slice(1)){
     const mc=iotCell(r,C.mc).toUpperCase(), t0=iotCell(r,C.t0); if(!mc){ log.blank++; continue; }
@@ -9619,11 +9621,21 @@ function iotTamperBuild(rows, log){
     const st=iotStOf(iotCell(r,C.st)); if(!st){ log.badState++; continue; }
     const ci=iotPerson(iotCell(r,C.ciA), iotCell(r,C.ciB));
     out.push({ kind:'T', id:'T|'+mc+'|'+t0, mc, at:t0, day:t0.slice(0,10), back:iotCell(r,C.t1), gap:iotNum(iotCell(r,C.gap)), km:iotNum(iotCell(r,C.km)),
-      loc:iotLL(iotCell(r,C.rlat),iotCell(r,C.rlon)), op:titleCase(iotNil(iotCell(r,C.op))), opMob:iotPh(iotNil(iotCell(r,C.opMob))), ci:ci.name, ciMob:ci.mob, st });
+      loc:iotLL(iotCell(r,C.rlat),iotCell(r,C.rlon)), op:titleCase(iotNil(iotCell(r,C.op))), opMob:iotPh(iotNil(iotCell(r,C.opMob))), ci:ci.name, ciMob:ci.mob, st,
+      sts:iotCell(r,C.status).toUpperCase(), tech:iotTechOf(r,C) });
   }
   return out;
 }
+// The technician who owns the case, from the row itself ("IoT technician name", on both case tabs since 2026-11-03).
+// null = the tab has no such column (an older tab: scope then falls back to state); '' = the row names nobody ("0").
+const iotTechOf = (r,C) => C.tech<0 ? null : titleCase(iotNil(iotCell(r,C.tech)));
 const IOT_STATUS = { MOVING_WITH_VOLTAGE_0:'Zero voltage · moving' };
+// Column J of the tamper tab. Shown and filtered since 2026-11-03 (by request; it was hidden before). A status the sheet
+// adds later is offered automatically, under its own words prettified.
+const IOT_TSTATUS = { NOT_RECOVERED:['Not recovered','#F2F0EB','#46433d'], SUSPICIOUS_MOVEMENT:['Suspicious movement','#FBEAE7','#B42318'] };
+const iotTsTxt = k => (IOT_TSTATUS[k]||[])[0] || iotStatusTxt(k) || 'No status';
+const iotTsTag = (k,n) => { const [,bg,ink]=IOT_TSTATUS[k]||['','#F2F0EB','#46433d'];
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:${bg};color:${ink};white-space:nowrap">${E(iotTsTxt(k))}${n>1?` <span style="font-family:'IBM Plex Mono';font-weight:600">×${n}</span>`:''}</span>`; };
 const iotStatusTxt = s => IOT_STATUS[s] || (s ? s.replace(/_/g,' ').toLowerCase().replace(/^./,c=>c.toUpperCase()) : '');
 function iotRiskBuild(rows, log){
   // `outage_start` arrived 2026-10-15 and `state` LEFT the tab the same day. Both are therefore optional: a missing
@@ -9631,7 +9643,7 @@ function iotRiskBuild(rows, log){
   const C=iotHead(rows,{ mc:x=>x.startsWith('machine'), t0:x=>x==='outage_start'||(x.includes('start')&&!/lat|lon/.test(x)),
     mins:x=>x==='outage_minutes'||x.includes('minute'), pings:x=>x.startsWith('ping'), slat:x=>x==='start_lat', slon:x=>x.startsWith('start_lon'),
     elat:x=>x==='end_lat', elon:x=>x.startsWith('end_lon'), km:x=>x.startsWith('movement'), status:x=>x==='status',
-    op:x=>x==='operator_name', opMob:x=>x==='operator_mobile', ciA:x=>x==='ci_name', ciB:x=>x==='ci_number', st:x=>x==='state' });
+    op:x=>x==='operator_name', opMob:x=>x==='operator_mobile', ciA:x=>x==='ci_name', ciB:x=>x==='ci_number', st:x=>x==='state', tech:x=>x.includes('technician') });
   const miss=['mc','km'].filter(k=>C[k]<0); if(miss.length) throw new Error('at-risk tab: missing column(s) '+miss.join(', '));
   log.hasState=C.st>=0; log.hasDate=C.t0>=0;
   const out=[];
@@ -9644,7 +9656,7 @@ function iotRiskBuild(rows, log){
     out.push({ kind:'R', id: dated ? 'R|'+mc+'|'+at : 'R|'+mc+'|'+iotCell(r,C.slat)+','+iotCell(r,C.slon), mc, at:dated?at:'', day:dated?at.slice(0,10):'',
       mins:iotNum(iotCell(r,C.mins)), pings:iotNum(iotCell(r,C.pings)), km:iotNum(iotCell(r,C.km)),
       start:iotLL(iotCell(r,C.slat),iotCell(r,C.slon)), end:iotLL(iotCell(r,C.elat),iotCell(r,C.elon)), status:iotStatusTxt(iotCell(r,C.status)),
-      op:titleCase(iotNil(iotCell(r,C.op))), opMob:iotPh(iotNil(iotCell(r,C.opMob))), ci:ci.name, ciMob:ci.mob, st:iotStOf(iotCell(r,C.st)) });
+      op:titleCase(iotNil(iotCell(r,C.op))), opMob:iotPh(iotNil(iotCell(r,C.opMob))), ci:ci.name, ciMob:ci.mob, st:iotStOf(iotCell(r,C.st)), tech:iotTechOf(r,C) });
   }
   return out;
 }
@@ -9712,23 +9724,29 @@ async function loadIoT(){
       }catch(e){ if(optional){ console.warn('[MP-Ops] iot optional tab failed →', q, e); return null; } throw e; } };
     const [t,r,m,a]=await Promise.all([ get('gid='+src.tamperGid), get('gid='+src.riskGid), get('gid='+src.mapGid,true), get('sheet='+encodeURIComponent(src.actionsTab),true) ]);
     const lt={blank:0,badDate:0,badState:0}, lr={blank:0,badState:0};
-    IOT.tamper=iotTamperBuild(t,lt); IOT.risk=await iotResolveStates(iotRiskBuild(r,lr), lr);
+    IOT.tamper=iotTamperBuild(t,lt);
+    { const n={}; IOT.tamper.forEach(r=>{ if(r.sts) n[r.sts]=(n[r.sts]||0)+1; }); IOT.tsKeys=Object.keys(n).sort((a,b)=>(IOT_TSTATUS[a]?0:1)-(IOT_TSTATUS[b]?0:1)||n[b]-n[a]); }
+    IOT.risk=await iotResolveStates(iotRiskBuild(r,lr), lr);
     if(m){ const x=iotTechBuild(m); IOT.techs=x.techs; IOT.head=x.head; }
     const acts=a?iotActionsBuild(a):null; IOT.actionsOk=!!acts; IOT.actions=acts||{}; iotMergeLocal();
     IOT.loaded=true;
     const days=IOT.tamper.map(x=>x.day).sort();
-    // The mapping tab DECIDES each technician's states; the PIN row's list is only the fallback for a load where the
-    // tab could not be read or names him nowhere. It used to be the other way round, and on 2026-11-03 the tab moved
-    // Rohit RJ → PB (and Manish HR + PB → HR) while his PIN still showed him Rajasthan's cases. The role row is the
-    // object GATE.cur points at, so rewriting it re-scopes a logged-in technician on this very render.
+    // WHO SEES A CASE is the technician named on its own row (both case tabs, "IoT technician name"), not a state:
+    // one person may cover several states and a state may one day be split. A risk row naming nobody borrows the
+    // same machine's technician from the tamper tab. A technician's STATES (his picker, his lock) are then simply
+    // the states his rows sit in — else the mapping tab's, else the PIN row's (pinStates), for a load with no rows.
+    const techMc={}; IOT.tamper.forEach(r=>{ if(r.tech) techMc[r.mc]=r.tech; });
+    IOT.risk.forEach(r=>{ if(r.tech==='' && techMc[r.mc]) r.tech=techMc[r.mc]; });
     const drift=Object.values(GATE.ROLES).filter(x=>x.project==='iot'&&x.tech).map(x=>{ x.pinStates||(x.pinStates=x.states.slice());
-      const want=[...new Set(IOT.techs.filter(q=>q.name.toLowerCase()===x.tech.toLowerCase()).map(q=>q.st))].sort(), have=x.pinStates.slice().sort().join(',');
-      x.states = want.length ? want : x.pinStates.slice(); x.switchStates = x.states.length>1;
-      return want.length&&want.join(',')!==have ? `${x.tech}: PIN ${have} → sheet ${want.join(',')}` : ''; }).filter(Boolean);
+      const me=x.tech.toLowerCase(), rows=[...IOT.tamper,...IOT.risk].filter(r=>(r.tech||'').toLowerCase()===me);
+      const fromRows=[...new Set(rows.map(r=>r.st))].sort(), fromMap=[...new Set(IOT.techs.filter(q=>q.name.toLowerCase()===me).map(q=>q.st))].sort();
+      x.states = fromRows.length ? fromRows : fromMap.length ? fromMap : x.pinStates.slice(); x.switchStates = x.states.length>1;
+      return x.states.join(',')!==x.pinStates.slice().sort().join(',') ? `${x.tech}: ${x.states.join(',')} (${fromRows.length?'case rows':fromMap.length?'mapping tab':'PIN'})` : ''; }).filter(Boolean);
+    const noTech={ tamper:IOT.tamper.filter(r=>r.tech==='').length, risk:IOT.risk.filter(r=>r.tech==='').length };
     IOT.log={ tamper:{ rows:IOT.tamper.length, machines:new Set(IOT.tamper.map(x=>x.mc)).size, from:days[0], to:days[days.length-1], dropped:lt },
-      risk:{ rows:IOT.risk.length, machines:new Set(IOT.risk.map(x=>x.mc)).size, dropped:lr }, techs:IOT.techs.length,
+      risk:{ rows:IOT.risk.length, machines:new Set(IOT.risk.map(x=>x.mc)).size, dropped:lr }, techs:IOT.techs.length, noTech, hasTechCol:lt.hasTech,
       actions:IOT.actionsOk ? Object.keys(IOT.actions).length+' cases' : 'tab "'+src.actionsTab+'" not found yet', pinDrift:drift };
-    console.info('[MP-Ops] iot →', IOT.log); if(drift.length) console.info('[MP-Ops] iot technician states taken from the mapping tab →', drift);
+    console.info('[MP-Ops] iot →', IOT.log); if(drift.length) console.info('[MP-Ops] iot technician states differ from the PIN rows →', drift);
     dataMode=cachedAt?'offline':'live'; lastUpdated=cachedAt?istTime(cachedAt):nowIST(); IOT.at=lastUpdated;
   }catch(e){ IOT.error=true; dataMode='error'; lastUpdated=nowIST(); console.error('iot load failed:', e); }
   finally{ IOT.loading=false; render(); }
@@ -9746,7 +9764,12 @@ function iotScope(){
   const st = lockSt || (stOpts.includes(state.iotSt) ? state.iotSt : '');
   return { lockSt, stOpts, st };
 }
-const iotInScope = (r,sc) => gateAllowsState(r.st) && (!sc.st || r.st===sc.st);
+// A technician sees the cases whose row names HIM; a tab without the technician column falls back to his states.
+// Everyone else (the IoT head) is cut by state as before.
+const iotMine = r => { const me=GATE.cur&&GATE.cur.tech; return !me || r.tech==null ? gateAllowsState(r.st) : r.tech.toLowerCase()===me.toLowerCase(); };
+const iotInScope = (r,sc) => iotMine(r) && (!sc.st || r.st===sc.st);
+// The status filter (tamper tab, column J) — one value for every IoT page and login, kept while moving between them.
+const iotTsOk = r => !state.iotTs || r.kind!=='T' || !IOT.tsKeys.includes(state.iotTs) || r.sts===state.iotTs;
 const iotMatch = (r,q) => !q || [r.mc,r.op,r.opMob,r.ci,r.ciMob].some(x=>String(x||'').toLowerCase().includes(q));
 function iotRange(list){
   const days=[...new Set(list.map(r=>r.day))].sort(), minD=days[0]||'', maxD=days[days.length-1]||'';
@@ -9755,23 +9778,49 @@ function iotRange(list){
   const from = state.itFrom && state.itFrom>=minD && state.itFrom<=to ? state.itFrom : dflt;
   return { minD, maxD, from, to };
 }
+// The status control's options, counted on the cases in front of the reader BEFORE the status cut (so each count
+// says what picking it would show). Built from the data, so a status the sheet adds later appears by itself.
+function iotTsOpts(cases){
+  // Options are every status the TAB carries (a zero still shows, so the control keeps its shape between scopes);
+  // counts are the cases in front of the reader.
+  const n={}; cases.forEach(r=>{ n[r.sts]=(n[r.sts]||0)+1; });
+  const keys=IOT.tsKeys;
+  return { all:cases.length, opts:keys.map(k=>({ k, t:iotTsTxt(k), n:n[k]||0 })), cur:keys.includes(state.iotTs)?state.iotTs:'' };
+}
+function iotTsHTML(O, mob){
+  if(!O.opts.length) return '';
+  const b=(k,t,n)=>{ const on=O.cur===k;
+    return `<button data-act="iotts" data-ts="${E(k)}" aria-pressed="${on}" style="flex:${mob?'1 1 0':'0 0 auto'};min-width:0;min-height:${mob?44:34}px;padding:0 ${mob?8:14}px;border:none;border-radius:9px;background:${on?'#fff':'transparent'};box-shadow:${on?'0 1px 2px rgba(0,0,0,.1)':'none'};color:${on?'#1B1A17':'#6E6A62'};font-family:inherit;font-size:${mob?12.5:13}px;font-weight:${on?700:600};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;line-height:1.15;text-align:center">${E(t)}<span style="font-family:'IBM Plex Mono';font-size:11.5px;${on&&k==='SUSPICIOUS_MOVEMENT'?'color:#B42318':''}">${fmt(n)}</span></button>`; };
+  return `<div style="display:flex;align-items:center;gap:10px;margin-top:${mob?10:12}px;flex-wrap:wrap">${mob?'':'<span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Status</span>'}
+    <div role="group" aria-label="Potential tamper status" style="display:flex;background:#ECEAE4;border-radius:12px;padding:3px;gap:3px;${mob?'width:100%;box-sizing:border-box':''}">${b('','All',O.all)}${O.opts.map(o=>b(o.k,o.t,o.n)).join('')}</div></div>`;
+}
 // The IoT head's view: one row per technician (from the mapping tab), with a line per state under him. States
 // carrying cases that no technician is mapped to are listed under "No technician mapped" rather than vanishing.
 function iotTeamAgg(){
   const sc=iotScope(), inSt=IOT.tamper.filter(r=>iotInScope(r,sc)), R=iotRange(inSt);
   // At risk is counted over the SAME range as the tamper cases now that its outages carry a start date; an undated
-  // row (an older tab) still counts, since it cannot be placed outside the range.
-  const T=inSt.filter(r=>r.day>=R.from&&r.day<=R.to), K=IOT.risk.filter(r=>iotInScope(r,sc)&&(!r.day||(r.day>=R.from&&r.day<=R.to)));
-  const sts=[...new Set(T.map(r=>r.st).concat(K.map(r=>r.st)).concat(IOT.techs.map(t=>t.st)))].filter(s=>gateAllowsState(s)&&(!sc.st||s===sc.st));
-  const cell=st=>{ const t=T.filter(r=>r.st===st), k=K.filter(r=>r.st===st);
-    return { st, t:t.length, tMc:new Set(t.map(r=>r.mc)).size, tAct:t.filter(r=>iotState(r.id)!=='new').length, tClosed:t.filter(r=>iotState(r.id)==='closed').length,
-      k:k.length, kMc:new Set(k.map(r=>r.mc)).size, kAct:k.filter(r=>iotState(r.id)!=='new').length, kClosed:k.filter(r=>iotState(r.id)==='closed').length }; };
+  // row (an older tab) still counts, since it cannot be placed outside the range. The status cut is tamper-only.
+  const T0=inSt.filter(r=>r.day>=R.from&&r.day<=R.to), TS=iotTsOpts(T0), T=T0.filter(iotTsOk);
+  const K=IOT.risk.filter(r=>iotInScope(r,sc)&&(!r.day||(r.day>=R.from&&r.day<=R.to)));
+  const cell=(st,t,k)=>({ st, t:t.length, tMc:new Set(t.map(r=>r.mc)).size, tAct:t.filter(r=>iotState(r.id)!=='new').length, tClosed:t.filter(r=>iotState(r.id)==='closed').length,
+      k:k.length, kMc:new Set(k.map(r=>r.mc)).size, kAct:k.filter(r=>iotState(r.id)!=='new').length, kClosed:k.filter(r=>iotState(r.id)==='closed').length });
   const add=(a,b)=>{ const o={...a}; ['t','tMc','tAct','tClosed','k','kMc','kAct','kClosed'].forEach(f=>o[f]=(a[f]||0)+b[f]); return o; };
+  // Grouped by the technician each CASE ROW names (one person may hold several states, a state may be split).
+  // Name and phone come from the mapping tab where it knows him; a technician it lists with no case in this scope
+  // still gets his row, at zero, under the states the tab gives him.
+  const mapOf=n=>IOT.techs.find(x=>x.name.toLowerCase()===String(n||'').toLowerCase());
+  const keyOf=r=>r.tech==null ? ((IOT.techs.find(x=>x.st===r.st)||{}).name||'').toLowerCase() : r.tech.toLowerCase();
   const by={};
-  sts.forEach(st=>{ const t=IOT.techs.find(x=>x.st===st), key=t?t.name:'';
-    (by[key]||(by[key]={ name:t?t.name:'No technician mapped', mob:t?t.mob:'', states:[], tot:{} })).states.push(cell(st)); });
-  const techs=Object.values(by).map(g=>({ ...g, tot:g.states.reduce(add,{}), states:g.states.sort((a,b)=>b.t-a.t) })).sort((a,b)=>(a.mob?0:1)-(b.mob?0:1)||b.tot.t-a.tot.t);
-  return { ...sc, ...R, techs, T:T.length, K:K.length };
+  const grp=k=>by[k]||(by[k]={ key:k, name:k?((mapOf(k)||{}).name||titleCase(k)):'No technician named', mob:k?((mapOf(k)||{}).mob||''):'', T:[], K:[] });
+  T.forEach(r=>grp(keyOf(r)).T.push(r)); K.forEach(r=>grp(keyOf(r)).K.push(r));
+  IOT.techs.forEach(x=>{ const k=x.name.toLowerCase(); if(!by[k] && gateAllowsState(x.st) && (!sc.st||x.st===sc.st)) grp(k).zero=true; });
+  const techs=Object.values(by).map(g=>{
+    const sts=g.zero&&!g.T.length&&!g.K.length ? IOT.techs.filter(x=>x.name.toLowerCase()===g.key&&gateAllowsState(x.st)&&(!sc.st||x.st===sc.st)).map(x=>x.st)
+      : [...new Set(g.T.map(r=>r.st).concat(g.K.map(r=>r.st)))];
+    const states=[...new Set(sts)].map(st=>cell(st,g.T.filter(r=>r.st===st),g.K.filter(r=>r.st===st))).sort((a,b)=>b.t-a.t);
+    return { name:g.name, mob:g.mob, none:!g.key, states, tot:states.reduce(add,{t:0,tMc:0,tAct:0,tClosed:0,k:0,kMc:0,kAct:0,kClosed:0}) };
+  }).sort((a,b)=>(a.none?1:0)-(b.none?1:0)||b.tot.t-a.tot.t);
+  return { ...sc, ...R, techs, T:T.length, K:K.length, TS };
 }
 
 /* ---- rendering */
@@ -9821,7 +9870,7 @@ function iotTeamHTML(mob){
   const rangeTxt = A.from===A.to ? iotDayTxt(A.from) : `${iotShortDay(A.from)} – ${iotDayTxt(A.to)}`;
   const tot=A.techs.reduce((o,g)=>{ ['t','tAct','tClosed','k','kAct','kClosed'].forEach(f=>o[f]+=(g.tot[f]||0)); return o; },{t:0,tAct:0,tClosed:0,k:0,kAct:0,kClosed:0});
   const stats=iotStats([
-    [fmt(tot.t),'Potential tamper cases',rangeTxt],
+    [fmt(tot.t),A.TS.cur?'Tamper · '+iotTsTxt(A.TS.cur):'Potential tamper cases',rangeTxt],
     [iotFrac(tot.tAct,tot.t),'Tamper cases actioned',`${fmt(tot.tClosed)} closed`],
     [fmt(tot.k),'At risk outages',rangeTxt],
     [iotFrac(tot.kAct,tot.k),'At risk actioned',`${fmt(tot.kClosed)} closed`],
@@ -9853,10 +9902,10 @@ function iotTeamHTML(mob){
     const body=A.techs.map(g=>line(g.tot,`<span style="font-size:13px;font-weight:700">${E(g.name)}</span> ${iotTel(g.mob,false)}`,true,false)
       + (g.states.length>1 ? g.states.map(s=>line(s,`<span style="font-size:12.5px">${E(iotStName(s.st))}</span>`,false,true)).join('') : '')).join('');
     list=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;margin-top:14px">
-      <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7"><div style="font-size:13px;font-weight:700">Technicians and their states</div><div style="font-size:11px;color:#6E6A62;margin-top:2px">Both counted over ${rangeTxt} · actioned = any action recorded</div></div>
+      <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7"><div style="font-size:13px;font-weight:700">Technicians and their states</div><div style="font-size:11px;color:#6E6A62;margin-top:2px">Each case counted under the technician its row names · both over ${rangeTxt}${A.TS.cur?` · tamper: ${E(iotTsTxt(A.TS.cur))} only`:''} · actioned = any action recorded</div></div>
       <div style="overflow-x:auto"><div style="min-width:${IOT_MINW}px">${th}${body}</div></div></div>`;
   }
-  return iotControls('iotteam',{...A,rows:[]},mob) + stats + head + iotWriteNote() + list;
+  return iotControls('iotteam',{...A,rows:[]},mob) + iotTsHTML(A.TS,mob) + stats + head + iotWriteNote() + list;
 }
 
 /* ---- technician pages (Potential tamper, At risk): MOBILE-FIRST, redesigned 2026-10-15 ----
@@ -9890,7 +9939,8 @@ function iotMachines(cases, every){
     const hist=((every&&every[m.mc])||m.cases).flatMap(c=>IOT.actions[c.id]||[]).sort((a,b)=>(iotActOn(a)+a.ts).localeCompare(iotActOn(b)+b.ts));
     const last=hist[hist.length-1]||null, lastClosed=hist.filter(a=>a.status==='Closed').pop()||null;
     const status = sts.includes('new') ? 'new' : sts.includes('open') ? 'open' : 'closed';
-    return { ...m, n:m.cases.length, top, op:who.op, opMob:who.opMob, ci:ciw.ci, ciMob:ciw.ciMob, last, lastClosed, status,
+    const tsN={}; if(T) m.cases.forEach(c=>{ if(c.sts) tsN[c.sts]=(tsN[c.sts]||0)+1; });
+    return { ...m, n:m.cases.length, tsN, top, op:who.op, opMob:who.opMob, ci:ciw.ci, ciMob:ciw.ciMob, last, lastClosed, status,
       // Two different situations with a case nobody has actioned, and they must not share a sentence:
       //  · BACK AGAIN — a gap/outage that STARTED AFTER the machine was last closed (it was sorted, and it recurred);
       //  · PARTLY DONE — earlier action(s) covered some cases, but these unactioned ones are from BEFORE that.
@@ -9912,13 +9962,13 @@ function iotPageAgg(view){
   // At risk carries a date since 2026-10-15 (outage_start); a tab without one falls back to the undated list.
   const dated=inSt.some(r=>r.day), R=dated ? iotRange(inSt.filter(r=>r.day)) : null;
   const pool=dated ? inSt.filter(r=>r.day>=R.from && r.day<=R.to) : inSt;
-  const hits=pool.filter(r=>iotMatch(r,q));
+  const hits0=pool.filter(r=>iotMatch(r,q)), TS=kind==='T'?iotTsOpts(hits0):null, hits=hits0.filter(iotTsOk);
   const every={}; src.forEach(r=>{ (every[r.mc]||(every[r.mc]=[])).push(r); });
   const all=iotMachines(hits, every);
   const cnt={ new:0, open:0, closed:0, all:all.length }; all.forEach(m=>cnt[m.status]++);
   const machines=all.filter(m=>queue==='all'||m.status===queue)
     .sort(kind==='T' ? (a,b)=>b.n-a.n||b.top.at.localeCompare(a.top.at) : (a,b)=>b.km-a.km);
-  const dayN={}; if(dated) inSt.filter(r=>r.day&&iotMatch(r,q)).forEach(r=>{ dayN[r.day]=(dayN[r.day]||0)+1; });
+  const dayN={}; if(dated) inSt.filter(r=>r.day&&iotMatch(r,q)&&iotTsOk(r)).forEach(r=>{ dayN[r.day]=(dayN[r.day]||0)+1; });
   let chips=[], custom=false;
   if(dated && R.maxD){
     const d7=iotAddDays(R.maxD,-6)<R.minD ? R.minD : iotAddDays(R.maxD,-6), sum=(f,t)=>Object.keys(dayN).filter(d=>d>=f&&d<=t).reduce((a,d)=>a+dayN[d],0);
@@ -9928,7 +9978,7 @@ function iotPageAgg(view){
     custom=!chips.some(c=>c.f===R.from&&c.to===R.to);
   }
   const nFilt=(sc.st&&!sc.lockSt?1:0)+(custom?1:0);
-  return { ...sc, ...(R||{}), kind, view, dated, q, queue, cnt, all, machines, cases:hits.length, chips, custom, nFilt };
+  return { ...sc, ...(R||{}), kind, view, dated, q, queue, cnt, all, machines, cases:hits.length, chips, custom, nFilt, TS };
 }
 
 const iotCallBtn = (mob, who) => mob ? `<a href="tel:${mob}" aria-label="Call ${E(who)} on ${mob}" style="width:44px;height:44px;flex-shrink:0;border-radius:12px;border:1px solid #DCEFE2;background:#F1FAF4;color:#15803D;display:flex;align-items:center;justify-content:center;text-decoration:none">${I.phone}</a>` : '';
@@ -9964,7 +10014,7 @@ function iotCardHTML(m, A){
       return `<div style="display:flex;align-items:center;gap:10px;min-height:48px;border-bottom:1px solid #F4F2EE">
         <span title="${IOT_PILL[s][2]}" style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0"></span>
         <div style="flex:1;min-width:0;font-size:12.5px">${T
-          ? `<b>${iotShortDay(c.day)}</b> ${iotTime(c.at)} → ${iotTime(c.back)} <span style="color:#6E6A62">· ${c.gap==null?'—':c.gap+' h'}${c.km?` · ${iotKm(c.km)} km`:''}</span>`
+          ? `<b>${iotShortDay(c.day)}</b> ${iotTime(c.at)} → ${iotTime(c.back)} <span style="color:#6E6A62">· ${c.gap==null?'—':c.gap+' h'}${c.km?` · ${iotKm(c.km)} km`:''}</span>${c.sts?`<div style="font-size:11.5px;color:${c.sts==='SUSPICIOUS_MOVEMENT'?'#B42318':'#6E6A62'}">${E(iotTsTxt(c.sts))}</div>`:''}`
           : `${c.at?`<b>${iotShortDay(c.day)}</b> ${iotTime(c.at)} · `:''}<b>${iotKm(c.km)} km</b> <span style="color:#6E6A62">· ${iotMins(c.mins)} · ${fmt(c.pings||0)} pings</span>`}</div>
         ${(T?c.loc:c.end)?`<a href="${iotMapHref(T?c.loc:c.end)}" target="_blank" rel="noopener" aria-label="Open this ${T?'gap':'outage'} in Maps" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#1B6FD1">${IOT_PIN}</a>`:''}</div>`; }).join('')}</div>`:''}` : '';
   return `<article style="background:#fff;border:1px solid #E9E6DF;border-radius:16px;padding:14px 14px 10px;box-shadow:0 1px 2px rgba(27,26,23,.04)">
@@ -9972,7 +10022,8 @@ function iotCardHTML(m, A){
       <span style="font-family:'IBM Plex Mono';font-size:16px;font-weight:700">${E(m.mc)}</span>
       ${A.st?'':`<span style="font-size:11.5px;color:#6E6A62">${E(iotStName(m.st))}</span>`}
       <span style="flex:1"></span>${iotPill(m.status)}</div>
-    ${T?'':`<div style="margin-top:6px"><span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#FBEAE7;color:#B42318">${E(m.top.status||'At risk')}</span></div>`}
+    ${T?(Object.keys(m.tsN).length?`<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${Object.keys(m.tsN).sort((a,b)=>(a==='SUSPICIOUS_MOVEMENT'?0:1)-(b==='SUSPICIOUS_MOVEMENT'?0:1)).map(k=>iotTsTag(k,m.n>1?m.tsN[k]:1)).join('')}</div>`:'')
+       :`<div style="margin-top:6px"><span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#FBEAE7;color:#B42318">${E(m.top.status||'At risk')}</span></div>`}
     ${fig}${last}
     <div style="margin-top:8px;border-top:1px solid #F0EEE9">${m.op||m.opMob||m.ci||m.ciMob ? iotPersonRow('Operator',m.op,m.opMob)+iotPersonRow('CI',m.ci,m.ciMob)
       : `<div style="min-height:40px;display:flex;align-items:center;font-size:13px;color:#6E6A62;font-style:italic">No operator or CI on the sheet for this machine</div>`}</div>
@@ -9991,7 +10042,7 @@ function iotTechHTML(view, mob){
       return `<button data-act="iotrange" data-from="${c.f}" data-to="${c.to}" aria-pressed="${on}" style="flex-shrink:0;min-height:${mob?40:34}px;padding:0 13px;border-radius:999px;border:1px solid ${on?'#1B1A17':'#E2DFD8'};background:${on?'#1B1A17':'#fff'};color:${on?'#fff':'#1B1A17'};font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap">${E(c.t)} <span style="font-family:'IBM Plex Mono';font-size:11.5px;opacity:.75">${fmt(c.n)}</span></button>`; }).join('')}
       ${A.custom?`<span style="flex-shrink:0;min-height:${mob?40:34}px;display:flex;align-items:center;padding:0 13px;border-radius:999px;background:#1B1A17;color:#fff;font-size:12.5px;font-weight:600;white-space:nowrap">${iotShortDay(A.from)} – ${iotShortDay(A.to)}</span>`:''}</div>` : '';
   const sticky=`<div style="position:sticky;top:0;z-index:6;background:#F6F5F2;margin:12px -${P}px 0;padding:8px ${P}px 10px;border-bottom:1px solid #E9E6DF">${qBar}${strip}</div>`;
-  const scopeTxt = A.st ? iotStName(A.st) : (isAdmin()?'all states':'your states');
+  const scopeTxt = (A.st ? iotStName(A.st) : (isAdmin()?'all states':'your states')) + (T&&A.TS.cur ? ' · '+iotTsTxt(A.TS.cur) : '');
   const sum = T
     ? `${fmt(A.machines.length)} machine${A.machines.length===1?'':'s'} · ${fmt(A.machines.reduce((a,m)=>a+m.n,0))} gaps · ${A.from===A.to?iotShortDay(A.from):iotShortDay(A.from)+' – '+iotShortDay(A.to)} · ${scopeTxt}`
     : `${fmt(A.machines.length)} machine${A.machines.length===1?'':'s'} · ${iotKm(A.machines.reduce((a,m)=>a+m.km,0))} km on zero voltage${A.dated?` · ${A.from===A.to?iotShortDay(A.from):iotShortDay(A.from)+' – '+iotShortDay(A.to)}`:''} · ${scopeTxt}`;
@@ -9999,12 +10050,12 @@ function iotTechHTML(view, mob){
   const ro = IOT_W.url ? '' : ' Recording actions switches on once the write endpoint is deployed.';
   const head=`<div style="margin-top:12px;font-size:13px;font-weight:700">${sum}</div><div style="font-size:12px;color:#6E6A62;margin-top:2px;line-height:1.45">${lead}${ro}</div>`;
   const lim=state.iotLimit||IOT_PAGE, shown=A.machines.slice(0,lim);
-  const emptyTxt = A.queue==='new' && A.cnt.all ? `Nothing left to do here. Every machine in ${A.dated?'this range':'this list'} has an action recorded.`
+  const emptyTxt = T && A.TS.cur && !A.TS.opts.find(o=>o.k===A.TS.cur).n ? `No ${E(iotTsTxt(A.TS.cur).toLowerCase())} gaps in this range.` : A.queue==='new' && A.cnt.all ? `Nothing left to do here. Every machine in ${A.dated?'this range':'this list'} has an action recorded.`
     : A.q ? `No machine matches "${E(A.q)}".` : A.queue==='all' ? (T?'No ping gaps in this range.':A.dated?'No zero-voltage outages started in this range.':'No machines at risk right now.') : `No ${A.queue==='open'?'open':'closed'} machines here.`;
   const list = !shown.length ? `<div style="margin-top:14px;background:#fff;border:1px solid #E9E6DF;border-radius:16px;padding:36px 20px;text-align:center;font-size:13.5px;color:#46433d;line-height:1.5">${emptyTxt}</div>`
-    : `<div style="margin-top:12px;display:grid;gap:12px;grid-template-columns:${mob?'1fr':'repeat(auto-fill,minmax(340px,1fr))'};align-items:start">${shown.map(m=>iotCardHTML(m,A)).join('')}</div>`
+    : `<div style="margin-top:12px;display:grid;gap:12px;grid-template-columns:${mob?'minmax(0,1fr)':'repeat(auto-fill,minmax(340px,1fr))'};align-items:start">${shown.map(m=>iotCardHTML(m,A)).join('')}</div>`
       + (shown.length<A.machines.length ? `<div style="text-align:center;margin-top:14px"><button data-act="iotmore" style="min-height:46px;padding:0 20px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#1B1A17;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Show more · ${fmt(shown.length)} of ${fmt(A.machines.length)}</button></div>` : '');
-  return top + sticky + head + list;
+  return top + (T?iotTsHTML(A.TS,mob):'') + sticky + head + list;
 }
 // The filter fields: inline on desktop, the body of the Filters sheet on a phone. Same element ids either way, so the
 // existing change handlers (iotStSel / iotFrom / iotTo) cover both.
@@ -10025,13 +10076,13 @@ function iotSheetHTML(){
 function iotCSV(view){
   const A=iotPageAgg(view), T=A.kind==='T';
   const ll=l=>l?`${l.lat},${l.lon}`:'', last=r=>{ const a=iotLast(r.id); return a?[a.status,a.action,iotActOn(a),a.remark,a.by,a.ts]:['No action yet','','','','','']; };
-  const head=T ? ['Potential tamper date','Last ping','Back online','Machine','Gaps on machine in range','Gap (h)','Moved (km)','Recovery lat,long','Maps link','Operator','Operator mobile','CI','CI mobile','State','Action status','Action','Action date','Remark','By','Recorded at']
-               : ['Outage start','Machine','Status','Outage (min)','Pings','Travelled (km)','Start lat,long','End lat,long','Maps link (end)','Operator','Operator mobile','CI','CI mobile','State','Action status','Action','Action date','Remark','By','Recorded at'];
+  const head=T ? ['Potential tamper date','Last ping','Back online','Machine','Gaps on machine in range','Gap (h)','Moved (km)','Recovery lat,long','Maps link','Operator','Operator mobile','CI','CI mobile','State','Status','IoT technician','Action status','Action','Action date','Remark','By','Recorded at']
+               : ['Outage start','Machine','Status','Outage (min)','Pings','Travelled (km)','Start lat,long','End lat,long','Maps link (end)','Operator','Operator mobile','CI','CI mobile','State','IoT technician','Action status','Action','Action date','Remark','By','Recorded at'];
   const lines=[head.join(',')].concat(A.machines.flatMap(m=>m.cases.map(r=>(T
-    ? [r.day,r.at,r.back,r.mc,m.n,r.gap,r.km,ll(r.loc),r.loc?iotMapHref(r.loc):'',r.op,r.opMob,r.ci,r.ciMob,iotStName(r.st),...last(r)]
-    : [r.at,r.mc,r.status,r.mins,r.pings,r.km,ll(r.start),ll(r.end),r.end?iotMapHref(r.end):'',r.op,r.opMob,r.ci,r.ciMob,iotStName(r.st),...last(r)]).map(csvCell).join(','))));
+    ? [r.day,r.at,r.back,r.mc,m.n,r.gap,r.km,ll(r.loc),r.loc?iotMapHref(r.loc):'',r.op,r.opMob,r.ci,r.ciMob,iotStName(r.st),iotTsTxt(r.sts),r.tech||'',...last(r)]
+    : [r.at,r.mc,r.status,r.mins,r.pings,r.km,ll(r.start),ll(r.end),r.end?iotMapHref(r.end):'',r.op,r.opMob,r.ci,r.ciMob,iotStName(r.st),r.tech||'',...last(r)]).map(csvCell).join(','))));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
-  a.download=`IoT_${T?'potential-tamper':'at-risk'}_${A.dated?A.from+'_'+A.to:new Date().toISOString().slice(0,10)}_${A.st||'all'}_${A.queue}.csv`;
+  a.download=`IoT_${T?'potential-tamper':'at-risk'}_${A.dated?A.from+'_'+A.to:new Date().toISOString().slice(0,10)}_${A.st||'all'}_${A.queue}${T&&A.TS.cur?'_'+A.TS.cur.toLowerCase():''}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
 }
 
@@ -11943,6 +11994,7 @@ app.addEventListener('click', e=>{
     case 'iotretry': loadIoT(); break;
     case 'iotact': iotActOpen(el.dataset.case); break;
     case 'iotq': setState({iotQueue:el.dataset.q, iotLimit:IOT_PAGE}); break;
+    case 'iotts': setState({iotTs:el.dataset.ts||'', iotLimit:IOT_PAGE}); track('iot_status_filter',{ ts:el.dataset.ts||'all' }); break;
     case 'iotsheet': setState({sheet:'iotfilters'}); break;
     case 'iotmore': setState({iotLimit:(state.iotLimit||IOT_PAGE)+IOT_PAGE}); break;
     case 'iotclear': setState(s=>({iotQ:'', itFrom:'', itTo:'', iotSt:(gateCanSwitchStates()?'':s.iotSt), iotLimit:IOT_PAGE})); break;

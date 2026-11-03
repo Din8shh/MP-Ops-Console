@@ -748,7 +748,7 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | **Wheat** `wteam` (company teams): HR UPL 4831 · HR SWAL 4832 · PB UPL 4731 · PB SWAL 4732 | one, forced | one, locked | Retailers, Territories, FOs in the **team form** (see Wheat team view) |
 | **Wheat** `wteam` leaders: UPL 4050 · SWAL 4060 | one, forced | HR + PB, switchable | same three pages, team form |
 | **IoT** `admin` (`iot-admin`, 7314 — Amit Kumar, IoT head; 2601 retired 2026-10-16) | n/a | all, switchable | Potential tamper, At risk, **Team overview** |
-| **IoT** `iottech` × Rohit (PB, 2611) / Manish (HR, 2621) / Vishal (MP+GJ+TG+MH+AP, 2631) | n/a | **read from the mapping tab on every load** (the PIN row is the fallback) | Potential tamper, At risk |
+| **IoT** `iottech` × Rohit (2611) / Manish (2621) / Vishal (2631) | n/a | **the cases whose row names him** (states follow; PIN row = fallback) | Potential tamper, At risk |
 | **Partner** `bayer` (3906) | n/a | n/a | **none in the console** — a handoff to `bayer/` (see Partner pages) |
 
 The Wheat rows carry `project:'wheat'`; see **Projects** below. The Kharif admin (0088) does NOT see Wheat, and
@@ -1032,8 +1032,8 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
 | by name `IoT actions` | written by `apps-script/iot-actions.gs` | one row per technician action | the case's Open / Closed status |
 
 - **"Potential", always.** A ping gap is a lead, not a finding, so no screen says "tampered". The sheet's own
-  `status` column (NOT_RECOVERED / SUSPICIOUS_MOVEMENT) is **deliberately not shown** (by request); its names
-  mislead anyway — every NOT_RECOVERED row has a recovery ping and some moved 20+ km.
+  `status` column (NOT_RECOVERED / SUSPICIOUS_MOVEMENT) was hidden until 2026-11-03 and is now a filter (see below);
+  its names still mislead — every NOT_RECOVERED row has a recovery ping and some moved 20+ km.
 - **Tamper date is column B, `last_ping_before_gap`**; the map link is the **recovery** lat/long. Default range is
   the last 7 days the tab carries; ×N beside a machine counts its cases in the range (one machine has 30).
 - **At risk shows the status** (`MOVING_WITH_VOLTAGE_0` → "Zero voltage · moving"), km travelled, outage, pings and
@@ -1083,13 +1083,21 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
 - **Two sheet faults handled in code:** the tamper tab's `CI_name` / `CI_number` are SWAPPED (decided per row by
   which cell is digits, so a sheet fix needs no edit); state arrives as "Madhya pradesh" and "Madhya Pradesh"
   (both → MP). `-` means blank (254 tamper rows have no operator — printed "not mapped").
-- **State scope comes from the mapping tab (since 2026-11-03).** `loadIoT` rewrites each technician role's `states`
-  from "IOT vs state mapping" (by name), keeping the PIN row's list only as the fallback when the tab is unreadable
-  or names him nowhere; `pinDrift` logs where the two differ. It was the reverse until the tab moved Rohit RJ → PB and
-  Manish HR + PB → HR while the PINs kept showing the old states. A state nobody is mapped to (Rajasthan, now) is
-  seen by the IoT head only, under "No technician mapped". A NEW technician still needs a PIN row. AP is a valid state here (`IOT_ST_NAMES`) though
-  it is not one of the console's seven. Scope is page-local (`iotSt`, `iotQ`, `itFrom`/`itTo`, `iotAct`) and shared
-  by the three pages.
+- **Scope is the MACHINE'S technician, not a state (2026-11-03, by request).** Both case tabs carry an
+  `IoT technician name` column (one per machine, never two). A technician login sees exactly the rows naming him
+  (`iotMine`), so one person can hold several states and a state can be split. A risk row naming nobody borrows the
+  machine's technician from the tamper tab; a row still naming nobody ("0") is seen by the IoT head only, under "No
+  technician named". His STATES (picker, lock) are the states his rows sit in → else the mapping tab's → else the PIN
+  row's (`pinStates`); a tab without the column falls back to state scope. The mapping tab now only supplies names'
+  phone numbers, the IoT head, and a zero row for a technician with no cases. Team overview groups by the row's
+  technician. `pinDrift` logs where the result differs from the PIN rows. A NEW technician still needs a PIN row,
+  whose `tech` must match the sheet's spelling (case-insensitive).
+- **Status filter (tamper tab column J, 2026-11-03, by request — it was hidden before).** `NOT_RECOVERED` →
+  "Not recovered", `SUSPICIOUS_MOVEMENT` → "Suspicious movement" (`IOT_TSTATUS`); a new value appears by itself.
+  ONE value, `state.iotTs`, for every IoT page and login (`iotTsOk`): it narrows Potential tamper (cards, day
+  counts, CSV, and what Record action covers) and the Team overview's tamper counts; At risk has a single status
+  and ignores it. A segmented control with counts sits under the search on both pages, desktop and phone; cards
+  carry a tag per status (×n), and the expanded gaps name their own. Live 2026-11-03: 3,571 / 67.
 - **The WRITE** is "Record action" on a machine (see above) → Action taken (per-kind list in `IOT_ACTIONS`), Open/Closed, remark
   (required for "Other") → `IOT_W.url`. Same transport rules as the concern form (bare-string POST, form built on
   `document.body` outside `render()`, a failed send keeps the text). A saved action is held locally (`IOT.local`)
