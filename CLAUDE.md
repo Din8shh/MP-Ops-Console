@@ -974,7 +974,8 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   · **Machine plan, deployed and breakdown (Dinesh 2026-10-30; replaces "only five figures" above).** Every machine on the sheet is the
     PLAN. `handover_status` (column K, one value per machine, no history) gives `m.stage` (`wStageOf`): `Done` = deployed (handed over),
     `In transit` / `In-Transit` = in transit, `Pending` and blank = pending. He named plan, in transit and deployed; the third bucket
-    was added so the three add up. Strip = **the same two labelled pieces as the admin's** (`wTeamStripHTML`, `.wtGroups`, regrouped the same day by request). **Machines**
+    was added so the three add up. **SWAL only (Dinesh 2026-11-03): In transit reads as Deployed and Pending / blank as In transit**
+    (`wStageOf(v, org)`), so SWAL shows no pending machines; UPL keeps the sheet's words. Strip = **the same two labelled pieces as the admin's** (`wTeamStripHTML`, `.wtGroups`, regrouped the same day by request). **Machines**
     (`.wteamMc`): Machine plan card (split bar, the three parts; on a past day "status is today's"), Ran · Breakdown · Operators mapped,
     then the breakdown list. **Acres**: one card, day on the left, total on the right, against target beside them. A blank status
     simply reads Pending everywhere (Dinesh: no "no status" note). **Breakdown** = the

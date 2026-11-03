@@ -724,7 +724,12 @@ const WRET_NO_TERR = 'Territory not on sheet';
 const istDay = ms => new Date(ms+5.5*36e5).toISOString().slice(0,10);
 // handover_status (column K) → a machine's stage. Dinesh 2026-10-30: every machine on the sheet is the PLAN; DEPLOYED = handed over.
 // "Done" (the sheet's old word was "Yes") = deployed · "In transit" / "In-Transit" = in transit · "Pending" and blank = pending.
-function wStageOf(v){ return /^(done|yes)$/i.test(v) ? 'dep' : /transit/i.test(v) ? 'transit' : 'wait'; }
+// SWAL ONLY (Dinesh 2026-11-03): the sheet's status runs a step behind, so In transit reads as deployed and Pending /
+// blank as in transit; SWAL therefore has no pending machines. UPL keeps the sheet's own words.
+function wStageOf(v, org){
+  const s = /^(done|yes)$/i.test(v) ? 'dep' : /transit/i.test(v) ? 'transit' : 'wait';
+  return org!=='SWAL' ? s : s==='wait' ? 'transit' : 'dep';
+}
 function wretBuild(grid){
   const h=(grid[0]||[]).map(x=>String(x||'').trim().toLowerCase());
   const ix=n=>h.indexOf(n);
@@ -768,8 +773,9 @@ function wretBuild(grid){
         // FO onboarded: the sheet's own status for the machine's FO (one value per FO on every row, checked 2026-10-29).
         foOn: /^onboarded$/i.test(txt(g('foOn')).trim()),
         // Column K, one value per machine and no history. See wStageOf.
-        handRaw:txt(g('hand')).replace(/\s+/g,' '), stage:wStageOf(txt(g('hand'))),
+        handRaw:txt(g('hand')).replace(/\s+/g,' '), stage:null,
         acAll:0, acY:0, ac7:0, scAll:0, scY:0, iotAll:0, iotY:0, itAll:0, itY:0, bkAll:0, bkY:0, brk:false, days:{}, sdays:{}, bdays:{}, brkDays:{} };
+      m.stage=wStageOf(m.handRaw, m.org);
     }
     const ac=num(g('ac')), sc=num(g('scan')), io=num(g('iot')), bk=num(g('book'));
     if(ac||sc||io||bk){ if(dt>lastDate) lastDate=dt; }
