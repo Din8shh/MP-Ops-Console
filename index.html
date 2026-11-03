@@ -8502,6 +8502,7 @@ function wpMachineHTML(m, mob){
       ${stat('Acres '+wDayWord(),acF(m.acY),wpDate(WRET.yday))}
       ${wTeam() ? stat('Operator',m.opName||m.opNum?'Mapped':'Not mapped',m.opName||m.opNum?'':'no operator on the sheet') : stat('Scanned overall',acF(m.scAll),`${acF(m.scY)} ac ${wDayWord()}`)}
       ${stat('Days sprayed',fmt(days.length),last?'last on '+wpDate(last):'none yet')}
+      ${stat('Last ping',m.lastPing?wpDate(m.lastPing):'—',m.lastPing?(n=>n<=0?'today':n===1?'1 day ago':n+' days ago')(Math.round((Date.parse(istDay(Date.now()))-Date.parse(m.lastPing))/864e5)):'no ping on the sheet')}
       ${wTeam() ? stat('Handover',wStageWord(m),wDayOn()?'today':'')+stat('Breakdown',m.stage!=='dep'?'—':m.brk?'ID '+E(m.brkDays[WRET.yday]):'None',m.stage!=='dep'?'not deployed yet':wpDate(WRET.yday)) : ''}
     </div>
     <div style="font-size:11px;color:#6E6A62;margin-top:8px">${wTeam()?`Target = ${fmt(WTEAM_TGT)} ac per machine for the season`:`Plan = retailer's ${fmt(r.planAc)} ac plan ÷ ${r.list.length} machine${r.list.length===1?'':'s'}`}</div>
@@ -8816,11 +8817,11 @@ function wtStripHTML(A, mob, stale, cardOnly){
         <div style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Worked ${wDayWord()}</div>
         <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="${w2num(40,600,W2.actD)};letter-spacing:-0.02em;line-height:1">${fmt(A.worked)}</span><span style="font-size:15px;color:${W2.ink2}">of ${fmt(A.n)} machines</span></div>
         <div style="height:6px;background:${W2.line2};border-radius:3px;overflow:hidden"><div style="width:${pctW}%;min-width:${A.worked?4:0}px;height:100%;background:${W2.act};border-radius:3px"></div></div>
-        <div style="font-size:13.5px;color:${W2.ink2}">${pctW}% of machines · ${acF(A.acY)} ac sprayed · ${day}</div>
+        <div style="font-size:13.5px;color:${W2.ink2}">${pctW}% of machines · ${acF(A.acY)} ac sprayed · ${acF(A.iotY)} IoT acres · ${day}</div>
         ${staleTxt?`<div style="font-size:13px;color:${W2.idleD}">${staleTxt}</div>`:''}
       </div>
       <div style="border-top:1px solid ${W2.line2};padding-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Season to ${day}</span><span style="${w2num(20)}">${acF(A.acAll)}${w2unit()}</span></div>
+        <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:12.5px;font-weight:500;color:${W2.ink2}">Season to ${day}</span><span style="${w2num(20)}">${acF(A.acAll)}${w2unit()}</span><span style="font-size:12.5px;color:${W2.ink2}">IoT acres ${acF(A.ioT)} ac</span></div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${planPill}<span style="font-size:12.5px;color:${W2.ink2};white-space:nowrap">of ${fmt(A.plan)} ac plan</span></div>
       </div></div>`;
   }
@@ -9487,7 +9488,8 @@ function wmCardHTML(g, mob){
       <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:${mob?14:13}px;font-weight:700">${E(m.mc)}</span>${wpBits(mob).orgChip(m.org)}<span style="flex:1"></span>
         <button data-act="wpmc" data-mc="${E(m.mc)}" style="border:1px solid #E9E6DF;background:#fff;border-radius:8px;min-height:${mob?44:28}px;padding:0 10px;font-size:12px;font-weight:600;color:#1B1A17;cursor:pointer">Details</button></div>
       <div style="font-size:12px;margin-top:4px;color:#46433d">${op?`Operator <b>${E(m.opName||'name not on sheet')}</b>${m.opNum&&realTel(m.opNum)?` · <a href="tel:${m.opNum}" style="color:#46433d;font-family:'IBM Plex Mono'">${E(m.opNum)}</a>`:''}`:`<span style="color:#B4462F;font-weight:600">✕ No operator mapped</span>`}</div>
-      <div style="font-size:12px;margin-top:2px;color:#46433d"><b style="font-family:'IBM Plex Mono'">${acF(wtAc(m))} ac</b> season to ${day} · ${acF(m.acY)} ${wDayWord()}</div>
+      <div style="font-size:12px;margin-top:2px;color:#46433d">Acres sprayed <b style="font-family:'IBM Plex Mono'">${acF(wtAc(m))} ac</b> season to ${day} · ${acF(m.acY)} ${wDayWord()}</div>
+      <div style="font-size:12px;margin-top:2px;color:#46433d">IoT acres <b style="font-family:'IBM Plex Mono'">${acF(m.iotAll)} ac</b> season to ${day} · ${acF(m.iotY)} ${wDayWord()}</div>
       <div style="font-size:11px;margin-top:2px;color:${wmStale(m)?'#8A5A00':'#6E6A62'}">${E(m.party)} · ${E(m.territory)}${m.lastPing?` · last seen ${wpDate(m.lastPing)}`:''}</div></div>`; };
   return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:${many?2:6}px">${many?`<span style="font-size:13px;font-weight:700;flex:1">${g.list.length} machines at this spot</span>`:'<span style="flex:1"></span>'}
       <button data-wmclose="1" aria-label="Close" style="width:${mob?44:26}px;height:${mob?44:26}px;margin:${mob?'-8px -8px 0 0':'-4px -6px 0 0'};border:none;background:none;color:#6E6A62;cursor:pointer;display:flex;align-items:center;justify-content:center">${I.closeS}</button></div>
