@@ -926,6 +926,11 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     desktop unit is ~0.5px and fixed unit sizes came out as 2px dots.
   · A filter change re-fits the map to the machines in view (`WM.sig`); leaving the page resets it. It reuses the
     shared pan/zoom engine and sets the shared `W`/`H` — safe only because Kharif and Wheat never share a page load.
+  · **IoT acres by territory** (`wchoroHTML` / `wchoroData`, below the pin map, Dinesh 2026-11-04): each DISTRICT filled by
+    the IoT acres of the sheet territories in it (aliasTerr: Khanna → Ludhiana, Malerkotla → Sangrur, Abohar → Fazilka,
+    Malout → Muktsar, Dabwali → Sirsa), shared districts ADDED. Five equal green steps 0 → largest district, no acres = no
+    colour. Season / that-day toggle (`state.wcPer`). Static SVG on WM.base's paths (not the pan/zoom engine); desktop labels
+    sized off the box height and decluttered; a list of territories beside (desktop) / below (phone).
   · **Pan / zoom (shared engine, `attachPanZoom`, reworked 2026-11-04 for "too sensitive")**: zoom pivots on the cursor, the
     pinch midpoint or the map centre (`zoomAround`, it used to pivot on the top-left corner); the wheel scales by the scroll's
     SIZE (`exp(-deltaY·0.0015)`, ctrl-pinch 0.01, capped 0.8–1.25 per event) instead of 12% per event; pan is 1:1 through
