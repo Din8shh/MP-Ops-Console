@@ -231,7 +231,7 @@ const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
-  wDay:'', wtmBrkOpen:false, wtNoIotOpen:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
+  wDay:'', wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
   wfoSort:'bk', wfoOpen:{}, wfoOn:'',   // Wheat TM → FO page: its own sort, open rows and onboarded filter; the rest is the wt* scope
   wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
   iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60, iotTs:'',   // IoT pages — page-local, shared by the three of them
@@ -9486,10 +9486,19 @@ function wmGeo(){
   WM.base=feats.map(x=>({ d:path(x.f.geometry), st:x.st, name:x.f.properties.name, c:(hr.COORDS[x.f.properties.name]||pb.COORDS[x.f.properties.name]) }));
   return true;
 }
+// The map's "Show" filter (Dinesh 2026-11-04): pick one kind and only those machines stay on the map. It narrows the
+// PINS (and the no-position list) only; the KPI strip above keeps the page's scope. Sprayed = IoT acres, as the pins.
+const WM_SHOW = [['all','All machines'],['y','Sprayed {day}'],['s','Sprayed earlier'],['n','Not sprayed yet'],
+  ['brk','Breakdown {day}'],['noop','No operator mapped'],['stale','Last ping 3+ days ago'],['noiot','Sprayed, no IoT acres']];
+const wmTone = m => m.iotY>0 ? 'y' : m.iotAll>0 ? 's' : 'n';
+const WM_TEST = { all:()=>true, y:m=>wmTone(m)==='y', s:m=>wmTone(m)==='s', n:m=>wmTone(m)==='n', brk:m=>!!m.brk,
+  noop:m=>!(m.opNum||m.opName), stale:wmStale, noiot:m=>wNoIot(m) };
+const wmShowKey = () => WM_TEST[state.wmShow] ? state.wmShow : 'all';
+const wmShown = A => A.rows.flatMap(r=>r.list).filter(WM_TEST[wmShowKey()]);
 // Machines in view, grouped by exact position (69 share one with another machine on 2026-10-28, mostly at one retailer).
 function wmGroups(A){
   const G={};
-  A.rows.flatMap(r=>r.list).filter(m=>m.lat!=null&&m.lon!=null).forEach(m=>{
+  wmShown(A).filter(m=>m.lat!=null&&m.lon!=null).forEach(m=>{
     const k=m.lat.toFixed(5)+','+m.lon.toFixed(5); (G[k]||(G[k]={ key:k, lat:m.lat, lon:m.lon, list:[] })).list.push(m); });
   return Object.values(G).map(g=>{
     // The MAP reads IoT acres as acres sprayed (Dinesh 2026-11-04): pin colour and card follow the device, not the
@@ -9504,9 +9513,13 @@ function wmapBodyHTML(mob){
   if(!isAdmin() || !WRET.loaded) return wplanBodyHTML(mob);   // the rebuild message, or the shared loading / error card
   const A=wterrAgg();
   const stale = WRET.lastDate && WRET.lastDate < WRET.yday;
-  const mcs=A.rows.flatMap(r=>r.list), off=mcs.filter(m=>m.lat==null||m.lon==null);
+  const all=A.rows.flatMap(r=>r.list), show=wmShowKey(), mcs=wmShown(A), off=mcs.filter(m=>m.lat==null||m.lon==null);
   const placed=mcs.length-off.length;
   const ready=wmGeo();
+  const dayW=wtDayShort();
+  const chips=`<div role="group" aria-label="Show on the map" style="display:flex;gap:6px;padding:${mob?'10px 16px':'10px 18px'};border-bottom:1px solid ${W2.line2};${mob?'overflow-x:auto;-webkit-overflow-scrolling:touch':'flex-wrap:wrap'}">${WM_SHOW.map(([k,t])=>{
+      const on=show===k, n=all.filter(WM_TEST[k]).length, lab=t.replace('{day}',dayW);
+      return `<button data-act="wmshow" data-k="${k}" aria-pressed="${on}" style="flex-shrink:0;min-height:${mob?44:32}px;padding:0 12px;border-radius:999px;border:1px solid ${on?W2.ink:W2.line};background:${on?W2.ink:'#fff'};color:${on?'#fff':W2.ink};font-family:inherit;font-size:13px;font-weight:${on?600:500};cursor:pointer;white-space:nowrap">${E(lab)} <span style="font-variant-numeric:tabular-nums;opacity:${on?.85:.6}">${fmt(n)}</span></button>`; }).join('')}</div>`;
   const dot=(c,ring,fade)=>`<span aria-hidden="true" style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${c};${ring?'box-shadow:0 0 0 2px '+C.brk+';':'border:1.5px solid #fff;box-sizing:border-box;'}${fade?'opacity:.4;':''}flex-shrink:0"></span>`;
   const key=(c,t,ring,fade)=>`<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">${dot(c,ring,fade)}${t}</span>`;
   const legend=`<div style="display:flex;flex-wrap:wrap;gap:8px 18px;font-size:${mob?13:13.5}px;color:${W2.ink}">
@@ -9514,11 +9527,11 @@ function wmapBodyHTML(mob){
       <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap"><span aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:#6E6A62;color:#fff;font-size:9.5px;font-weight:700;font-family:'IBM Plex Mono'">3</span>Machines at one spot</span></div>`;
   const notes=`<div style="font-size:13px;color:${W2.ink2};line-height:1.5;margin-top:10px;border-top:1px solid ${W2.line2};padding-top:10px">${wDayOn()?`Pin colours are ${wpDate(WRET.yday)}'s acres; positions and pings are today's (the sheet keeps no history of them). `:''}Positions are each machine's last ping and are approximate: the sheet's longitude has 2 decimals (about 1 km east–west).${off.length?` <b style="color:#46433d">${fmt(off.length)} machine${off.length===1?' has':'s have'} no usable position</b> and ${off.length===1?'is':'are'} not on the map: ${off.slice(0,8).map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;font:inherit;font-family:'IBM Plex Mono';color:#1B1A17;text-decoration:underline;text-decoration-color:#D5D0C6;cursor:pointer;${mob?'min-height:44px':''}">${E(m.mc)}</button>`).join(', ')}${off.length>8?` +${off.length-8}`:''}.`:''}</div>`;
   const head=`<div style="display:flex;align-items:center;gap:10px;padding:${mob?'14px 16px':'14px 18px'};border-bottom:1px solid ${W2.line2};flex-wrap:wrap">
-      <div style="flex:1;min-width:0"><div style="font-size:${mob?15:16}px;font-weight:600">Machines on the map · ${fmt(placed)}</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${A.narrowed?'what the filters show':'every machine'} · ${mob?'tap':'point at'} a pin for its card</div></div>
-      ${mob?'':zoomCtrlsFor(false)}</div>`;
+      <div style="flex:1;min-width:0"><div style="font-size:${mob?15:16}px;font-weight:600">Machines on the map · ${fmt(placed)}</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${show!=='all'?`only ${E((t=>t[0].toLowerCase()+t.slice(1))(WM_SHOW.find(x=>x[0]===show)[1].replace('{day}',dayW)))}`:A.narrowed?'what the filters show':'every machine'} · ${mob?'tap':'point at'} a pin for its card</div></div>
+      ${mob?'':zoomCtrlsFor(false)}</div>${chips}`;
   const box = !ready
     ? `<div style="height:${mob?'300px':'520px'};display:flex;align-items:center;justify-content:center;color:#6E6A62;font-size:13px">Loading the map…</div>`
-    : !placed ? `<div style="padding:48px 18px;text-align:center;color:#46433d;font-size:13px">No machine in view has a position.${A.narrowed?`<div style="margin-top:12px"><button data-act="wtclear" style="min-height:${mob?44:32}px;padding:0 14px;border:1px solid #E9E6DF;border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;cursor:pointer">Clear filters</button></div>`:''}</div>`
+    : !placed ? `<div style="padding:48px 18px;text-align:center;color:#46433d;font-size:13px">${show!=='all'&&!mcs.length?'No machine in view matches this.':'No machine in view has a position.'}${A.narrowed||show!=='all'?`<div style="margin-top:12px"><button data-act="wtclear" style="min-height:${mob?44:32}px;padding:0 14px;border:1px solid #E9E6DF;border-radius:9px;background:#fff;font-size:12.5px;font-weight:600;cursor:pointer">Clear filters</button></div>`:''}</div>`
     : `<div id="wmHost" style="position:relative;background:radial-gradient(ellipse at 50% 40%,#F2F7FC 0%,#FFFFFF 75%);${mob?`aspect-ratio:${WM.W}/${WM.H};max-height:60vh;width:100%`:'height:clamp(460px,72vh,840px)'};overflow:hidden">${mob?zoomOverlayFor(true):''}</div>`;
   const map=`<div style="${w2card(mob?18:16)};overflow:hidden;margin-top:${mob?12:16}px">${head}${box}
       <div style="padding:${mob?'14px 16px':'14px 18px'};border-top:1px solid ${W2.line2}">${legend}${notes}</div></div>`;
@@ -9557,8 +9570,9 @@ function drawWheatMap(){
   // District names: faint, desktop only (a phone has no room), so a pin can be placed without the card.
   if(!touch) WM.base.forEach(b=>{ if(!b.c) return; const [x,y]=WM.proj(b.c[0],b.c[1]); const t=el('text',{x,y,'text-anchor':'middle',fill:'#B6B1A8','font-size':10*k,'font-family':'Noto Sans'}); t.dataset.fs=10*k; t.textContent=b.name; t.style.pointerEvents='none'; g.appendChild(t); });
   // Re-fit to the machines in view whenever the filters change (and on first draw).
-  if(WM.sig!==A.sig){ WM.sig=A.sig; WM.pinned=null;
-    if(A.narrowed && groups.length){ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; groups.forEach(q=>{ const [x,y]=WM.proj(q.lon,q.lat); x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y); });
+  const wsig=A.sig+'|'+wmShowKey();
+  if(WM.sig!==wsig){ WM.sig=wsig; WM.pinned=null;
+    if((A.narrowed||wmShowKey()!=='all') && groups.length){ let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; groups.forEach(q=>{ const [x,y]=WM.proj(q.lon,q.lat); x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y); });
       const s=Math.max(1,Math.min(6,0.8*Math.min(W/Math.max(60,x1-x0),H/Math.max(60,y1-y0))));
       scale=s; tx=W/2-(x0+x1)/2*s; ty=H/2-(y0+y1)/2*s; }
     else { scale=1; tx=0; ty=0; } }
@@ -12064,7 +12078,8 @@ app.addEventListener('click', e=>{
     case 'wpcsv': wplanCSV(); track('wplan_csv',{ st:state.wpSt||'all' }); break;
     case 'wtorg': setState({wtOrg:el.dataset.org, wtTerr:'', wtTm:'', wtAm:''}); break;
     case 'wday': setState({wDay:''}); break;
-    case 'wtclear': setState({wDay:'', wfoOn:'', wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
+    case 'wmshow': setState({wmShow:el.dataset.k}); break;
+    case 'wtclear': setState({wDay:'', wfoOn:'', wmShow:'all', wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
     case 'wamexp': { const k=el.dataset.k; setState(s=>({wamOpen:{...s.wamOpen, [k]:!s.wamOpen[k]}})); break; }
     case 'wamsort': setState({wamSort:el.dataset.k}); break;
     case 'wfoexp': { const k=el.dataset.k; setState(s=>({wfoOpen:{...s.wfoOpen, [k]:!s.wfoOpen[k]}})); break; }
