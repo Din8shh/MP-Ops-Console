@@ -960,6 +960,10 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     onboarded filter (`wfoOn`, a segmented control with counts; Clear resets it). Own sort (`wfoSort`) and open rows.
   · Reconciles with the sheet except UPL_2826, listed twice on 28 Oct (read once): 89 bookings / 727 ac through 28 Oct.
   · Desktop table fits unscrolled at 1280 (min-width 940); KPI strip is `.wfoKpi` (6 across, 3 below 1240px).
+- **Page 6, Top 10 machines** (`wtop`, `#/top-machines`, rail "Top 10"; `wtopBodyHTML` / `wtopList` / `wtopCSV`, Dinesh
+  2026-11-04). Wheat admin only. The ten machines with the most season acres through the Day filter's day, on the shared wt*
+  scope. A toggle ranks by acres sprayed (`wtAc`) or IoT acres (`iotAll`); days / per day follow the chosen measure. Admin's
+  phone bar now has six pages, so it shows four + All pages.
 - **The Wheat team view (role `wteam`, asked by Dinesh 2026-10-29).** Six PINs for the UPL and SWAL teams: one per company per
   state (HR UPL 4831, HR SWAL 4832, PB UPL 4731, PB SWAL 4732) and one per company for its leaders across HR + PB (UPL 4050,
   SWAL 4060, State control shown). The company is forced (`allow` = their own), so the Company control is gone and every
