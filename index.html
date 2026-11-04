@@ -9492,8 +9492,10 @@ function wmGroups(A){
   A.rows.flatMap(r=>r.list).filter(m=>m.lat!=null&&m.lon!=null).forEach(m=>{
     const k=m.lat.toFixed(5)+','+m.lon.toFixed(5); (G[k]||(G[k]={ key:k, lat:m.lat, lon:m.lon, list:[] })).list.push(m); });
   return Object.values(G).map(g=>{
-    const L=g.list.sort((a,b)=>b.acY-a.acY||wtAc(b)-wtAc(a)||a.mc.localeCompare(b.mc));
-    const tone = L.some(m=>m.acY>0) ? 'y' : L.some(m=>wtAc(m)>0) ? 's' : 'n';
+    // The MAP reads IoT acres as acres sprayed (Dinesh 2026-11-04): pin colour and card follow the device, not the
+    // reported column. The KPI strip above it is shared with Territory / AM and keeps the reported acres.
+    const L=g.list.sort((a,b)=>b.iotY-a.iotY||b.iotAll-a.iotAll||a.mc.localeCompare(b.mc));
+    const tone = L.some(m=>m.iotY>0) ? 'y' : L.some(m=>m.iotAll>0) ? 's' : 'n';
     return { ...g, list:L, tone, noOp:L.some(m=>!(m.opNum||m.opName)), stale:L.every(wmStale) };
   }).sort((a,b)=>({n:0,s:1,y:2}[a.tone]-{n:0,s:1,y:2}[b.tone]));   // green painted last, on top
 }
@@ -9534,8 +9536,7 @@ function wmCardHTML(g, mob){
       <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'IBM Plex Mono';font-size:${mob?14:13}px;font-weight:700">${E(m.mc)}</span>${wpBits(mob).orgChip(m.org)}<span style="flex:1"></span>
         <button data-act="wpmc" data-mc="${E(m.mc)}" style="border:1px solid #E9E6DF;background:#fff;border-radius:8px;min-height:${mob?44:28}px;padding:0 10px;font-size:12px;font-weight:600;color:#1B1A17;cursor:pointer">Details</button></div>
       <div style="font-size:12px;margin-top:4px;color:#46433d">${op?`Operator <b>${E(m.opName||'name not on sheet')}</b>${m.opNum&&realTel(m.opNum)?` · <a href="tel:${m.opNum}" style="color:#46433d;font-family:'IBM Plex Mono'">${E(m.opNum)}</a>`:''}`:`<span style="color:#B4462F;font-weight:600">✕ No operator mapped</span>`}</div>
-      <div style="font-size:12px;margin-top:2px;color:#46433d">Acres sprayed <b style="font-family:'IBM Plex Mono'">${acF(wtAc(m))} ac</b> season to ${day} · ${acF(m.acY)} ${wDayWord()}</div>
-      <div style="font-size:12px;margin-top:2px;color:#46433d">IoT acres <b style="font-family:'IBM Plex Mono'">${acF(m.iotAll)} ac</b> season to ${day} · ${acF(m.iotY)} ${wDayWord()}</div>
+      <div style="font-size:12px;margin-top:2px;color:#46433d">Acres sprayed <b style="font-family:'IBM Plex Mono'">${acF(m.iotAll)} ac</b> season to ${day} · ${acF(m.iotY)} ${wDayWord()}</div>
       <div style="font-size:11px;margin-top:2px;color:${wmStale(m)?'#8A5A00':'#6E6A62'}">${E(m.party)} · ${E(m.territory)}${m.lastPing?` · last seen ${wpDate(m.lastPing)}`:''}</div></div>`; };
   return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:${many?2:6}px">${many?`<span style="font-size:13px;font-weight:700;flex:1">${g.list.length} machines at this spot</span>`:'<span style="flex:1"></span>'}
       <button data-wmclose="1" aria-label="Close" style="width:${mob?44:26}px;height:${mob?44:26}px;margin:${mob?'-8px -8px 0 0':'-4px -6px 0 0'};border:none;background:none;color:#6E6A62;cursor:pointer;display:flex;align-items:center;justify-content:center">${I.closeS}</button></div>
