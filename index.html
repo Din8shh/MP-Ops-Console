@@ -231,7 +231,7 @@ const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
-  wDay:'', wtmBrkOpen:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
+  wDay:'', wtmBrkOpen:false, wtNoIotOpen:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
   wfoSort:'bk', wfoOpen:{}, wfoOn:'',   // Wheat TM → FO page: its own sort, open rows and onboarded filter; the rest is the wt* scope
   wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
   iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60, iotTs:'',   // IoT pages — page-local, shared by the three of them
@@ -8649,7 +8649,7 @@ function wterrAgg(){
     nF, narrowed: nF>0 || !!q, n:mcs.length, plan, acAll, acY:sumOf(rows,r=>r.acY), scAll:sumOf(rows,r=>r.scAll), scY:sumOf(rows,r=>r.scY),
     acPrev: days.length>1 ? tot[tot.length-2] : null, prevDay: days.length>1 ? days[days.length-2] : '',
     op:sumOf(rows,r=>r.op), pct: plan>0 ? 100*acAll/plan : null,
-    worked: mcs.filter(m=>m.acY>0).length, workedIot: mcs.filter(m=>m.iotY>0).length, ranAll: mcs.filter(m=>wtAc(m)>0).length, iotY: sumOf(mcs,m=>m.iotY),
+    mcs, noIot: mcs.filter(wNoIot), worked: mcs.filter(m=>m.acY>0).length, workedIot: mcs.filter(m=>m.iotY>0).length, ranAll: mcs.filter(m=>wtAc(m)>0).length, iotY: sumOf(mcs,m=>m.iotY),
     pinged: mcs.filter(m=>m.lastPing&&m.lastPing>=WRET.yday).length,
     ...wtScan(mcs),
     nNamed: named.length, nSprayedY: named.filter(r=>r.acY>0).length, none: rows.find(r=>r.none)||null,
@@ -8890,14 +8890,57 @@ function wtStripHTML(A, mob, stale, cardOnly){
     return `<div style="display:flex;flex-direction:column;gap:14px">
         ${group('Machines',machinesNote,grid(machines))}
         ${group('Acres','',`<div style="display:flex;flex-direction:column;gap:8px">${acresCards.join('')}</div>`)}
-      </div>`;
+      </div>${wNoIotHTML(A, mob)}`;
   }
   // Desktop: a row for Machines, the three acres cards under it. Geometry: .wtGroups in the stylesheet.
   const grid = (list, cls='') => `<div class="wtGrid ${cls}" style="--n:${list.length}">${list.map(k=>`<div style="${box(k)}border-radius:14px;box-shadow:${W2.shadow};padding:12px 14px;display:flex;flex-direction:column;gap:5px;min-width:0">${tileHTML(k,24)}</div>`).join('')}</div>`;
   return `<div class="wtGroups">
       ${group('Machines',machinesNote,grid(machines))}
       ${group('Acres','',`<div class="wtAcres">${acresCards.join('')}</div>`)}
-    </div>`;
+    </div>${wNoIotHTML(A, mob)}`;
+}
+// Sprayed but NO IoT acres (Dinesh 2026-11-04, admin only): machines whose reported acres on the picked day are above
+// zero while the device measured nothing that day. A SWAL machine can never appear, since its acres sprayed ARE its IoT
+// acres. Closed by default (`state.wtNoIotOpen`), follows the page's filters, and downloads as its own CSV.
+const wNoIot = m => m.acY>0 && !(m.iotY>0);
+function wNoIotHTML(A, mob){
+  if(!isAdmin()) return '';
+  const B=wpBits(mob), day=wpDate(WRET.yday), open=!!state.wtNoIotOpen;
+  const list=A.noIot.slice().sort((a,b)=>b.acY-a.acY||a.mc.localeCompare(b.mc));
+  const wrap=`margin-top:${mob?12:16}px;overflow:hidden`;
+  if(!list.length) return B.cardBox(B.msg(`Every machine that sprayed on ${day} also has IoT acres.`, '16px 18px'), wrap);
+  const acY=list.reduce((a,m)=>a+m.acY,0), never=list.filter(m=>!(m.iotAll>0)).length;
+  const iotAllH=m=>m.iotAll>0?acF(m.iotAll)+' ac':`<span style="color:${W2.brkD};font-weight:600">never</span>`;
+  const head=`<div style="display:flex;align-items:center;gap:10px;padding:12px ${mob?16:22}px">
+      <button data-act="wtnoiot" aria-expanded="${open}" style="flex:1;min-width:0;min-height:44px;border:0;background:none;padding:0;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
+      <span style="flex:1;min-width:0"><span style="display:flex;align-items:baseline;gap:7px;font-size:16px;font-weight:600"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:${W2.idle};flex-shrink:0;transform:translateY(-1px)"></span>Sprayed, no IoT acres · ${fmt(list.length)}</span>
+      <span style="display:block;font-size:13px;color:${W2.ink2};margin-top:2px">${day} · ${acF(acY)} ac sprayed with no IoT acres${never?` · ${fmt(never)} with no IoT acres all season`:''}</span></span>
+      <span style="flex-shrink:0;font-size:14px;font-weight:500;white-space:nowrap">${open?'Hide':'Show'} <span aria-hidden="true" style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></span></button>
+      ${mob?'':B.csv('wtnoiotcsv',`Download the ${fmt(list.length)} machines as CSV`)}</div>`;
+  if(!open) return B.cardBox(head, wrap);
+  if(mob) return B.cardBox(head+`<div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:8px">${list.map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:${W2.head};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
+      <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${B.orgChip(m.org)}<span style="font-size:13px;font-weight:600">${acF(m.acY)} ac · IoT 0</span></span>
+        <span style="display:block;font-size:13px;margin-top:2px">${E(m.party)} · ${E(m.territory)}</span>
+        <span style="display:block;font-size:12.5px;color:${W2.ink2};margin-top:2px">${m.opName||m.opNum?E(m.opName||m.opNum):'No operator'} · IoT season ${iotAllH(m)}${m.lastPing?' · ping '+wpDate(m.lastPing):''}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`).join('')}
+      <div style="padding-top:4px">${B.csv('wtnoiotcsv',`Download the ${fmt(list.length)} machines as CSV`)}</div></div>`, wrap);
+  const cols='minmax(120px,1fr) 80px 80px 90px minmax(130px,1.6fr) minmax(90px,1fr) minmax(110px,1.2fr) minmax(100px,1.1fr) 76px';
+  const cell=(t,x='')=>`<span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${x}">${t}</span>`;
+  return B.cardBox(head+`<div style="overflow-x:auto;border-top:1px solid ${W2.line2}"><div style="min-width:960px">
+      <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2}"><span>Machine</span><span style="text-align:right">Sprayed ${E(wtDayShort())}</span><span style="text-align:right">IoT ${E(wtDayShort())}</span><span style="text-align:right">IoT season</span><span>Retailer</span><span>Territory</span><span>Operator</span><span>CI</span><span style="text-align:right">Last ping</span></div>
+      ${list.map(m=>`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:13.5px">
+        <span style="display:flex;align-items:center;gap:6px;min-width:0"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font:600 13px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</button>${B.orgChip(m.org)}</span>
+        ${cell(acF(m.acY),'text-align:right;font-weight:600')}${cell('0','text-align:right;color:'+W2.idleD)}${cell(iotAllH(m),'text-align:right')}${cell(E(m.party))}${cell(E(m.territory))}${cell(m.opName||m.opNum?E(m.opName||m.opNum):`<span style="color:${W2.brkD}">✕ No operator</span>`)}${cell(m.co?E(m.co):`<i style="color:${W2.ink2}">none</i>`)}${cell(m.lastPing?wpDate(m.lastPing):'—','text-align:right')}</div>`).join('')}
+    </div></div>`, wrap);
+}
+function wNoIotCSV(){
+  const A=wterrAgg(), list=A.noIot.slice().sort((a,b)=>b.acY-a.acY||a.mc.localeCompare(b.mc));
+  const head=['State','Territory','Machine','Company','Retailer',`Acres sprayed (${WRET.yday})`,`IoT acres (${WRET.yday})`,`IoT acres to ${WRET.yday}`,`Season acres to ${WRET.yday}`,
+    'Operator','Operator mobile','CI','CI mobile','AM','AM mobile','TM','TM mobile','Last ping'];
+  const lines=[head.join(',')].concat(list.map(m=>[STATE_NAMES[m.st]||m.st, m.territory, m.mc, m.org, m.party, m.acY, m.iotY||0, m.iotAll||0, wtAc(m),
+    m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, m.retailer.tmName, m.retailer.tmMob, m.lastPing].map(csvCell).join(',')));
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
+  a.download=`Wheat-North_sprayed-no-IoT_${A.st||'HR-PB'}_${WRET.yday||new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
 }
 function wterrViewHTML(v){ return `<section style="padding:24px 32px">${wterrBodyHTML(false)}</section>`; }
 /* ===================== Wheat North — Area manager summary (view key `wam`) =====================
@@ -12015,6 +12058,8 @@ app.addEventListener('click', e=>{
     case 'iotcsv': iotCSV(state.view); track('iot_csv',{ view:state.view, st:state.iotSt||'all' }); break;
     case 'wteamcsv': wTeamCSV(); track('wteam_csv',{ view:state.view }); break;
     case 'wtmbrk': setState(s=>({wtmBrkOpen:!s.wtmBrkOpen})); break;
+    case 'wtnoiot': setState(s=>({wtNoIotOpen:!s.wtNoIotOpen})); break;
+    case 'wtnoiotcsv': wNoIotCSV(); track('wnoiot_csv',{ st:state.wtSt||'all' }); break;
     case 'wpcsv': wplanCSV(); track('wplan_csv',{ st:state.wpSt||'all' }); break;
     case 'wtorg': setState({wtOrg:el.dataset.org, wtTerr:'', wtTm:'', wtAm:''}); break;
     case 'wday': setState({wDay:''}); break;
