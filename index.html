@@ -8649,7 +8649,7 @@ function wterrAgg(){
     nF, narrowed: nF>0 || !!q, n:mcs.length, plan, acAll, acY:sumOf(rows,r=>r.acY), scAll:sumOf(rows,r=>r.scAll), scY:sumOf(rows,r=>r.scY),
     acPrev: days.length>1 ? tot[tot.length-2] : null, prevDay: days.length>1 ? days[days.length-2] : '',
     op:sumOf(rows,r=>r.op), pct: plan>0 ? 100*acAll/plan : null,
-    worked: mcs.filter(m=>m.acY>0).length, ranAll: mcs.filter(m=>wtAc(m)>0).length, iotY: sumOf(mcs,m=>m.iotY),
+    worked: mcs.filter(m=>m.acY>0).length, workedIot: mcs.filter(m=>m.iotY>0).length, ranAll: mcs.filter(m=>wtAc(m)>0).length, iotY: sumOf(mcs,m=>m.iotY),
     pinged: mcs.filter(m=>m.lastPing&&m.lastPing>=WRET.yday).length,
     ...wtScan(mcs),
     nNamed: named.length, nSprayedY: named.filter(r=>r.acY>0).length, none: rows.find(r=>r.none)||null,
@@ -8805,7 +8805,7 @@ function wterrBodyHTML(mob){
 // Scan % follows the same rule: the day's scanned ÷ the day's sprayed, then the total's. `cardOnly` is the phone map's one
 // summary card, which keeps Worked and Season together.
 function wtStripHTML(A, mob, stale, cardOnly){
-  const pctW = A.n ? Math.round(100*A.worked/A.n) : 0, idle = A.n - A.worked, day = wpDate(WRET.yday), past = wDayOn();
+  const pctW = A.n ? Math.round(100*A.worked/A.n) : 0, pctIot = A.n ? Math.round(100*A.workedIot/A.n) : 0, idle = A.n - A.worked, day = wpDate(WRET.yday), past = wDayOn();
   const staleTxt = stale ? `⚠ the sheet's acres stop at ${wpDate(WRET.lastDate)}` : '';
   const nDays = A.days.length, perMc = A.ranAll ? A.acAll/A.ranAll : null, perDay = A.ranAll && nDays ? A.acAll/A.ranAll/nDays : null;
   const avgF = v => v==null ? '—' : acF(Math.round(v*10)/10);
@@ -8818,6 +8818,7 @@ function wtStripHTML(A, mob, stale, cardOnly){
         <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="${w2num(40,600,W2.actD)};letter-spacing:-0.02em;line-height:1">${fmt(A.worked)}</span><span style="font-size:15px;color:${W2.ink2}">of ${fmt(A.n)} machines</span></div>
         <div style="height:6px;background:${W2.line2};border-radius:3px;overflow:hidden"><div style="width:${pctW}%;min-width:${A.worked?4:0}px;height:100%;background:${W2.act};border-radius:3px"></div></div>
         <div style="font-size:13.5px;color:${W2.ink2}">${pctW}% of machines · ${acF(A.acY)} ac sprayed · ${acF(A.iotY)} IoT acres · ${day}</div>
+        <div style="font-size:13.5px;color:${W2.ink2}">Ran on IoT acres <b style="color:${W2.ink}">${fmt(A.workedIot)}</b> of ${fmt(A.n)} · ${pctIot}%</div>
         ${staleTxt?`<div style="font-size:13px;color:${W2.idleD}">${staleTxt}</div>`:''}
       </div>
       <div style="border-top:1px solid ${W2.line2};padding-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
@@ -8827,6 +8828,8 @@ function wtStripHTML(A, mob, stale, cardOnly){
   }
   const machines = [
     { label:'Worked', val:fmt(A.worked), unit:`of ${fmt(A.n)}`, sub:`${pctW}% of machines`, tone:'Ran', bar:pctW, wide:1 },
+    // Ran on IoT acres (Dinesh 2026-11-04): machines whose device measured acres that day, beside the reported count.
+    { label:'Ran on IoT acres', val:fmt(A.workedIot), unit:`of ${fmt(A.n)}`, sub:`${pctIot}% of machines`, tone:'IoT', bar:pctIot, wide:1 },
     { label:'Idle', val:fmt(idle), sub:'did not run', tone:'Idle' },
     { label:'Territories sprayed', val:fmt(A.nSprayedY), unit:`of ${fmt(A.nNamed)}`, tone:'Operators' },
     { label:'Operators mapped'+(past?' today':''), val:fmt(A.op), unit:`of ${fmt(A.n)}`, tone:'Operators' },
