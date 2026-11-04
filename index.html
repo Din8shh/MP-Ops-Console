@@ -2639,26 +2639,46 @@ function mapHostEl(){ const svg=_g&&_g.ownerSVGElement; return svg&&svg.parentEl
 // page, so `touch-action:auto` lets a finger drag scroll it. Unlocked, we own the gesture.
 function mapTouchAction(svg){ if(svg) svg.style.touchAction = mapLocked ? 'auto' : 'none'; }
 function setMapLock(locked){ mapLocked=locked; const h=mapHostEl(); if(h) h.style.cursor=locked?'default':'grab'; mapTouchAction(_g&&_g.ownerSVGElement); }
+// Zoom keeps the point under the cursor / between the fingers fixed (it used to pivot on the map's top-left corner,
+// so every zoom threw the map sideways). The wheel scales by the SIZE of the scroll, not per event: a trackpad sends
+// dozens of small events per swipe and a fixed 12% step on each made it unusable. Pan moves the map exactly with the
+// pointer, measured through the SVG's own screen matrix (a tall map is height-limited, so W/clientWidth was wrong).
+const ZMIN=0.6, ZMAX=8;
+const zClamp = v => Math.max(ZMIN, Math.min(ZMAX, v));
+function zoomAround(px, py, ns){ ns=zClamp(ns); tx=px-(px-tx)*(ns/scale); ty=py-(py-ty)*(ns/scale); scale=ns; applyTransform(); }
+function zoomCenter(f){ zoomAround(W/2, H/2, scale*f); }
+function svgXY(svg, cx, cy){ const m=svg.getScreenCTM(); if(!m) return [0,0]; const p=new DOMPoint(cx,cy).matrixTransform(m.inverse()); return [p.x,p.y]; }
 function attachPanZoom(svg){
-  let down=false,moved=false,sx=0,sy=0;
+  let down=false,moved=false,sx=0,sy=0,slop=4;
   const pts=new Map();          // live pointers — 2 of them means pinch, not pan
-  let pinchD=0, pinchScale=1;
-  const dist=()=>{ const [a,b]=[...pts.values()]; return Math.hypot(a.x-b.x, a.y-b.y); };
+  let pinch=null;               // {d, s, cx, cy}: start distance, scale, and the content point under the fingers
+  const two=()=>{ const [a,b]=[...pts.values()]; return { d:Math.hypot(a.x-b.x, a.y-b.y)||1, mx:(a.x+b.x)/2, my:(a.y+b.y)/2 }; };
   if(svg.parentElement) svg.parentElement.style.cursor = mapLocked?'default':'grab';
   mapTouchAction(svg);
   svg.addEventListener('pointerdown',e=>{
     pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
-    if(pts.size===2){ setMapLock(false); mapTouchAction(svg); pinchD=dist(); pinchScale=scale; down=false; moved=true; return; }  // pinch always unlocks
-    if(mapLocked)return; down=true; moved=false; sx=e.clientX; sy=e.clientY;
+    if(pts.size===2){ setMapLock(false); mapTouchAction(svg); const t=two(), [ux,uy]=svgXY(svg,t.mx,t.my);
+      pinch={ d:t.d, s:scale, cx:(ux-tx)/scale, cy:(uy-ty)/scale }; down=false; moved=true; return; }  // pinch always unlocks
+    if(mapLocked)return; down=true; moved=false; sx=e.clientX; sy=e.clientY; slop=e.pointerType==='touch'?8:4;
   });
   svg.addEventListener('pointermove',e=>{
     if(pts.has(e.pointerId)) pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
-    if(pts.size===2){ if(!pinchD) return; e.preventDefault(); scale=Math.max(0.6,Math.min(6, pinchScale*(dist()/pinchD))); applyTransform(); return; }
-    if(mapLocked||!down)return; if(!moved && Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)<4) return; if(!moved){ moved=true; try{svg.setPointerCapture(e.pointerId);}catch(_){ } if(svg.parentElement)svg.parentElement.style.cursor='grabbing'; } const k=W/svg.clientWidth; tx+=(e.clientX-sx)*k; ty+=(e.clientY-sy)*k; sx=e.clientX;sy=e.clientY; applyTransform(); });
-  const up=(e)=>{ pts.delete(e.pointerId); if(pts.size<2) pinchD=0; if(moved){ try{svg.releasePointerCapture(e.pointerId);}catch(_){ } } down=false; if(svg.parentElement)svg.parentElement.style.cursor = mapLocked?'default':'grab'; };
+    if(pts.size===2){ if(!pinch) return; e.preventDefault(); const t=two(), [ux,uy]=svgXY(svg,t.mx,t.my), ns=zClamp(pinch.s*(t.d/pinch.d));
+      scale=ns; tx=ux-pinch.cx*ns; ty=uy-pinch.cy*ns; applyTransform(); return; }   // zoom AND follow the fingers
+    if(mapLocked||!down)return; if(!moved && Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)<slop) return;
+    if(!moved){ moved=true; try{svg.setPointerCapture(e.pointerId);}catch(_){ } if(svg.parentElement)svg.parentElement.style.cursor='grabbing'; }
+    const m=svg.getScreenCTM(), k=m&&m.a?1/m.a:W/svg.clientWidth; tx+=(e.clientX-sx)*k; ty+=(e.clientY-sy)*k; sx=e.clientX;sy=e.clientY; applyTransform(); });
+  const up=(e)=>{ pts.delete(e.pointerId); if(pts.size<2) pinch=null;
+    if(pts.size===1){ const [p]=[...pts.values()]; sx=p.x; sy=p.y; down=!mapLocked; }   // lifting one finger of a pinch carries on as a pan, with no jump
+    else down=false;
+    if(moved){ try{svg.releasePointerCapture(e.pointerId);}catch(_){ } } if(svg.parentElement)svg.parentElement.style.cursor = mapLocked?'default':'grab'; };
   svg.addEventListener('pointerup',up); svg.addEventListener('pointercancel',up);
   svg.addEventListener('click',e=>{ if(moved){ e.stopPropagation(); moved=false; } },true);
-  svg.addEventListener('wheel',e=>{ if(mapLocked) return; e.preventDefault(); const f=e.deltaY<0?1.12:0.89; scale=Math.max(0.6,Math.min(6,scale*f)); applyTransform(); },{passive:false});
+  svg.addEventListener('wheel',e=>{ if(mapLocked) return; e.preventDefault();
+    const dy=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?400:1);
+    // ctrlKey = a trackpad pinch (small deltas), so it gets a steeper curve; a mouse notch (~100) moves ~14%.
+    const f=Math.max(0.8, Math.min(1.25, Math.exp(-dy*(e.ctrlKey?0.01:0.0015))));
+    const [ux,uy]=svgXY(svg,e.clientX,e.clientY); zoomAround(ux, uy, scale*f); },{passive:false});
 }
 function drawMap(hostId, metric){
   const host=document.getElementById(hostId); if(!host||!BASE) return;
@@ -12113,8 +12133,8 @@ app.addEventListener('click', e=>{
     case 'exp': { const k=el.dataset.key; setState(s=>({expanded:{...s.expanded,[k]:!s.expanded[k]}})); break; }
     case 'open': { const m=ROWS.find(x=>x.mc===el.dataset.mc); if(m){ setState({selected:m}); track('machine_open',{ machine:el.dataset.mc, org:state.org, mp_state:state.st||'all' }); } break; }
     case 'close': setState({selected:null}); break;
-    case 'zoomin': setMapLock(false); scale=Math.min(6,scale*1.25); applyTransform(); break;
-    case 'zoomout': setMapLock(false); scale=Math.max(0.6,scale*0.8); applyTransform(); break;
+    case 'zoomin': setMapLock(false); zoomCenter(1.4); break;
+    case 'zoomout': setMapLock(false); zoomCenter(1/1.4); break;
     case 'zoomreset': setMapLock(true); scale=1;tx=0;ty=0; applyTransform(); break;
     case 'snakeretry': SNAKE.loaded=false; SNAKE.error=false; loadSnake(); break;
     case 'apmretry':   APM.loaded=false;   APM.error=false;   loadApm();   break;
