@@ -745,7 +745,7 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | **Wheat** `admin` (`wh-admin`, 4040) | All / UPL / SWAL / Open | HR + PB, switchable | the Retailer summary (the only Wheat page while it is rebuilt) |
 | **Wheat** `wstate` × HR / PB (4811 / 4711) | All / UPL / SWAL | one, locked | **none yet** — a "being rebuilt" message until their pages are decided |
 | **Wheat** `wsales` × HR / PB (4822 / 4722) | All / UPL / SWAL | one, locked | **none yet** — same message |
-| **Wheat** `wteam` (company teams): HR UPL 4831 · HR SWAL 4832 · PB UPL 4731 · PB SWAL 4732 | one, forced | one, locked | Retailers, Territories, FOs in the **team form** (see Wheat team view) |
+| **Wheat** `wteam` (company teams): HR UPL 4831 · HR SWAL 4832 · PB UPL 4731 · PB SWAL 4732 | one, forced | one, locked | Retailers, Territories, FOs in the **team form** (see Wheat team view), + Map (territory acres map only, 2026-11-04) |
 | **Wheat** `wteam` leaders: UPL 4050 · SWAL 4060 | one, forced | HR + PB, switchable | same three pages, team form |
 | **IoT** `admin` (`iot-admin`, 7314 — Amit Kumar, IoT head; 2601 retired 2026-10-16) | n/a | all, switchable | Potential tamper, At risk, **Team overview** |
 | **IoT** `iottech` × Rohit (2611) / Manish (2621) / Vishal (2631) | n/a | **the cases whose row names him** (states follow; PIN row = fallback) | Potential tamper, At risk |
@@ -934,7 +934,8 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   · **IoT acres by territory** (`wchoroHTML` / `wchoroData`, below the pin map, Dinesh 2026-11-04): each DISTRICT filled by
     the IoT acres of the sheet territories in it (aliasTerr: Khanna → Ludhiana, Malerkotla → Sangrur, Abohar → Fazilka,
     Malout → Muktsar, Dabwali → Sirsa), shared districts ADDED. Five equal green steps 0 → largest district, no acres = no
-    colour. Season / that-day toggle (`state.wcPer`). Static SVG on WM.base's paths (not the pan/zoom engine); desktop labels
+    colour, red = a territory with no acres, plain = no territory. Season / that-day toggle (`state.wcPer`). **Team logins get the
+    Map page too, with this map alone** (their company only; pins to follow, no CSV). Static SVG on WM.base's paths (not the pan/zoom engine); desktop labels
     sized off the box height and decluttered; a list of territories beside (desktop) / below (phone).
   · **Pan / zoom (shared engine, `attachPanZoom`, reworked 2026-11-04 for "too sensitive")**: zoom pivots on the cursor, the
     pinch midpoint or the map centre (`zoomAround`, it used to pivot on the top-left corner); the wheel scales by the scroll's
