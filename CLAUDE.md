@@ -893,6 +893,11 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     operator-mapped bar (`mOpBar`). CSVs add last ping, live and breakdown ID (Territory / AM) and last 7 days / IoT (Retailer).
   · Strip: MTD and "Machines on the sheet" removed; Scanned shows the DAY on top with the total under it (also on the
     Retailer strip). Tile labels may wrap. Layout since 2026-10-30: the four groups above.
+  · **gviz can answer SHORT with no error (2026-11-04):** the Main sheet held 374 rows a day, but every gviz query on it
+    (filtered or not, `headers=1` or not) returned ONE row per date — 14 rows — and every Wheat page read 14 machines.
+    `loadWRet` now treats fewer than 20 rows a date as truncated and reads the plain CSV export (`/export?format=csv&gid=`,
+    3 MB, redirects to googleusercontent, CORS allowed) instead. Read the load log: a `gviz returned N rows over N dates`
+    warning means the fallback ran. The 29 Oct "35 rows" sighting below was probably the same fault.
   · Seen on 29 Oct ~1:40 pm: the Main sheet briefly held only 35 rows (28 Oct only) while being rebuilt — the page shows
     whatever the sheet holds, so a sudden drop to ~34 machines is the sheet, not the console.
 - **The Day filter (added 2026-10-29, by request)** — `state.wDay` ('' = yesterday), ONE value shared by all four Wheat
