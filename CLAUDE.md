@@ -977,6 +977,26 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     onboarded filter (`wfoOn`, a segmented control with counts; Clear resets it). Own sort (`wfoSort`) and open rows.
   · Reconciles with the sheet except UPL_2826, listed twice on 28 Oct (read once): 89 bookings / 727 ac through 28 Oct.
   · Desktop table fits unscrolled at 1280 (min-width 940); KPI strip is `.wfoKpi` (6 across, 3 below 1240px).
+- **Bayer machines in the Wheat admin (Dinesh 2026-11-05)** — `PROJECTS.wheat.bayer`: Bayer's own workbook
+  (`14dpDPQtB8GyQFMrjJa28LeTtgz5x5wr2dVv-WmoSH3M`, tab Sheet1, gid 0), the Main sheet's layout with organisation "Bayer"
+  (75 machines, HR 31 / PB 44). `loadWRet` fetches it beside the Main sheet through the same `wretFetch`, **for the Wheat
+  admin (4040) only**, and a failure there never blocks the Main sheet. Read **from 1 Nov** (`from`; Bayer's programme
+  start) — earlier rows are dropped at parse. Logs `[MP-Ops] wheat bayer sheet → {…}`; the merge is in `WRET.log.bayer`.
+  · **Company control on Territory / AM / FO / Map / Top 10** (`W_ORGS`, `wOrgOk`): UPL + SWAL (default, = the old
+    "Both", figures unchanged) · UPL · SWAL · Bayer · All 3. The header's machine count follows it. Team logins are
+    locked to their company and never see Bayer. **The Retailer page never shows Bayer** (no retailer, no plan on its sheet).
+  · **Bayer has no plan.** `wPlanAc` gives its machines 0 planned acres, so "% of plan" under All 3 is UPL + SWAL acres ÷
+    their plan and says so; Bayer alone reads "Bayer has no plan", plan cells show "—" (`wPlanF`), and a plan sort
+    becomes an acres sort.
+  · Acres sprayed = `Rabi_achieved_acres`; IoT acres = `IOT_acres` (both shown, as for UPL). **Scanned = MOMIJI +
+    MATENOMORE** (Sheet4's "Tot Scan Data"; its `scanned_acres` column is near-empty), split by those two products in
+    the Scanned card (`sdays[6]`/`[7]`, `wtScan` keys `mo`/`mt`). Bayer alone: the day axis, per-day average and Top 10
+    "Season" start on 1 Nov (`wtDays(from)`).
+  · A machine on both sheets (UPL_2657, UPL_2782) counts as **Bayer's only** (`skip` in `wretBuild`). Duplicate
+    machine-days (UPL_2698, UPL_3048) are read once, so totals sit a few acres under Sheet4's (1,525 vs 1,532 ac to 4 Nov).
+  · FO page: Bayer's sheet has no "FO onboarded", so FOs whose machines are all Bayer's are left out of the onboarding
+    counts (and named as such). Retailer and FO on Bayer rows are mostly "0" → "No retailer named".
+  · Not read: "Product Bayer" (per-scan rows, agrees with the two columns) and Sheet4 (a summary).
 - **Page 6, Top 10 machines** (`wtop`, `#/top-machines`, rail "Top 10"; `wtopBodyHTML` / `wtopList` / `wtopCSV`, Dinesh
   2026-11-04). Wheat admin only. The ten machines with the most season acres through the Day filter's day, on the shared wt*
   scope. A toggle ranks by acres sprayed (`wtAc`) or IoT acres (`iotAll`); days / per day follow the chosen measure. Admin's
