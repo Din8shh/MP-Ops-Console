@@ -9335,10 +9335,10 @@ const wStageWord = m => m.stage==='dep' ? 'Deployed' : m.stage==='transit' ? 'In
 // Breakdown and Operators mapped count DEPLOYED machines only (Dinesh 2026-10-30): a machine not handed over yet is neither.
 const wTeamBrk = m => m.brk && m.stage==='dep';
 function wTeamFigs(list){
-  const sumOf=f=>list.reduce((a,m)=>a+f(m),0), n=list.length, op=list.filter(m=>m.stage==='dep'&&(m.opNum||m.opName)).length;
+  const sumOf=f=>list.reduce((a,m)=>a+f(m),0), n=list.length, op=list.filter(m=>m.opNum||m.opName).length;   // over ALL machines (Dinesh 2026-11-05; was deployed only)
   const plan=n*WTEAM_TGT, acAll=sumOf(wtAc), stage=k=>list.filter(m=>m.stage===k).length;
   return { n, dep:stage('dep'), transit:stage('transit'), wait:stage('wait'), brk:list.filter(wTeamBrk).length,
-    ranY:list.filter(m=>m.acY>0).length, op, opPct:stage('dep')?100*op/stage('dep'):null, acY:sumOf(m=>m.acY), plan, acAll, pct:plan>0?100*acAll/plan:null };
+    ranY:list.filter(m=>m.acY>0).length, op, opPct:n?100*op/n:null, acY:sumOf(m=>m.acY), plan, acAll, pct:plan>0?100*acAll/plan:null };
 }
 // The page as a tree of nodes { key, label, name, org, mob, sub, people, warn, tag, none, f, nAll, open, kids | groups }.
 function wTeamTree(view){
@@ -9392,7 +9392,7 @@ function wTeamStripHTML(T, F, B, mob, stale, brkList){
   const tiles=[
     tile('Ran '+dw,'Ran',F.ranY,F.n,`${ranP}% of machines`,ranP),
     tile('Breakdown','Breakdown',F.brk,F.dep,`of deployed · on ${day}${brkRan?` · ${fmt(brkRan)} still sprayed`:''}`),
-    tile('Operators mapped'+(wDayOn()?' today':''),'Operators',F.op,F.dep,F.dep-F.op ? `of deployed · ${fmt(F.dep-F.op)} not mapped` : 'every deployed machine has one'),
+    tile('Operators mapped'+(wDayOn()?' today':''),'Operators',F.op,F.n,F.n-F.op ? `of all machines · ${fmt(F.n-F.op)} not mapped` : 'every machine has one'),
   ];
   const tM=w2tone('Machines'), parts=[['Deployed',F.dep,W2.act],['In transit',F.transit,'#3B82C4'],['Pending',F.wait,W2.ink3]];
   const pctOf=v=>F.n?Math.round(100*v/F.n):0;
@@ -9461,10 +9461,10 @@ function wTeamListHTML(T, B, mob){
     const stat=(v,l)=>`<div style="display:flex;flex-direction:column;min-width:0"><span style="${w2num(17)}">${v}</span><span style="font-size:12.5px;color:${W2.ink2}">${l}</span></div>`;
     const of=(k,n)=>`${fmt(k)}<span style="font-size:12px;font-weight:500;color:${W2.ink2}"> /${fmt(n)}</span>`;
     const figs=x=>`<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span style="${w2num(22)}">${acF(x.f.acAll)}</span> <span style="font-size:13.5px;color:${W2.ink2}">of ${fmt(x.f.plan)} ac target</span></span><span style="${w2num(14)}">${pctF(x.f.pct)}</span></div>${meter(x.f.pct,'',W2.act)}</div>
-      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 8px">${stat(x.nAll>x.f.n?of(x.f.n,x.nAll):fmt(x.f.n),'plan')}${stat(fmt(x.f.dep),'deployed')}${stat(fmt(x.f.transit),'in transit')}${stat(`<span style="${x.f.brk?`color:${W2.brkD}`:''}">${fmt(x.f.brk)}</span>`,'breakdown')}${stat(of(x.f.ranY,x.f.n),'ran '+dw)}${stat(acF(x.f.acY),'ac '+dw)}</div>${mOpBar({op:x.f.op,n:x.f.dep})}`;
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 8px">${stat(x.nAll>x.f.n?of(x.f.n,x.nAll):fmt(x.f.n),'plan')}${stat(fmt(x.f.dep),'deployed')}${stat(fmt(x.f.transit),'in transit')}${stat(`<span style="${x.f.brk?`color:${W2.brkD}`:''}">${fmt(x.f.brk)}</span>`,'breakdown')}${stat(of(x.f.ranY,x.f.n),'ran '+dw)}${stat(acF(x.f.acY),'ac '+dw)}</div>${mOpBar({op:x.f.op,n:x.f.n})}`;
     const pRow=(p,last)=>`<div style="display:flex;align-items:center;gap:10px;min-height:52px;${last?'':'border-bottom:1px solid '+W2.line2}"><span style="width:28px;font-size:12px;font-weight:600;color:${W2.ink2};flex-shrink:0">${p.lab}</span><span style="flex:1;min-width:0;font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.n?E(p.n):none}</span>${tel(p,p.lab)}</div>`;
     const mcBtn=(m,inBox)=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:${inBox?'#fff':W2.head};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
-        <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${orgChip(m.org)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hasOp(m)?E(m.opName||m.opNum):m.stage==='dep'?`<span style="color:${W2.brkD}">No operator</span>`:'No operator yet'}${T.view==='wplan'?'':' · '+E(m.party)}</span><span style="display:block;font-size:12.5px">${wStageH(m)}${wTeamBrk(m)?` · <span style="color:${W2.brkD};font-weight:600">! Breakdown</span>`:''}</span></span>
+        <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${orgChip(m.org)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hasOp(m)?E(m.opName||m.opNum):`<span style="color:${W2.brkD}">No operator</span>`}${T.view==='wplan'?'':' · '+E(m.party)}</span><span style="display:block;font-size:12.5px">${wStageH(m)}${wTeamBrk(m)?` · <span style="color:${W2.brkD};font-weight:600">! Breakdown</span>`:''}</span></span>
         <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${acF(wtAc(m))} <span style="font-weight:400;color:${W2.ink2}">/ ${fmt(WTEAM_TGT)} ac</span></span><span style="display:block;font-size:12.5px;color:${m.acY>0?W2.actD:W2.ink2}">${m.acY>0?'✓ '+acF(m.acY)+' ac '+dw:'idle '+dw}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`;
     const tText=x=>x.kids ? `${x.kids.filter(k=>!k.none).length} FO${x.kids.filter(k=>!k.none).length===1?'':'s'}${x.kids.some(k=>k.none)?' + no FO':''}` : `${x.f.n} machine${x.f.n===1?'':'s'}`;
     const toggle=x=>`<button data-act="${T.act}" data-k="${E(x.key)}" aria-expanded="${x.open}" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:${x.open?W2.head:'#fff'};color:${W2.ink};font:500 14px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${x.open?'Hide':'Show'} ${tText(x)} <span aria-hidden="true" style="display:inline-block;transform:rotate(${x.open?180:0}deg)">▾</span></button>`;
@@ -9498,13 +9498,13 @@ function wTeamListHTML(T, B, mob){
       <div style="min-width:0;display:flex;gap:8px;align-items:flex-start;padding-left:${lv*20}px">${B.chev(x.open)}<div style="min-width:0">
         <div style="display:flex;align-items:center;gap:8px;min-width:0">${x.label?`<b style="font-size:11.5px;font-weight:600;color:${W2.ink2}">${x.label}</b>`:''}<span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${E(x.name)}">${E(x.name)}${phone(x.mob)}</span>${x.org?orgChip(x.org):''}${x.tag?tagH(x.tag):''}</div>
         ${sub?`<div style="font-size:13px;color:${W2.ink2};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div>`:''}${x.warn?warnH(x.warn):''}</div></div>
-      ${numC(fmt(x.f.n)+(x.nAll>x.f.n?`<span style="color:${W2.ink2};font-weight:400"> /${fmt(x.nAll)}</span>`:''))}${numC(fmt(x.f.dep),1)}${numC(fmt(x.f.transit))}${numC(`<span style="${x.f.brk?`color:${W2.brkD};font-weight:600`:`color:${W2.ink2}`}">${fmt(x.f.brk)}</span>`)}${ofC(x.f.ranY,x.f.n,W2.act)}${ofC(x.f.op,x.f.dep,'#1A9E80')}${numC(acF(x.f.acY))}${numC(fmt(x.f.plan),1)}${vsC(x.f.acAll,x.f.pct)}</div>`; };
+      ${numC(fmt(x.f.n)+(x.nAll>x.f.n?`<span style="color:${W2.ink2};font-weight:400"> /${fmt(x.nAll)}</span>`:''))}${numC(fmt(x.f.dep),1)}${numC(fmt(x.f.transit))}${numC(`<span style="${x.f.brk?`color:${W2.brkD};font-weight:600`:`color:${W2.ink2}`}">${fmt(x.f.brk)}</span>`)}${ofC(x.f.ranY,x.f.n,W2.act)}${ofC(x.f.op,x.f.n,'#1A9E80')}${numC(acF(x.f.acY))}${numC(fmt(x.f.plan),1)}${vsC(x.f.acAll,x.f.pct)}</div>`; };
   const mRow=(m,lv)=>`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;background:#FBFCFD">
       <div style="min-width:0;padding-left:${22+lv*20}px"><div style="display:flex;align-items:center;gap:6px"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font:600 13px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</button>${orgChip(m.org)}</div><div style="font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(T.view==='wplan'?(m.village||''):m.party)}</div></div>
       <span style="grid-column:span 3;text-align:right;font-size:13px;white-space:nowrap">${wStageH(m)}</span>
       <span style="text-align:right;font-size:13px;white-space:nowrap;color:${W2.brkD};font-weight:600">${wTeamBrk(m)?`! <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">${E(m.brkDays[WRET.yday])}</span>`:''}</span>
       <span style="text-align:right;font-size:13px;white-space:nowrap;color:${m.acY>0?W2.actD:W2.ink2}">${m.acY>0?'✓ Ran':'Idle'}</span>
-      <span style="text-align:right;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasOp(m)?E(m.opName||m.opNum):m.stage==='dep'?`<span style="color:${W2.brkD}">✕ No operator</span>`:`<span style="color:${W2.ink2}">Not deployed</span>`}</span>
+      <span style="text-align:right;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasOp(m)?E(m.opName||m.opNum):`<span style="color:${W2.brkD}">✕ No operator</span>`}</span>
       ${numC(acF(m.acY))}${numC(`<span style="color:${W2.ink2}" title="${WTEAM_TGT} ac per machine">${fmt(WTEAM_TGT)}</span>`)}${vsC(wtAc(m),mcPct(m))}</div>`;
   const lRow=(t,lv)=>`<div style="padding:8px 22px 6px ${52+lv*20}px;border-bottom:1px solid ${W2.line2};background:${W2.head};font-size:13px;color:${W2.ink2}">${E(t)}</div>`;
   const kids=(x,lv)=>!x.open ? '' : x.kids ? x.kids.map(k=>gRow(k,lv+1)+kids(k,lv+1)).join('')
@@ -9579,12 +9579,12 @@ function wmGeo(){
 const WM_SHOW = [['all','All machines'],['y','Sprayed {day}'],['s','Sprayed earlier'],['n','Not sprayed yet'],
   ['brk','Breakdown {day}'],['noop','No operator mapped'],['stale','Last ping 3+ days ago'],['noiot','Sprayed, no IoT acres']];
 const wmTone = m => m.iotY>0 ? 'y' : m.iotAll>0 ? 's' : 'n';
-// A team login reads Breakdown and No operator on DEPLOYED machines only, exactly as its own pages count them, and has
+// A team login reads Breakdown on DEPLOYED machines only and No operator on ALL machines, as its own pages count them, and has
 // no "Sprayed, no IoT acres" button (a SWAL machine's acres sprayed ARE its IoT acres, so it would always read 0) and no
 // "Last ping 3+ days ago" button (removed for the team logins by request, 2026-11-05; the admin keeps it).
 const WM_TEST = { all:()=>true, y:m=>wmTone(m)==='y', s:m=>wmTone(m)==='s', n:m=>wmTone(m)==='n',
   brk:m=>wTeam() ? wTeamBrk(m) : !!m.brk,
-  noop:m=>!(m.opNum||m.opName) && (!wTeam() || m.stage==='dep'), stale:wmStale, noiot:m=>wNoIot(m) };
+  noop:m=>!(m.opNum||m.opName), stale:wmStale, noiot:m=>wNoIot(m) };
 const wmShowOpts = () => wTeam() ? WM_SHOW.filter(([k])=>k!=='noiot'&&k!=='stale') : WM_SHOW;
 const wmShowKey = () => WM_TEST[state.wmShow] && wmShowOpts().some(([k])=>k===state.wmShow) ? state.wmShow : 'all';
 // The pin map (Dinesh 2026-11-05): admin and every team login — SWAL first, the UPL ones the same day.
@@ -9600,7 +9600,7 @@ function wmGroups(A){
     // reported column. The KPI strip above it is shared with Territory / AM and keeps the reported acres.
     const L=g.list.sort((a,b)=>b.iotY-a.iotY||b.iotAll-a.iotAll||a.mc.localeCompare(b.mc));
     const tone = L.some(m=>m.iotY>0) ? 'y' : L.some(m=>m.iotAll>0) ? 's' : 'n';
-    return { ...g, list:L, tone, noOp:L.some(WM_TEST.noop), stale:L.every(wmStale) };   // a team's red ring = deployed with no operator
+    return { ...g, list:L, tone, noOp:L.some(WM_TEST.noop), stale:L.every(wmStale) };   // red ring = no operator mapped
   }).sort((a,b)=>({n:0,s:1,y:2}[a.tone]-{n:0,s:1,y:2}[b.tone]));   // green painted last, on top
 }
 const WM_TONE = { y:C.act, s:'#6E6A62', n:'#CBC6BC' };

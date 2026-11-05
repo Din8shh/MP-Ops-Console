@@ -936,8 +936,7 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     Malout → Muktsar, Dabwali → Sirsa), shared districts ADDED. Five equal green steps 0 → largest district, no acres = no
     colour, red = a territory with no acres, plain = no territory. Season / that-day toggle (`state.wcPer`). **Team logins get the
     Map page too** (their company only, no CSV, no admin KPI strip), the pin map above the territory map for every team login
-    (`wmPins`: SWAL first, UPL the same day, 2026-11-05). On a team login the Breakdown / No operator
-    buttons and the red ring count DEPLOYED machines only, as the team pages do, and neither "Sprayed, no IoT acres" nor
+    (`wmPins`: SWAL first, UPL the same day, 2026-11-05). On a team login the Breakdown button counts DEPLOYED machines only and No operator / the red ring ALL machines, as the team pages do, and neither "Sprayed, no IoT acres" nor
     "Last ping 3+ days ago" is offered as a Show button (2026-11-05; faded pins and their legend key stay). Static SVG on WM.base's paths (not the pan/zoom engine); desktop labels
     sized off the box height and decluttered; a list of territories beside (desktop) / below (phone).
   · **Pan / zoom (shared engine, `attachPanZoom`, reworked 2026-11-04 for "too sensitive")**: zoom pivots on the cursor, the
@@ -1031,8 +1030,9 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     `state.wtmBrkOpen`, follows the page's filters): machine, ID, handover, retailer, territory, operator, TM, the day's acres. The IDs
     are the same on every date the sheet holds (first date 22 Oct), so no "since" is shown. Rows: Plan · Deployed · In transit · Breakdown columns
     (all sortable), machine rows show the stage and ID; phone cards a 6-figure grid. Machine panel: Handover + Breakdown stats, team
-    logins only. CSV: Handover status + Breakdown ID. **Breakdown and Operators mapped count DEPLOYED machines only (`wTeamBrk`, `wTeamFigs`; Dinesh 2026-10-30): tiles, rows, list, CSV and panel.
-    Ran and the 650 ac target still count the whole plan.** The admin pages do not show any of this yet. Checked on the sheet 30 Oct: UPL 157 = 127 + 8 + 22, SWAL 212 = 184 + 10 + 18 (17 blank in all),
+    logins only. CSV: Handover status + Breakdown ID. **Breakdown counts DEPLOYED machines only (`wTeamBrk`; Dinesh 2026-10-30): tiles, rows, list, CSV and panel. Operators mapped did too
+    until 2026-11-05, when Dinesh moved it to ALL machines (`wTeamFigs`: "n of all machines", rows n of plan, the Map's No operator
+    button and red ring likewise). Ran and the 650 ac target count the whole plan.** The admin pages do not show any of this yet. Checked on the sheet 30 Oct: UPL 157 = 127 + 8 + 22, SWAL 212 = 184 + 10 + 18 (17 blank in all),
     breakdown 31 UPL + 43 SWAL on 29 Oct (5 of them sprayed; before the deployed-only rule). After it, on the sheet of the evening of 30 Oct: UPL 27 of 127 and operators 98 of 127; SWAL 38 of 186 and operators 145 of 186 (the sheet had moved: 313 deployed then). 14.5 ac were sprayed by machines not marked Done. Table fits unscrolled at 1280 (min-width 950).
   · One tree renderer for all three pages: Retailer → machines · Territory → machines (under each TM) · TM → FO → machines. It
     reuses each page's own expand acts / open state / sort state (`wpexp`/`wtexp`/`wfoexp`, `wpSort`/`wtSort`/`wfoSort`) with
