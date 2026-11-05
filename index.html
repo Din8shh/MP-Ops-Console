@@ -9526,9 +9526,16 @@ function wmGeo(){
 const WM_SHOW = [['all','All machines'],['y','Sprayed {day}'],['s','Sprayed earlier'],['n','Not sprayed yet'],
   ['brk','Breakdown {day}'],['noop','No operator mapped'],['stale','Last ping 3+ days ago'],['noiot','Sprayed, no IoT acres']];
 const wmTone = m => m.iotY>0 ? 'y' : m.iotAll>0 ? 's' : 'n';
-const WM_TEST = { all:()=>true, y:m=>wmTone(m)==='y', s:m=>wmTone(m)==='s', n:m=>wmTone(m)==='n', brk:m=>!!m.brk,
-  noop:m=>!(m.opNum||m.opName), stale:wmStale, noiot:m=>wNoIot(m) };
-const wmShowKey = () => WM_TEST[state.wmShow] ? state.wmShow : 'all';
+// A team login reads Breakdown and No operator on DEPLOYED machines only, exactly as its own pages count them, and has
+// no "Sprayed, no IoT acres" button (a SWAL machine's acres sprayed ARE its IoT acres, so it would always read 0).
+const WM_TEST = { all:()=>true, y:m=>wmTone(m)==='y', s:m=>wmTone(m)==='s', n:m=>wmTone(m)==='n',
+  brk:m=>wTeam() ? wTeamBrk(m) : !!m.brk,
+  noop:m=>!(m.opNum||m.opName) && (!wTeam() || m.stage==='dep'), stale:wmStale, noiot:m=>wNoIot(m) };
+const wmShowOpts = () => wTeam() ? WM_SHOW.filter(([k])=>k!=='noiot') : WM_SHOW;
+const wmShowKey = () => WM_TEST[state.wmShow] && wmShowOpts().some(([k])=>k===state.wmShow) ? state.wmShow : 'all';
+// The pin map (Dinesh 2026-11-05): admin, and the three SWAL team logins (HR SWAL, PB SWAL, SWAL leaders). UPL team
+// logins keep the territory map alone until asked.
+const wmPins = () => isAdmin() || (wTeam() && GATE.cur.org==='SWAL');
 const wmShown = A => A.rows.flatMap(r=>r.list).filter(WM_TEST[wmShowKey()]);
 // Machines in view, grouped by exact position (69 share one with another machine on 2026-10-28, mostly at one retailer).
 function wmGroups(A){
@@ -9540,7 +9547,7 @@ function wmGroups(A){
     // reported column. The KPI strip above it is shared with Territory / AM and keeps the reported acres.
     const L=g.list.sort((a,b)=>b.iotY-a.iotY||b.iotAll-a.iotAll||a.mc.localeCompare(b.mc));
     const tone = L.some(m=>m.iotY>0) ? 'y' : L.some(m=>m.iotAll>0) ? 's' : 'n';
-    return { ...g, list:L, tone, noOp:L.some(m=>!(m.opNum||m.opName)), stale:L.every(wmStale) };
+    return { ...g, list:L, tone, noOp:L.some(WM_TEST.noop), stale:L.every(wmStale) };   // a team's red ring = deployed with no operator
   }).sort((a,b)=>({n:0,s:1,y:2}[a.tone]-{n:0,s:1,y:2}[b.tone]));   // green painted last, on top
 }
 const WM_TONE = { y:C.act, s:'#6E6A62', n:'#CBC6BC' };
@@ -9617,9 +9624,9 @@ function wtopCSV(){
 }
 function wmapBodyHTML(mob){
   if(!wSees() || !WRET.loaded) return wplanBodyHTML(mob);   // the rebuild message, or the shared loading / error card
-  // Team logins (Dinesh 2026-11-04): the territory acres map first, on their own company's machines (wterrAgg honours
-  // the forced org). The pin map follows for them later; until then the page is the territory map alone.
-  if(wTeam()){ const A=wterrAgg(), ready=wmGeo(), controls=wtControlsHTML(A, mob, false, { noCsv:true });   // the admin CSV carries columns a team does not get
+  // Team logins (Dinesh 2026-11-04): the territory acres map, on their own company's machines (wterrAgg honours the
+  // forced org). The SWAL ones also get the pin map (wmPins) and go on below, without the admin's KPI strip.
+  if(wTeam() && !wmPins()){ const A=wterrAgg(), ready=wmGeo(), controls=wtControlsHTML(A, mob, false, { noCsv:true });   // the admin CSV carries columns a team does not get
     const box = ready ? wchoroHTML(A, mob) : `<div style="${w2card(mob?18:16)};margin-top:${mob?12:16}px;height:300px;display:flex;align-items:center;justify-content:center;color:${W2.ink2};font-size:13px">Loading the map…</div>`;
     return mob ? `<div>${controls}</div>` + box : controls + box; }
   const A=wterrAgg();
@@ -9628,7 +9635,7 @@ function wmapBodyHTML(mob){
   const placed=mcs.length-off.length;
   const ready=wmGeo();
   const dayW=wtDayShort();
-  const chips=`<div role="group" aria-label="Show on the map" style="display:flex;gap:6px;padding:${mob?'10px 16px':'10px 18px'};border-bottom:1px solid ${W2.line2};${mob?'overflow-x:auto;-webkit-overflow-scrolling:touch':'flex-wrap:wrap'}">${WM_SHOW.map(([k,t])=>{
+  const chips=`<div role="group" aria-label="Show on the map" style="display:flex;gap:6px;padding:${mob?'10px 16px':'10px 18px'};border-bottom:1px solid ${W2.line2};${mob?'overflow-x:auto;-webkit-overflow-scrolling:touch':'flex-wrap:wrap'}">${wmShowOpts().map(([k,t])=>{
       const on=show===k, n=all.filter(WM_TEST[k]).length, lab=t.replace('{day}',dayW);
       return `<button data-act="wmshow" data-k="${k}" aria-pressed="${on}" style="flex-shrink:0;min-height:${mob?44:32}px;padding:0 12px;border-radius:999px;border:1px solid ${on?W2.ink:W2.line};background:${on?W2.ink:'#fff'};color:${on?'#fff':W2.ink};font-family:inherit;font-size:13px;font-weight:${on?600:500};cursor:pointer;white-space:nowrap">${E(lab)} <span style="font-variant-numeric:tabular-nums;opacity:${on?.85:.6}">${fmt(n)}</span></button>`; }).join('')}</div>`;
   const dot=(c,ring,fade)=>`<span aria-hidden="true" style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${c};${ring?'box-shadow:0 0 0 2px '+C.brk+';':'border:1.5px solid #fff;box-sizing:border-box;'}${fade?'opacity:.4;':''}flex-shrink:0"></span>`;
@@ -9646,8 +9653,10 @@ function wmapBodyHTML(mob){
     : `<div id="wmHost" style="position:relative;background:radial-gradient(ellipse at 50% 40%,#F2F7FC 0%,#FFFFFF 75%);${mob?`aspect-ratio:${WM.W}/${WM.H};max-height:60vh;width:100%`:'height:clamp(460px,72vh,840px)'};overflow:hidden">${mob?zoomOverlayFor(true):''}</div>`;
   const map=`<div style="${w2card(mob?18:16)};overflow:hidden;margin-top:${mob?12:16}px">${head}${box}
       <div style="padding:${mob?'14px 16px':'14px 18px'};border-top:1px solid ${W2.line2}">${legend}${notes}</div></div>`;
-  const controls = wtControlsHTML(A, mob, false);
+  const team = wTeam();
+  const controls = wtControlsHTML(A, mob, false, team ? { noCsv:true } : undefined);   // the admin CSV carries columns a team does not get
   const choro = ready ? wchoroHTML(A, mob) : '';
+  if(team) return mob ? `<div>${controls}</div>` + map + choro : controls + map + choro;   // no admin KPI strip for a team
   return mob ? wtStripHTML(A, mob, stale, true) + `<div style="margin-top:12px">${controls}</div>` + map + choro
              : controls + wtStripHTML(A, mob, stale) + map + choro;
 }
