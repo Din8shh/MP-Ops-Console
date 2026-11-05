@@ -3,269 +3,210 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Partner view · Bayer</title>
+<title>Territories · Bayer partner view</title>
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#FFFFFF">
 <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  /* Tokens — the console's (CLAUDE.md → Tokens). Health: assigned = Active green, awaiting = Idle amber. */
-  :root{ --ink:#1B1A17; --ink2:#6E6A62; --ink3:#9C988F; --line:#E9E6DF; --soft:#F2F0EB; --bg:#F6F5F2; --card:#fff;
-         --accent:#D96A12; --accentBg:#FDF1E6;
-         --ok:#15A24A; --okInk:#0F7A37; --okBg:#E8F6EE; --wait:#E0A008; --waitInk:#8A6100; --waitBg:#FDF5DD; --none:#D8D4CA; }
+  /* The console's Wheat v2 tokens (W2 in index.html), so this page looks like the UPL / SWAL team logins: cool neutrals,
+     IBM Plex Sans with tabular figures (Mono for machine and phone numbers), tinted KPI tiles, a dark labelled rail. */
+  :root{ --ink:#15181C; --ink2:#5B636D; --ink3:#8C939B; --line:#E4E7EA; --line2:#EEF0F2; --cardBd:#E8ECF1; --head:#F8F9FA; --track:#EAEEF3;
+         --act:#12924A; --actD:#0F7A3D; --idle:#D69A00; --idleD:#8A6200; --brk:#D23B2C; --brkD:#B42D20; --op:#1A9E80;
+         --shadow:0 1px 2px rgba(20,30,45,0.04),0 10px 28px -16px rgba(20,30,45,0.14);
+         --dark:linear-gradient(135deg,#243447,#16352D); --page:linear-gradient(160deg,#FFF6EC 0%,#F3F6FB 38%,#F1F8F4 100%); }
   *{ box-sizing:border-box; }
-  html,body{ margin:0; background:var(--bg); color:var(--ink); font-family:'Noto Sans',system-ui,sans-serif; -webkit-text-size-adjust:100%; }
-  body{ min-height:100dvh; display:flex; flex-direction:column; }
+  html,body{ margin:0; color:var(--ink); background:#F3F6FB; font-family:'IBM Plex Sans',system-ui,sans-serif; font-variant-numeric:tabular-nums; -webkit-text-size-adjust:100%; }
+  body{ background:var(--page) fixed; min-height:100dvh; }
   .mono{ font-family:'IBM Plex Mono',monospace; }
-  .muted{ color:var(--ink2); }
-  button{ font:inherit; }
-  :focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  button{ font:inherit; color:inherit; }
+  :focus-visible{ outline:2px solid var(--ink); outline-offset:2px; }
+  a{ color:inherit; }
 
-  /* header: who · page · scope, then the two tabs */
-  header{ background:#fff; border-bottom:1px solid var(--line); padding:calc(env(safe-area-inset-top) + 12px) 20px 0; position:sticky; top:0; z-index:5; }
-  .hrow{ display:flex; align-items:flex-start; gap:12px; max-width:1180px; margin:0 auto; }
-  .eyebrow{ font-size:11px; font-weight:700; letter-spacing:.14em; color:var(--accent); text-transform:uppercase; }
-  h1{ font-size:20px; margin:2px 0 0; font-weight:700; line-height:1.25; }
-  .scope{ font-size:12.5px; color:var(--ink2); margin-top:2px; }
-  .grow{ flex:1; min-width:0; }
-  .hside{ display:flex; align-items:center; gap:12px; }
-  .stamp{ font-size:12px; color:var(--ink2); text-align:right; line-height:1.35; }
-  .stamp b{ color:var(--ink); font-weight:600; }
-  .stamp.stale b{ color:#DC3A2B; }
-  .btn{ color:var(--ink2); background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:8px 14px; min-height:44px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; }
-  .btn:hover{ border-color:#D8D4CA; color:var(--ink); }
-  .btn.sm{ min-height:36px; padding:6px 12px; font-size:12.5px; }
-  .tabs{ display:flex; gap:4px; max-width:1180px; margin:8px auto 0; }
-  .tab{ font-size:14px; font-weight:600; color:var(--ink2); background:none; border:none; border-bottom:3px solid transparent; padding:10px 12px; min-height:46px; cursor:pointer; }
-  .tab[aria-current="page"]{ color:var(--ink); border-bottom-color:var(--accent); font-weight:700; }
-  .tab .n{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink2); margin-left:4px; font-weight:500; }
+  /* shell: a dark rail beside a page with a 68px header carrying the brand stripe */
+  #app{ display:none; min-height:100dvh; }
+  .shell{ display:flex; min-height:100dvh; }
+  .rail{ width:232px; flex-shrink:0; position:sticky; top:0; height:100vh; background:linear-gradient(185deg,#1F2B3A 0%,#182C33 60%,#14302A 100%); color:#fff; display:flex; flex-direction:column; padding:20px 14px 16px; }
+  .logo{ display:flex; align-items:center; gap:10px; padding:0 6px 20px; }
+  .logo i{ width:34px; height:34px; border-radius:9px; background:linear-gradient(135deg,#F5821F,#1FAE43); display:flex; align-items:center; justify-content:center; font:700 12px 'IBM Plex Sans',sans-serif; font-style:normal; flex-shrink:0; }
+  .logo b{ display:block; font-size:15px; font-weight:600; } .logo span{ font-size:12px; color:rgba(255,255,255,.62); }
+  .rlbl{ font-size:11px; font-weight:600; color:rgba(255,255,255,.55); letter-spacing:.08em; padding:0 10px 6px; text-transform:uppercase; }
+  .nav{ display:flex; align-items:center; gap:10px; width:100%; height:38px; padding:0 10px; border:0; border-radius:8px; background:transparent; color:rgba(255,255,255,.78); font:500 14px 'IBM Plex Sans',sans-serif; cursor:pointer; text-align:left; }
+  .nav svg{ width:18px; height:18px; color:rgba(255,255,255,.5); flex-shrink:0; }
+  .nav:hover{ background:rgba(255,255,255,.06); }
+  .nav[aria-current="page"]{ background:linear-gradient(90deg,rgba(245,130,31,.30),rgba(31,174,67,.14)); color:#fff; font-weight:600; }
+  .nav[aria-current="page"] svg{ color:#FFB273; }
+  .rfoot{ margin-top:auto; border-top:1px solid rgba(255,255,255,.1); padding-top:12px; }
+  .conf{ font:500 10.5px 'IBM Plex Mono',monospace; letter-spacing:.18em; color:rgba(255,255,255,.4); padding:10px 10px 0; }
+  .col{ flex:1; min-width:0; display:flex; flex-direction:column; }
+  .top{ height:68px; flex-shrink:0; background:#fff linear-gradient(90deg,#F5821F,#1FAE43) no-repeat; background-size:100% 3px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:20px; padding:0 32px; position:sticky; top:0; z-index:5; }
+  .top h1{ font-size:20px; font-weight:600; margin:0; line-height:1.2; }
+  .top .sc{ font-size:13px; color:var(--ink2); margin-top:2px; }
+  .stamp{ font-size:12.5px; color:var(--ink2); text-align:right; }
+  .stamp.bad{ color:var(--brkD); }
+  .link{ border:none; background:none; padding:0; font:inherit; color:var(--ink); text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+  main{ flex:1; padding:24px 32px 32px; width:100%; max-width:1440px; }
+  footer{ font-size:12px; color:var(--ink2); padding:14px 32px calc(env(safe-area-inset-bottom) + 14px); }
+  .mhead, .mnav{ display:none; }
 
-  main{ flex:1; width:100%; max-width:1180px; margin:0 auto; padding:18px 20px 40px; }
-  .lead{ font-size:13.5px; color:var(--ink2); margin:0 0 14px; }
-  .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
-  .sec{ margin-top:26px; scroll-margin-top:130px; }   /* clears the sticky header when a filter jumps to the list */
-  .sechead{ display:flex; align-items:baseline; gap:10px; margin:0 0 10px; flex-wrap:wrap; }
-  .sechead h2{ font-size:15.5px; margin:0; }
-  .sechead .sub{ font-size:12.5px; color:var(--ink2); }
-  .sechead .end{ margin-left:auto; }
+  /* controls */
+  .ctl{ display:flex; align-items:center; gap:12px 14px; flex-wrap:wrap; }
+  .fld{ display:flex; flex-direction:column; gap:4px; }
+  .fld > span{ font-size:12.5px; font-weight:500; color:var(--ink2); white-space:nowrap; }
+  .sel{ height:38px; border:1px solid var(--line); border-radius:10px; background:#fff; padding:0 10px; font:14px 'IBM Plex Sans',sans-serif; color:var(--ink); cursor:pointer; max-width:220px; }
+  .sel:disabled{ color:var(--ink3); cursor:default; }
+  .segb{ display:flex; gap:2px; background:var(--track); padding:3px; border-radius:10px; }
+  .segb button{ border:0; cursor:pointer; font:500 13.5px 'IBM Plex Sans',sans-serif; padding:6px 14px; border-radius:7px; background:transparent; color:var(--ink2); white-space:nowrap; }
+  .segb button[aria-pressed="true"]{ background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(20,24,28,.12); }
+  .srch{ position:relative; width:320px; }
+  .srch svg{ position:absolute; left:11px; top:50%; transform:translateY(-50%); color:var(--ink3); pointer-events:none; }
+  .srch input{ width:100%; height:38px; border:1px solid var(--line); border-radius:10px; background:#fff; padding:0 12px 0 34px; font:14px 'IBM Plex Sans',sans-serif; color:var(--ink); }
+  .ghost{ height:38px; padding:0 14px; border:1px solid var(--line); border-radius:10px; background:#fff; font-weight:500; font-size:14px; cursor:pointer; white-space:nowrap; }
+  .csv{ display:inline-flex; align-items:center; gap:6px; height:38px; padding:0 14px; border:0; border-radius:10px; background:var(--dark); color:#fff; box-shadow:0 6px 16px -8px rgba(22,53,45,.6); font-weight:500; font-size:14px; cursor:pointer; white-space:nowrap; }
 
-  /* 1 · status: the "good or not" card */
-  .status{ display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr); gap:28px; padding:20px 22px; border-left:4px solid var(--ok); }
-  .status.low{ border-left-color:var(--wait); }
-  .big{ font-size:34px; font-weight:700; font-family:'IBM Plex Mono',monospace; line-height:1.1; }
-  .big small{ font-size:18px; color:var(--ink2); font-weight:500; }
-  .bigLbl{ font-size:14px; font-weight:600; margin-top:4px; }
-  .bigNote{ font-size:12.5px; color:var(--ink2); margin-top:2px; }
-  .sbar{ display:flex; gap:2px; height:12px; border-radius:6px; overflow:hidden; background:var(--soft); margin-top:14px; }
-  .sbar i{ display:block; height:100%; }
-  .sbar .a{ background:var(--ok); } .sbar .w{ background:var(--wait); }
-  .key{ display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--ink2); margin-top:8px; }
-  .key span::before{ content:''; display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:0; background:var(--k); }
-  .stages{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0; align-self:center; }
-  .stages li{ position:relative; padding:0 10px 0 0; }
-  .stages li + li{ padding-left:14px; border-left:1px solid var(--line); }
-  .stages .sl{ font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink2); }
-  .stages .sv{ font-size:24px; font-weight:700; font-family:'IBM Plex Mono',monospace; margin-top:4px; }
-  .stages .sn{ font-size:12px; color:var(--ink2); margin-top:2px; }
-  .stages .off .sv{ color:var(--ink3); }
+  /* the strip: two labelled pieces, Machines and Acres */
+  .groups{ display:grid; gap:16px; margin-top:20px; }
+  .glbl{ display:flex; align-items:baseline; gap:8px; margin-bottom:8px; } .glbl b{ font-size:14px; font-weight:600; } .glbl span{ font-size:12.5px; color:var(--ink2); }
+  .mcgrid{ display:grid; grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(0,1fr)); gap:12px; }
+  .tile{ border-radius:14px; border:1px solid; box-shadow:var(--shadow); padding:14px 16px; display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .tile .l{ display:flex; align-items:baseline; gap:7px; font-size:12.5px; font-weight:500; color:var(--ink2); line-height:1.3; }
+  .tile .l i{ width:8px; height:8px; border-radius:50%; flex-shrink:0; transform:translateY(-1px); }
+  .tile .v{ font-size:26px; font-weight:600; line-height:1.1; letter-spacing:-.01em; white-space:nowrap; }
+  .u{ font-size:12.5px; color:var(--ink2); font-weight:500; letter-spacing:0; }
+  .tile .n{ font-size:12.5px; color:var(--ink2); line-height:1.4; }
+  .bar{ display:block; height:6px; border-radius:3px; background:var(--line2); overflow:hidden; }
+  .bar > span{ display:block; height:100%; border-radius:3px; }
+  .acard{ display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr); gap:0; padding:16px 18px; }
+  .acard > div + div{ border-left:1px solid var(--line2); padding-left:18px; margin-left:18px; }
+  .card{ background:#fff; border:1px solid var(--cardBd); border-radius:16px; box-shadow:var(--shadow); }
+  .warn{ font-size:12.5px; color:var(--idleD); margin-top:6px; }
 
-  /* 2 · by state */
-  .states{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
-  .stc{ padding:14px 16px; text-align:left; cursor:pointer; border:1px solid var(--line); width:100%; }
-  .stc:hover{ border-color:#D8D4CA; }
-  .stc[aria-pressed="true"]{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
-  .stc .t{ display:flex; align-items:baseline; gap:8px; }
-  .stc .nm{ font-size:14.5px; font-weight:700; }
-  .stc .v{ margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600; }
-  .stc .v small{ color:var(--ink2); font-weight:500; }
-  .stc .sbar{ height:8px; margin-top:10px; }
-  .stc .ft{ font-size:12px; color:var(--ink2); margin-top:7px; }
-
-  /* 3 · districts still waiting: a sorted horizontal bar list */
-  .dlist{ padding:6px 0; }
-  .drow{ display:grid; grid-template-columns:minmax(150px,220px) minmax(0,1fr) 150px; gap:14px; align-items:center; width:100%;
-         background:none; border:none; text-align:left; padding:8px 18px; min-height:44px; cursor:pointer; color:inherit; }
-  .drow:hover{ background:#FAF9F6; }
-  .drow[aria-pressed="true"]{ background:var(--accentBg); }
-  .drow .nm{ font-size:13.5px; font-weight:600; }
-  .drow .wh{ font-size:11.5px; color:var(--ink2); }
-  .drow .track{ display:flex; gap:2px; height:10px; }
-  .drow .track i{ display:block; height:100%; border-radius:2px; }
-  .drow .fig{ font-size:12.5px; text-align:right; }
-  .drow .fig b{ font-family:'IBM Plex Mono',monospace; }
-  .done{ color:var(--okInk); font-weight:600; }
-  .more{ display:block; width:100%; background:none; border:none; border-top:1px solid var(--soft); color:var(--accent); font-weight:600; font-size:13px; padding:12px; min-height:44px; cursor:pointer; }
-
-  /* 4 · the list */
-  .filters{ display:flex; flex-wrap:wrap; gap:8px; }
-  select, input[type=search]{ font:inherit; font-size:13.5px; color:var(--ink); background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:8px 10px; min-height:44px; outline:none; }
-  select:focus, input[type=search]:focus{ border-color:var(--accent); }
-  input[type=search]{ flex:1; min-width:200px; }
-  .fstate{ display:flex; align-items:center; gap:10px; font-size:12.5px; color:var(--ink2); margin:10px 0; min-height:28px; }
-  .link{ background:none; border:none; color:var(--accent); font-weight:600; font-size:12.5px; padding:6px 4px; cursor:pointer; }
-  table{ width:100%; border-collapse:collapse; font-size:13px; }
-  th{ text-align:left; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink2); padding:10px 14px; border-bottom:1px solid var(--line); background:#FBFAF8; position:sticky; top:0; }
-  td{ padding:10px 14px; border-bottom:1px solid var(--soft); vertical-align:top; }
-  tbody tr:last-child td{ border-bottom:none; }
-  tbody tr:hover td{ background:#FCFBF9; }
-  .tl{ font-weight:600; }
-  .ts{ font-size:12px; color:var(--ink2); margin-top:1px; }
-  .tel{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink2); text-decoration:none; }
-  .tel:hover{ color:var(--accent); text-decoration:underline; }
-  .chip{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:700; border-radius:20px; padding:3px 9px; white-space:nowrap; }
-  .chip.ok{ color:var(--okInk); background:var(--okBg); }
-  .chip.wait{ color:var(--waitInk); background:var(--waitBg); }
-  .tblwrap{ overflow:hidden; }
-  .cards{ display:none; }
-  .empty, .msg{ padding:30px 20px; text-align:center; color:var(--ink2); font-size:13.5px; }
-  .msg .btn{ margin-top:12px; }
-  .skel{ height:14px; border-radius:7px; background:linear-gradient(90deg,var(--soft),#F8F7F4,var(--soft)); background-size:200% 100%; margin:10px 0; }
+  /* the list */
+  .lhead{ padding:18px 22px; border-bottom:1px solid var(--line2); }
+  .lhead b{ font-size:16px; font-weight:600; } .lhead div{ font-size:13.5px; color:var(--ink2); margin-top:2px; }
+  .tbl{ overflow-x:auto; } .tbl > div{ min-width:980px; }
+  .row{ display:grid; grid-template-columns:minmax(210px,2fr) 70px 84px 110px 120px 84px 70px 140px; gap:10px; padding:12px 22px; border-bottom:1px solid var(--line2); align-items:center; font-size:14px; }
+  .row.hd{ background:var(--head); font-size:12px; font-weight:600; color:var(--ink2); padding-top:10px; padding-bottom:10px; position:sticky; top:0; z-index:1; }
+  .row.hd button{ border:none; background:none; padding:0; font:inherit; color:var(--ink2); cursor:pointer; text-align:right; justify-self:end; }
+  .row.hd button:first-child{ text-align:left; justify-self:start; }
+  .row.hd button[aria-sort="descending"]{ color:var(--ink); }
+  .row.g{ cursor:pointer; background:#fff; } .row.g:hover{ background:#FBFCFD; }
+  .row.g[aria-expanded="true"]{ background:var(--head); }
+  .row.g.l1{ background:var(--head); padding-top:10px; padding-bottom:10px; } .row.g.l1[aria-expanded="true"]{ background:#F3F6F9; }
+  .row.none{ background:#FFFBF2; }
+  .row.m{ background:#FBFCFD; padding-top:10px; padding-bottom:10px; }
+  .num{ text-align:right; }
+  .of{ display:flex; flex-direction:column; align-items:flex-end; gap:5px; } .of .bar{ width:100%; height:4px; }
+  .nm{ min-width:0; display:flex; gap:8px; align-items:flex-start; }
+  .nm .t{ display:flex; align-items:center; gap:8px; min-width:0; font-weight:600; } .nm .t span{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .nm .s{ font-size:13px; color:var(--ink2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lab{ font-size:11.5px; font-weight:600; color:var(--ink2); }
+  .chev{ flex-shrink:0; margin-top:3px; transition:transform .15s; }
+  [aria-expanded="true"] > .nm > .chev, [aria-expanded="true"] .chev{ transform:rotate(90deg); }
+  .mcb{ border:none; background:none; padding:0; cursor:pointer; font:600 13px 'IBM Plex Mono',monospace; color:var(--ink); text-decoration:underline; text-decoration-color:#C9CFD6; text-underline-offset:3px; }
+  .glab{ padding:8px 22px 6px 52px; border-bottom:1px solid var(--line2); background:var(--head); font-size:13px; color:var(--ink2); }
+  .tel{ font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:400; color:var(--ink2); text-decoration:none; white-space:nowrap; }
+  .tel:hover{ text-decoration:underline; }
+  .ok{ color:var(--actD); } .bd{ color:var(--brkD); font-weight:600; } .mu{ color:var(--ink2); }
+  .msg{ padding:44px 20px; text-align:center; color:var(--ink2); font-size:14px; line-height:1.55; }
+  .skel{ height:14px; border-radius:7px; background:linear-gradient(90deg,var(--line2),#F8F9FA,var(--line2)); background-size:200% 100%; margin:12px 0; }
   @media (prefers-reduced-motion:no-preference){ .skel{ animation:sk 1.2s linear infinite; } @keyframes sk{ to{ background-position:-200% 0; } } }
 
-  /* field officers */
-  .kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
-  .kpi{ padding:14px 16px; }
-  .kpi .l{ font-size:12px; font-weight:600; color:var(--ink2); }
-  .kpi .v{ font-size:26px; font-weight:700; font-family:'IBM Plex Mono',monospace; margin-top:4px; }
-  .kpi .v small{ font-size:15px; color:var(--ink2); font-weight:500; }
-  .kpi .n{ font-size:12px; color:var(--ink2); margin-top:2px; }
-  .grp + .grp{ border-top:1px solid var(--line); }
-  .ghead{ display:flex; align-items:center; gap:10px; padding:12px 16px; background:#FBFAF8; }
-  .ghead .nm{ font-weight:700; font-size:13.5px; }
-  .ghead .ct{ margin-left:auto; font-size:12px; color:var(--ink2); }
-  .forow{ display:grid; grid-template-columns:minmax(160px,240px) 120px minmax(0,1fr); gap:14px; padding:10px 16px; border-top:1px solid var(--soft); font-size:13px; align-items:baseline; }
-  .call{ display:none; }
+  /* breakdown list */
+  .bkh{ width:100%; min-height:56px; padding:12px 22px; border:0; background:none; display:flex; align-items:center; gap:10px; text-align:left; cursor:pointer; }
+  .bkh b{ font-size:15px; font-weight:600; display:flex; align-items:baseline; gap:7px; }
+  .bkrow{ display:grid; grid-template-columns:minmax(120px,1fr) 100px minmax(110px,1fr) minmax(130px,1.4fr) minmax(110px,1.2fr) 90px; gap:10px; padding:10px 22px; border-top:1px solid var(--line2); align-items:center; font-size:13.5px; min-width:780px; }
+  .bkrow.hd{ background:var(--head); font-size:12px; font-weight:600; color:var(--ink2); }
+  .bkrow > *{ min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-  /* spray progress: the UPL/SWAL team view's figures, on Bayer's machine-day sheet */
-  .spbar{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-  .seg{ display:inline-flex; background:var(--soft); border-radius:10px; padding:3px; gap:2px; }
-  .seg button{ border:none; background:none; color:var(--ink2); font-weight:600; font-size:13px; padding:6px 12px; min-height:38px; border-radius:8px; cursor:pointer; white-space:nowrap; }
-  .seg button[aria-pressed="true"]{ background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.08); }
-  input[type=date]{ font:inherit; font-size:13.5px; color:var(--ink); background:#fff; border:1.5px solid var(--line); border-radius:9px; padding:7px 10px; min-height:44px; outline:none; }
-  .spgroups{ display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr); gap:18px; margin-top:14px; }
-  .glbl{ font-size:14px; font-weight:700; margin:0 0 8px; } .glbl span{ font-size:12.5px; font-weight:400; color:var(--ink2); margin-left:6px; }
-  .tiles{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
-  .tile{ padding:12px 14px; min-width:0; }
-  .tile .l{ font-size:12.5px; font-weight:600; color:var(--ink2); line-height:1.3; }
-  .tile .v{ font-size:24px; font-weight:700; font-family:'IBM Plex Mono',monospace; margin-top:4px; white-space:nowrap; }
-  .tile .v small{ font-size:13px; color:var(--ink2); font-weight:500; }
-  .tile .n{ font-size:12px; color:var(--ink2); margin-top:3px; line-height:1.35; }
-  .tile.bad .v{ color:#B42318; }
-  .meter{ height:6px; border-radius:3px; background:var(--soft); overflow:hidden; margin-top:7px; }
-  .meter i{ display:block; height:100%; border-radius:3px; background:var(--ok); }
-  .acres{ padding:14px 16px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; }
-  .acres .side{ border-left:1px solid var(--line); padding-left:16px; }
-  .acres .v{ font-size:26px; font-weight:700; font-family:'IBM Plex Mono',monospace; white-space:nowrap; }
-  .acres .v small, .acres .v2 small{ font-size:13px; color:var(--ink2); font-weight:500; }
-  .acres .v2{ font-size:18px; font-weight:700; font-family:'IBM Plex Mono',monospace; white-space:nowrap; }
-  .acres .n{ font-size:12px; color:var(--ink2); margin-top:2px; }
-  .warn{ font-size:12.5px; color:var(--waitInk); margin-top:6px; }
-  .brkbtn{ margin-top:10px; width:100%; text-align:left; display:flex; align-items:center; gap:8px; }
-  .brktbl td, .brktbl th{ padding:8px 12px; }
-  .sptree{ overflow-x:auto; }
-  .spr{ display:grid; grid-template-columns:minmax(230px,1.6fr) 72px 72px 86px 92px 96px 150px 104px; gap:10px; align-items:center; padding:10px 16px; border-top:1px solid var(--soft); min-width:940px; font-size:13px; }
-  .spr.hd{ border-top:none; background:#FBFAF8; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink2); padding-top:9px; padding-bottom:9px; }
-  .spr.hd > :not(:first-child), .spr .num{ text-align:right; font-family:'IBM Plex Mono',monospace; }
-  .spr.hd > :not(:first-child){ font-family:inherit; }
-  .spr .num small{ color:var(--ink2); font-size:11.5px; }
-  button.spr{ width:100%; background:#fff; border-left:none; border-right:none; border-bottom:none; text-align:left; cursor:pointer; color:inherit; font:inherit; font-size:13px; }
-  button.spr:hover{ background:#FCFBF9; }
-  .spr.l1{ background:#FDFCFA; } .spr.l1 .nmc{ padding-left:18px; }
-  .spr.mc{ background:#FAF9F6; } .spr.mc .nmc{ padding-left:30px; } .spr.l1 + .spr.mc .nmc, .spr.mc.deep .nmc{ padding-left:42px; }
-  .nmc{ min-width:0; } .nmc .t{ font-weight:600; display:flex; align-items:center; gap:6px; } .nmc .s{ font-size:12px; color:var(--ink2); margin-top:1px; }
-  .chev{ color:var(--ink3); font-size:11px; width:12px; display:inline-block; transition:transform .15s; }
-  [aria-expanded="true"] .chev{ transform:rotate(90deg); }
-  .glab{ padding:7px 16px 7px 46px; font-size:11.5px; font-weight:700; color:var(--ink2); background:#FAF9F6; border-top:1px solid var(--soft); min-width:940px; }
-  .pbar{ display:flex; align-items:center; gap:8px; justify-content:flex-end; }
-  .pbar .meter{ width:46px; margin:0; flex-shrink:0; }
-  .ok{ color:var(--okInk); } .bd{ color:#B42318; font-weight:600; }
-  .spcards{ display:none; }
-
-  footer{ font-size:11px; color:var(--ink2); text-align:center; padding:14px 16px calc(env(safe-area-inset-bottom) + 14px); }
+  /* machine panel: a drawer on desktop, a sheet on the phone */
+  .scrim{ position:fixed; inset:0; background:rgba(20,24,28,.32); z-index:40; }
+  .drawer{ position:fixed; top:0; right:0; bottom:0; width:440px; max-width:92vw; background:#fff; z-index:41; box-shadow:-8px 0 40px rgba(0,0,0,.16); display:flex; flex-direction:column; }
+  .dhead{ padding:18px 22px; border-bottom:1px solid var(--line); display:flex; align-items:flex-start; gap:12px; }
+  .dhead .mc{ font:600 21px 'IBM Plex Mono',monospace; } .dhead .w{ font-size:13px; color:var(--ink2); margin-top:3px; }
+  .x{ width:36px; height:36px; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--ink2); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .dbody{ flex:1; overflow:auto; padding:18px 22px 28px; }
+  .stats{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  .stat{ background:var(--head); border:1px solid var(--line2); border-radius:10px; padding:10px 12px; min-width:0; }
+  .stat .l{ font-size:12px; font-weight:500; color:var(--ink2); } .stat .v{ font-size:18px; font-weight:600; margin-top:3px; } .stat .n{ font-size:12px; color:var(--ink2); margin-top:2px; }
+  .sect{ font-size:12px; font-weight:600; color:var(--ink2); margin:20px 0 8px; letter-spacing:.02em; }
+  .box{ border:1px solid var(--line2); border-radius:12px; overflow:hidden; }
+  .prow{ display:flex; align-items:center; gap:12px; padding:10px 14px; min-height:60px; border-top:1px solid var(--line2); }
+  .prow:first-child{ border-top:none; }
+  .prow .r{ font-size:12px; color:var(--ink2); } .prow .p{ font-size:14.5px; font-weight:500; } .prow .who{ flex:1; min-width:0; }
+  .call{ display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; border-radius:12px; border:1px solid var(--line); background:#fff; color:var(--ink); flex-shrink:0; }
+  .go{ display:inline-flex; align-items:center; min-height:44px; padding:0 14px; border-radius:10px; background:var(--dark); color:#fff; font-weight:500; font-size:14px; text-decoration:none; flex-shrink:0; }
 
   /* PIN gate */
-  #gate{ position:fixed; inset:0; z-index:10; display:none; align-items:center; justify-content:center; background:var(--bg); padding:16px; }
-  #gate .box{ width:340px; max-width:100%; background:#fff; border:1px solid var(--line); border-radius:16px; padding:30px 28px; box-shadow:0 12px 40px rgba(0,0,0,.08); text-align:center; }
-  #gate .ttl{ font-size:20px; font-weight:700; margin-top:6px; }
-  #pin{ margin-top:16px; width:100%; text-align:center; font-family:'IBM Plex Mono',monospace; font-size:30px; letter-spacing:.5em; padding:12px 0 12px .5em; border:1.5px solid var(--line); border-radius:10px; outline:none; color:var(--ink); }
-  #pin:focus{ border-color:var(--accent); }
-  #err{ font-size:12px; color:#DC3A2B; margin-top:10px; min-height:15px; font-weight:600; }
-  #gate .note{ font-size:11.5px; color:var(--ink2); margin-top:14px; line-height:1.4; }
-  #app{ display:none; }
+  #gate{ position:fixed; inset:0; z-index:60; display:none; align-items:center; justify-content:center; background:var(--page); padding:16px; }
+  #gate .gbox{ width:360px; max-width:100%; background:#fff; border:1px solid var(--cardBd); border-radius:18px; padding:30px 28px; box-shadow:0 12px 40px rgba(20,30,45,.10); text-align:center;
+    background-image:linear-gradient(90deg,#F5821F,#1FAE43); background-size:100% 3px; background-repeat:no-repeat; }
+  #gate .eb{ font-size:12px; font-weight:600; letter-spacing:.08em; color:var(--ink2); text-transform:uppercase; }
+  #gate .ttl{ font-size:20px; font-weight:600; margin-top:6px; }
+  #pin{ margin-top:16px; width:100%; text-align:center; font-family:'IBM Plex Mono',monospace; font-size:30px; letter-spacing:.5em; padding:12px 0 12px .5em; border:1px solid var(--line); border-radius:12px; outline:none; color:var(--ink); }
+  #pin:focus{ border-color:var(--ink); }
+  #err{ font-size:12.5px; color:var(--brkD); margin-top:10px; min-height:16px; font-weight:600; }
+  #gate .note{ font-size:12px; color:var(--ink2); margin-top:12px; line-height:1.4; }
 
-  /* ── phone: one column, status first, cards instead of the table, 44px targets, 16px fields ── */
+  @media (max-width:1180px){ .acard{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); row-gap:14px; } .acard > div:nth-child(3){ grid-column:1/-1; border-left:none; margin-left:0; padding-left:0; border-top:1px solid var(--line2); padding-top:14px; } }
+  @media (max-width:1040px){ .mcgrid{ grid-template-columns:repeat(3,minmax(0,1fr)); } .mcgrid > :first-child{ grid-column:1/-1; } }
+
+  /* ── phone: header, strip, controls, cards; a pill tab bar at the foot; 44px targets, 16px fields ── */
   @media (max-width:820px){
     input, select{ font-size:16px !important; }
-    header{ padding:calc(env(safe-area-inset-top) + 10px) 16px 0; position:static; }   /* a sticky header would hold a fifth of a phone screen */
-    .sec{ scroll-margin-top:12px; }
-    .btn.sm{ min-height:44px; }
-    h1{ font-size:18px; }
-    .hrow .stamp{ display:none; }
-    .mstamp{ display:block !important; }
-    main{ padding:14px 16px 32px; }
-    .status{ grid-template-columns:1fr; gap:18px; padding:16px; }
-    .big{ font-size:30px; }
-    /* the first two stages restate the headline above them; the phone keeps only the two still to come */
-    .stages li.rep{ display:none; }
-    .stages{ grid-template-columns:repeat(2,minmax(0,1fr)); border-top:1px solid var(--line); padding-top:14px; }
-    .stages li:nth-child(3){ padding-left:0; border-left:none; }
-    .drow{ grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"nm fig" "bar bar"; gap:6px 10px; padding:10px 16px; }
-    .drow > div:first-child{ grid-area:nm; } .drow .track{ grid-area:bar; } .drow .fig{ grid-area:fig; }
-    .filters select{ flex:1 1 calc(50% - 4px); min-width:0; }
-    input[type=search]{ flex:1 1 100%; min-width:0; }
-    .tblwrap{ display:none; }
-    .cards{ display:grid; gap:10px; }
-    .lc{ padding:14px 14px 6px; }
-    .lc .top{ display:flex; gap:10px; align-items:flex-start; }
-    .lc .nm{ font-weight:700; font-size:15px; }
-    .lc .wh{ font-size:12px; color:var(--ink2); margin-top:2px; }
-    .lc .facts{ display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:13px; margin:10px 0 4px; }
-    .lc .facts dt{ color:var(--ink2); } .lc .facts dd{ margin:0; min-width:0; }
-    .prow{ display:flex; align-items:center; gap:10px; border-top:1px solid var(--soft); padding:4px 0; min-height:52px; }
-    .prow .r{ font-size:11.5px; color:var(--ink2); width:30px; flex-shrink:0; font-weight:600; }
-    .prow .who{ flex:1; min-width:0; font-size:13.5px; }
-    .prow .who .tel{ display:block; }
-    .call{ display:inline-flex; align-items:center; justify-content:center; gap:6px; min-width:44px; min-height:44px; padding:0 14px; border-radius:10px;
-           border:1.5px solid #F4D9C1; color:var(--accent); font-weight:700; font-size:13px; text-decoration:none; background:#fff; }
-    .kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); }
-    .ghead{ padding:12px 14px; }
-    .ghead > .tel{ display:none; }   /* the Call button carries the CCM's number on a phone */
-    .ghead .ct{ white-space:nowrap; }
-    .forow{ grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"who call" "locs locs"; gap:4px 10px; padding:8px 14px; }
-    .forow .who{ grid-area:who; } .forow .locs{ grid-area:locs; font-size:12.5px; color:var(--ink2); } .forow .num{ display:none; }
-    .forow .call{ grid-area:call; }
-    .tab{ flex:1; padding:10px 6px; }
-    .spgroups{ grid-template-columns:1fr; gap:14px; }
-    .tiles{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-    .tiles .wide{ grid-column:1/-1; }
-    .tile .v{ font-size:22px; }
-    .acres{ grid-template-columns:1fr; gap:10px; }
-    .acres .side{ border-left:none; padding-left:0; border-top:1px solid var(--line); padding-top:10px; }
-    .spbar .seg{ flex:1 1 100%; } .spbar .seg button{ flex:1; min-height:40px; }
-    .spbar input[type=date]{ flex:1 1 auto; min-width:0; }
-    .sptree{ display:none; }
-    .spcards{ display:grid; gap:10px; }
-    .spc{ overflow:hidden; }
-    .spc > .h{ display:flex; align-items:flex-start; gap:10px; width:100%; background:none; border:none; text-align:left; padding:14px 14px 4px; cursor:pointer; color:inherit; font:inherit; min-height:44px; }
-    .spc .nm{ font-weight:700; font-size:15px; } .spc .wh{ font-size:12px; color:var(--ink2); margin-top:2px; }
-    .figs{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px 10px; padding:8px 14px 14px; }
-    .figs .l{ font-size:11.5px; color:var(--ink2); } .figs .v{ font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:15px; white-space:nowrap; } .figs .v small{ font-size:11.5px; color:var(--ink2); font-weight:500; }
-    .kids{ border-top:1px solid var(--line); background:#FAF9F6; padding:8px; display:grid; gap:8px; }
-    .kids .spc{ border-radius:10px; }
-    .glab{ padding:4px 6px 0; background:none; border:none; min-width:0; }
-    .mcc{ background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 12px 4px; }
-    .mcc .top{ display:flex; gap:8px; align-items:baseline; } .mcc .top .grow b{ font-family:'IBM Plex Mono',monospace; }
-    .mcc .ac{ font-size:13px; margin-top:6px; }
-    .more2{ width:100%; margin-top:2px; }
+    .rail, .top, footer.d{ display:none; }
+    .mhead{ display:flex; align-items:flex-start; gap:10px; background:#fff linear-gradient(90deg,#F5821F,#1FAE43) no-repeat; background-size:100% 3px; border-bottom:1px solid var(--line); padding:calc(env(safe-area-inset-top) + 14px) 16px 12px; }
+    .mhead h1{ font-size:19px; font-weight:600; margin:0; } .mhead .sc{ font-size:13px; color:var(--ink2); margin-top:2px; }
+    .mhead .out{ width:44px; height:44px; border:1px solid var(--line); border-radius:12px; background:#fff; display:flex; align-items:center; justify-content:center; color:var(--ink2); flex-shrink:0; cursor:pointer; }
+    main{ padding:14px 16px calc(env(safe-area-inset-bottom) + 96px); }
+    footer.m{ display:block; text-align:center; padding:6px 16px 0; }
+    .mnav{ display:flex; position:fixed; left:0; right:0; bottom:0; z-index:30; background:rgba(255,255,255,.96); border-top:1px solid var(--line); padding:4px 6px env(safe-area-inset-bottom); }
+    .mnav button{ flex:1; min-height:58px; border:0; background:transparent; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; cursor:pointer; color:var(--ink2); font:500 12.5px 'IBM Plex Sans',sans-serif; }
+    .mnav button span{ display:flex; align-items:center; justify-content:center; width:56px; height:28px; border-radius:14px; }
+    .mnav button[aria-current="page"]{ color:#7A3B06; font-weight:600; }
+    .mnav button[aria-current="page"] span{ background:linear-gradient(120deg,#FFE7D2,#DDF3E4); }
+    .groups{ margin-top:0; gap:14px; }
+    .mcgrid{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; } .mcgrid > :nth-child(-n+2){ grid-column:1/-1; }   /* Machines and Ran across, Breakdown beside Operators */
+    .tile{ box-shadow:none; padding:12px 14px; } .tile .v{ font-size:22px; }
+    .acard{ grid-template-columns:1fr; padding:14px 16px; row-gap:12px; }
+    .acard > div + div{ border-left:none; margin-left:0; padding-left:0; border-top:1px solid var(--line2); padding-top:12px; }
+    .acard > div:nth-child(3){ grid-column:auto; }
+    .ctl.m{ margin-top:14px; }
+    .srch{ flex:1; min-width:0; width:auto; } .srch input, .ghost, .csv, .sel{ height:48px; border-radius:12px; }
+    .fbtn{ flex-shrink:0; display:inline-flex; align-items:center; gap:6px; height:48px; padding:0 14px; border:1px solid var(--line); border-radius:12px; background:#fff; font-weight:500; font-size:15px; cursor:pointer; }
+    .fbtn.on{ border-color:var(--ink); }
+    .fbtn em{ font-style:normal; min-width:20px; height:20px; border-radius:10px; background:var(--ink); color:#fff; font-size:12px; display:inline-flex; align-items:center; justify-content:center; padding:0 6px; }
+    .ltitle{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; margin:18px 2px 10px; } .ltitle b{ font-size:16px; font-weight:600; } .ltitle span{ font-size:12.5px; color:var(--ink2); }
+    .nc{ margin-bottom:12px; padding:16px; display:flex; flex-direction:column; gap:12px; }
+    .nc.none{ border-color:#F1E2BC; }
+    .kid{ border:1px solid var(--line2); border-radius:14px; background:var(--head); padding:12px; display:flex; flex-direction:column; gap:10px; }
+    .nch{ display:flex; align-items:flex-start; gap:10px; } .nch .nmx{ font-size:16px; font-weight:600; line-height:1.3; } .nch .sub{ font-size:13.5px; color:var(--ink2); margin-top:2px; }
+    .big{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; } .big b{ font-size:22px; font-weight:600; }
+    .sg{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 8px; } .sg b{ display:block; font-size:17px; font-weight:600; } .sg span{ font-size:12.5px; color:var(--ink2); }
+    .tog{ width:100%; min-height:48px; border:1px solid var(--line); border-radius:12px; background:#fff; font-weight:500; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; }
+    .tog[aria-expanded="true"]{ background:var(--head); }
+    .mcbtn{ display:flex; align-items:center; gap:10px; width:100%; min-height:58px; padding:10px 12px; border:1px solid var(--line2); border-radius:12px; background:#fff; text-align:left; cursor:pointer; }
+    .mcbtn .a{ flex:1; min-width:0; } .mcbtn .a > span{ display:block; font-size:12.5px; color:var(--ink2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .mcbtn .b{ text-align:right; flex-shrink:0; } .mcbtn .b > span{ display:block; font-size:12.5px; }
+    .more{ width:100%; min-height:48px; border:1px solid var(--line); border-radius:12px; background:#fff; font-weight:500; font-size:14px; cursor:pointer; }
+    .bkh{ padding:12px 16px; } .bkm{ padding:0 12px 12px; display:flex; flex-direction:column; gap:8px; }
+    .scrim{ background:rgba(20,24,28,.4); }
+    .drawer{ top:auto; left:0; width:auto; max-width:none; height:92%; border-radius:24px 24px 0 0; box-shadow:0 -8px 40px rgba(0,0,0,.2); }
+    .grab{ width:38px; height:4px; border-radius:3px; background:#D5D9DE; margin:0 auto 12px; }
+    .dhead{ display:block; padding:12px 18px 14px; } .dhead .row2{ display:flex; gap:10px; align-items:flex-start; }
+    .x{ width:44px; height:44px; border-radius:12px; }
+    .dbody{ padding:16px 18px calc(env(safe-area-inset-bottom) + 26px); }
+    .fsheet{ height:auto; max-height:92%; }
+    .fsheet .dbody{ display:flex; flex-direction:column; gap:14px; }
+    .fsheet .sel{ max-width:none; width:100%; }
+    .fsheet .segb button{ flex:1; min-height:44px; }
+    .sfoot{ padding:12px 18px calc(env(safe-area-inset-bottom) + 12px); border-top:1px solid var(--line); display:flex; gap:8px; }
+    .sfoot .csv{ flex:1; justify-content:center; }
   }
-  @media (max-width:400px){ .tab .n{ display:none; } }
-  @media (max-width:360px){
-    .stages .sv{ font-size:20px; }
-    .big{ font-size:26px; }
-  }
+  @media (min-width:821px){ footer.m{ display:none; } }
 </style>
 </head>
 <body>
@@ -274,8 +215,8 @@
      no machines.js, no internal sheet ids), so its source carries one PIN — Bayer's — and reads only Bayer's own
      workbook. See CLAUDE.md → Partner pages. -->
 <div id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTtl">
-  <div class="box">
-    <div class="eyebrow">Partner view</div>
+  <div class="gbox">
+    <div class="eb">Partner view · Bayer</div>
     <div class="ttl" id="gateTtl">Enter access PIN</div>
     <input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="4" aria-label="Access PIN">
     <div id="err"></div>
@@ -283,29 +224,7 @@
   </div>
 </div>
 
-<div id="app">
-  <header>
-    <div class="hrow">
-      <div class="grow">
-        <div class="eyebrow">Partner view · Bayer</div>
-        <h1 id="ttl">Machine deployment</h1>
-        <div class="scope" id="scope">UPL machines for Bayer</div>
-        <div class="scope mstamp" id="mstamp" style="display:none"></div>
-      </div>
-      <div class="hside">
-        <div class="stamp" id="stamp" aria-live="polite"></div>
-        <button class="btn" id="logout" type="button">Log out</button>
-      </div>
-    </div>
-    <nav class="tabs" aria-label="Pages">
-      <button class="tab" type="button" data-tab="sp">Spraying</button>
-      <button class="tab" type="button" data-tab="loc">Deployment</button>
-      <button class="tab" type="button" data-tab="fo">Field officers</button>
-    </nav>
-  </header>
-  <main id="main" tabindex="-1"></main>
-  <footer>Built with tokens, Powered by Claude. By din8sh.</footer>
-</div>
+<div id="app"></div>
 
 <script>
 /* Soft client-side gate, same model as the main console: a SHA-256 of the PIN, checked in the browser. It stops
@@ -317,23 +236,18 @@ const GATE = {
   TTL_MS: 30*60*1000,
   timer: null,
 };
-/* Bayer's own workbook — never the console's. Tabs are read by gid, columns by header keyword. */
-const SHEET = {
-  id: '13SpCKS_Am9mPOqSh8jPOH8OS6htEMCDfA15iuJgEZL8',
-  machines: '1933202962',   // "Machine details": one row per machine slot, HR + PB, under a title row (headerRow finds the real one)
-  fo: '720662332',          // "FO Mapping final": one row per field officer
-  refreshMinutes: 10,
-};
 /* Bayer's machine-DAY workbook (one row per machine per day), the same sheet the console's Wheat admin reads for its Bayer
-   choice. The Spraying tab shows it the way the UPL / SWAL team logins see theirs: machines, ran on the day, breakdown,
-   operators mapped, acres on the day and for the season against a flat 650 ac per machine. Acres = IOT_acres (by request,
-   as on the team logins); read from 1 Nov, Bayer's programme start. Read as a plain CSV export, because gviz has answered
-   this kind of tab short with no error. */
+   choice. Shown the way the UPL / SWAL team logins see theirs (Dinesh 2026-11-05): two pages, Territories and TM · FO, with
+   machines, ran on the day, breakdown, operators mapped, acres on the day and for the season against a flat 650 ac per
+   machine, and a machine panel. Acres = IOT_acres (as on the team logins); read from 1 Nov, Bayer's programme start. No
+   deployed / in transit / pending anywhere — by request it just says machines. Read as a plain CSV export, because gviz has
+   answered this kind of tab short with no error. */
 const SPRAY = {
   id: '14dpDPQtB8GyQFMrjJa28LeTtgz5x5wr2dVv-WmoSH3M', gid: '0',
   from: '2026-11-01',
   target: 650,                      // acres per machine for the season, as on the team logins
   notBayer: new Set(['UPL_2782']),  // on Bayer's sheet, but a UPL Punjab machine (same rule as the console's WRET_UPL_KEEP)
+  refreshMinutes: 10,
 };
 
 async function sha256(s){ const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
@@ -344,7 +258,7 @@ function arm(ms){ clearTimeout(GATE.timer); GATE.timer=setTimeout(lock, Math.max
 let _started=false;
 function show(){
   document.getElementById('gate').style.display='none'; document.getElementById('app').style.display='block';
-  if(!_started){ _started=true; load(); setInterval(()=>{ if(gateValid()) load(); }, SHEET.refreshMinutes*60000); }
+  if(!_started){ _started=true; load(); setInterval(()=>{ if(gateValid()) load(); }, SPRAY.refreshMinutes*60000); }
   render();
 }
 function lock(){
@@ -352,6 +266,7 @@ function lock(){
   try{ sessionStorage.removeItem(GATE.SKEY); }catch(_){ }
   document.getElementById('app').style.display='none';
   document.getElementById('gate').style.display='flex';
+  document.body.style.overflow='';
   const p=document.getElementById('pin'); p.value=''; setTimeout(()=>p.focus(),30);
 }
 document.getElementById('pin').addEventListener('input', async e=>{
@@ -362,7 +277,6 @@ document.getElementById('pin').addEventListener('input', async e=>{
   if(h===GATE.HASH){ p.value=''; gateTouch(); show(); }
   else { err.textContent='Incorrect PIN'; p.value=''; }
 });
-document.getElementById('logout').addEventListener('click', lock);
 // Activity keeps the session alive, like the console's 30-minute idle expiry.
 ['click','keydown','touchstart'].forEach(ev=>document.addEventListener(ev, ()=>{ if(gateValid()) gateTouch(); }, {passive:true}));
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden && !gateValid()) lock(); });
@@ -373,7 +287,6 @@ const E = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&l
 const val = v => { const s=String(v==null?'':v).trim(); return (s==='0'||s==='-'||/^n\/?a$/i.test(s)) ? '' : s; };
 const tel = v => { const d=String(v||'').replace(/\D/g,''); return d.length>=10 ? d.slice(-10) : ''; };
 const nice = s => val(s).replace(/_/g,' ').replace(/\s+/g,' ').trim();
-
 function parseCSV(t){
   const rows=[]; let row=[], f='', q=false;
   for(let i=0;i<t.length;i++){
@@ -387,13 +300,6 @@ function parseCSV(t){
   if(f!==''||row.length){ row.push(f); rows.push(row); }
   return rows;
 }
-// The tab opens with a title line ("UPL Machine Details – Oct 2026"), which gviz may or may not fold into the header.
-// So the header is whichever of the first rows names the most of the expected columns, wherever it sits.
-function headerRow(rows, pats){
-  let best=0, hit=-1;
-  rows.slice(0,6).forEach((r,i)=>{ const h=r.map(x=>String(x).trim().toLowerCase()); const n=pats.filter(p=>h.some(x=>p.test(x))).length; if(n>hit){ hit=n; best=i; } });
-  return best;
-}
 // First header matching each pattern; -1 when the sheet has no such column (the field then reads blank).
 function cols(head, spec){
   const h=head.map(x=>String(x).trim().toLowerCase()), out={};
@@ -402,58 +308,14 @@ function cols(head, spec){
 }
 const cell = (r,i) => i>=0 && i<r.length ? r[i] : '';
 
-async function fetchTab(gid){
-  const u=`https://docs.google.com/spreadsheets/d/${SHEET.id}/gviz/tq?tqx=out:csv&gid=${gid}&t=${Date.now()}`;
-  const res=await fetch(u, {cache:'no-store'});
-  if(!res.ok) throw new Error('HTTP '+res.status);
-  const rows=parseCSV(await res.text());
-  if(!rows.length) throw new Error('empty');
-  return rows;
+const istDay = off => new Date(Date.now()+5.5*3600e3+off*864e5).toISOString().slice(0,10);
+const dPretty = d => { const [,m,dd]=d.split('-').map(Number); return dd+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]; };
+const titleCase = s => s.toLowerCase().replace(/\b[a-z]/g, c=>c.toUpperCase());
+const SP_NO_TERR = 'Territory not on sheet';
+function isoDate(v){
+  const s=String(v||'').trim(); let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1]+'-'+m[2]+'-'+m[3];
+  m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/); return m ? `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` : '';
 }
-
-function buildMachines(rows){
-  const spec={ state:/^state$/, mc:/machine (no|number)/, squad:/squad/, dist:/territory|district/, market:/market|village/,
-    count:/machine count/, retailer:/retailer/, fo:/^fo name/, foMob:/^fo mob/, ccm:/^ccm name/, ccmMob:/^ccm mob/,
-    co:/cluster officer name|^co$/, coMob:/cluster officer mob|^co.?mob/, am:/area manager name|^am$/, amMob:/area manager mob|^am.?mob/,
-    deploy:/deployment date/, handover:/handover/, from:/^from$/, to:/^to$/, org:/organi[sz]ation/ };
-  const hi=headerRow(rows, Object.values(spec)), c=cols(rows[hi], spec);
-  return rows.slice(hi+1).map(r=>({
-      state:val(cell(r,c.state)), mc:val(cell(r,c.mc)).replace(/\s+/g,''), squad:val(cell(r,c.squad)),
-      dist:val(cell(r,c.dist)).replace(/\s+(district|territory)$/i,''), market:val(cell(r,c.market)),
-      count:Math.max(1, parseInt(cell(r,c.count),10)||1), retailer:val(cell(r,c.retailer)),
-      fo:nice(cell(r,c.fo)), foMob:tel(cell(r,c.foMob)), ccm:nice(cell(r,c.ccm)), ccmMob:tel(cell(r,c.ccmMob)),
-      co:nice(cell(r,c.co)), coMob:tel(cell(r,c.coMob)), am:nice(cell(r,c.am)), amMob:tel(cell(r,c.amMob)),
-      deploy:val(cell(r,c.deploy)), handover:val(cell(r,c.handover)), from:val(cell(r,c.from)), to:val(cell(r,c.to)),
-      org:val(cell(r,c.org)) }))
-    // The sheet closes with a "Total" row, which carries no place; a row needs a village or a district to be a slot.
-    .filter(m=>(m.market||m.dist) && m.squad);
-}
-function buildFO(rows){
-  const c=cols(rows[0], { name:/^fo name/, mob:/^fo mob/, ccm:/^ccm name/, ccmMob:/^ccm mob/, app:/partner app/ });
-  return rows.slice(1).map(r=>({ name:nice(cell(r,c.name)), mob:tel(cell(r,c.mob)), ccm:nice(cell(r,c.ccm)),
-    ccmMob:tel(cell(r,c.ccmMob)), app:/^y/i.test(val(cell(r,c.app))) })).filter(f=>f.name||f.mob);
-}
-
-const S = { tab:'sp', st:'', squad:'', dist:'', status:'', q:'', foQ:'', allD:false, limit:20,
-  spDay:'', spBy:'terr', spSt:'', spTerr:'', spTm:'', spQ:'', spSort:'n', spOpen:{}, spBrk:false, spLimit:20 };
-const D = { mc:null, fo:null, sp:null, spErr:null, at:null, err:null, loading:false };
-const M_PAGE = 20;   // phone cards per page; the desktop table shows every row
-const TABS = { sp:{ slug:'spraying', title:'Spray progress' }, loc:{ slug:'deployment', title:'Machine deployment' }, fo:{ slug:'field-officers', title:'Field officers' } };
-
-async function load(){
-  D.loading=true; D.err=null; stamp();
-  // The two workbooks load side by side; one failing never blanks the other's tabs.
-  const [ab, sp] = await Promise.allSettled([Promise.all([fetchTab(SHEET.machines), fetchTab(SHEET.fo)]), fetchSpray()]);
-  if(ab.status==='fulfilled'){ D.mc=buildMachines(ab.value[0]); D.fo=buildFO(ab.value[1]); }
-  else { D.err=String(ab.reason&&ab.reason.message||ab.reason); console.warn('[Bayer] load failed', ab.reason); }
-  if(sp.status==='fulfilled'){ try{ D.sp=buildSpray(sp.value); D.spErr=null; }catch(e){ D.spErr=String(e.message||e); console.warn('[Bayer] spray sheet parse failed', e); } }
-  else { D.spErr=String(sp.reason&&sp.reason.message||sp.reason); console.warn('[Bayer] spray sheet load failed', sp.reason); }
-  if(!D.err || !D.spErr) D.at=new Date();
-  if(D.spErr && !D.err) D.err=D.spErr;
-  D.loading=false; render();
-}
-
-/* ---------- the machine-day sheet ---------- */
 async function fetchSpray(){
   const res=await fetch(`https://docs.google.com/spreadsheets/d/${SPRAY.id}/export?format=csv&gid=${SPRAY.gid}`, {cache:'no-store'});
   if(!res.ok) throw new Error('HTTP '+res.status);
@@ -461,18 +323,11 @@ async function fetchSpray(){
   if(rows.length<2) throw new Error('empty');
   return rows;
 }
-const istDay = off => new Date(Date.now()+5.5*3600e3+off*864e5).toISOString().slice(0,10);
-const dPretty = d => { const [y,m,dd]=d.split('-').map(Number); return dd+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m-1]; };
-const titleCase = s => s.toLowerCase().replace(/\b[a-z]/g, c=>c.toUpperCase());
-const SP_NO_TERR = 'Territory not on sheet';
-function isoDate(v){
-  const s=String(v||'').trim(); let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1]+'-'+m[2]+'-'+m[3];
-  m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/); return m ? `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}` : '';
-}
 function buildSpray(rows){
   const spec={ mc:/^machine_number$/, date:/^selected_date$/, terr:/^territory$/, st:/^state$/, vil:/^village_location$/, org:/^organi[sz]ation$/,
     fo:/^fo_name$/, foMob:/^fo_number$/, tm:/^tm_name$/, tmMob:/^tm_number$/, op:/^operator_name$/, opMob:/^operator_number$/,
-    ci:/^ci_name$/, ciMob:/^ci_contact$/, am:/^am_name$/, amMob:/^am_contact$/, iot:/^iot_acres$/, brk:/^breakdown_id$/, ping:/^last_pinged_date$/ };
+    ci:/^ci_name$/, ciMob:/^ci_contact$/, am:/^am_name$/, amMob:/^am_contact$/, iot:/^iot_acres$/, brk:/^breakdown_id$/,
+    ping:/^last_pinged_date$/, lat:/^latest_latitude$/, lon:/^latest_longitude$/ };
   const c=cols(rows[0], spec), miss=['mc','date','iot'].filter(k=>c[k]<0);
   if(miss.length) throw new Error('column missing: '+miss.join(', '));
   const today=istDay(0), by={}, seen=new Set(), log={ rows:0, dup:0, notBayer:0, otherOrg:0 };
@@ -485,15 +340,16 @@ function buildSpray(rows){
     if(seen.has(mc+'|'+d)){ log.dup++; continue; }   // a machine listed twice on one day is read once
     seen.add(mc+'|'+d);
     const m=by[mc]=by[mc]||{ mc, days:{}, at:'' };
-    const ac=parseFloat(cell(r,c.iot))||0, brk=val(cell(r,c.brk));
-    m.days[d]={ ac:ac>0?ac:0, brk };
+    const ac=parseFloat(cell(r,c.iot))||0;
+    m.days[d]={ ac:ac>0?ac:0, brk:val(cell(r,c.brk)) };
     // Everything else on a row is today's value copied onto every date, so the latest row speaks for the machine.
     if(d>=m.at){
       const terr=nice(cell(r,c.terr)).replace(/\s+(district|territory)$/i,'');
+      const lat=parseFloat(cell(r,c.lat)), lon=parseFloat(cell(r,c.lon)), pos=lat>26&&lat<34&&lon>72&&lon<79;   // HR + PB
       Object.assign(m, { at:d, st:nice(cell(r,c.st)), terr:terr?titleCase(terr):SP_NO_TERR, vil:nice(cell(r,c.vil)),
         fo:nice(cell(r,c.fo)), foMob:tel(cell(r,c.foMob)), tm:nice(cell(r,c.tm)), tmMob:tel(cell(r,c.tmMob)),
         op:nice(cell(r,c.op)), opMob:tel(cell(r,c.opMob)), ci:nice(cell(r,c.ci)), ciMob:tel(cell(r,c.ciMob)),
-        am:nice(cell(r,c.am)), amMob:tel(cell(r,c.amMob)), ping:isoDate(cell(r,c.ping)) });
+        am:nice(cell(r,c.am)), amMob:tel(cell(r,c.amMob)), ping:isoDate(cell(r,c.ping)), lat:pos?lat:null, lon:pos?lon:null });
     }
   }
   const machines=Object.values(by);
@@ -504,459 +360,391 @@ function buildSpray(rows){
   return out;
 }
 
-/* ================================ view ================================ */
-const isPhone = () => matchMedia('(max-width:820px)').matches;
-const fmtTime = d => d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'});
-const fmtDate = d => d.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
-const pct = (a,b) => b ? Math.round(a/b*100) : 0;
-const opt = (v, cur, label) => `<option value="${E(v)}"${v===cur?' selected':''}>${E(label||v)}</option>`;
-const uniq = a => [...new Set(a.filter(Boolean))].sort((x,y)=>x.localeCompare(y));
-const plural = (n, one, many) => n+' '+(n===1?one:(many||one+'s'));
-const listAnd = a => a.length<2 ? (a[0]||'') : a.slice(0,-1).join(', ')+' & '+a[a.length-1];
+const PAGES = { terr:{ slug:'territories', title:'Territory summary', short:'Territories' }, tm:{ slug:'tm-fo', title:'TM · FO summary', short:'TM · FO' } };
+const S = { page:'terr', day:'', st:'', terr:'', tm:'', q:'', sort:'tgt', open:{}, brk:false, limit:20, sel:null, sheet:false };
+const D = { sp:null, err:null, at:null, loading:false };
+const M_PAGE = 20;   // phone cards per page; the desktop table shows every row
 
-// How far a slot has got. Deployment and handover are columns the sheet has not started filling; a stage counts the
-// moment its column carries anything, and a handover status that reads like "no" / "pending" is not a handover.
-const isHanded = m => !!m.handover && !/^(no|not|pending|awaiting|tbd)/i.test(m.handover);
-const stageOf = m => isHanded(m) ? 3 : m.deploy ? 2 : m.mc ? 1 : 0;
-const STAGE_CHIP = [
-  '<span class="chip wait"><span aria-hidden="true">◷</span> Awaiting a machine</span>',
-  '<span class="chip ok"><span aria-hidden="true">●</span> Machine assigned</span>',
-  '<span class="chip ok"><span aria-hidden="true">▲</span> Deployed</span>',
-  '<span class="chip ok"><span aria-hidden="true">✓</span> Handed over</span>' ];
-
-// Data stamp: the time of the last good fetch; a failed refresh says so in red rather than passing old figures off as current.
-function stamp(){
-  const t = D.at ? `Updated <b>${fmtTime(D.at)}</b>${D.err?' · <b>last refresh failed</b>':''}<br>refreshes every ${SHEET.refreshMinutes} min`
-          : D.err ? '<b>Could not load the sheet</b>' : 'Loading…';
-  const a=document.getElementById('stamp'), b=document.getElementById('mstamp');
-  if(a){ a.innerHTML=t; a.classList.toggle('stale', !!D.err); }
-  if(b) b.innerHTML = D.at ? `Updated ${fmtTime(D.at)}${D.err?' · last refresh failed':''}` : (D.err?'Could not load the sheet':'Loading…');
-}
-const telLink = mob => mob ? `<a class="tel" href="tel:+91${mob}">${mob}</a>` : '';
-function personCell(name, mob){
-  if(!name && !mob) return '<span class="muted">Not named yet</span>';
-  return `<div>${E(name||'—')}</div>${telLink(mob)}`;
-}
-function personRow(role, name, mob){
-  return `<div class="prow"><span class="r">${role}</span><div class="who">${name||mob?`${E(name||'—')}${mob?`<span class="tel">${mob}</span>`:''}`:'<span class="muted">Not named yet</span>'}</div>
-    ${mob?`<a class="call" href="tel:+91${mob}" aria-label="Call ${E(name||mob)}">Call</a>`:''}</div>`;
+async function load(){
+  D.loading=true; render();
+  try{ D.sp=buildSpray(await fetchSpray()); D.err=null; D.at=new Date(); }
+  catch(e){ D.err=String(e&&e.message||e); console.warn('[Bayer] spray sheet load failed', e); }
+  D.loading=false; render();
 }
 
-/* ---------- Deployment ---------- */
-function filtered(all){
-  const q=S.q.trim().toLowerCase();
-  return all.filter(m=>(!S.st||m.state===S.st) && (!S.squad||m.squad===S.squad) && (!S.dist||m.dist===S.dist)
-    && (!S.status || (S.status==='wait' ? !m.mc : !!m.mc))
-    && (!q || [m.market,m.dist,m.squad,m.state,m.mc,m.retailer,m.fo,m.foMob,m.ccm,m.ccmMob,m.co,m.am].join(' ').toLowerCase().includes(q)));
-}
-// Waiting slots first inside each district, so the gaps sit at the top of every group.
-const listOrder = (a,b) => a.state.localeCompare(b.state) || a.dist.localeCompare(b.dist) || (a.mc?1:0)-(b.mc?1:0) || a.market.localeCompare(b.market);
-
-function locHTML(){
-  const all=D.mc, ph=isPhone();
-  const req=all.reduce((s,m)=>s+m.count,0);
-  const got=all.filter(m=>stageOf(m)>=1).length, dep=all.filter(m=>stageOf(m)>=2).length, hand=all.filter(m=>stageOf(m)>=3).length;
-  const wait=req-got, p=pct(got,req);
-
-  // 1 · status — "how far along is the handover?"
-  const stage = (lbl, v, note, off, rep) => `<li class="${[off&&'off',rep&&'rep'].filter(Boolean).join(' ')}"><div class="sl">${lbl}</div><div class="sv">${v}</div><div class="sn">${note}</div></li>`;
-  const status=`<section class="card status${p<50?' low':''}" aria-label="Overall progress">
-    <div>
-      <div class="big">${got}<small> of ${req}</small></div>
-      <div class="bigLbl">machines assigned (${p}%)</div>
-      <div class="bigNote">${wait ? `${plural(wait,'location')} still waiting for a UPL machine` : 'Every requested location has a machine'}</div>
-      <div class="sbar" role="img" aria-label="${got} assigned, ${wait} waiting"><i class="a" style="width:${got/req*100}%"></i><i class="w" style="width:${wait/req*100}%"></i></div>
-      <div class="key"><span style="--k:var(--ok)">Assigned ${got}</span><span style="--k:var(--wait)">Waiting ${wait}</span></div>
-    </div>
-    <ol class="stages" aria-label="Handover stages">
-      ${stage('Requested', req, plural(all.length,'location'), false, true)}
-      ${stage('Machine assigned', got, p+'% of requested', false, true)}
-      ${stage('Deployed', dep||'—', dep?pct(dep,req)+'% of requested':'not started yet', !dep)}
-      ${stage('Handed over', hand||'—', hand?pct(hand,req)+'% of requested':'not started yet', !hand)}
-    </ol>
-  </section>`;
-
-  // 2 · by state — two programmes moving at different speeds
-  const byS={}; all.forEach(m=>{ const s=byS[m.state]=byS[m.state]||{st:m.state,req:0,got:0,squads:new Set()}; s.req+=m.count; if(m.mc) s.got++; s.squads.add(m.squad); });
-  const sts=Object.values(byS).sort((a,b)=>b.req-a.req);
-  const states = sts.length<2 ? '' : `<section class="sec" aria-label="By state"><div class="sechead"><h2>By state</h2><span class="sub">tap a state to filter the list</span></div>
-    <div class="states">${sts.map(s=>{ const w=s.req-s.got; return `<button type="button" class="card stc" data-st="${E(s.st)}" aria-pressed="${S.st===s.st}">
-      <div class="t"><span class="nm">${E(s.st)}</span><span class="v">${s.got}<small> of ${s.req}</small></span></div>
-      <div class="sbar"><i class="a" style="width:${s.got/s.req*100}%"></i><i class="w" style="width:${w/s.req*100}%"></i></div>
-      <div class="ft">${pct(s.got,s.req)}% assigned · ${w?`<b style="color:var(--waitInk)">${w} waiting</b>`:'<span class="done">✓ all assigned</span>'} · ${plural(s.squads.size,'squad')}</div>
-    </button>`; }).join('')}</div></section>`;
-
-  // 3 · where machines are still needed — districts ranked by machines waiting, bars on one scale
-  const byD={}; all.forEach(m=>{ const k=m.state+'|'+m.dist; const d=byD[k]=byD[k]||{state:m.state,squad:m.squad,dist:m.dist,req:0,got:0}; d.req+=m.count; if(m.mc) d.got++; });
-  const ds=Object.values(byD).map(d=>Object.assign(d,{w:d.req-d.got})).sort((a,b)=>b.w-a.w||b.req-a.req||a.dist.localeCompare(b.dist));
-  const maxReq=Math.max(1,...ds.map(d=>d.req)), waitingD=ds.filter(d=>d.w).length;
-  const cap = ph ? 6 : 10, shown = S.allD ? ds : ds.slice(0,cap);
-  const drows=shown.map(d=>`<button type="button" class="drow" data-dist="${E(d.dist)}" data-dst="${E(d.state)}" aria-pressed="${S.dist===d.dist}">
-      <div><div class="nm">${E(d.dist)}</div><div class="wh">${E(d.squad)} squad · ${E(d.state)}</div></div>
-      <div class="track" aria-hidden="true"><i style="width:${d.got/maxReq*100}%;background:var(--ok)"></i><i style="width:${d.w/maxReq*100}%;background:var(--wait)"></i></div>
-      <div class="fig">${d.w?`<b style="color:var(--waitInk)">${d.w} waiting</b> · ${d.got} of ${d.req}`:`<span class="done">✓ ${d.got} of ${d.req} assigned</span>`}</div>
-    </button>`).join('');
-  const dist=`<section class="sec" aria-label="Districts"><div class="sechead"><h2>Where machines are still needed</h2>
-      <span class="sub">${waitingD} of ${ds.length} districts waiting · most first · tap one to filter</span></div>
-    <div class="card dlist">${drows}${ds.length>cap?`<button type="button" class="more" data-act="allD">${S.allD?'Show fewer':`Show all ${ds.length} districts`}</button>`:''}</div></section>`;
-
-  // 4 · every location — the operational list
-  const states2=uniq(all.map(m=>m.state));
-  if(S.st && !states2.includes(S.st)) S.st='';
-  const inSt=all.filter(m=>!S.st||m.state===S.st);
-  const squads=uniq(inSt.map(m=>m.squad)); if(S.squad && !squads.includes(S.squad)) S.squad='';
-  const dists=uniq(inSt.filter(m=>!S.squad||m.squad===S.squad).map(m=>m.dist)); if(S.dist && !dists.includes(S.dist)) S.dist='';
-  const list=filtered(all).sort(listOrder);
-  const nF=[S.st,S.squad,S.dist,S.status,S.q.trim()].filter(Boolean).length;
-  // Columns the sheet has not started filling stay out of the table until some row carries them.
-  const has = k => all.some(m=>m[k]);
-  const xcols=[ has('deploy')&&['Deployed','deploy'], has('handover')&&['Handover','handover'], has('org')&&['Organisation','org'] ].filter(Boolean);
-  const xppl=[ (has('co')||has('coMob'))&&['Cluster officer','co','coMob'], (has('am')||has('amMob'))&&['Area manager','am','amMob'] ].filter(Boolean);
-  const filters=`<div class="filters" role="search">
-    ${states2.length>1?`<select id="fSt" aria-label="State">${opt('',S.st,'All states')}${states2.map(s=>opt(s,S.st)).join('')}</select>`:''}
-    <select id="fSquad" aria-label="Squad">${opt('',S.squad,'All squads')}${squads.map(s=>opt(s,S.squad,s+' squad')).join('')}</select>
-    <select id="fDist" aria-label="District">${opt('',S.dist,'All districts')}${dists.map(s=>opt(s,S.dist)).join('')}</select>
-    <select id="fStatus" aria-label="Status">${opt('',S.status,'Any status')}${opt('wait',S.status,'Awaiting a machine')}${opt('got',S.status,'Machine assigned')}</select>
-    <input type="search" id="fQ" placeholder="Search village, machine, retailer, person" value="${E(S.q)}" aria-label="Search locations" enterkeyhint="search" autocorrect="off">
-  </div>
-  <div class="fstate" aria-live="polite">${nF?`Showing <b>${list.length}</b>&nbsp;of ${all.length} locations · ${plural(nF,'filter')} on <button type="button" class="link" data-act="clear">Clear filters</button>`:`Showing all ${all.length} locations · waiting ones first in each district`}</div>`;
-  const table = list.length ? `<div class="card tblwrap"><table>
-      <thead><tr><th>Location</th><th>Status</th><th>Machine</th><th>Retailer</th>${xcols.map(c=>`<th>${c[0]}</th>`).join('')}<th>Field officer</th><th>CCM</th>${xppl.map(c=>`<th>${c[0]}</th>`).join('')}</tr></thead>
-      <tbody>${list.map(m=>`<tr>
-        <td><div class="tl">${E(m.market||m.dist)}</div><div class="ts">${E(m.dist)} · ${E(m.squad)} · ${E(m.state)}</div></td>
-        <td>${STAGE_CHIP[stageOf(m)]}</td>
-        <td>${m.mc?`<span class="mono">${E(m.mc)}</span>`:'<span class="muted">—</span>'}</td>
-        <td>${m.retailer?E(m.retailer):'<span class="muted">—</span>'}</td>
-        ${xcols.map(c=>`<td>${m[c[1]]?E(m[c[1]]):'<span class="muted">—</span>'}</td>`).join('')}
-        <td>${personCell(m.fo,m.foMob)}</td><td>${personCell(m.ccm,m.ccmMob)}</td>
-        ${xppl.map(c=>`<td>${personCell(m[c[1]],m[c[2]])}</td>`).join('')}
-      </tr>`).join('')}</tbody></table></div>` : '';
-  const page=list.slice(0,S.limit);
-  const cards = list.length ? `<div class="cards">${page.map(m=>`<article class="card lc">
-      <div class="top"><div class="grow"><div class="nm">${E(m.market||m.dist)}</div><div class="wh">${E(m.dist)} · ${E(m.squad)} squad · ${E(m.state)}</div></div>${STAGE_CHIP[stageOf(m)]}</div>
-      <dl class="facts"><dt>Machine</dt><dd>${m.mc?`<span class="mono">${E(m.mc)}</span>`:'<span class="muted">Not assigned yet</span>'}</dd>
-        ${m.retailer?`<dt>Retailer</dt><dd>${E(m.retailer)}</dd>`:''}
-        ${xcols.map(c=>m[c[1]]?`<dt>${c[0]}</dt><dd>${E(m[c[1]])}</dd>`:'').join('')}</dl>
-      ${personRow('FO',m.fo,m.foMob)}${personRow('CCM',m.ccm,m.ccmMob)}
-      ${xppl.map(c=>(m[c[1]]||m[c[2]])?personRow(c[0]==='Cluster officer'?'CO':'AM',m[c[1]],m[c[2]]):'').join('')}
-    </article>`).join('')}
-    ${list.length>page.length?`<button type="button" class="btn" data-act="moreList" style="width:100%">Show ${Math.min(M_PAGE,list.length-page.length)} more · ${list.length-page.length} left</button>`:''}</div>` : '';
-  const none = list.length ? '' : `<div class="card empty">No location matches these filters. <button type="button" class="link" data-act="clear">Clear filters</button></div>`;
-  const listSec=`<section class="sec" id="listSec" aria-label="All locations"><div class="sechead"><h2>All locations</h2>
-      <button type="button" class="btn sm end" data-act="csv">Download CSV</button></div>${filters}${table}${cards}${none}</section>`;
-
-  const lead=`<p class="lead">Where each of the ${req} machines Bayer requested stands, and who to call about a location.</p>`;
-  return lead + status + states + dist + listSec;
-}
-
-/* ---------- Field officers ---------- */
-// An FO is matched to the locations he covers on his MOBILE, the name only where the number is missing.
-function foLocs(){
-  const by={}; (D.mc||[]).forEach(m=>{ const k=m.foMob||('n:'+m.fo.toLowerCase()); if(!m.fo&&!m.foMob) return; (by[k]=by[k]||[]).push(m); });
-  return by;
-}
-function foFiltered(){
-  const q=S.foQ.trim().toLowerCase(), by=foLocs();
-  return D.fo.map(f=>Object.assign({}, f, { locs:by[f.mob]||by['n:'+f.name.toLowerCase()]||[] }))
-    .filter(f=>!q || [f.name,f.mob,f.ccm,f.ccmMob,...f.locs.map(m=>m.market+' '+m.dist)].join(' ').toLowerCase().includes(q));
-}
-// "Patti ×2" rather than "Patti, Patti": two slots in one village are one place with two machines.
-const villages = locs => { const n={}; locs.forEach(m=>{ const k=m.market||m.dist; n[k]=(n[k]||0)+1; }); return Object.keys(n).map(k=>n[k]>1?`${k} ×${n[k]}`:k).join(', '); };
-function foHTML(){
-  const all=foFiltered(), base=D.fo, q=S.foQ.trim(), by=foLocs();
-  const totalWith=base.filter(f=>(by[f.mob]||by['n:'+f.name.toLowerCase()]||[]).length).length;
-  const app=base.filter(f=>f.app).length, ccms=new Set(base.map(f=>f.ccmMob||f.ccm)).size;
-  const kpis=`<div class="kpis">
-    <div class="card kpi"><div class="l">Field officers</div><div class="v">${base.length}</div><div class="n">on the FO mapping</div></div>
-    <div class="card kpi"><div class="l">CCMs</div><div class="v">${ccms}</div><div class="n">each leading a group below</div></div>
-    <div class="card kpi"><div class="l">FOs with a location</div><div class="v">${totalWith}<small> of ${base.length}</small></div><div class="n">named against a machine slot</div></div>
-    <div class="card kpi"><div class="l">Partner app access</div><div class="v">${app}<small> of ${base.length}</small></div><div class="n">${app?'have access':'none given yet'}</div></div>
-  </div>`;
-  const g={}; all.forEach(f=>{ const k=f.ccmMob||f.ccm||'—'; (g[k]=g[k]||{ccm:f.ccm,mob:f.ccmMob,fos:[]}).fos.push(f); });
-  const groups=Object.values(g).sort((a,b)=>b.fos.length-a.fos.length||a.ccm.localeCompare(b.ccm));
-  const body=groups.length ? `<div class="card" style="overflow:hidden">${groups.map(gr=>`<div class="grp">
-      <div class="ghead"><span class="muted" style="font-size:11.5px;font-weight:700">CCM</span><span class="nm">${E(gr.ccm||'Not named')}</span>${telLink(gr.mob)}
-        <span class="ct">${plural(gr.fos.length,'FO')}</span>${gr.mob?`<a class="call" href="tel:+91${gr.mob}" aria-label="Call ${E(gr.ccm)}">Call</a>`:''}</div>
-      ${gr.fos.sort((a,b)=>b.locs.length-a.locs.length||a.name.localeCompare(b.name)).map(f=>`<div class="forow">
-        <div class="who"><b style="font-weight:600">${E(f.name)}</b>${f.app?' <span class="chip ok">✓ App access</span>':''}${isPhone()&&f.mob?`<span class="tel" style="display:block">${f.mob}</span>`:''}</div>
-        <div class="num">${telLink(f.mob)}</div>
-        <div class="locs">${f.locs.length?E(villages(f.locs)):'<span class="muted">No location yet</span>'}</div>
-        ${f.mob?`<a class="call" href="tel:+91${f.mob}" aria-label="Call ${E(f.name)}">Call</a>`:''}
-      </div>`).join('')}</div>`).join('')}</div>`
-    : `<div class="card empty">No field officer matches “${E(q)}”. <button type="button" class="link" data-act="clearFo">Clear search</button></div>`;
-  const lead=`<p class="lead">Bayer's field officers, grouped under their CCM, with the locations each one covers.</p>`;
-  return lead + kpis + `<section class="sec"><div class="sechead"><h2>Field officers by CCM</h2>
-      <span class="sub">${q?`${all.length} of ${base.length} match`:'most locations first'}</span>
-      <button type="button" class="btn sm end" data-act="csvFo">Download CSV</button></div>
-    <div class="filters" role="search"><input type="search" id="fFoQ" placeholder="Search name, number or village" value="${E(S.foQ)}" aria-label="Search field officers" enterkeyhint="search" autocorrect="off"></div>
-    <div style="height:10px"></div>${body}</section>`;
-}
-
-/* ---------- Spraying (the UPL / SWAL team view's figures) ---------- */
+/* ================================ figures ================================ */
 const fmtN = n => Math.round(n).toLocaleString('en-IN');
 const acF = n => n>0 && n<10 ? n.toFixed(1) : fmtN(n);
 const pctF = p => p==null ? '—' : (p>0 && p<1 ? '<1' : Math.round(p))+'%';
+const plural = (n, one, many) => fmtN(n)+' '+(n===1?one:(many||one+'s'));
+const uniq = a => [...new Set(a.filter(Boolean))].sort((x,y)=>x.localeCompare(y));
+const listAnd = a => a.length<2 ? (a[0]||'') : a.slice(0,-1).join(', ')+' & '+a[a.length-1];
+const isPhone = () => matchMedia('(max-width:820px)').matches;
+const fmtTime = d => d.toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'});
 // The picked day: Yesterday by default, never before 1 Nov or after the calendar's yesterday (today's row is still being written).
 function spDay(){
   const y=istDay(-1), lo=D.sp ? D.sp.firstDate : SPRAY.from;
-  let d=S.spDay || y; if(d>y) d=y; if(d<lo) d=lo; return d;
+  let d=S.day || y; if(d>y) d=y; if(d<lo) d=lo; return d;
 }
-const spWord = d => d===istDay(-1) ? 'yesterday' : 'on '+dPretty(d);
-// A machine's figures for the picked day: acres that day, season acres up to it, the day's breakdown ID.
+const isYday = d => d===istDay(-1);
+const dayWord = d => isYday(d) ? 'yesterday' : 'on '+dPretty(d);
+const dayShort = d => isYday(d) ? 'y’day' : dPretty(d);
+// A machine's figures for the picked day: acres that day, season acres up to it, the day's breakdown ID, days sprayed.
 function spAt(m, d){
-  const day=m.days[d]||{}; let all=0; for(const k in m.days) if(k<=d) all+=m.days[k].ac;
-  return { acY:day.ac||0, acAll:all, brk:day.brk||'' };
+  let all=0, n=0, last=''; for(const k in m.days) if(k<=d){ all+=m.days[k].ac; if(m.days[k].ac>0){ n++; if(k>last) last=k; } }
+  const day=m.days[d]||{}; return { acY:day.ac||0, acAll:all, brk:day.brk||'', nDays:n, lastRun:last };
 }
-function spFigs(list){
-  const n=list.length, sum=f=>list.reduce((a,m)=>a+f(m),0), tgt=n*SPRAY.target, acAll=sum(m=>m.f.acAll);
-  return { n, ran:list.filter(m=>m.f.acY>0).length, brk:list.filter(m=>m.f.brk).length, op:list.filter(m=>m.op||m.opMob).length,
+const hasOp = m => !!(m.op||m.opMob);
+// One set of figures for any group of machines; the strip and every row come from it, so they reconcile.
+function figs(list){
+  const n=list.length, sum=f=>list.reduce((a,m)=>a+f(m),0), tgt=n*SPRAY.target, acAll=sum(m=>m.f.acAll), op=list.filter(hasOp).length;
+  return { n, ran:list.filter(m=>m.f.acY>0).length, brk:list.filter(m=>m.f.brk).length, op, opPct:n?100*op/n:null,
     acY:sum(m=>m.f.acY), acAll, tgt, pct:tgt?100*acAll/tgt:null };
 }
-const SP_SORTS=[['n','Machines'],['acAll','Season acres'],['pct','% of target'],['acY','Acres on the day'],['ran','Ran on the day'],['brk','Breakdown'],['op','Operators mapped'],['name','Name']];
-const spKey = (n, m) => (m||'')+'|'+(n||'').toLowerCase();
-function spScope(){
+const SORTS=[['tgt','Target acres'],['acAll','Season acres'],['pct','% of target'],['acY','Acres on the day'],['ran','Ran on the day'],['opPct','Operator mapped %'],['n','Machines'],['brk','Breakdown'],['name','Name']];
+const pKey = (n, m) => (m||'')+'|'+(n||'').toLowerCase();
+function scope(){
   const d=spDay(), all=D.sp.machines.map(m=>Object.assign(m,{ f:spAt(m,d) }));
-  const sts=uniq(all.map(m=>m.st)); if(S.spSt && !sts.includes(S.spSt)) S.spSt='';
-  const inSt=all.filter(m=>!S.spSt||m.st===S.spSt);
-  const terrs=uniq(inSt.map(m=>m.terr).filter(t=>t!==SP_NO_TERR)); if(S.spTerr && !terrs.includes(S.spTerr) && S.spTerr!==SP_NO_TERR) S.spTerr='';
-  const inT=inSt.filter(m=>!S.spTerr||m.terr===S.spTerr);
-  const tms=uniq(inT.map(m=>m.tm)); if(S.spTm && !tms.includes(S.spTm)) S.spTm='';
-  const scoped=inT.filter(m=>!S.spTm||m.tm===S.spTm);
-  const q=S.spQ.trim().toLowerCase();
+  const sts=uniq(all.map(m=>m.st)); if(S.st && !sts.includes(S.st)) S.st='';
+  const inSt=all.filter(m=>!S.st||m.st===S.st);
+  const terrs=uniq(inSt.map(m=>m.terr).filter(t=>t!==SP_NO_TERR)); if(S.terr && !terrs.includes(S.terr)) S.terr='';
+  const inT=inSt.filter(m=>!S.terr||m.terr===S.terr);
+  const tms=uniq(inT.map(m=>m.tm)); if(S.tm && !tms.includes(S.tm)) S.tm='';
+  const scoped=inT.filter(m=>!S.tm||m.tm===S.tm);
+  const q=S.q.trim().toLowerCase();
   const list=q ? scoped.filter(m=>[m.mc,m.vil,m.op,m.opMob,m.fo,m.foMob,m.tm,m.tmMob,m.terr,m.st,m.ci,m.am].join(' ').toLowerCase().includes(q)) : scoped;
-  return { d, all, sts, terrs, tms, list, q };
+  const nF=[S.st,S.terr,S.tm].filter(Boolean).length + (d!==istDay(-1)?1:0);
+  return { d, all, sts, terrs, tms, list, q, nF };
 }
-function spOrder(nodes){
-  const k=SP_SORTS.some(([x])=>x===S.spSort)?S.spSort:'n';
+function order(nodes){
+  const k=SORTS.some(([x])=>x===S.sort)?S.sort:'tgt';
   return nodes.sort((a,b)=>(!!a.none-!!b.none) || (k==='name' ? a.name.localeCompare(b.name)
     : ((b.f[k]==null?-1:b.f[k])-(a.f[k]==null?-1:a.f[k])) || b.f.n-a.f.n || a.name.localeCompare(b.name)));
 }
 const mcOrder = (a,b) => b.f.acAll-a.f.acAll || a.mc.localeCompare(b.mc);
 // The page as a tree: Territory → machines (under each TM where there is more than one) · TM → FO → machines.
-function spTree(list){
-  if(S.spBy==='terr'){
+function tree(list){
+  if(S.page==='terr'){
     const g={}; list.forEach(m=>{ const k=m.st+'|'+m.terr; (g[k]=g[k]||{ key:'t:'+k, name:m.terr, st:m.st, none:m.terr===SP_NO_TERR, list:[] }).list.push(m); });
-    return spOrder(Object.values(g).map(t=>{
-      const tm={}; t.list.forEach(m=>{ const k=spKey(m.tm,m.tmMob); (tm[k]=tm[k]||{ n:m.tm, mob:m.tmMob, list:[] }).list.push(m); });
+    return order(Object.values(g).map(t=>{
+      const tm={}; t.list.forEach(m=>{ const k=pKey(m.tm,m.tmMob); (tm[k]=tm[k]||{ n:m.tm, mob:m.tmMob, list:[] }).list.push(m); });
       const tmL=Object.values(tm).sort((a,b)=>b.list.length-a.list.length||a.n.localeCompare(b.n));
-      return Object.assign(t, { f:spFigs(t.list), people:tmL.filter(p=>p.n||p.mob).map(p=>({ lab:'TM', n:p.n, mob:p.mob })),
+      return Object.assign(t, { f:figs(t.list), people:tmL.filter(p=>p.n||p.mob).map(p=>({ lab:'TM', n:p.n, mob:p.mob })),
+        warn:t.none?'The sheet’s territory is "0" or blank — fix on the sheet':'',
         groups:tmL.map(p=>({ label:tmL.length>1?`TM · ${p.n||'not on the sheet'} · ${p.list.length}`:'', mcs:p.list.sort(mcOrder) })) });
     }));
   }
-  const g={}; list.forEach(m=>{ const k=spKey(m.tm,m.tmMob); (g[k]=g[k]||{ key:'m:'+k, name:m.tm||'TM not named', mob:m.tmMob, none:!m.tm&&!m.tmMob, list:[] }).list.push(m); });
-  return spOrder(Object.values(g).map(t=>{
-    const fo={}; t.list.forEach(m=>{ const k=spKey(m.fo,m.foMob); (fo[k]=fo[k]||{ key:t.key+'/f:'+k, name:m.fo||'FO not named', mob:m.foMob, none:!m.fo&&!m.foMob, list:[] }).list.push(m); });
-    const kids=spOrder(Object.values(fo).map(f=>Object.assign(f,{ f:spFigs(f.list), lab:'FO', groups:[{ label:'', mcs:f.list.sort(mcOrder) }] })));
-    return Object.assign(t, { f:spFigs(t.list), lab:'TM', sub:plural(kids.length,'FO'), kids });
+  const g={}; list.forEach(m=>{ const k=pKey(m.tm,m.tmMob); (g[k]=g[k]||{ key:'m:'+k, name:m.tm||'TM not named', mob:m.tmMob, none:!m.tm&&!m.tmMob, list:[] }).list.push(m); });
+  return order(Object.values(g).map(t=>{
+    const fo={}; t.list.forEach(m=>{ const k=pKey(m.fo,m.foMob); (fo[k]=fo[k]||{ key:t.key+'/f:'+k, name:m.fo||'FO not named', mob:m.foMob, none:!m.fo&&!m.foMob, list:[] }).list.push(m); });
+    const kids=order(Object.values(fo).map(f=>Object.assign(f,{ f:figs(f.list), lab:'FO', tag:f.mob&&f.mob===t.mob?'TM himself':'',
+      warn:f.none?'The sheet names no FO for these machines — fix on the sheet':'', groups:[{ label:'', mcs:f.list.sort(mcOrder) }] })));
+    const nFo=kids.filter(k=>!k.none).length;
+    return Object.assign(t, { f:figs(t.list), lab:'TM', sub:`${nFo} FO${nFo===1?'':'s'}${kids.some(k=>k.none)?' + no FO':''}`,
+      warn:t.none?'These machines have no TM on the sheet — fix on the sheet':'', kids });
   }));
 }
-const isOpen = (nd, q) => !!q || !!S.spOpen[nd.key];
+const isOpen = (nd, q) => !!q || !!S.open[nd.key];
 
-function spStrip(F, sc, d){
-  const dw=spWord(d), day=dPretty(d), nTerr=new Set(sc.list.filter(m=>m.terr!==SP_NO_TERR).map(m=>m.st+'|'+m.terr)).size;
-  const stale=D.sp.lastDate && D.sp.lastDate<d, ranP=F.n?100*F.ran/F.n:0, opP=F.n?100*F.op/F.n:0;
-  const brkRan=sc.list.filter(m=>m.f.brk&&m.f.acY>0).length;
-  const tile=(lab,v,of,note,bar,cls,wide)=>`<div class="card tile${cls?' '+cls:''}${wide?' wide':''}"><div class="l">${lab}</div>
-    <div class="v">${fmtN(v)}${of!=null?`<small> of ${fmtN(of)}</small>`:''}</div>${bar!=null?`<div class="meter"><i style="width:${Math.min(100,bar)}%"></i></div>`:''}<div class="n">${note}</div></div>`;
-  const brkM=sc.list.filter(m=>m.f.brk).sort((a,b)=>a.terr.localeCompare(b.terr)||a.mc.localeCompare(b.mc));
-  const brkList = !brkM.length ? '' : `<button type="button" class="btn sm brkbtn" data-act="spbrk" aria-expanded="${S.spBrk}"><span class="chev" aria-hidden="true">▶</span>Breakdown machines · ${brkM.length}</button>
-    ${S.spBrk?`<div class="card" style="margin-top:8px;overflow-x:auto"><table class="brktbl"><thead><tr><th>Machine</th><th>Breakdown ID</th><th>Territory</th><th>Operator</th><th>TM</th><th style="text-align:right">Acres ${E(dw)}</th></tr></thead>
-      <tbody>${brkM.map(m=>`<tr><td><span class="mono">${E(m.mc)}</span>${m.vil?`<div class="ts">${E(m.vil)}</div>`:''}</td><td class="mono">${E(m.f.brk)}</td><td>${E(m.terr)}</td><td>${personCell(m.op,m.opMob)}</td><td>${personCell(m.tm,m.tmMob)}</td><td class="mono" style="text-align:right">${acF(m.f.acY)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
-  const mcs=`<section aria-label="Machines"><div class="glbl">Machines<span>${E(day)}</span></div><div class="tiles">
-    ${tile('Machines',F.n,null,S.spTerr?'in '+E(S.spTerr):`in ${plural(nTerr,'territory','territories')}`,null,'',false)}
-    ${tile('Ran '+E(dw),F.ran,F.n,`${Math.round(ranP)}% of machines`,ranP,'',false)}
-    ${tile('Breakdown',F.brk,F.n,`on ${E(day)}${brkRan?` · ${brkRan} still sprayed`:''}`,null,F.brk?'bad':'',false)}
-    ${tile('Operators mapped',F.op,F.n,F.n-F.op?`${F.n-F.op} not mapped`:'every machine has one',opP,'',false)}
-  </div>${brkList}</section>`;
-  const acres=`<section aria-label="Acres"><div class="glbl">Acres sprayed<span>IoT-measured</span></div><div class="card acres">
-    <div><div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px">
-      <div><div class="v"${stale?' style="color:var(--waitInk)"':''}>${acF(F.acY)}<small> ac</small></div><div class="n">on ${E(day)}</div></div>
-      <div style="text-align:right"><div class="v2">${acF(F.acAll)}<small> ac</small></div><div class="n">total · ${E(dPretty(D.sp.firstDate))} – ${E(day)}</div></div></div>
+/* ================================ view ================================ */
+const IC = {
+  terr:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+  tm:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2c2.8.4 5 2.8 5 5.8"/></svg>',
+  out:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>',
+  phone:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>',
+  search:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+  filter:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
+  close:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  dl:'<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  chev:'<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8C939B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
+};
+// The tinted tile for a KPI label — each kind of figure keeps one hue, as in the console (w2tone).
+function tone(l){
+  const T=(a,b,c,d)=>({ bg:`linear-gradient(150deg,${a} 0%,#FFFFFF 75%)`, bd:b, vc:c, dot:d });
+  return l==='Breakdown' ? T('#FDECEA','#F4D8D4','#B42D20','#D23B2C') : l==='Stale' ? T('#FDF4DF','#F1E2BC','#8A6200','#D69A00')
+    : /^Acres/.test(l) ? T('#E8F2FC','#D2E3F4','#1D4F80','#3B82C4') : /^Machines/.test(l) ? T('#FFF0E2','#F5DEC7','#8A430A','#F5821F')
+    : /^Operators/.test(l) ? T('#E6F6F1','#CBEAE0','#0E6B57','#1A9E80') : /^Ran/.test(l) ? T('#EEF8F2','#CFE9DA','#0F7A3D','#12924A') : T('#F4F6F8','#E8ECF1','#15181C','#8C939B');
+}
+const bar = (p, col, h) => `<span class="bar"${h?` style="height:${h}px"`:''}><span style="width:${p==null?0:Math.min(100,Math.max(0,p))}%;min-width:${p>0?3:0}px;background:${col}"></span></span>`;
+const telA = mob => mob ? ` <a class="tel" href="tel:+91${mob}" onclick="event.stopPropagation()">${mob}</a>` : '';
+const callBtn = (mob, who) => mob ? `<a class="call" href="tel:+91${mob}" aria-label="Call ${E(who||mob)}">${IC.phone}</a>` : '';
+const noOp = '<span class="bd" style="font-weight:500">✕ No operator</span>';
+
+function stampTxt(){
+  if(D.err && !D.sp) return '<span class="stamp bad">Could not load the sheet</span>';
+  if(!D.at) return '<span class="stamp">Loading…</span>';
+  return `<span class="stamp${D.err?' bad':''}">Bayer sheet · checked ${fmtTime(D.at)}${D.err?' · last refresh failed':''} · <button class="link" data-act="retry" type="button">refresh</button></span>`;
+}
+
+function stripHTML(F, sc){
+  const d=sc.d, day=dPretty(d), dw=dayWord(d), ph=isPhone();
+  const nTerr=new Set(sc.list.filter(m=>m.terr!==SP_NO_TERR).map(m=>m.st+'|'+m.terr)).size;
+  const stale=D.sp.lastDate && D.sp.lastDate<d, ranP=F.n?100*F.ran/F.n:0, brkRan=sc.list.filter(m=>m.f.brk&&m.f.acY>0).length;
+  const tile=(lab,key,v,of,note,b)=>{ const t=tone(key);
+    return `<div class="tile" style="background:${t.bg};border-color:${t.bd}"><div class="l"><i style="background:${t.dot}"></i>${lab}</div>
+      <div class="v" style="color:${t.vc}">${v}${of!=null?`<span class="u"> of ${fmtN(of)}</span>`:''}</div>${b!=null?bar(b,t.dot):''}<div class="n">${note}</div></div>`; };
+  const tm=tone('Machines');
+  const mcTile=`<div class="tile" style="background:${tm.bg};border-color:${tm.bd}"><div class="l" style="font-size:14px;font-weight:600;color:var(--ink)"><i style="background:${tm.dot}"></i>Machines</div>
+    <div><span class="v" style="color:${tm.vc};font-size:${ph?26:28}px">${fmtN(F.n)}</span><span class="u"> machines</span>
+    <span style="font-size:13px;color:var(--ink2)"> ${S.terr?'in '+E(S.terr):`in ${plural(nTerr,'territory','territories')}`}</span></div>
+    <div class="n">${E(S.st||listAnd(sc.sts))} · Bayer's machines on the sheet</div></div>`;
+  const tiles = mcTile
+    + tile('Ran '+E(dw),'Ran',fmtN(F.ran),F.n,`${Math.round(ranP)}% of machines`,ranP)
+    + tile('Breakdown','Breakdown',fmtN(F.brk),F.n,`on ${E(day)}${brkRan?` · ${brkRan} still sprayed`:''}`)
+    + tile('Operators mapped','Operators',fmtN(F.op),F.n,F.n-F.op?`${F.n-F.op} not mapped`:'every machine has one',F.opPct);
+  const ta=stale?tone('Stale'):tone('Acres');
+  const acres=`<div class="card acard" style="background:${ta.bg};border-color:${ta.bd}">
+    <div><div style="display:flex;align-items:baseline;gap:7px;font-size:14px;font-weight:600"><i style="width:8px;height:8px;border-radius:50%;background:${ta.dot}"></i>Acres sprayed</div>
+      <div style="font-size:${ph?28:30}px;font-weight:600;margin-top:6px;color:${ta.vc}">${acF(F.acY)}<span class="u"> ac</span></div><div style="font-size:12.5px;color:var(--ink2)">on ${E(day)} · ${fmtN(F.ran)} machines ran</div>
       ${stale?`<div class="warn">⚠ the sheet's acres stop at ${E(dPretty(D.sp.lastDate))}</div>`:''}</div>
-    <div class="side"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13.5px"><span>Against target<span class="n" style="display:block">of ${fmtN(F.tgt)} ac · ${SPRAY.target} ac per machine</span></span><b class="mono">${pctF(F.pct)}</b></div>
-      <div class="meter" style="height:8px;margin-top:8px"><i style="width:${Math.min(100,F.pct||0)}%"></i></div>
-      <div class="n" style="margin-top:8px">${F.n?`${acF(F.acAll/F.n)} ac per machine so far`:''}</div></div></div></section>`;
-  return `<div class="spgroups">${mcs}${acres}</div>`;
+    <div><div style="font-size:12.5px;font-weight:500;color:var(--ink2)">Season</div><div style="font-size:22px;font-weight:600;margin-top:6px">${acF(F.acAll)}<span class="u"> ac</span></div>
+      <div style="font-size:12.5px;color:var(--ink2)">${E(dPretty(D.sp.firstDate))} – ${E(day)} · ${F.n?acF(F.acAll/F.n):0} ac per machine</div></div>
+    <div><div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13.5px"><span>Against target<span style="display:block;font-size:12.5px;color:var(--ink2)">of ${fmtN(F.tgt)} ac · ${SPRAY.target} ac per machine</span></span><b style="font-weight:600">${pctF(F.pct)}</b></div>
+      <div style="margin-top:10px">${bar(F.pct,ta.dot,8)}</div><div style="font-size:12.5px;color:var(--ink2);margin-top:8px">IoT-measured acres</div></div></div>`;
+  return `<div class="groups"><section aria-label="Machines"><div class="glbl"><b>Machines</b><span>${E(day)}</span></div><div class="mcgrid">${tiles}</div>${brkHTML(sc)}</section>
+    <section aria-label="Acres"><div class="glbl"><b>Acres</b><span>${E(day)}</span></div>${acres}</section></div>`;
+}
+// The machines carrying a breakdown_id on the picked day, under the page's filters. Closed by default.
+function brkHTML(sc){
+  const d=sc.d, day=dPretty(d), ph=isPhone();
+  const list=sc.list.filter(m=>m.f.brk).sort((a,b)=>a.terr.localeCompare(b.terr)||a.mc.localeCompare(b.mc));
+  if(!list.length) return '';
+  const ran=m=>m.f.acY>0?`<span class="ok">✓ ${acF(m.f.acY)} ac</span>`:'<span class="mu">Idle</span>';
+  const head=`<button type="button" class="bkh" data-act="brk" aria-expanded="${S.brk}"><span style="flex:1;min-width:0"><b><i style="width:8px;height:8px;border-radius:50%;background:var(--brk)"></i>Breakdown machines · ${list.length}</b>
+      <span style="display:block;font-size:13px;color:var(--ink2);margin-top:2px">${E(day)}${ph?'':' · machines with a breakdown ID on the sheet'} · ${ph?'tap':'click'} a machine for who to call</span></span>
+      <span style="font-size:14px;font-weight:500;white-space:nowrap">${S.brk?'Hide':'Show'} <span aria-hidden="true" style="display:inline-block;transform:rotate(${S.brk?180:0}deg)">▾</span></span></button>`;
+  if(!S.brk) return `<div class="card" style="margin-top:12px;overflow:hidden">${head}</div>`;
+  if(ph) return `<div class="card" style="margin-top:12px;overflow:hidden">${head}<div class="bkm">${list.map(m=>`<button type="button" class="mcbtn" data-act="mc" data-mc="${E(m.mc)}" style="background:var(--head)">
+      <span class="a"><b class="mono" style="font-size:13.5px">${E(m.mc)}</b> <span class="bd" style="display:inline;font-size:13px">! ${E(m.f.brk)}</span><span style="color:var(--ink)">${E(m.terr)}${m.vil?' · '+E(m.vil):''}</span><span>${hasOp(m)?E(m.op||m.opMob):noOp} · ${ran(m)}</span></span><span aria-hidden="true" style="color:var(--ink3)">›</span></button>`).join('')}</div></div>`;
+  return `<div class="card" style="margin-top:12px;overflow:hidden">${head}<div style="overflow-x:auto">
+    <div class="bkrow hd"><span>Machine</span><span>Breakdown ID</span><span>Territory</span><span>Operator</span><span>TM</span><span style="text-align:right">${E(dayShort(d))}</span></div>
+    ${list.map(m=>`<div class="bkrow"><span><button type="button" class="mcb" data-act="mc" data-mc="${E(m.mc)}">${E(m.mc)}</button></span><span class="bd mono" style="font-size:12.5px">! ${E(m.f.brk)}</span>
+      <span>${E(m.terr)}</span><span>${hasOp(m)?E(m.op||m.opMob):noOp}</span><span>${m.tm?E(m.tm):'<i class="mu">not on the sheet</i>'}</span><span style="text-align:right">${ran(m)}</span></div>`).join('')}</div></div>`;
 }
 
-// One figures row, shared by every node: machines · ran · breakdown · operators · acres on the day · season · % of target.
-const figCells = f => `<span class="num">${fmtN(f.n)}</span><span class="num">${fmtN(f.ran)}</span><span class="num${f.brk?' bd':''}">${f.brk||'–'}</span>
-  <span class="num">${fmtN(f.op)}<small>/${fmtN(f.n)}</small></span><span class="num">${acF(f.acY)}</span>
-  <span class="num">${acF(f.acAll)}<small> / ${fmtN(f.tgt)}</small></span><span class="pbar"><span class="meter"><i style="width:${Math.min(100,f.pct||0)}%"></i></span><span class="num">${pctF(f.pct)}</span></span>`;
-const peopleTxt = ps => ps.map(p=>`${p.lab} ${E(p.n||'—')}${p.mob?` · <a class="tel" href="tel:+91${p.mob}">${p.mob}</a>`:''}`).join(' · ');
-function mcRowD(m, deep){
-  const pc=100*m.f.acAll/SPRAY.target;
-  return `<div class="spr mc${deep?' deep':''}"><div class="nmc"><div class="t"><span class="mono">${E(m.mc)}</span>${m.vil?`<span class="muted" style="font-weight:400">${E(m.vil)}</span>`:''}</div>
-      <div class="s">${m.op||m.opMob?`Operator ${E(m.op||'—')}${m.opMob?` · <a class="tel" href="tel:+91${m.opMob}">${m.opMob}</a>`:''}`:'<span style="color:var(--waitInk)">No operator mapped</span>'}${S.spBy==='terr'&&m.fo?` · FO ${E(m.fo)}`:''}</div></div>
-    <span></span><span class="num">${m.f.acY>0?'<span class="ok">✓</span>':'–'}</span><span class="num${m.f.brk?' bd':''}" title="${m.f.brk?'Breakdown ID':''}">${m.f.brk?E(m.f.brk):'–'}</span>
-    <span class="num">${m.op||m.opMob?'<span class="ok">✓</span>':'–'}</span><span class="num">${acF(m.f.acY)}</span>
-    <span class="num">${acF(m.f.acAll)}<small> / ${SPRAY.target}</small></span><span class="pbar"><span class="meter"><i style="width:${Math.min(100,pc)}%"></i></span><span class="num">${pctF(pc)}</span></span></div>`;
+function controlsHTML(sc){
+  const ph=isPhone(), d=sc.d, y=istDay(-1);
+  const sel=(id,label,cur,all,opts)=>`<select class="sel" id="${id}" aria-label="${label}"><option value="">${all}</option>${opts.map(o=>`<option value="${E(o)}"${o===cur?' selected':''}>${E(o)}</option>`).join('')}</select>`;
+  const sortSel=`<select class="sel" id="fSort" aria-label="Sort by"${ph?' style="width:100%;max-width:none"':''}>${SORTS.map(([k,l])=>`<option value="${k}"${k===S.sort?' selected':''}>Sort: ${E(l.replace('the day',dayShort(d)))}</option>`).join('')}</select>`;
+  const search=`<div class="srch">${IC.search}<input id="fQ" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${ph?'Search machine, operator, FO…':'Search machine, village, operator, FO, TM'}" value="${E(S.q)}" aria-label="Search"></div>`;
+  const csv=`<button type="button" class="csv" data-act="csv" title="Download the ${sc.list.length} machines shown as CSV">${IC.dl}CSV</button>`;
+  const clear = sc.nF||S.q.trim() ? `<button type="button" class="ghost" data-act="clear">Clear</button>` : '';
+  if(ph) return `<div class="ctl m" style="flex-wrap:nowrap">${search}<button type="button" class="fbtn${sc.nF?' on':''}" data-act="sheet" aria-label="Filters${sc.nF?`, ${sc.nF} active`:''}">${IC.filter}Filters${sc.nF?` <em>${sc.nF}</em>`:''}</button></div>
+    <div class="ctl" style="margin-top:8px;flex-wrap:nowrap"><div style="flex:1;min-width:0">${sortSel}</div>${clear}${csv}</div>`;
+  const f=(lab,inner)=>`<label class="fld"><span>${lab}</span>${inner}</label>`;
+  return `<div class="ctl">${f('Day',`<div style="display:flex;gap:8px;align-items:center"><div class="segb" role="group" aria-label="Day"><button type="button" data-act="yday" aria-pressed="${d===y}">Yesterday</button></div>
+        <input class="sel" type="date" id="fDay" aria-label="Pick a day" min="${E(D.sp.firstDate)}" max="${E(y)}" value="${E(d)}"></div>`)}
+      ${sc.sts.length>1?f('State',sel('fSt','State',S.st,'All states',sc.sts)):''}
+      ${f('Territory',sel('fTerr','Territory',S.terr,'All territories',sc.terrs))}${f('TM',sel('fTm','TM',S.tm,'All TMs',sc.tms))}${f('Sort',sortSel)}</div>
+    <div class="ctl" style="margin-top:16px">${search}${clear}<div style="flex:1"></div>${stampTxt()}${csv}</div>`;
 }
-const groupsD = (nd, deep) => nd.groups.map(g=>(g.label?`<div class="glab">${E(g.label)}</div>`:'')+g.mcs.map(m=>mcRowD(m,deep)).join('')).join('');
-function nodeD(nd, q, lvl){
-  const open=isOpen(nd,q), sub = nd.sub || (nd.people ? (nd.people.length?peopleTxt(nd.people):'No TM on the sheet') : '');
-  const st = S.spBy==='terr' && !S.spSt ? ` · ${E(nd.st)}` : '';
-  return `<button type="button" class="spr${lvl?' l1':''}" data-act="spexp" data-k="${E(nd.key)}" aria-expanded="${open}">
-      <span class="nmc"><span class="t"><span class="chev" aria-hidden="true">▶</span>${nd.lab?`<span class="muted" style="font-size:11px;font-weight:700">${nd.lab}</span>`:''}${E(nd.name)}${nd.mob&&!nd.people?` <span class="tel" style="font-weight:400">${nd.mob}</span>`:''}</span>
-      ${sub||st?`<span class="s" style="display:block;padding-left:18px">${sub}${st}</span>`:''}</span>${figCells(nd.f)}</button>
-    ${open ? (nd.kids ? nd.kids.map(k=>nodeD(k,q,1)).join('') : groupsD(nd, lvl>0)) : ''}`;
-}
-// Phone: a card per node, a 3 × 2 grid of figures, machines as their own cards with Call buttons.
-const figGrid = f => `<div class="figs">
-  <div><div class="l">Machines</div><div class="v">${fmtN(f.n)}</div></div>
-  <div><div class="l">Ran</div><div class="v">${fmtN(f.ran)}<small>/${fmtN(f.n)}</small></div></div>
-  <div><div class="l">Breakdown</div><div class="v"${f.brk?' style="color:#B42318"':''}>${fmtN(f.brk)}</div></div>
-  <div><div class="l">Operators</div><div class="v">${fmtN(f.op)}<small>/${fmtN(f.n)}</small></div></div>
-  <div><div class="l">Acres day</div><div class="v">${acF(f.acY)}</div></div>
-  <div><div class="l">Season</div><div class="v">${acF(f.acAll)}<small> ${pctF(f.pct)}</small></div></div></div>`;
-function mcCard(m){
-  const pc=100*m.f.acAll/SPRAY.target;
-  return `<div class="mcc"><div class="top"><div class="grow"><b>${E(m.mc)}</b>${m.vil?` <span class="muted" style="font-size:12.5px">${E(m.vil)}</span>`:''}</div>
-      ${m.f.brk?`<span class="chip wait" style="color:#B42318;background:#FDECEA">Breakdown ${E(m.f.brk)}</span>`:m.f.acY>0?'<span class="chip ok">✓ Ran</span>':'<span class="chip" style="background:var(--soft);color:var(--ink2)">Idle</span>'}</div>
-    <div class="ac"><b class="mono">${acF(m.f.acY)}</b> ac on the day · <b class="mono">${acF(m.f.acAll)}</b> / ${SPRAY.target} ac season (${pctF(pc)})</div>
-    <div class="meter"><i style="width:${Math.min(100,pc)}%"></i></div>
-    ${personRow('Op',m.op,m.opMob)}${S.spBy==='terr'?personRow('FO',m.fo,m.foMob):''}</div>`;
-}
-function nodeM(nd, q){
-  const open=isOpen(nd,q), sub = nd.sub || (nd.people ? (nd.people.length?nd.people.map(p=>'TM '+E(p.n||'—')).join(' · '):'No TM on the sheet') : '');
-  const st = S.spBy==='terr' && !S.spSt ? ' · '+E(nd.st) : '';
-  return `<div class="card spc"><button type="button" class="h" data-act="spexp" data-k="${E(nd.key)}" aria-expanded="${open}">
-      <div class="grow"><div class="nm">${nd.lab?`<span class="muted" style="font-size:11px">${nd.lab}</span> `:''}${E(nd.name)}</div>${sub||st?`<div class="wh">${sub}${st}</div>`:''}</div><span class="chev" aria-hidden="true" style="margin-top:4px">▶</span></button>
-    ${figGrid(nd.f)}
-    ${open?`<div class="kids">${nd.kids ? nd.kids.map(k=>nodeM(k,q)).join('')
-      : nd.groups.map(g=>(g.label?`<div class="glab muted">${E(g.label)}</div>`:'')+g.mcs.map(mcCard).join('')).join('')}</div>`:''}</div>`;
+// The phone's Filters sheet: the same field ids, so the same change handler covers it.
+function sheetHTML(sc){
+  const d=sc.d, y=istDay(-1);
+  const sel=(id,label,cur,all,opts)=>`<label class="fld"><span>${label}</span><select class="sel" id="${id}" aria-label="${label}"><option value="">${all}</option>${opts.map(o=>`<option value="${E(o)}"${o===cur?' selected':''}>${E(o)}</option>`).join('')}</select></label>`;
+  return `<div class="scrim" data-act="closesheet"></div><div class="drawer fsheet" role="dialog" aria-modal="true" aria-label="Filters">
+    <div class="dhead"><div class="grab"></div><div class="row2"><div style="flex:1;font-size:18px;font-weight:600">Filters</div><button type="button" class="x" data-act="closesheet" id="sClose" aria-label="Close">${IC.close}</button></div></div>
+    <div class="dbody" id="sheetBody">
+      <label class="fld"><span>Day</span><div style="display:flex;gap:8px"><div class="segb" role="group" aria-label="Day"><button type="button" data-act="yday" aria-pressed="${d===y}">Yesterday</button></div>
+        <input class="sel" type="date" id="fDay" aria-label="Pick a day" min="${E(D.sp.firstDate)}" max="${E(y)}" value="${E(d)}" style="flex:1;min-width:0"></div></label>
+      ${sc.sts.length>1?sel('fSt','State',S.st,'All states',sc.sts):''}
+      ${sel('fTerr','Territory',S.terr,'All territories',sc.terrs)}${sel('fTm','TM',S.tm,'All TMs',sc.tms)}
+    </div>
+    <div class="sfoot">${sc.nF?`<button type="button" class="ghost" data-act="clear">Clear</button>`:''}<button type="button" class="csv" data-act="closesheet">Show ${sc.list.length} machines</button></div></div>`;
 }
 
-function spHTML(){
-  if(!D.sp) return D.spErr ? `<div class="card msg">Bayer's machine-day sheet could not be loaded (${E(D.spErr)}).<br><button class="btn" data-act="retry" type="button">Try again</button></div>` : skeleton();
-  const sc=spScope(), d=sc.d, y=istDay(-1), F=spFigs(sc.list), nodes=spTree(sc.list), ph=isPhone();
-  const nF=[S.spSt,S.spTerr,S.spTm,S.spQ.trim()].filter(Boolean).length + (d!==y?1:0);
-  const seg=`<div class="seg" role="group" aria-label="Group by"><button type="button" data-act="spby" data-v="terr" aria-pressed="${S.spBy==='terr'}">By territory</button><button type="button" data-act="spby" data-v="tm" aria-pressed="${S.spBy==='tm'}">By TM · FO</button></div>`;
-  const dayCtl=`<div class="seg" role="group" aria-label="Day" style="flex:0 0 auto"><button type="button" data-act="spyday" aria-pressed="${d===y}">Yesterday</button></div>
-    <input type="date" id="spDay" aria-label="Pick a day" min="${E(D.sp.firstDate)}" max="${E(y)}" value="${E(d)}">`;
-  const filters=`<div class="filters" role="search" style="margin-top:10px">
-    ${sc.sts.length>1?`<select id="spSt" aria-label="State">${opt('',S.spSt,'All states')}${sc.sts.map(s=>opt(s,S.spSt)).join('')}</select>`:''}
-    <select id="spTerr" aria-label="Territory">${opt('',S.spTerr,'All territories')}${sc.terrs.map(s=>opt(s,S.spTerr)).join('')}</select>
-    <select id="spTm" aria-label="TM">${opt('',S.spTm,'All TMs')}${sc.tms.map(s=>opt(s,S.spTm)).join('')}</select>
-    <select id="spSort" aria-label="Sort by">${SP_SORTS.map(([k,l])=>opt(k,S.spSort,'Sort: '+l.replace('the day',spWord(d)))).join('')}</select>
-    <input type="search" id="spQ" placeholder="Search machine, village, operator, FO, TM" value="${E(S.spQ)}" aria-label="Search machines" enterkeyhint="search" autocorrect="off">
-  </div>`;
-  const fstate=`<div class="fstate" aria-live="polite">${nF?`Showing <b>${sc.list.length}</b>&nbsp;of ${sc.all.length} machines · ${plural(nF,'filter')} on <button type="button" class="link" data-act="spclear">Clear filters</button>`:`All ${sc.all.length} Bayer machines · figures for ${E(dPretty(d))}`}</div>`;
-  const head = S.spBy==='terr' ? 'Territory · TM' : 'TM · FO';
-  const lim = ph && !sc.q ? S.spLimit : nodes.length, page=nodes.slice(0,lim);
-  const body = !nodes.length ? `<div class="card empty">No machine matches these filters. <button type="button" class="link" data-act="spclear">Clear filters</button></div>`
-    : `<div class="card sptree"><div class="spr hd"><span>${head}</span><span>Machines</span><span>Ran</span><span>Breakdown</span><span>Operators</span><span>Acres ${E(spWord(d).replace(/^on /,''))}</span><span>Season acres / target</span><span>% of target</span></div>${nodes.map(nd=>nodeD(nd,sc.q,0)).join('')}</div>
-       <div class="spcards">${page.map(nd=>nodeM(nd,sc.q)).join('')}${nodes.length>page.length?`<button type="button" class="btn more2" data-act="spmore">Show ${Math.min(M_PAGE,nodes.length-page.length)} more · ${nodes.length-page.length} left</button>`:''}</div>`;
-  const lead=`<p class="lead">How Bayer's machines are spraying: who ran, what broke down, and the acres against ${SPRAY.target} ac per machine for the season.</p>`;
-  return lead + `<div class="spbar">${dayCtl}</div>` + spStrip(F, sc, d)
-    + `<section class="sec" id="spSec" aria-label="${head}"><div class="sechead"><h2>${S.spBy==='terr'?'Territories':'TMs and FOs'}</h2>
-        <span class="sub">${ph?'tap':'click'} a row for its ${S.spBy==='terr'?'machines':'FOs'}</span><button type="button" class="btn sm end" data-act="spcsv">Download CSV</button></div>
-      <div class="spbar">${seg}</div>${filters}${fstate}${body}</section>`;
+const TCOLS = d => [['name',S.page==='terr'?'Territory · TM':'TM · FO'],['n','Machines'],['brk','Breakdown'],['ran','Ran '+dayShort(d)],['opPct','Operator mapped'],['acY','Acres '+dayShort(d)],['tgt','Target ac'],['acAll','Season ac · % of target']];
+const sortName = d => ((SORTS.find(([k])=>k===S.sort)||[])[1]||'').replace('the day',dayShort(d)).toLowerCase();
+function listDesk(nodes, sc){
+  const hd=`<div class="row hd">${TCOLS(sc.d).map(([k,t])=>`<button type="button" data-act="sort" data-k="${k}" aria-sort="${S.sort===k?'descending':'none'}">${E(t)}${S.sort===k?' ↓':''}</button>`).join('')}</div>`;
+  const ofC=(k,n,col)=>`<div class="of"><span><b style="font-weight:500">${fmtN(k)}</b><span class="mu"> of ${fmtN(n)}</span></span>${bar(n?100*k/n:null,col)}</div>`;
+  const vsC=(v,p)=>`<div class="of"><span><b style="font-weight:600">${acF(v)}</b><span class="mu" style="font-size:12.5px"> · ${pctF(p)}</span></span>${bar(p,'var(--act)')}</div>`;
+  const gRow=(x,lv)=>{
+    const ppl = x.people ? (x.people.length?'<b class="lab">TM</b> '+x.people.map(p=>`<span style="color:var(--ink)">${E(p.n||'—')}</span>${telA(p.mob)}`).join(', '):'<i>No TM on the sheet</i>') : '';
+    const sub=[x.sub?E(x.sub):'', S.page==='terr'&&!S.st?E(x.st):'', ppl].filter(Boolean).join(' · ');
+    return `<div class="row g${lv?' l1':''}${x.none?' none':''}" data-act="exp" data-k="${E(x.key)}" role="button" tabindex="0" aria-expanded="${isOpen(x,sc.q)}">
+      <div class="nm" style="padding-left:${lv*20}px">${IC.chev}<div style="min-width:0"><div class="t">${x.lab?`<b class="lab">${x.lab}</b>`:''}<span title="${E(x.name)}">${E(x.name)}${x.people?'':telA(x.mob)}</span>${x.tag?`<span class="lab" style="border:1px solid var(--line);border-radius:5px;padding:0 5px">${E(x.tag)}</span>`:''}</div>
+        ${sub?`<div class="s">${sub}</div>`:''}${x.warn?`<div class="warn" style="margin-top:3px">⚠ ${E(x.warn)}</div>`:''}</div></div>
+      <span class="num">${fmtN(x.f.n)}</span><span class="num ${x.f.brk?'bd':'mu'}">${fmtN(x.f.brk)}</span>${ofC(x.f.ran,x.f.n,'var(--act)')}${ofC(x.f.op,x.f.n,'var(--op)')}
+      <span class="num">${acF(x.f.acY)}</span><span class="num" style="font-weight:600">${fmtN(x.f.tgt)}</span>${vsC(x.f.acAll,x.f.pct)}</div>`; };
+  const mRow=(m,lv)=>{ const pc=100*m.f.acAll/SPRAY.target;
+    return `<div class="row m"><div style="min-width:0;padding-left:${22+lv*20}px"><button type="button" class="mcb" data-act="mc" data-mc="${E(m.mc)}">${E(m.mc)}</button>
+        <div class="mu" style="font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.vil||'')}${S.page==='terr'&&m.fo?(m.vil?' · ':'')+'FO '+E(m.fo):''}</div></div>
+      <span></span><span class="num bd" style="font-size:12.5px">${m.f.brk?`! <span class="mono">${E(m.f.brk)}</span>`:''}</span>
+      <span class="num" style="font-size:13px">${m.f.acY>0?'<span class="ok">✓ Ran</span>':'<span class="mu">Idle</span>'}</span>
+      <span class="num" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasOp(m)?E(m.op||m.opMob):noOp}</span>
+      <span class="num">${acF(m.f.acY)}</span><span class="num mu">${SPRAY.target}</span>${vsC(m.f.acAll,pc)}</div>`; };
+  const kids=(x,lv)=>!isOpen(x,sc.q) ? '' : x.kids ? x.kids.map(k=>gRow(k,lv+1)+kids(k,lv+1)).join('')
+    : x.groups.map(g=>(g.label?`<div class="glab" style="padding-left:${52+lv*20}px">${E(g.label)}</div>`:'')+g.mcs.map(m=>mRow(m,lv)).join('')).join('');
+  const count=nodes.filter(x=>!x.none).length;
+  return `<div class="card" style="overflow:hidden;margin-top:16px"><div class="lhead"><b>${S.page==='terr'?'Territories':'Territory managers'} · ${count}</b>
+      <div>Sorted by ${E(sortName(sc.d))} · ${S.page==='terr'?'click a territory for its machines':'click a TM for his FOs, an FO for his machines'}, a machine number for its details · target is ${SPRAY.target} ac per machine</div></div>
+    <div class="tbl"><div>${hd}${nodes.map(x=>gRow(x,0)+kids(x,0)).join('')}</div></div></div>`;
 }
-function spCSV(){
-  const sc=spScope(), d=sc.d, w=dPretty(d);
-  csvDownload('Bayer-spraying_'+d, ['State','Territory','TM','TM mobile','FO','FO mobile','Machine','Village','Operator','Operator mobile','Cluster officer','CO mobile','Area manager','AM mobile',
+function listPhone(nodes, sc){
+  const dw=dayWord(sc.d);
+  const of=(k,n)=>`${fmtN(k)}<span style="font-size:12px;font-weight:500;color:var(--ink2)"> /${fmtN(n)}</span>`;
+  const fig=x=>`<div><div class="big"><span><b>${acF(x.f.acAll)}</b> <span style="font-size:13.5px;color:var(--ink2)">of ${fmtN(x.f.tgt)} ac target</span></span><b style="font-size:14px">${pctF(x.f.pct)}</b></div><div style="margin-top:6px">${bar(x.f.pct,'var(--act)')}</div></div>
+    <div class="sg"><div><b>${fmtN(x.f.n)}</b><span>machines</span></div><div><b${x.f.brk?' class="bd"':''}>${fmtN(x.f.brk)}</b><span>breakdown</span></div><div><b>${of(x.f.ran,x.f.n)}</b><span>ran ${E(dw)}</span></div>
+      <div><b>${acF(x.f.acY)}</b><span>ac ${E(dw)}</span></div><div style="grid-column:span 2"><b>${of(x.f.op,x.f.n)}</b><span>operators mapped</span></div></div>`;
+  const mcBtn=m=>`<button type="button" class="mcbtn" data-act="mc" data-mc="${E(m.mc)}"><span class="a"><b class="mono" style="font-size:13.5px">${E(m.mc)}</b>
+      <span>${hasOp(m)?E(m.op||m.opMob):noOp}${m.vil?' · '+E(m.vil):''}</span>${m.f.brk?`<span class="bd" style="font-size:12.5px">! Breakdown ${E(m.f.brk)}</span>`:''}</span>
+    <span class="b"><b style="font-size:14px;font-weight:600">${acF(m.f.acAll)} <span style="font-weight:400;color:var(--ink2)">/ ${SPRAY.target} ac</span></b><span class="${m.f.acY>0?'ok':'mu'}">${m.f.acY>0?'✓ '+acF(m.f.acY)+' ac '+E(dw):'idle '+E(dw)}</span></span><span aria-hidden="true" style="color:var(--ink3)">›</span></button>`;
+  const head=(x,lv)=>{ const sub=[x.sub?E(x.sub):'',S.page==='terr'&&!S.st?E(x.st):''].filter(Boolean).join(' · ');
+    return `<div class="nch"><div style="flex:1;min-width:0">${x.lab?`<div class="lab" style="font-size:12px">${x.lab}</div>`:''}<div class="nmx" style="font-size:${lv?15:16}px">${E(x.name)}</div>
+      ${sub?`<div class="sub">${sub}</div>`:''}${x.tag?`<div class="lab" style="margin-top:4px">${E(x.tag)}</div>`:''}${x.warn?`<div class="warn" style="margin-top:3px">⚠ ${E(x.warn)}</div>`:''}</div>${x.people?'':callBtn(x.mob,x.name)}</div>`; };
+  const people=x=>!x.people ? '' : `<div class="box">${x.people.length?x.people.map(p=>`<div class="prow"><span class="r" style="width:26px;font-weight:600">TM</span><div class="who"><div class="p">${E(p.n||'—')}</div></div>${callBtn(p.mob,p.n)}</div>`).join(''):'<div class="prow mu" style="font-size:13px">No TM on the sheet</div>'}</div>`;
+  const tText=x=>x.kids ? x.sub : `${x.f.n} machine${x.f.n===1?'':'s'}`;
+  const tog=x=>{ const o=isOpen(x,sc.q); return `<button type="button" class="tog" data-act="exp" data-k="${E(x.key)}" aria-expanded="${o}">${o?'Hide':'Show'} ${E(tText(x))} <span aria-hidden="true" style="display:inline-block;transform:rotate(${o?180:0}deg)">▾</span></button>`; };
+  const kids=x=>!isOpen(x,sc.q) ? '' : `<div style="display:flex;flex-direction:column;gap:${x.kids?10:8}px">${x.kids ? x.kids.map(k=>`<div class="kid"${k.none?' style="border-color:#F1E2BC;background:#FFFBF2"':''}>${head(k,1)}${fig(k)}${tog(k)}${kids(k)}</div>`).join('')
+    : x.groups.map(g=>(g.label?`<div class="lab" style="margin:6px 2px 0;font-size:12px">${E(g.label)}</div>`:'')+g.mcs.map(mcBtn).join('')).join('')}</div>`;
+  const lim=sc.q?nodes.length:S.limit, shown=nodes.slice(0,lim);
+  return `<div class="ltitle"><b>${S.page==='terr'?'Territories':'Territory managers'} · ${nodes.filter(x=>!x.none).length}</b><span>by ${E(sortName(sc.d))}</span></div>`
+    + shown.map(x=>`<div class="card nc${x.none?' none':''}">${head(x,0)}${fig(x)}${people(x)}${tog(x)}${kids(x)}</div>`).join('')
+    + (nodes.length>shown.length?`<button type="button" class="more" data-act="more">Load more · ${shown.length} of ${nodes.length} shown</button>`:'')
+    + `<div style="margin-top:12px;text-align:center">${stampTxt()}</div>`;
+}
+
+// The machine panel: what it has done, and who to call.
+function panelHTML(m){
+  const d=spDay(), f=m.f, pc=100*f.acAll/SPRAY.target, ph=isPhone();
+  const stat=(l,v,n)=>`<div class="stat"><div class="l">${l}</div><div class="v">${v}</div>${n?`<div class="n">${n}</div>`:''}</div>`;
+  const ago=m.ping?Math.round((Date.parse(istDay(0))-Date.parse(m.ping))/864e5):null;
+  const person=(role,n,mob)=>`<div class="prow"><div class="who"><div class="r">${role}</div><div class="p">${n?E(n):'<i class="mu" style="font-weight:400">Not on the sheet</i>'}</div>${mob?`<div class="tel">${mob}</div>`:''}</div>${callBtn(mob,n)}</div>`;
+  const loc = m.lat!=null
+    ? `<div class="box"><div class="prow"><div class="who"><div class="mono" style="font-size:13px">${m.lat.toFixed(5)}, ${m.lon.toFixed(5)}</div><div class="r">Last ping position${m.ping?' · '+dPretty(m.ping):''}</div></div>
+        <a class="go" href="https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lon}" target="_blank" rel="noopener">Navigate</a></div></div>`
+    : `<div class="box"><div class="prow mu" style="font-size:13px">The sheet has no usable position for this machine.</div></div>`;
+  const body=`<div class="stats">
+      ${stat('Season acres',acF(f.acAll)+'<span class="u"> ac</span>',`${pctF(pc)} of its ${SPRAY.target} ac target`)}
+      ${stat('Acres '+dayWord(d),acF(f.acY)+'<span class="u"> ac</span>',f.acY>0?'<span class="ok">✓ Ran</span>':'Idle')}
+      ${stat('Breakdown',f.brk?`<span class="bd">ID <span class="mono">${E(f.brk)}</span></span>`:'None',dPretty(d))}
+      ${stat('Operator',hasOp(m)?'Mapped':'<span class="bd">Not mapped</span>',hasOp(m)?'':'no operator on the sheet')}
+      ${stat('Days sprayed',fmtN(f.nDays),f.lastRun?'last on '+dPretty(f.lastRun):'none yet')}
+      ${stat('Last ping',m.ping?dPretty(m.ping):'—',ago==null?'no ping on the sheet':ago<=0?'today':ago===1?'1 day ago':ago+' days ago')}
+    </div>
+    <div style="font-size:12px;color:var(--ink2);margin-top:8px">Acres are IoT-measured · target = ${SPRAY.target} ac per machine for the season</div>
+    <div class="sect">Village</div><div class="box"><div class="prow" style="min-height:48px;font-weight:600;font-size:14px">${m.vil?E(m.vil):'<i class="mu" style="font-weight:400">Not on the sheet</i>'}</div></div>
+    <div class="sect">Who to call</div><div class="box">${person('Operator',m.op,m.opMob)}${person('Cluster officer (CI)',m.ci,m.ciMob)}${person('Area manager',m.am,m.amMob)}${person('Field officer',m.fo,m.foMob)}${person('Territory manager',m.tm,m.tmMob)}</div>
+    <div class="sect">Location</div>${loc}`;
+  return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Machine ${E(m.mc)}">
+    <div class="dhead">${ph?'<div class="grab"></div>':''}<div class="row2" style="display:flex;gap:12px;align-items:flex-start;width:100%"><div style="flex:1;min-width:0"><div class="mc">${E(m.mc)}</div>
+      <div class="w">${E(m.terr)}, ${E(m.st)}${m.tm?' · TM '+E(m.tm):''}</div></div><button type="button" class="x" data-act="close" id="pClose" aria-label="Close">${IC.close}</button></div></div>
+    <div class="dbody" id="pBody">${body}</div></aside>`;
+}
+
+function csvDownload(name, head, rows){
+  const esc = v => { let s=String(v==null?'':v); if(/^[=+\-@]/.test(s)) s="'"+s; return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const txt='﻿'+[head,...rows].map(r=>r.map(esc).join(',')).join('\r\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));
+  a.download=name+'.csv'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+}
+// One line per machine shown, with the same figures as the page.
+function doCSV(){
+  const sc=scope(), d=sc.d, w=dPretty(d);
+  csvDownload(`Bayer-${PAGES[S.page].slug}_${d}`, ['State','Territory','TM','TM mobile','FO','FO mobile','Machine','Village','Operator','Operator mobile','Cluster officer','CO mobile','Area manager','AM mobile',
       `Ran (${w})`,`Acres (${w}, IoT)`,`Season acres to ${w} (IoT)`,`Target acres (${SPRAY.target} per machine)`,'% of target',`Breakdown ID (${w})`,'Last ping'],
     sc.list.slice().sort((a,b)=>a.st.localeCompare(b.st)||a.terr.localeCompare(b.terr)||a.mc.localeCompare(b.mc)).map(m=>[m.st,m.terr,m.tm,m.tmMob,m.fo,m.foMob,m.mc,m.vil,m.op,m.opMob,m.ci,m.ciMob,m.am,m.amMob,
       m.f.acY>0?'Yes':'No', Math.round(m.f.acY*10)/10, Math.round(m.f.acAll*10)/10, SPRAY.target, Math.round(1000*m.f.acAll/SPRAY.target)/10, m.f.brk, m.ping]));
 }
 
-/* ---------- CSV ---------- */
-function csvDownload(name, head, rows){
-  const esc = v => { let s=String(v==null?'':v); if(/^[=+\-@]/.test(s)) s="'"+s; return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
-  const txt='﻿'+[head,...rows].map(r=>r.map(esc).join(',')).join('\r\n');
-  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));
-  a.download=name+'_'+new Date().toISOString().slice(0,10)+'.csv'; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+/* ================================ render ================================ */
+function scopeLine(){ return D.sp ? `Bayer machines · ${listAnd(uniq(D.sp.machines.map(m=>m.st)))} · from ${dPretty(D.sp.firstDate)}` : 'Bayer machines'; }
+function bodyHTML(){
+  if(!D.sp) return D.err ? `<div class="card msg">Bayer's sheet could not be loaded (${E(D.err)}).<div style="margin-top:12px"><button type="button" class="ghost" data-act="retry">Try again</button></div></div>`
+    : `<div class="card" style="padding:20px 22px">${'<div class="skel"></div>'.repeat(4)}</div><div class="card" style="padding:20px 22px;margin-top:16px">${'<div class="skel"></div>'.repeat(6)}</div>`;
+  const sc=scope(), F=figs(sc.list), nodes=tree(sc.list), ph=isPhone();
+  const list = !nodes.length ? `<div class="card msg" style="margin-top:16px">Nothing matches these filters.<div style="margin-top:12px"><button type="button" class="ghost" data-act="clear">Clear filters</button></div></div>`
+    : ph ? listPhone(nodes, sc) : listDesk(nodes, sc);
+  return ph ? stripHTML(F, sc) + controlsHTML(sc) + list : controlsHTML(sc) + stripHTML(F, sc) + list;
 }
-const STAGE_TXT=['Awaiting a machine','Machine assigned','Deployed','Handed over'];
-
-/* ---------- render ---------- */
-function skeleton(){ return `<div class="card" style="padding:20px 22px">${'<div class="skel"></div>'.repeat(4)}</div><div class="sec card" style="padding:20px 22px">${'<div class="skel"></div>'.repeat(6)}</div>`; }
+let _ov='';
 function render(){
-  stamp();
-  document.querySelectorAll('.tab').forEach(b=>{ const on=b.dataset.tab===S.tab; if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
-  if(D.sp) document.querySelector('[data-tab=sp]').innerHTML=`Spraying<span class="n">${D.sp.machines.length}</span>`;
-  if(D.mc) document.querySelector('[data-tab=loc]').innerHTML=`Deployment<span class="n">${D.mc.length}</span>`;
-  if(D.fo) document.querySelector('[data-tab=fo]').innerHTML=`Field officers<span class="n">${D.fo.length}</span>`;
-  document.getElementById('ttl').textContent=TABS[S.tab].title;
-  document.title=TABS[S.tab].title+' · Bayer partner view';
-  if(S.tab==='sp'){ document.getElementById('scope').textContent = D.sp ? `Bayer machines · ${listAnd(uniq(D.sp.machines.map(m=>m.st)))} · from ${dPretty(D.sp.firstDate)}` : 'Bayer machines'; }
-  else if(D.mc){ const st=uniq(D.mc.map(m=>m.state)); document.getElementById('scope').textContent=`UPL machines for Bayer · ${listAnd(st)}`; }
-  const main=document.getElementById('main');
-  let html;
-  if(S.tab==='sp') html=spHTML();
-  else if(!D.mc && D.err) html=`<div class="card msg">The sheet could not be loaded (${E(D.err)}). Check the connection and try again.<br><button class="btn" data-act="retry" type="button">Try again</button></div>`;
-  else if(!D.mc) html=skeleton();
-  else html = S.tab==='fo' ? foHTML() : locHTML();
-  // Keep the search box's focus and caret, and the page's scroll, across the rebuild.
+  const app=document.getElementById('app'); if(app.style.display==='none') return;
+  const ph=isPhone(), P=PAGES[S.page];
+  document.title=P.title+' · Bayer partner view';
+  const nav=Object.keys(PAGES).map(k=>`<button type="button" class="nav" data-page="${k}"${k===S.page?' aria-current="page"':''}>${IC[k]}<span>${PAGES[k].short}</span></button>`).join('');
+  const mnav=Object.keys(PAGES).map(k=>`<button type="button" data-page="${k}"${k===S.page?' aria-current="page"':''}><span>${IC[k].replace('<svg','<svg width="20" height="20"')}</span>${PAGES[k].short}</button>`).join('');
+  const body=bodyHTML();   // computes every machine's figures for the picked day before the panel reads them
+  const m = S.sel && D.sp ? D.sp.machines.find(x=>x.mc===S.sel) : null; if(S.sel && D.sp && !m) S.sel=null;
+  const ov = m ? panelHTML(m) : (S.sheet && ph && D.sp) ? sheetHTML(scope()) : '';
+  const ovKey = m ? 'mc:'+m.mc : ov ? 'sheet' : '';
+  const html=`<div class="shell">
+    <aside class="rail"><div class="logo"><i>UPL</i><div><b>Ops Console</b><span>Bayer partner view</span></div></div>
+      <div class="rlbl">Wheat · Bayer</div><nav aria-label="Pages">${nav}</nav>
+      <div class="rfoot"><button type="button" class="nav" data-act="logout" style="color:rgba(255,255,255,.7)">${IC.out}<span>Log out</span></button><div class="conf">CONFIDENTIAL</div></div></aside>
+    <div class="col">
+      <header class="top"><div style="flex:1;min-width:0"><h1>${P.title}</h1><div class="sc">${E(scopeLine())}</div></div></header>
+      <header class="mhead"><div style="flex:1;min-width:0"><h1>${P.short}</h1><div class="sc">${E(scopeLine())}</div></div><button type="button" class="out" data-act="logout" aria-label="Log out">${IC.out}</button></header>
+      <main id="main">${body}${D.sp?'<footer class="m">Built with tokens, Powered by Claude. By din8sh.</footer>':''}</main>
+      <footer class="d">Built with tokens, Powered by Claude. By din8sh.</footer>
+    </div></div>
+    <nav class="mnav" aria-label="Pages">${mnav}</nav>${ov}`;
+  // Keep the focused field and its caret, and every scroller's place, across the rebuild.
   const a=document.activeElement, id=a&&a.id, pos=a&&a.selectionStart, y=scrollY;
-  main.innerHTML=html;
+  const keep={}; ['pBody','sheetBody'].forEach(k=>{ const el=document.getElementById(k); if(el) keep[k]=el.scrollTop; });
+  app.innerHTML=html;
   if(id){ const el=document.getElementById(id); if(el){ el.focus({preventScroll:true}); try{ if(pos!=null) el.setSelectionRange(pos,pos); }catch(_){ } } }
+  if(ovKey===_ov) Object.keys(keep).forEach(k=>{ const el=document.getElementById(k); if(el) el.scrollTop=keep[k]; });
+  else if(ovKey){ const c=document.getElementById(m?'pClose':'sClose'); if(c) c.focus({preventScroll:true}); }
+  _ov=ovKey;
+  document.body.style.overflow = ov ? 'hidden' : '';
   scrollTo(0,y);
 }
 
-/* ---------- address: #/deployment and #/field-officers, so Back moves between tabs ---------- */
-const tabOfHash = () => { const h=location.hash.replace(/^#\/?/,''); return Object.keys(TABS).find(k=>TABS[k].slug===h)||null; };
-S.tab = tabOfHash() || (()=>{ try{ const t=localStorage.getItem('bayer_tab'); return TABS[t]?t:null; }catch(_){ return null; } })() || 'sp';
-history.replaceState(null,'','#/'+TABS[S.tab].slug);
-window.addEventListener('hashchange', ()=>{ const t=tabOfHash(); if(t && t!==S.tab){ S.tab=t; try{ localStorage.setItem('bayer_tab',t); }catch(_){ } render(); scrollTo(0,0); } });
-document.querySelector('.tabs').addEventListener('click', e=>{
-  const b=e.target.closest('.tab'); if(!b) return;
-  if(b.dataset.tab===S.tab){ scrollTo({top:0,behavior:'smooth'}); return; }
-  location.hash='#/'+TABS[b.dataset.tab].slug;
+/* ---------- address: #/territories and #/tm-fo; Back closes the machine panel first ---------- */
+const pageOfHash = () => { const h=location.hash.replace(/^#\/?/,''); return Object.keys(PAGES).find(k=>PAGES[k].slug===h)||null; };
+S.page = pageOfHash() || (()=>{ try{ const t=localStorage.getItem('bayer_page'); return PAGES[t]?t:null; }catch(_){ return null; } })() || 'terr';
+history.replaceState(null,'','#/'+PAGES[S.page].slug);
+function goPage(k){
+  if(k===S.page){ scrollTo({top:0,behavior:'smooth'}); return; }
+  S.page=k; S.limit=M_PAGE; S.sel=null; S.sheet=false; try{ localStorage.setItem('bayer_page',k); }catch(_){ }
+  history.pushState(null,'','#/'+PAGES[k].slug); render(); scrollTo(0,0);
+}
+function openPanel(mc){ S.sel=mc; S.sheet=false; history.pushState({panel:mc},'',location.hash); render(); }
+function closePanel(){ if(!S.sel) return; if(history.state && history.state.panel) history.back(); else { S.sel=null; render(); } }
+window.addEventListener('popstate', ()=>{
+  const k=pageOfHash()||'terr';
+  S.sel = history.state && history.state.panel || null;
+  if(k!==S.page){ S.page=k; S.limit=M_PAGE; S.sheet=false; }
+  render();
 });
 
-const toList = () => { const el=document.getElementById('listSec'); if(el) el.scrollIntoView({block:'start'}); };
-const main=document.getElementById('main');
-main.addEventListener('change', e=>{
+const app=document.getElementById('app');
+app.addEventListener('change', e=>{
   const t=e.target;
-  if(t.id==='fSt'){ S.st=t.value; S.squad=''; S.dist=''; }
-  else if(t.id==='fSquad'){ S.squad=t.value; S.dist=''; }
-  else if(t.id==='fDist') S.dist=t.value;
-  else if(t.id==='fStatus') S.status=t.value;
-  else if(t.id.startsWith('sp')){
-    if(t.id==='spDay'){ S.spDay = t.value && t.value!==istDay(-1) ? t.value : ''; }
-    else if(t.id==='spSt'){ S.spSt=t.value; S.spTerr=''; S.spTm=''; }
-    else if(t.id==='spTerr'){ S.spTerr=t.value; S.spTm=''; }
-    else if(t.id==='spTm') S.spTm=t.value;
-    else if(t.id==='spSort') S.spSort=t.value;
-    else return;
-    S.spLimit=M_PAGE; render(); return;
-  }
+  if(t.id==='fDay') S.day = t.value && t.value!==istDay(-1) ? t.value : '';
+  else if(t.id==='fSt'){ S.st=t.value; S.terr=''; S.tm=''; }
+  else if(t.id==='fTerr'){ S.terr=t.value; S.tm=''; }
+  else if(t.id==='fTm') S.tm=t.value;
+  else if(t.id==='fSort') S.sort=t.value;
   else return;
   S.limit=M_PAGE; render();
 });
-main.addEventListener('input', e=>{
-  if(e.target.id==='fQ'){ S.q=e.target.value; S.limit=M_PAGE; render(); }
-  else if(e.target.id==='fFoQ'){ S.foQ=e.target.value; render(); }
-  else if(e.target.id==='spQ'){ S.spQ=e.target.value; S.spLimit=M_PAGE; render(); }
-});
-main.addEventListener('click', e=>{
-  const st=e.target.closest('[data-st]'), di=e.target.closest('[data-dist]'), act=e.target.closest('[data-act]');
-  if(st){ S.st = S.st===st.dataset.st ? '' : st.dataset.st; S.squad=''; S.dist=''; S.limit=M_PAGE; render(); if(S.st) toList(); return; }
-  if(di){ const same=S.dist===di.dataset.dist; S.dist=same?'':di.dataset.dist; S.st=same?S.st:di.dataset.dst; S.squad=''; S.limit=M_PAGE; render(); if(!same) toList(); return; }
-  if(!act) return;
+app.addEventListener('input', e=>{ if(e.target.id==='fQ'){ S.q=e.target.value; S.limit=M_PAGE; render(); } });
+app.addEventListener('click', e=>{
+  const pg=e.target.closest('[data-page]'); if(pg){ goPage(pg.dataset.page); return; }
+  const act=e.target.closest('[data-act]'); if(!act) return;
   const a=act.dataset.act;
   if(a==='retry') load();
-  else if(a==='allD'){ S.allD=!S.allD; render(); }
-  else if(a==='clear'){ Object.assign(S,{st:'',squad:'',dist:'',status:'',q:'',limit:M_PAGE}); render(); }
-  else if(a==='clearFo'){ S.foQ=''; render(); }
-  else if(a==='moreList'){ S.limit+=M_PAGE; render(); }
-  else if(a==='spexp'){ const k=act.dataset.k; S.spOpen[k]=!S.spOpen[k]; render(); }
-  else if(a==='spby'){ S.spBy=act.dataset.v; S.spLimit=M_PAGE; render(); }
-  else if(a==='spyday'){ S.spDay=''; render(); }
-  else if(a==='spbrk'){ S.spBrk=!S.spBrk; render(); }
-  else if(a==='spmore'){ S.spLimit+=M_PAGE; render(); }
-  else if(a==='spclear'){ Object.assign(S,{spDay:'',spSt:'',spTerr:'',spTm:'',spQ:'',spLimit:M_PAGE}); render(); }
-  else if(a==='spcsv') spCSV();
-  else if(a==='csv') csvDownload('Bayer-deployment',
-      ['State','Squad','District','Village / market','Status','Machine','Retailer','FO','FO mobile','CCM','CCM mobile','Cluster officer','CO mobile','Area manager','AM mobile','Deployment date','Handover status'],
-      filtered(D.mc).sort(listOrder).map(m=>[m.state,m.squad,m.dist,m.market,STAGE_TXT[stageOf(m)],m.mc,m.retailer,m.fo,m.foMob,m.ccm,m.ccmMob,m.co,m.coMob,m.am,m.amMob,m.deploy,m.handover]));
-  else if(a==='csvFo') csvDownload('Bayer-field-officers', ['FO','FO mobile','CCM','CCM mobile','Locations','Partner app access'],
-      foFiltered().map(f=>[f.name,f.mob,f.ccm,f.ccmMob,villages(f.locs).replace(/, /g,'; '),f.app?'Yes':'No']));
+  else if(a==='logout') lock();
+  else if(a==='exp'){ const k=act.dataset.k; S.open[k]=!S.open[k]; render(); }
+  else if(a==='mc') openPanel(act.dataset.mc);
+  else if(a==='close') closePanel();
+  else if(a==='sort'){ S.sort=act.dataset.k; render(); }
+  else if(a==='yday'){ S.day=''; S.limit=M_PAGE; render(); }
+  else if(a==='brk'){ S.brk=!S.brk; render(); }
+  else if(a==='more'){ S.limit+=M_PAGE; render(); }
+  else if(a==='sheet'){ S.sheet=true; render(); }
+  else if(a==='closesheet'){ S.sheet=false; render(); }
+  else if(a==='clear'){ Object.assign(S,{day:'',st:'',terr:'',tm:'',q:'',limit:M_PAGE}); render(); }
+  else if(a==='csv') doCSV();
 });
-// Desktop table ↔ phone cards: re-render when the window crosses the breakpoint (district cap and phone numbers differ).
-matchMedia('(max-width:820px)').addEventListener('change', ()=>{ if(D.mc||D.sp) render(); });
+// A group row is a div with role=button: Enter and Space open it, as a click would.
+app.addEventListener('keydown', e=>{ if((e.key==='Enter'||e.key===' ') && e.target.matches('.row.g')){ e.preventDefault(); e.target.click(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ if(S.sel) closePanel(); else if(S.sheet){ S.sheet=false; render(); } } });
+// Desktop table ↔ phone cards: re-render when the window crosses the breakpoint.
+matchMedia('(max-width:820px)').addEventListener('change', ()=>render());
 
 if(gateValid()){ const o=gateRead(); arm(GATE.TTL_MS-(Date.now()-o.at)); show(); } else lock();
 </script>

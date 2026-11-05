@@ -1326,36 +1326,27 @@ Bayer's. It is `noindex`, registers no service worker, and the console never lin
   (same origin, same tab) and `location.replace`s to `bayer/`, which accepts it only if `h` equals its own hash and is
   under 30 minutes old. So a partner PIN never sets `GATE.cur`, never boots the console, and admin (0088) does not see
   the partner page in its rail — "Bayer PIN only", by request.
-- **It reads Bayer's OWN workbook** (`SHEET.id` = `13SpCKS_Am9mPOqSh8jPOH8OS6htEMCDfA15iuJgEZL8`, wired 2026-10-26), never
-  `CONFIG.sheetId`, which would put the internal workbook's id in the partner's View Source. Two tabs, by gid:
-  · **`1933202962` "Machine details"** — one row per machine slot, **75 slots, HR + PB** (Hisar / Karnal / Chandigarh /
-    Jalandhar squads); 39 carry a machine number on 2026-10-26. The tab opens with a TITLE line ("UPL Machine Details –
-    Oct 2026") that gviz folds into the first header, so `headerRow` picks whichever of the first rows names the most
-    expected columns; a closing "Total" row is dropped (no squad). `-` / `0` read as blank. CO, AM, deployment date,
-    handover status, From/To and Organisation are **empty today** — each appears on the card the moment it is filled.
-  · **`720662332` "FO Mapping final"** — 47 FOs under 18 CCMs, with a `Partner App access` flag (all "No").
-  · **The workbook's DEFAULT tab (gid 0) is a hidden, older 30-row Haryana list** with an internal sign-off column. An
-    export without a gid lands on it — always pass the gid.
-- **Layout (design review 2026-10-26, `design/Bayer-Page-Review-2026-10-26.md`)** — two tabs with addresses,
-  `#/deployment` and `#/field-officers` (Back moves between them). Deployment reads top-down: a **status card**
-  ("39 of 75 machines assigned" + the four handover stages, an empty stage reading "not started yet", never 0) →
-  **by state** → **"Where machines are still needed"** (districts sorted by machines WAITING, bars on one shared
-  scale; tapping a state or district filters the list and jumps to it) → **All locations** (a table on desktop,
-  compact cards with Call buttons and 20-per-page on the phone; waiting slots first in each district). Field
-  officers groups FOs under their CCM and lists the villages each covers, joined to the machine tab on the FO's
-  MOBILE ("Patti ×2" for two slots in one village). Both tabs export the filtered rows as CSV.
-  A stage counts the moment its column carries anything; a handover status reading no / pending is not a handover.
-  On the phone the header is not sticky and the first two stages (which restate the headline) are hidden.
-  Refreshes every 10 minutes while unlocked; a failed refresh says so in the header.
-- **Spraying tab (`#/spraying`, the landing tab; Dinesh 2026-11-05)** — Bayer's machine-DAY workbook (`SPRAY.id` =
-  `14dpDPQtB8GyQFMrjJa28LeTtgz5x5wr2dVv-WmoSH3M`, gid 0, the same sheet the Wheat admin's Bayer choice reads), shown the way
-  the UPL / SWAL team logins see theirs: Day filter (Yesterday / a date from 1 Nov), Machines · Ran · Breakdown (the day's
-  `breakdown_id`) · Operators mapped, Acres on the day and for the season against a flat **650 ac per machine**, then
-  Territory → machines (under each TM) or TM → FO → machines (a toggle, not two tabs), with a CSV. **Acres = `IOT_acres`**,
+- **Rebuilt 2026-11-05 as the UPL / SWAL team view, in its look (Dinesh).** The Deployment and Field officers tabs (and the
+  Spraying tab that led them for a few hours) are GONE, and so is the old Bayer workbook they read (`13SpCKS…`, "Machine
+  details" + "FO Mapping final"); nothing on the page reads it now. It is the console's Wheat v2 look written into this
+  file's own CSS (W2 values as `:root` tokens: IBM Plex Sans, dark labelled rail, 68px header with the brand stripe, tinted
+  tiles, pill tab bar on the phone) — no code is shared with `index.html`, by the rule above.
+- **Source: Bayer's machine-DAY workbook** (`SPRAY.id` = `14dpDPQtB8GyQFMrjJa28LeTtgz5x5wr2dVv-WmoSH3M`, gid 0, the same sheet
+  the Wheat admin's Bayer choice reads), as a plain CSV export (~1.4 MB). **Acres = `IOT_acres`** (as on the team logins),
   read **from 1 Nov**, machine-days read once, `UPL_2782` left out (`SPRAY.notBayer`, = the console's `WRET_UPL_KEEP`).
-  **No deployed / in transit / pending anywhere** — by request it just says machines (`handover_status` is "0" on every row).
-  Read as a plain CSV export (~1.4 MB). Logs `[Bayer] spray sheet → {…}`. Checked 4 Nov: 74 machines, 46 ran, 24 breakdown,
-  653 ac on the day, 2,157 ac 1–4 Nov, matching the sheet. No map yet.
+  Logs `[Bayer] spray sheet → {…}`. Person fields, village and position are the latest row's.
+- **Two pages, `#/territories` (Territory summary) and `#/tm-fo` (TM · FO summary)**, the team logins' Territories and FOs
+  pages; no Retailers (every retailer on the sheet is "0") and **no map, by request**. Each: Day filter (Yesterday / a date
+  from 1 Nov) · State · Territory · TM · Sort, search, CSV (one line per machine); the strip in two pieces — **Machines**
+  (count, Ran, Breakdown = the day's `breakdown_id`, Operators mapped, plus a closed-by-default breakdown list) and
+  **Acres** (the day, the season, against a flat **650 ac per machine**); then Territory → machines (under each TM) or
+  TM → FO → machines, sortable headers on desktop, cards on the phone. A machine opens a panel (drawer / bottom sheet):
+  season and day acres, breakdown, operator, days sprayed, last ping, village, who to call (operator, CI, AM, FO, TM), and
+  Navigate to the last ping position. Back and Escape close it. Strip and rows come from one `figs()`, so they reconcile.
+- **No deployed / in transit / pending anywhere** — by request it just says machines (`handover_status` is "0" on every row),
+  so Breakdown counts all machines, not deployed ones as on the team logins.
+- Checked 2026-11-05 at 1280 / 375 / 320 (no sideways scroll): 74 machines, 46 ran, 25 breakdown, 653 ac on 4 Nov,
+  2,157 ac 1–4 Nov — the same as a direct count from the sheet.
 - **Another partner** = a new folder copied from `bayer/` with its own hash and `SKEY`, plus one handoff row.
 
 ## Insights (the cross-tab summary)
