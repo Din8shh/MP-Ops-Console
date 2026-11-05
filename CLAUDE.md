@@ -993,7 +993,9 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     MATENOMORE** (Sheet4's "Tot Scan Data"; its `scanned_acres` column is near-empty), split by those two products in
     the Scanned card (`sdays[6]`/`[7]`, `wtScan` keys `mo`/`mt`). Bayer alone: the day axis, per-day average and Top 10
     "Season" start on 1 Nov (`wtDays(from)`).
-  · A machine on both sheets (UPL_2657, UPL_2782) counts as **Bayer's only** (`skip` in `wretBuild`). Duplicate
+  · A machine on both sheets counts as **Bayer's only** (`skip` in `wretBuild`), except those in `WRET_UPL_KEEP`, which stay
+    on the Main sheet's side. UPL_2782 is there (Dinesh 2026-11-05: his UPL Punjab list of 91 includes it). On 5 Nov the
+    overlap was UPL_2782 (UPL PB), UPL_2681 (UPL HR, Jind) and UPL_2729 (SWAL HR, Jind); UPL_2657 had left the Main sheet. Duplicate
     machine-days (UPL_2698, UPL_3048) are read once, so totals sit a few acres under Sheet4's (1,525 vs 1,532 ac to 4 Nov).
   · FO page: Bayer's sheet has no "FO onboarded", so FOs whose machines are all Bayer's are left out of the onboarding
     counts (and named as such). Retailer and FO on Bayer rows are mostly "0" → "No retailer named".
@@ -1018,7 +1020,10 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     `In transit` / `In-Transit` = in transit, `Pending` and blank = pending. He named plan, in transit and deployed; the third bucket
     was added so the three add up. **SWAL only (Dinesh 2026-11-03): In transit reads as Deployed and Pending / blank as In transit**
     (`wStageOf(v, org)`), so SWAL shows no pending machines; UPL keeps the sheet's words. **Also SWAL only, the same day: a SWAL machine's acres
-    sprayed = its `IOT_acres`** (set at parse in `wretBuild`, so every figure, chart and CSV follows, still labelled "Acres sprayed"). Strip = **the same two labelled pieces as the admin's** (`wTeamStripHTML`, `.wtGroups`, regrouped the same day by request). **Machines**
+    sprayed = its `IOT_acres`** (set at parse in `wretBuild`, so every figure, chart and CSV follows, still labelled "Acres sprayed"). **On the UPL team logins too
+    (Dinesh 2026-11-05)**; the Wheat admin's UPL keeps `Rabi_achieved_acres`. Because the parse now depends on the ROLE, `gateSave`
+    reloads on a Wheat admin ⇄ team switch, and reads `GATE.last` (Log out clears `GATE.cur`, which used to hide every switch made
+    after a Log out — the project-switch reload included). Strip = **the same two labelled pieces as the admin's** (`wTeamStripHTML`, `.wtGroups`, regrouped the same day by request). **Machines**
     (`.wteamMc`): Machine plan card (split bar, the three parts; on a past day "status is today's"), Ran · Breakdown · Operators mapped,
     then the breakdown list. **Acres**: one card, day on the left, total on the right, against target beside them. A blank status
     simply reads Pending everywhere (Dinesh: no "no status" note). **Breakdown** = the

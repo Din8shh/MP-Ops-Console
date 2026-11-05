@@ -789,11 +789,12 @@ function wretBuild(grid, opt){
       m.stage=wStageOf(m.handRaw, m.org);
     }
     // SWAL ONLY (Dinesh 2026-11-03): a SWAL machine's acres sprayed ARE its IoT acres (IOT_acres), shown under the
-    // "Acres sprayed" name everywhere; UPL keeps Rabi_achieved_acres.
+    // "Acres sprayed" name everywhere. On the UPL TEAM logins too (Dinesh 2026-11-05: "use IoT and say Acres sprayed");
+    // the Wheat admin's UPL keeps Rabi_achieved_acres. The gate is set before the sheet is read, so wTeam() holds here.
     // BAYER: its scan is the two product columns (MOMIJI + MATENOMORE, = Sheet4's "Tot Scan Data"); its scanned_acres
     // column is near-empty (90 ac against 1,315 on 2026-11-05) and is not read.
     const mo=num(g('momiji')), mt=num(g('mateno'));
-    const io=num(g('iot')), ac=m.org==='SWAL'?io:num(g('ac')), sc=m.org==='Bayer'?mo+mt:num(g('scan')), bk=num(g('book'));
+    const io=num(g('iot')), ac=(m.org==='SWAL'||(m.org==='UPL'&&wTeam()))?io:num(g('ac')), sc=m.org==='Bayer'?mo+mt:num(g('scan')), bk=num(g('book'));
     if(ac||sc||io||bk){ if(dt>lastDate) lastDate=dt; }
     m.acAll+=ac; m.scAll+=sc; m.iotAll+=io;
     if(ac) m.days[dt]=(m.days[dt]||0)+ac;
@@ -884,6 +885,9 @@ function wDayFieldHTML(mob, lab){
       <div style="${w2segBox(mob)}${mob?';flex:1':''}"><button data-act="wday" aria-pressed="${y}" style="${w2seg(y,mob)}">Yesterday</button></div>
       <input id="wDayInput" type="date" min="${lo}" max="${WRET.ydayCal||''}" value="${WRET.yday||''}" aria-label="Pick a day" style="${w2sel(mob)};padding:0 10px${mob?';flex:1;min-width:0':''}${y?'':`;border-color:${W2.ink};font-weight:600`}"></div>`, true);
 }
+// Machines on BOTH sheets that stay UPL (Dinesh 2026-11-05: "consider these 91 machines for UPL" — his Punjab list
+// includes UPL_2782, which Bayer's sheet also carries). Remove an entry once the sheets agree.
+const WRET_UPL_KEEP = new Set(['UPL_2782']);
 async function loadWRet(){
   const P=curProject(); if(!P.ret || WRET.loading) return;
   WRET.loading=true; WRET.error=false;
@@ -892,8 +896,8 @@ async function loadWRet(){
   try{
     const got=await wretFetch(P.ret), bg=await bayerP;
     let Bb=null;
-    if(bg){ try{ Bb=wretBuild(bg.grid, { from:P.bayer.from, label:'bayer' }); Bb.machines=Bb.machines.filter(m=>m.org==='Bayer'); }catch(e){ console.warn('wheat bayer sheet parse failed —', e.message); } }
-    // A machine on both sheets (UPL_2657, UPL_2782 on 2026-11-05) counts as Bayer's only.
+    if(bg){ try{ Bb=wretBuild(bg.grid, { from:P.bayer.from, label:'bayer' }); Bb.machines=Bb.machines.filter(m=>m.org==='Bayer' && !WRET_UPL_KEEP.has(m.mc)); }catch(e){ console.warn('wheat bayer sheet parse failed —', e.message); } }
+    // A machine on both sheets counts as Bayer's only, except WRET_UPL_KEEP, which stays on the Main sheet's side.
     const B=wretBuild(got.grid, { skip: Bb ? new Set(Bb.machines.map(m=>m.mc)) : null });
     if(!B.machines.length) throw new Error('wheat retailer sheet: no machines parsed');
     if(Bb && Bb.machines.length){
@@ -12506,12 +12510,15 @@ function gateArmTimer(ms){ clearTimeout(GATE.timer); GATE.timer=setTimeout(gateL
 // out-of-scope re-prompt) RELOADS rather than re-rendering: ROWS, weather, the contest and every side-tab cache are
 // module state holding the old project's data, and a reload is the one reset that cannot miss one of them.
 // gateRestore() then boots straight into the new project from sessionStorage.
-function gateSave(r){ const was=GATE.cur && (GATE.cur.project||'kharif'); GATE.cur=r; try{ sessionStorage.setItem(GATE.SKEY, JSON.stringify({id:r.id, at:Date.now()})); }catch(_){ } gateArmTimer(GATE.TTL_MS);
+// Wheat also reloads when the ROLE changes (admin ⇄ team): the Main sheet is parsed per role — a UPL team login reads
+// IoT acres as acres sprayed, the admin reads Bayer's sheet beside it — so the parsed WRET belongs to the old role.
+// Both read GATE.last, not GATE.cur: Log out clears GATE.cur, and the next PIN would otherwise look like a first login.
+function gateSave(r){ const P0=GATE.cur||GATE.last, was=P0 && (P0.project||'kharif'), wasRole=P0 && P0.role; GATE.cur=GATE.last=r; try{ sessionStorage.setItem(GATE.SKEY, JSON.stringify({id:r.id, at:Date.now()})); }catch(_){ } gateArmTimer(GATE.TTL_MS);
   if(GA_ON()){ try{ window.gtag('set','user_properties',{ project:r.project||'kharif', role:r.role, org:r.org, mp_state:(r.states||[]).join(','), team:r.label, team_id:r.id }); }catch(_){ } track('login',{ role:r.role, role_id:r.id, team:r.label }); }
-  if(_booted && was && was!==(r.project||'kharif')) location.reload(); }
+  if(_booted && was && (was!==(r.project||'kharif') || (was==='wheat' && wasRole!==r.role))) location.reload(); }
 function gateRead(){ try{ return JSON.parse(sessionStorage.getItem(GATE.SKEY)||'null'); }catch(_){ return null; } }
 function gateExpired(){ const o=gateRead(); return !o||!o.id||(Date.now()-(o.at||0))>=GATE.TTL_MS; }
-function gateRestore(){ const o=gateRead(); if(!o||!o.id) return false; const age=Date.now()-(o.at||0); if(age>=GATE.TTL_MS) return false; const f=Object.values(GATE.ROLES).find(r=>r.id===o.id); if(!f) return false; GATE.cur=f; gateArmTimer(GATE.TTL_MS-age); return true; }
+function gateRestore(){ const o=gateRead(); if(!o||!o.id) return false; const age=Date.now()-(o.at||0); if(age>=GATE.TTL_MS) return false; const f=Object.values(GATE.ROLES).find(r=>r.id===o.id); if(!f) return false; GATE.cur=GATE.last=f; gateArmTimer(GATE.TTL_MS-age); return true; }
 function gateLock(){ clearTimeout(GATE.timer); GATE.cur=null; try{ sessionStorage.removeItem(GATE.SKEY); }catch(_){ } helpClose(); helpSync(); iotActClose(); gateShow(()=>bootApp()); }
 function gateHide(){ const ov=document.getElementById('gateOv'); if(ov) ov.style.display='none'; }
 function gateShow(onOk, msg, cancelable){
