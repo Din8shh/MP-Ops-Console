@@ -79,7 +79,7 @@
   .tile .n{ font-size:12.5px; color:var(--ink2); line-height:1.4; }
   .bar{ display:block; height:6px; border-radius:3px; background:var(--line2); overflow:hidden; }
   .bar > span{ display:block; height:100%; border-radius:3px; }
-  .acard{ display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr); gap:0; padding:16px 18px; }
+  .acard{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0; padding:16px 18px; }
   .acard > div + div{ border-left:1px solid var(--line2); padding-left:18px; margin-left:18px; }
   .card{ background:#fff; border:1px solid var(--cardBd); border-radius:16px; box-shadow:var(--shadow); }
   .warn{ font-size:12.5px; color:var(--idleD); margin-top:6px; }
@@ -87,8 +87,8 @@
   /* the list */
   .lhead{ padding:18px 22px; border-bottom:1px solid var(--line2); }
   .lhead b{ font-size:16px; font-weight:600; } .lhead div{ font-size:13.5px; color:var(--ink2); margin-top:2px; }
-  .tbl{ overflow-x:auto; } .tbl > div{ min-width:980px; }
-  .row{ display:grid; grid-template-columns:minmax(210px,2fr) 70px 84px 110px 120px 84px 70px 140px; gap:10px; padding:12px 22px; border-bottom:1px solid var(--line2); align-items:center; font-size:14px; }
+  .tbl{ overflow-x:auto; } .tbl > div{ min-width:900px; }
+  .row{ display:grid; grid-template-columns:minmax(210px,2fr) 70px 84px 110px 120px 90px 130px; gap:10px; padding:12px 22px; border-bottom:1px solid var(--line2); align-items:center; font-size:14px; }
   .row.hd{ background:var(--head); font-size:12px; font-weight:600; color:var(--ink2); padding-top:10px; padding-bottom:10px; position:sticky; top:0; z-index:1; }
   .row.hd button{ border:none; background:none; padding:0; font:inherit; color:var(--ink2); cursor:pointer; text-align:right; justify-self:end; }
   .row.hd button:first-child{ text-align:left; justify-self:start; }
@@ -157,7 +157,6 @@
   #pv iframe{ width:100%; height:100%; border:0; border-radius:34px; background:#fff; display:block; }
   #pv .pvx{ align-self:flex-start; display:inline-flex; align-items:center; gap:8px; height:40px; padding:0 14px; border:0; border-radius:10px; background:#fff; color:var(--ink); font:500 14px 'IBM Plex Sans',sans-serif; cursor:pointer; }
 
-  @media (max-width:1180px){ .acard{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); row-gap:14px; } .acard > div:nth-child(3){ grid-column:1/-1; border-left:none; margin-left:0; padding-left:0; border-top:1px solid var(--line2); padding-top:14px; } }
   @media (max-width:1040px){ .mcgrid{ grid-template-columns:repeat(3,minmax(0,1fr)); } .mcgrid > :first-child{ grid-column:1/-1; } }
 
   /* ── phone: header, strip, controls, cards; a pill tab bar at the foot; 44px targets, 16px fields ── */
@@ -179,7 +178,6 @@
     .tile{ box-shadow:none; padding:12px 14px; } .tile .v{ font-size:22px; }
     .acard{ grid-template-columns:1fr; padding:14px 16px; row-gap:12px; }
     .acard > div + div{ border-left:none; margin-left:0; padding-left:0; border-top:1px solid var(--line2); padding-top:12px; }
-    .acard > div:nth-child(3){ grid-column:auto; }
     .ctl.m{ margin-top:14px; }
     .srch{ flex:1; min-width:0; width:auto; } .srch input, .ghost, .csv, .sel{ height:48px; border-radius:12px; }
     .fbtn{ flex-shrink:0; display:inline-flex; align-items:center; gap:6px; height:48px; padding:0 14px; border:1px solid var(--line); border-radius:12px; background:#fff; font-weight:500; font-size:15px; cursor:pointer; }
@@ -245,15 +243,14 @@ const GATE = {
   timer: null,
 };
 /* Bayer's machine-DAY workbook (one row per machine per day), the same sheet the console's Wheat admin reads for its Bayer
-   choice. Shown the way the UPL / SWAL team logins see theirs (Dinesh 2026-11-05): two pages, Territories and TM · FO, with
-   machines, ran on the day, breakdown, operators mapped, acres on the day and for the season against a flat 650 ac per
-   machine, and a machine panel. Acres = IOT_acres (as on the team logins); read from 1 Nov, Bayer's programme start. No
+   choice. Shown the way the UPL / SWAL team logins see theirs (Dinesh 2026-11-05): two pages, Territories and CCM · FO, with
+   machines, ran on the day, breakdown, operators mapped, acres on the day and for the season, and a machine panel. NO target
+   acres (removed by request), and the TM column is called CCM, which is how Bayer addresses the sales team. Acres = IOT_acres (as on the team logins); read from 1 Nov, Bayer's programme start. No
    deployed / in transit / pending anywhere — by request it just says machines. Read as a plain CSV export, because gviz has
    answered this kind of tab short with no error. */
 const SPRAY = {
   id: '14dpDPQtB8GyQFMrjJa28LeTtgz5x5wr2dVv-WmoSH3M', gid: '0',
   from: '2026-11-01',
-  target: 650,                      // acres per machine for the season, as on the team logins
   notBayer: new Set(['UPL_2782']),  // on Bayer's sheet, but a UPL Punjab machine (same rule as the console's WRET_UPL_KEEP)
   refreshMinutes: 10,
 };
@@ -368,8 +365,8 @@ function buildSpray(rows){
   return out;
 }
 
-const PAGES = { terr:{ slug:'territories', title:'Territory summary', short:'Territories' }, tm:{ slug:'tm-fo', title:'TM · FO summary', short:'TM · FO' } };
-const S = { page:'terr', day:'', st:'', terr:'', tm:'', q:'', sort:'tgt', open:{}, brk:false, limit:20, sel:null, sheet:false };
+const PAGES = { terr:{ slug:'territories', title:'Territory summary', short:'Territories' }, tm:{ slug:'ccm-fo', title:'CCM · FO summary', short:'CCM · FO' } };
+const S = { page:'terr', day:'', st:'', terr:'', tm:'', q:'', sort:'acAll', open:{}, brk:false, limit:20, sel:null, sheet:false };
 const D = { sp:null, err:null, at:null, loading:false };
 const M_PAGE = 20;   // phone cards per page; the desktop table shows every row
 
@@ -405,11 +402,11 @@ function spAt(m, d){
 const hasOp = m => !!(m.op||m.opMob);
 // One set of figures for any group of machines; the strip and every row come from it, so they reconcile.
 function figs(list){
-  const n=list.length, sum=f=>list.reduce((a,m)=>a+f(m),0), tgt=n*SPRAY.target, acAll=sum(m=>m.f.acAll), op=list.filter(hasOp).length;
+  const n=list.length, sum=f=>list.reduce((a,m)=>a+f(m),0), acAll=sum(m=>m.f.acAll), op=list.filter(hasOp).length;
   return { n, ran:list.filter(m=>m.f.acY>0).length, brk:list.filter(m=>m.f.brk).length, op, opPct:n?100*op/n:null,
-    acY:sum(m=>m.f.acY), acAll, tgt, pct:tgt?100*acAll/tgt:null };
+    acY:sum(m=>m.f.acY), acAll, perMc:n?acAll/n:null };
 }
-const SORTS=[['tgt','Target acres'],['acAll','Season acres'],['pct','% of target'],['acY','Acres on the day'],['ran','Ran on the day'],['opPct','Operator mapped %'],['n','Machines'],['brk','Breakdown'],['name','Name']];
+const SORTS=[['acAll','Season acres'],['perMc','Acres per machine'],['acY','Acres on the day'],['ran','Ran on the day'],['opPct','Operator mapped %'],['n','Machines'],['brk','Breakdown'],['name','Name']];
 const pKey = (n, m) => (m||'')+'|'+(n||'').toLowerCase();
 function scope(){
   const d=spDay(), all=D.sp.machines.map(m=>Object.assign(m,{ f:spAt(m,d) }));
@@ -425,31 +422,32 @@ function scope(){
   return { d, all, sts, terrs, tms, list, q, nF };
 }
 function order(nodes){
-  const k=SORTS.some(([x])=>x===S.sort)?S.sort:'tgt';
+  const k=SORTS.some(([x])=>x===S.sort)?S.sort:'acAll';
   return nodes.sort((a,b)=>(!!a.none-!!b.none) || (k==='name' ? a.name.localeCompare(b.name)
     : ((b.f[k]==null?-1:b.f[k])-(a.f[k]==null?-1:a.f[k])) || b.f.n-a.f.n || a.name.localeCompare(b.name)));
 }
 const mcOrder = (a,b) => b.f.acAll-a.f.acAll || a.mc.localeCompare(b.mc);
-// The page as a tree: Territory → machines (under each TM where there is more than one) · TM → FO → machines.
+// The page as a tree: Territory → machines (under each CCM where there is more than one) · CCM → FO → machines.
+// CCM is the sheet's tm_name / tm_number: Bayer calls its sales team CCMs, so every label says CCM.
 function tree(list){
   if(S.page==='terr'){
     const g={}; list.forEach(m=>{ const k=m.st+'|'+m.terr; (g[k]=g[k]||{ key:'t:'+k, name:m.terr, st:m.st, none:m.terr===SP_NO_TERR, list:[] }).list.push(m); });
     return order(Object.values(g).map(t=>{
       const tm={}; t.list.forEach(m=>{ const k=pKey(m.tm,m.tmMob); (tm[k]=tm[k]||{ n:m.tm, mob:m.tmMob, list:[] }).list.push(m); });
       const tmL=Object.values(tm).sort((a,b)=>b.list.length-a.list.length||a.n.localeCompare(b.n));
-      return Object.assign(t, { f:figs(t.list), people:tmL.filter(p=>p.n||p.mob).map(p=>({ lab:'TM', n:p.n, mob:p.mob })),
+      return Object.assign(t, { f:figs(t.list), people:tmL.filter(p=>p.n||p.mob).map(p=>({ lab:'CCM', n:p.n, mob:p.mob })),
         warn:t.none?'The sheet’s territory is "0" or blank — fix on the sheet':'',
-        groups:tmL.map(p=>({ label:tmL.length>1?`TM · ${p.n||'not on the sheet'} · ${p.list.length}`:'', mcs:p.list.sort(mcOrder) })) });
+        groups:tmL.map(p=>({ label:tmL.length>1?`CCM · ${p.n||'not on the sheet'} · ${p.list.length}`:'', mcs:p.list.sort(mcOrder) })) });
     }));
   }
-  const g={}; list.forEach(m=>{ const k=pKey(m.tm,m.tmMob); (g[k]=g[k]||{ key:'m:'+k, name:m.tm||'TM not named', mob:m.tmMob, none:!m.tm&&!m.tmMob, list:[] }).list.push(m); });
+  const g={}; list.forEach(m=>{ const k=pKey(m.tm,m.tmMob); (g[k]=g[k]||{ key:'m:'+k, name:m.tm||'CCM not named', mob:m.tmMob, none:!m.tm&&!m.tmMob, list:[] }).list.push(m); });
   return order(Object.values(g).map(t=>{
     const fo={}; t.list.forEach(m=>{ const k=pKey(m.fo,m.foMob); (fo[k]=fo[k]||{ key:t.key+'/f:'+k, name:m.fo||'FO not named', mob:m.foMob, none:!m.fo&&!m.foMob, list:[] }).list.push(m); });
-    const kids=order(Object.values(fo).map(f=>Object.assign(f,{ f:figs(f.list), lab:'FO', tag:f.mob&&f.mob===t.mob?'TM himself':'',
+    const kids=order(Object.values(fo).map(f=>Object.assign(f,{ f:figs(f.list), lab:'FO', tag:f.mob&&f.mob===t.mob?'CCM himself':'',
       warn:f.none?'The sheet names no FO for these machines — fix on the sheet':'', groups:[{ label:'', mcs:f.list.sort(mcOrder) }] })));
     const nFo=kids.filter(k=>!k.none).length;
-    return Object.assign(t, { f:figs(t.list), lab:'TM', sub:`${nFo} FO${nFo===1?'':'s'}${kids.some(k=>k.none)?' + no FO':''}`,
-      warn:t.none?'These machines have no TM on the sheet — fix on the sheet':'', kids });
+    return Object.assign(t, { f:figs(t.list), lab:'CCM', sub:`${nFo} FO${nFo===1?'':'s'}${kids.some(k=>k.none)?' + no FO':''}`,
+      warn:t.none?'These machines have no CCM on the sheet — fix on the sheet':'', kids });
   }));
 }
 const isOpen = (nd, q) => !!q || !!S.open[nd.key];
@@ -507,9 +505,8 @@ function stripHTML(F, sc){
       <div style="font-size:${ph?28:30}px;font-weight:600;margin-top:6px;color:${ta.vc}">${acF(F.acY)}<span class="u"> ac</span></div><div style="font-size:12.5px;color:var(--ink2)">on ${E(day)} · ${fmtN(F.ran)} machines ran</div>
       ${stale?`<div class="warn">⚠ the sheet's acres stop at ${E(dPretty(D.sp.lastDate))}</div>`:''}</div>
     <div><div style="font-size:12.5px;font-weight:500;color:var(--ink2)">Season</div><div style="font-size:22px;font-weight:600;margin-top:6px">${acF(F.acAll)}<span class="u"> ac</span></div>
-      <div style="font-size:12.5px;color:var(--ink2)">${E(dPretty(D.sp.firstDate))} – ${E(day)} · ${F.n?acF(F.acAll/F.n):0} ac per machine</div></div>
-    <div><div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13.5px"><span>Against target<span style="display:block;font-size:12.5px;color:var(--ink2)">of ${fmtN(F.tgt)} ac · ${SPRAY.target} ac per machine</span></span><b style="font-weight:600">${pctF(F.pct)}</b></div>
-      <div style="margin-top:10px">${bar(F.pct,ta.dot,8)}</div><div style="font-size:12.5px;color:var(--ink2);margin-top:8px">IoT-measured acres</div></div></div>`;
+      <div style="font-size:12.5px;color:var(--ink2)">${E(dPretty(D.sp.firstDate))} – ${E(day)} · ${F.n?acF(F.acAll/F.n):0} ac per machine · IoT-measured</div></div>
+    </div>`;
   return `<div class="groups"><section aria-label="Machines"><div class="glbl"><b>Machines</b><span>${E(day)}</span></div><div class="mcgrid">${tiles}</div>${brkHTML(sc)}</section>
     <section aria-label="Acres"><div class="glbl"><b>Acres</b><span>${E(day)}</span></div>${acres}</section></div>`;
 }
@@ -526,7 +523,7 @@ function brkHTML(sc){
   if(ph) return `<div class="card" style="margin-top:12px;overflow:hidden">${head}<div class="bkm">${list.map(m=>`<button type="button" class="mcbtn" data-act="mc" data-mc="${E(m.mc)}" style="background:var(--head)">
       <span class="a"><b class="mono" style="font-size:13.5px">${E(m.mc)}</b> <span class="bd" style="display:inline;font-size:13px">! ${E(m.f.brk)}</span><span style="color:var(--ink)">${E(m.terr)}${m.vil?' · '+E(m.vil):''}</span><span>${hasOp(m)?E(m.op||m.opMob):noOp} · ${ran(m)}</span></span><span aria-hidden="true" style="color:var(--ink3)">›</span></button>`).join('')}</div></div>`;
   return `<div class="card" style="margin-top:12px;overflow:hidden">${head}<div style="overflow-x:auto">
-    <div class="bkrow hd"><span>Machine</span><span>Breakdown ID</span><span>Territory</span><span>Operator</span><span>TM</span><span style="text-align:right">${E(dayShort(d))}</span></div>
+    <div class="bkrow hd"><span>Machine</span><span>Breakdown ID</span><span>Territory</span><span>Operator</span><span>CCM</span><span style="text-align:right">${E(dayShort(d))}</span></div>
     ${list.map(m=>`<div class="bkrow"><span><button type="button" class="mcb" data-act="mc" data-mc="${E(m.mc)}">${E(m.mc)}</button></span><span class="bd mono" style="font-size:12.5px">! ${E(m.f.brk)}</span>
       <span>${E(m.terr)}</span><span>${hasOp(m)?E(m.op||m.opMob):noOp}</span><span>${m.tm?E(m.tm):'<i class="mu">not on the sheet</i>'}</span><span style="text-align:right">${ran(m)}</span></div>`).join('')}</div></div>`;
 }
@@ -535,7 +532,7 @@ function controlsHTML(sc){
   const ph=isPhone(), d=sc.d, y=istDay(-1);
   const sel=(id,label,cur,all,opts)=>`<select class="sel" id="${id}" aria-label="${label}"><option value="">${all}</option>${opts.map(o=>`<option value="${E(o)}"${o===cur?' selected':''}>${E(o)}</option>`).join('')}</select>`;
   const sortSel=`<select class="sel" id="fSort" aria-label="Sort by"${ph?' style="width:100%;max-width:none"':''}>${SORTS.map(([k,l])=>`<option value="${k}"${k===S.sort?' selected':''}>Sort: ${E(l.replace('the day',dayShort(d)))}</option>`).join('')}</select>`;
-  const search=`<div class="srch">${IC.search}<input id="fQ" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${ph?'Search machine, operator, FO…':'Search machine, village, operator, FO, TM'}" value="${E(S.q)}" aria-label="Search"></div>`;
+  const search=`<div class="srch">${IC.search}<input id="fQ" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${ph?'Search machine, operator, FO…':'Search machine, village, operator, FO, CCM'}" value="${E(S.q)}" aria-label="Search"></div>`;
   const csv=`<button type="button" class="csv" data-act="csv" title="Download the ${sc.list.length} machines shown as CSV">${IC.dl}CSV</button>`;
   const clear = sc.nF||S.q.trim() ? `<button type="button" class="ghost" data-act="clear">Clear</button>` : '';
   if(ph) return `<div class="ctl m" style="flex-wrap:nowrap">${search}<button type="button" class="fbtn${sc.nF?' on':''}" data-act="sheet" aria-label="Filters${sc.nF?`, ${sc.nF} active`:''}">${IC.filter}Filters${sc.nF?` <em>${sc.nF}</em>`:''}</button></div>
@@ -544,7 +541,7 @@ function controlsHTML(sc){
   return `<div class="ctl">${f('Day',`<div style="display:flex;gap:8px;align-items:center"><div class="segb" role="group" aria-label="Day"><button type="button" data-act="yday" aria-pressed="${d===y}">Yesterday</button></div>
         <input class="sel" type="date" id="fDay" aria-label="Pick a day" min="${E(D.sp.firstDate)}" max="${E(y)}" value="${E(d)}"></div>`)}
       ${sc.sts.length>1?f('State',sel('fSt','State',S.st,'All states',sc.sts)):''}
-      ${f('Territory',sel('fTerr','Territory',S.terr,'All territories',sc.terrs))}${f('TM',sel('fTm','TM',S.tm,'All TMs',sc.tms))}${f('Sort',sortSel)}</div>
+      ${f('Territory',sel('fTerr','Territory',S.terr,'All territories',sc.terrs))}${f('CCM',sel('fTm','CCM',S.tm,'All CCMs',sc.tms))}${f('Sort',sortSel)}</div>
     <div class="ctl" style="margin-top:16px">${search}${clear}<div style="flex:1"></div>${stampTxt()}${csv}</div>`;
 }
 // The phone's Filters sheet: the same field ids, so the same change handler covers it.
@@ -557,58 +554,58 @@ function sheetHTML(sc){
       <label class="fld"><span>Day</span><div style="display:flex;gap:8px"><div class="segb" role="group" aria-label="Day"><button type="button" data-act="yday" aria-pressed="${d===y}">Yesterday</button></div>
         <input class="sel" type="date" id="fDay" aria-label="Pick a day" min="${E(D.sp.firstDate)}" max="${E(y)}" value="${E(d)}" style="flex:1;min-width:0"></div></label>
       ${sc.sts.length>1?sel('fSt','State',S.st,'All states',sc.sts):''}
-      ${sel('fTerr','Territory',S.terr,'All territories',sc.terrs)}${sel('fTm','TM',S.tm,'All TMs',sc.tms)}
+      ${sel('fTerr','Territory',S.terr,'All territories',sc.terrs)}${sel('fTm','CCM',S.tm,'All CCMs',sc.tms)}
     </div>
     <div class="sfoot">${sc.nF?`<button type="button" class="ghost" data-act="clear">Clear</button>`:''}<button type="button" class="csv" data-act="closesheet">Show ${sc.list.length} machines</button></div></div>`;
 }
 
-const TCOLS = d => [['name',S.page==='terr'?'Territory · TM':'TM · FO'],['n','Machines'],['brk','Breakdown'],['ran','Ran '+dayShort(d)],['opPct','Operator mapped'],['acY','Acres '+dayShort(d)],['tgt','Target ac'],['acAll','Season ac · % of target']];
+const TCOLS = d => [['name',S.page==='terr'?'Territory · CCM':'CCM · FO'],['n','Machines'],['brk','Breakdown'],['ran','Ran '+dayShort(d)],['opPct','Operator mapped'],['acY','Acres '+dayShort(d)],['acAll','Season acres']];
 const sortName = d => ((SORTS.find(([k])=>k===S.sort)||[])[1]||'').replace('the day',dayShort(d)).toLowerCase();
 function listDesk(nodes, sc){
   const hd=`<div class="row hd">${TCOLS(sc.d).map(([k,t])=>`<button type="button" data-act="sort" data-k="${k}" aria-sort="${S.sort===k?'descending':'none'}">${E(t)}${S.sort===k?' ↓':''}</button>`).join('')}</div>`;
   const ofC=(k,n,col)=>`<div class="of"><span><b style="font-weight:500">${fmtN(k)}</b><span class="mu"> of ${fmtN(n)}</span></span>${bar(n?100*k/n:null,col)}</div>`;
-  const vsC=(v,p)=>`<div class="of"><span><b style="font-weight:600">${acF(v)}</b><span class="mu" style="font-size:12.5px"> · ${pctF(p)}</span></span>${bar(p,'var(--act)')}</div>`;
+  const seasonC=(v,n)=>`<div class="of"><b style="font-weight:600">${acF(v)}</b>${n>1?`<span class="mu" style="font-size:12.5px">${acF(v/n)} ac per machine</span>`:''}</div>`;
   const gRow=(x,lv)=>{
-    const ppl = x.people ? (x.people.length?'<b class="lab">TM</b> '+x.people.map(p=>`<span style="color:var(--ink)">${E(p.n||'—')}</span>${telA(p.mob)}`).join(', '):'<i>No TM on the sheet</i>') : '';
+    const ppl = x.people ? (x.people.length?'<b class="lab">CCM</b> '+x.people.map(p=>`<span style="color:var(--ink)">${E(p.n||'—')}</span>${telA(p.mob)}`).join(', '):'<i>No CCM on the sheet</i>') : '';
     const sub=[x.sub?E(x.sub):'', S.page==='terr'&&!S.st?E(x.st):'', ppl].filter(Boolean).join(' · ');
     return `<div class="row g${lv?' l1':''}${x.none?' none':''}" data-act="exp" data-k="${E(x.key)}" role="button" tabindex="0" aria-expanded="${isOpen(x,sc.q)}">
       <div class="nm" style="padding-left:${lv*20}px">${IC.chev}<div style="min-width:0"><div class="t">${x.lab?`<b class="lab">${x.lab}</b>`:''}<span title="${E(x.name)}">${E(x.name)}${x.people?'':telA(x.mob)}</span>${x.tag?`<span class="lab" style="border:1px solid var(--line);border-radius:5px;padding:0 5px">${E(x.tag)}</span>`:''}</div>
         ${sub?`<div class="s">${sub}</div>`:''}${x.warn?`<div class="warn" style="margin-top:3px">⚠ ${E(x.warn)}</div>`:''}</div></div>
       <span class="num">${fmtN(x.f.n)}</span><span class="num ${x.f.brk?'bd':'mu'}">${fmtN(x.f.brk)}</span>${ofC(x.f.ran,x.f.n,'var(--act)')}${ofC(x.f.op,x.f.n,'var(--op)')}
-      <span class="num">${acF(x.f.acY)}</span><span class="num" style="font-weight:600">${fmtN(x.f.tgt)}</span>${vsC(x.f.acAll,x.f.pct)}</div>`; };
-  const mRow=(m,lv)=>{ const pc=100*m.f.acAll/SPRAY.target;
+      <span class="num">${acF(x.f.acY)}</span>${seasonC(x.f.acAll,x.f.n)}</div>`; };
+  const mRow=(m,lv)=>{
     return `<div class="row m"><div style="min-width:0;padding-left:${22+lv*20}px"><button type="button" class="mcb" data-act="mc" data-mc="${E(m.mc)}">${E(m.mc)}</button>
         <div class="mu" style="font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.vil||'')}${S.page==='terr'&&m.fo?(m.vil?' · ':'')+'FO '+E(m.fo):''}</div></div>
       <span></span><span class="num bd" style="font-size:12.5px">${m.f.brk?`! <span class="mono">${E(m.f.brk)}</span>`:''}</span>
       <span class="num" style="font-size:13px">${m.f.acY>0?'<span class="ok">✓ Ran</span>':'<span class="mu">Idle</span>'}</span>
       <span class="num" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasOp(m)?E(m.op||m.opMob):noOp}</span>
-      <span class="num">${acF(m.f.acY)}</span><span class="num mu">${SPRAY.target}</span>${vsC(m.f.acAll,pc)}</div>`; };
+      <span class="num">${acF(m.f.acY)}</span>${seasonC(m.f.acAll,1)}</div>`; };
   const kids=(x,lv)=>!isOpen(x,sc.q) ? '' : x.kids ? x.kids.map(k=>gRow(k,lv+1)+kids(k,lv+1)).join('')
     : x.groups.map(g=>(g.label?`<div class="glab" style="padding-left:${52+lv*20}px">${E(g.label)}</div>`:'')+g.mcs.map(m=>mRow(m,lv)).join('')).join('');
   const count=nodes.filter(x=>!x.none).length;
-  return `<div class="card" style="overflow:hidden;margin-top:16px"><div class="lhead"><b>${S.page==='terr'?'Territories':'Territory managers'} · ${count}</b>
-      <div>Sorted by ${E(sortName(sc.d))} · ${S.page==='terr'?'click a territory for its machines':'click a TM for his FOs, an FO for his machines'}, a machine number for its details · target is ${SPRAY.target} ac per machine</div></div>
+  return `<div class="card" style="overflow:hidden;margin-top:16px"><div class="lhead"><b>${S.page==='terr'?'Territories':'CCMs'} · ${count}</b>
+      <div>Sorted by ${E(sortName(sc.d))} · ${S.page==='terr'?'click a territory for its machines':'click a CCM for his FOs, an FO for his machines'}, a machine number for its details</div></div>
     <div class="tbl"><div>${hd}${nodes.map(x=>gRow(x,0)+kids(x,0)).join('')}</div></div></div>`;
 }
 function listPhone(nodes, sc){
   const dw=dayWord(sc.d);
   const of=(k,n)=>`${fmtN(k)}<span style="font-size:12px;font-weight:500;color:var(--ink2)"> /${fmtN(n)}</span>`;
-  const fig=x=>`<div><div class="big"><span><b>${acF(x.f.acAll)}</b> <span style="font-size:13.5px;color:var(--ink2)">of ${fmtN(x.f.tgt)} ac target</span></span><b style="font-size:14px">${pctF(x.f.pct)}</b></div><div style="margin-top:6px">${bar(x.f.pct,'var(--act)')}</div></div>
+  const fig=x=>`<div class="big"><span><b>${acF(x.f.acAll)}</b> <span style="font-size:13.5px;color:var(--ink2)">ac season</span></span><span style="font-size:13px;color:var(--ink2)">${x.f.n?acF(x.f.perMc):0} ac per machine</span></div>
     <div class="sg"><div><b>${fmtN(x.f.n)}</b><span>machines</span></div><div><b${x.f.brk?' class="bd"':''}>${fmtN(x.f.brk)}</b><span>breakdown</span></div><div><b>${of(x.f.ran,x.f.n)}</b><span>ran ${E(dw)}</span></div>
       <div><b>${acF(x.f.acY)}</b><span>ac ${E(dw)}</span></div><div style="grid-column:span 2"><b>${of(x.f.op,x.f.n)}</b><span>operators mapped</span></div></div>`;
   const mcBtn=m=>`<button type="button" class="mcbtn" data-act="mc" data-mc="${E(m.mc)}"><span class="a"><b class="mono" style="font-size:13.5px">${E(m.mc)}</b>
       <span>${hasOp(m)?E(m.op||m.opMob):noOp}${m.vil?' · '+E(m.vil):''}</span>${m.f.brk?`<span class="bd" style="font-size:12.5px">! Breakdown ${E(m.f.brk)}</span>`:''}</span>
-    <span class="b"><b style="font-size:14px;font-weight:600">${acF(m.f.acAll)} <span style="font-weight:400;color:var(--ink2)">/ ${SPRAY.target} ac</span></b><span class="${m.f.acY>0?'ok':'mu'}">${m.f.acY>0?'✓ '+acF(m.f.acY)+' ac '+E(dw):'idle '+E(dw)}</span></span><span aria-hidden="true" style="color:var(--ink3)">›</span></button>`;
+    <span class="b"><b style="font-size:14px;font-weight:600">${acF(m.f.acAll)} <span style="font-weight:400;color:var(--ink2)">ac season</span></b><span class="${m.f.acY>0?'ok':'mu'}">${m.f.acY>0?'✓ '+acF(m.f.acY)+' ac '+E(dw):'idle '+E(dw)}</span></span><span aria-hidden="true" style="color:var(--ink3)">›</span></button>`;
   const head=(x,lv)=>{ const sub=[x.sub?E(x.sub):'',S.page==='terr'&&!S.st?E(x.st):''].filter(Boolean).join(' · ');
     return `<div class="nch"><div style="flex:1;min-width:0">${x.lab?`<div class="lab" style="font-size:12px">${x.lab}</div>`:''}<div class="nmx" style="font-size:${lv?15:16}px">${E(x.name)}</div>
       ${sub?`<div class="sub">${sub}</div>`:''}${x.tag?`<div class="lab" style="margin-top:4px">${E(x.tag)}</div>`:''}${x.warn?`<div class="warn" style="margin-top:3px">⚠ ${E(x.warn)}</div>`:''}</div>${x.people?'':callBtn(x.mob,x.name)}</div>`; };
-  const people=x=>!x.people ? '' : `<div class="box">${x.people.length?x.people.map(p=>`<div class="prow"><span class="r" style="width:26px;font-weight:600">TM</span><div class="who"><div class="p">${E(p.n||'—')}</div></div>${callBtn(p.mob,p.n)}</div>`).join(''):'<div class="prow mu" style="font-size:13px">No TM on the sheet</div>'}</div>`;
+  const people=x=>!x.people ? '' : `<div class="box">${x.people.length?x.people.map(p=>`<div class="prow"><span class="r" style="width:34px;font-weight:600">CCM</span><div class="who"><div class="p">${E(p.n||'—')}</div></div>${callBtn(p.mob,p.n)}</div>`).join(''):'<div class="prow mu" style="font-size:13px">No CCM on the sheet</div>'}</div>`;
   const tText=x=>x.kids ? x.sub : `${x.f.n} machine${x.f.n===1?'':'s'}`;
   const tog=x=>{ const o=isOpen(x,sc.q); return `<button type="button" class="tog" data-act="exp" data-k="${E(x.key)}" aria-expanded="${o}">${o?'Hide':'Show'} ${E(tText(x))} <span aria-hidden="true" style="display:inline-block;transform:rotate(${o?180:0}deg)">▾</span></button>`; };
   const kids=x=>!isOpen(x,sc.q) ? '' : `<div style="display:flex;flex-direction:column;gap:${x.kids?10:8}px">${x.kids ? x.kids.map(k=>`<div class="kid"${k.none?' style="border-color:#F1E2BC;background:#FFFBF2"':''}>${head(k,1)}${fig(k)}${tog(k)}${kids(k)}</div>`).join('')
     : x.groups.map(g=>(g.label?`<div class="lab" style="margin:6px 2px 0;font-size:12px">${E(g.label)}</div>`:'')+g.mcs.map(mcBtn).join('')).join('')}</div>`;
   const lim=sc.q?nodes.length:S.limit, shown=nodes.slice(0,lim);
-  return `<div class="ltitle"><b>${S.page==='terr'?'Territories':'Territory managers'} · ${nodes.filter(x=>!x.none).length}</b><span>by ${E(sortName(sc.d))}</span></div>`
+  return `<div class="ltitle"><b>${S.page==='terr'?'Territories':'CCMs'} · ${nodes.filter(x=>!x.none).length}</b><span>by ${E(sortName(sc.d))}</span></div>`
     + shown.map(x=>`<div class="card nc${x.none?' none':''}">${head(x,0)}${fig(x)}${people(x)}${tog(x)}${kids(x)}</div>`).join('')
     + (nodes.length>shown.length?`<button type="button" class="more" data-act="more">Load more · ${shown.length} of ${nodes.length} shown</button>`:'')
     + `<div style="margin-top:12px;text-align:center">${stampTxt()}</div>`;
@@ -616,7 +613,7 @@ function listPhone(nodes, sc){
 
 // The machine panel: what it has done, and who to call.
 function panelHTML(m){
-  const d=spDay(), f=m.f, pc=100*f.acAll/SPRAY.target, ph=isPhone();
+  const d=spDay(), f=m.f, ph=isPhone();
   const stat=(l,v,n)=>`<div class="stat"><div class="l">${l}</div><div class="v">${v}</div>${n?`<div class="n">${n}</div>`:''}</div>`;
   const ago=m.ping?Math.round((Date.parse(istDay(0))-Date.parse(m.ping))/864e5):null;
   const person=(role,n,mob)=>`<div class="prow"><div class="who"><div class="r">${role}</div><div class="p">${n?E(n):'<i class="mu" style="font-weight:400">Not on the sheet</i>'}</div>${mob?`<div class="tel">${mob}</div>`:''}</div>${callBtn(mob,n)}</div>`;
@@ -625,20 +622,20 @@ function panelHTML(m){
         <a class="go" href="https://www.google.com/maps/dir/?api=1&destination=${m.lat},${m.lon}" target="_blank" rel="noopener">Navigate</a></div></div>`
     : `<div class="box"><div class="prow mu" style="font-size:13px">The sheet has no usable position for this machine.</div></div>`;
   const body=`<div class="stats">
-      ${stat('Season acres',acF(f.acAll)+'<span class="u"> ac</span>',`${pctF(pc)} of its ${SPRAY.target} ac target`)}
+      ${stat('Season acres',acF(f.acAll)+'<span class="u"> ac</span>',`${dPretty(D.sp.firstDate)} – ${dPretty(d)}`)}
       ${stat('Acres '+dayWord(d),acF(f.acY)+'<span class="u"> ac</span>',f.acY>0?'<span class="ok">✓ Ran</span>':'Idle')}
       ${stat('Breakdown',f.brk?`<span class="bd">ID <span class="mono">${E(f.brk)}</span></span>`:'None',dPretty(d))}
       ${stat('Operator',hasOp(m)?'Mapped':'<span class="bd">Not mapped</span>',hasOp(m)?'':'no operator on the sheet')}
       ${stat('Days sprayed',fmtN(f.nDays),f.lastRun?'last on '+dPretty(f.lastRun):'none yet')}
       ${stat('Last ping',m.ping?dPretty(m.ping):'—',ago==null?'no ping on the sheet':ago<=0?'today':ago===1?'1 day ago':ago+' days ago')}
     </div>
-    <div style="font-size:12px;color:var(--ink2);margin-top:8px">Acres are IoT-measured · target = ${SPRAY.target} ac per machine for the season</div>
+    <div style="font-size:12px;color:var(--ink2);margin-top:8px">Acres are IoT-measured</div>
     <div class="sect">Village</div><div class="box"><div class="prow" style="min-height:48px;font-weight:600;font-size:14px">${m.vil?E(m.vil):'<i class="mu" style="font-weight:400">Not on the sheet</i>'}</div></div>
-    <div class="sect">Who to call</div><div class="box">${person('Operator',m.op,m.opMob)}${person('Cluster officer (CI)',m.ci,m.ciMob)}${person('Area manager',m.am,m.amMob)}${person('Field officer',m.fo,m.foMob)}${person('Territory manager',m.tm,m.tmMob)}</div>
+    <div class="sect">Who to call</div><div class="box">${person('Operator',m.op,m.opMob)}${person('Cluster officer (CI)',m.ci,m.ciMob)}${person('Area manager',m.am,m.amMob)}${person('Field officer',m.fo,m.foMob)}${person('CCM',m.tm,m.tmMob)}</div>
     <div class="sect">Location</div>${loc}`;
   return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Machine ${E(m.mc)}">
     <div class="dhead">${ph?'<div class="grab"></div>':''}<div class="row2" style="display:flex;gap:12px;align-items:flex-start;width:100%"><div style="flex:1;min-width:0"><div class="mc">${E(m.mc)}</div>
-      <div class="w">${E(m.terr)}, ${E(m.st)}${m.tm?' · TM '+E(m.tm):''}</div></div><button type="button" class="x" data-act="close" id="pClose" aria-label="Close">${IC.close}</button></div></div>
+      <div class="w">${E(m.terr)}, ${E(m.st)}${m.tm?' · CCM '+E(m.tm):''}</div></div><button type="button" class="x" data-act="close" id="pClose" aria-label="Close">${IC.close}</button></div></div>
     <div class="dbody" id="pBody">${body}</div></aside>`;
 }
 
@@ -651,10 +648,10 @@ function csvDownload(name, head, rows){
 // One line per machine shown, with the same figures as the page.
 function doCSV(){
   const sc=scope(), d=sc.d, w=dPretty(d);
-  csvDownload(`Bayer-${PAGES[S.page].slug}_${d}`, ['State','Territory','TM','TM mobile','FO','FO mobile','Machine','Village','Operator','Operator mobile','Cluster officer','CO mobile','Area manager','AM mobile',
-      `Ran (${w})`,`Acres (${w}, IoT)`,`Season acres to ${w} (IoT)`,`Target acres (${SPRAY.target} per machine)`,'% of target',`Breakdown ID (${w})`,'Last ping'],
+  csvDownload(`Bayer-${PAGES[S.page].slug}_${d}`, ['State','Territory','CCM','CCM mobile','FO','FO mobile','Machine','Village','Operator','Operator mobile','Cluster officer','CO mobile','Area manager','AM mobile',
+      `Ran (${w})`,`Acres (${w}, IoT)`,`Season acres to ${w} (IoT)`,`Breakdown ID (${w})`,'Last ping'],
     sc.list.slice().sort((a,b)=>a.st.localeCompare(b.st)||a.terr.localeCompare(b.terr)||a.mc.localeCompare(b.mc)).map(m=>[m.st,m.terr,m.tm,m.tmMob,m.fo,m.foMob,m.mc,m.vil,m.op,m.opMob,m.ci,m.ciMob,m.am,m.amMob,
-      m.f.acY>0?'Yes':'No', Math.round(m.f.acY*10)/10, Math.round(m.f.acAll*10)/10, SPRAY.target, Math.round(1000*m.f.acAll/SPRAY.target)/10, m.f.brk, m.ping]));
+      m.f.acY>0?'Yes':'No', Math.round(m.f.acY*10)/10, Math.round(m.f.acAll*10)/10, m.f.brk, m.ping]));
 }
 
 /* ================================ render ================================ */
@@ -701,8 +698,8 @@ function render(){
   scrollTo(0,y);
 }
 
-/* ---------- address: #/territories and #/tm-fo; Back closes the machine panel first ---------- */
-const pageOfHash = () => { const h=location.hash.replace(/^#\/?/,''); return Object.keys(PAGES).find(k=>PAGES[k].slug===h)||null; };
+/* ---------- address: #/territories and #/ccm-fo (the old #/tm-fo still opens it); Back closes the machine panel first ---------- */
+const pageOfHash = () => { const h=location.hash.replace(/^#\/?/,''); return h==='tm-fo' ? 'tm' : Object.keys(PAGES).find(k=>PAGES[k].slug===h)||null; };
 S.page = pageOfHash() || (()=>{ try{ const t=localStorage.getItem('bayer_page'); return PAGES[t]?t:null; }catch(_){ return null; } })() || 'terr';
 history.replaceState(null,'','#/'+PAGES[S.page].slug);
 function goPage(k){

@@ -1335,14 +1335,18 @@ Bayer's. It is `noindex`, registers no service worker, and the console never lin
   the Wheat admin's Bayer choice reads), as a plain CSV export (~1.4 MB). **Acres = `IOT_acres`** (as on the team logins),
   read **from 1 Nov**, machine-days read once, `UPL_2782` left out (`SPRAY.notBayer`, = the console's `WRET_UPL_KEEP`).
   Logs `[Bayer] spray sheet → {…}`. Person fields, village and position are the latest row's.
-- **Two pages, `#/territories` (Territory summary) and `#/tm-fo` (TM · FO summary)**, the team logins' Territories and FOs
+- **Two pages, `#/territories` (Territory summary) and `#/ccm-fo` (CCM · FO summary; the old `#/tm-fo` still opens it)**, the team logins' Territories and FOs
   pages; no Retailers (every retailer on the sheet is "0") and **no map, by request**. Each: Day filter (Yesterday / a date
   from 1 Nov) · State · Territory · TM · Sort, search, CSV (one line per machine); the strip in two pieces — **Machines**
   (count, Ran, Breakdown = the day's `breakdown_id`, Operators mapped, plus a closed-by-default breakdown list) and
-  **Acres** (the day, the season, against a flat **650 ac per machine**); then Territory → machines (under each TM) or
-  TM → FO → machines, sortable headers on desktop, cards on the phone. A machine opens a panel (drawer / bottom sheet):
-  season and day acres, breakdown, operator, days sprayed, last ping, village, who to call (operator, CI, AM, FO, TM), and
+  **Acres** (the day, the season, acres per machine); then Territory → machines (under each CCM) or
+  CCM → FO → machines, sortable headers on desktop, cards on the phone. A machine opens a panel (drawer / bottom sheet):
+  season and day acres, breakdown, operator, days sprayed, last ping, village, who to call (operator, CI, AM, FO, CCM), and
   Navigate to the last ping position. Back and Escape close it. Strip and rows come from one `figs()`, so they reconcile.
+- **No target acres, and TM reads CCM (Dinesh 2026-11-05).** The team logins' flat 650 ac per machine target is gone from
+  the strip, the table, the cards, the panel and the CSV; Season acres is the default sort, with acres per machine beside it.
+  The sheet's `tm_name` / `tm_number` are labelled **CCM** everywhere, because that is how Bayer addresses the sales team —
+  the data and the field names (`m.tm`, `fTm`) are unchanged.
 - **No deployed / in transit / pending anywhere** — by request it just says machines (`handover_status` is "0" on every row),
   so Breakdown counts all machines, not deployed ones as on the team logins.
 - Checked 2026-11-05 at 1280 / 375 / 320 (no sideways scroll): 74 machines, 46 ran, 25 breakdown, 653 ac on 4 Nov,
