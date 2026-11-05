@@ -1347,6 +1347,15 @@ Bayer's. It is `noindex`, registers no service worker, and the console never lin
   A stage counts the moment its column carries anything; a handover status reading no / pending is not a handover.
   On the phone the header is not sticky and the first two stages (which restate the headline) are hidden.
   Refreshes every 10 minutes while unlocked; a failed refresh says so in the header.
+- **Spraying tab (`#/spraying`, the landing tab; Dinesh 2026-11-05)** — Bayer's machine-DAY workbook (`SPRAY.id` =
+  `14dpDPQtB8GyQFMrjJa28LeTtgz5x5wr2dVv-WmoSH3M`, gid 0, the same sheet the Wheat admin's Bayer choice reads), shown the way
+  the UPL / SWAL team logins see theirs: Day filter (Yesterday / a date from 1 Nov), Machines · Ran · Breakdown (the day's
+  `breakdown_id`) · Operators mapped, Acres on the day and for the season against a flat **650 ac per machine**, then
+  Territory → machines (under each TM) or TM → FO → machines (a toggle, not two tabs), with a CSV. **Acres = `IOT_acres`**,
+  read **from 1 Nov**, machine-days read once, `UPL_2782` left out (`SPRAY.notBayer`, = the console's `WRET_UPL_KEEP`).
+  **No deployed / in transit / pending anywhere** — by request it just says machines (`handover_status` is "0" on every row).
+  Read as a plain CSV export (~1.4 MB). Logs `[Bayer] spray sheet → {…}`. Checked 4 Nov: 74 machines, 46 ran, 24 breakdown,
+  653 ac on the day, 2,157 ac 1–4 Nov, matching the sheet. No map yet.
 - **Another partner** = a new folder copied from `bayer/` with its own hash and `SKEY`, plus one handoff row.
 
 ## Insights (the cross-tab summary)
