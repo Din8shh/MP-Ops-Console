@@ -935,9 +935,10 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     the IoT acres of the sheet territories in it (aliasTerr: Khanna → Ludhiana, Malerkotla → Sangrur, Abohar → Fazilka,
     Malout → Muktsar, Dabwali → Sirsa), shared districts ADDED. Five equal green steps 0 → largest district, no acres = no
     colour, red = a territory with no acres, plain = no territory. Season / that-day toggle (`state.wcPer`). **Team logins get the
-    Map page too** (their company only, no CSV, no admin KPI strip): the three SWAL ones (4832, 4732, 4060; `wmPins`) get the
-    pin map above it as well, the UPL ones the territory map alone (2026-11-05). On a team login the Breakdown / No operator
-    buttons and the red ring count DEPLOYED machines only, as the team pages do, and "Sprayed, no IoT acres" is not offered. Static SVG on WM.base's paths (not the pan/zoom engine); desktop labels
+    Map page too** (their company only, no CSV, no admin KPI strip), the pin map above the territory map for every team login
+    (`wmPins`: SWAL first, UPL the same day, 2026-11-05). On a team login the Breakdown / No operator
+    buttons and the red ring count DEPLOYED machines only, as the team pages do, and neither "Sprayed, no IoT acres" nor
+    "Last ping 3+ days ago" is offered as a Show button (2026-11-05; faded pins and their legend key stay). Static SVG on WM.base's paths (not the pan/zoom engine); desktop labels
     sized off the box height and decluttered; a list of territories beside (desktop) / below (phone).
   · **Pan / zoom (shared engine, `attachPanZoom`, reworked 2026-11-04 for "too sensitive")**: zoom pivots on the cursor, the
     pinch midpoint or the map centre (`zoomAround`, it used to pivot on the top-left corner); the wheel scales by the scroll's

@@ -9576,15 +9576,15 @@ const WM_SHOW = [['all','All machines'],['y','Sprayed {day}'],['s','Sprayed earl
   ['brk','Breakdown {day}'],['noop','No operator mapped'],['stale','Last ping 3+ days ago'],['noiot','Sprayed, no IoT acres']];
 const wmTone = m => m.iotY>0 ? 'y' : m.iotAll>0 ? 's' : 'n';
 // A team login reads Breakdown and No operator on DEPLOYED machines only, exactly as its own pages count them, and has
-// no "Sprayed, no IoT acres" button (a SWAL machine's acres sprayed ARE its IoT acres, so it would always read 0).
+// no "Sprayed, no IoT acres" button (a SWAL machine's acres sprayed ARE its IoT acres, so it would always read 0) and no
+// "Last ping 3+ days ago" button (removed for the team logins by request, 2026-11-05; the admin keeps it).
 const WM_TEST = { all:()=>true, y:m=>wmTone(m)==='y', s:m=>wmTone(m)==='s', n:m=>wmTone(m)==='n',
   brk:m=>wTeam() ? wTeamBrk(m) : !!m.brk,
   noop:m=>!(m.opNum||m.opName) && (!wTeam() || m.stage==='dep'), stale:wmStale, noiot:m=>wNoIot(m) };
-const wmShowOpts = () => wTeam() ? WM_SHOW.filter(([k])=>k!=='noiot') : WM_SHOW;
+const wmShowOpts = () => wTeam() ? WM_SHOW.filter(([k])=>k!=='noiot'&&k!=='stale') : WM_SHOW;
 const wmShowKey = () => WM_TEST[state.wmShow] && wmShowOpts().some(([k])=>k===state.wmShow) ? state.wmShow : 'all';
-// The pin map (Dinesh 2026-11-05): admin, and the three SWAL team logins (HR SWAL, PB SWAL, SWAL leaders). UPL team
-// logins keep the territory map alone until asked.
-const wmPins = () => isAdmin() || (wTeam() && GATE.cur.org==='SWAL');
+// The pin map (Dinesh 2026-11-05): admin and every team login — SWAL first, the UPL ones the same day.
+const wmPins = () => isAdmin() || wTeam();
 const wmShown = A => A.rows.flatMap(r=>r.list).filter(WM_TEST[wmShowKey()]);
 // Machines in view, grouped by exact position (69 share one with another machine on 2026-10-28, mostly at one retailer).
 function wmGroups(A){
@@ -9673,11 +9673,8 @@ function wtopCSV(){
 }
 function wmapBodyHTML(mob){
   if(!wSees() || !WRET.loaded) return wplanBodyHTML(mob);   // the rebuild message, or the shared loading / error card
-  // Team logins (Dinesh 2026-11-04): the territory acres map, on their own company's machines (wterrAgg honours the
-  // forced org). The SWAL ones also get the pin map (wmPins) and go on below, without the admin's KPI strip.
-  if(wTeam() && !wmPins()){ const A=wterrAgg(), ready=wmGeo(), controls=wtControlsHTML(A, mob, false, { noCsv:true });   // the admin CSV carries columns a team does not get
-    const box = ready ? wchoroHTML(A, mob) : `<div style="${w2card(mob?18:16)};margin-top:${mob?12:16}px;height:300px;display:flex;align-items:center;justify-content:center;color:${W2.ink2};font-size:13px">Loading the map…</div>`;
-    return mob ? `<div>${controls}</div>` + box : controls + box; }
+  // Team logins get the pin map and the territory acres map on their own company's machines (wterrAgg honours the
+  // forced org), without the admin's KPI strip.
   const A=wterrAgg();
   const stale = WRET.lastDate && WRET.lastDate < WRET.yday;
   const all=A.rows.flatMap(r=>r.list), show=wmShowKey(), mcs=wmShown(A), off=mcs.filter(m=>m.lat==null||m.lon==null);
