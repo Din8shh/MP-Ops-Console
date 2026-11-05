@@ -920,7 +920,8 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   · **It shares the Territory page's filters** — one `wt*` scope, `wterrAgg` feeds both, and `wtControlsHTML` draws
     both pages' controls (the map without a sort). Picking Kaithal on one page is Kaithal on the other. The same KPI
     strip sits above it; the phone shows only its "worked yesterday" card (`wtStripHTML(…, cardOnly)`).
-  · Pin colour: green sprayed yesterday · dark grey sprayed earlier · light grey not yet; RED RING = no operator mapped;
+  · Pin colour: green sprayed yesterday · blue sprayed earlier · amber not yet (the two greys were hard to see; changed
+    2026-11-05); RED RING = no operator mapped;
     faded = last ping 3+ days ago (`wmStale`); one pin with a count for machines at the SAME position (`wmGroups`).
   · Card: machine, operator (with number), season acres to yesterday, retailer · territory · last seen, **Details**
     (the shared machine panel) and **Navigate** (`navHref`: Google Maps DIRECTIONS; the machine panel's Navigate now

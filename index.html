@@ -9547,7 +9547,7 @@ function wTeamCSV(){
 /* ===================== Wheat North — Machine map (view key `wmap`) =====================
    Page 3 of the Wheat rebuild (agreed 2026-10-28). Every machine at its LAST PING position, on the Haryana + Punjab
    district outlines, under the Territory page's own filters (one shared `wt*` scope: wterrAgg feeds both pages).
-   · Pin colour = what it did: green sprayed yesterday · dark grey sprayed earlier this season · light grey not yet.
+   · Pin colour = what it did: green sprayed yesterday · blue sprayed earlier this season · amber not yet.
      A RED RING = no operator mapped. Faded = last ping 3+ days ago. Same position → one pin with a count.
    · Pointing at a pin (desktop) or tapping it (phone) opens a card: machine, operator, season acres to yesterday,
      Navigate (Google Maps directions) and Details (the shared machine panel). A click on desktop keeps it open.
@@ -9603,7 +9603,8 @@ function wmGroups(A){
     return { ...g, list:L, tone, noOp:L.some(WM_TEST.noop), stale:L.every(wmStale) };   // red ring = no operator mapped
   }).sort((a,b)=>({n:0,s:1,y:2}[a.tone]-{n:0,s:1,y:2}[b.tone]));   // green painted last, on top
 }
-const WM_TONE = { y:C.act, s:'#6E6A62', n:'#CBC6BC' };
+// Strong, distinct pin colours (Dinesh 2026-11-05: the two greys were hard to see on the map). Red stays the ring's.
+const WM_TONE = { y:C.act, s:'#2563EB', n:'#E0A008' };
 /* ===================== Wheat North — Top 10 machines (view key `wtop`, Dinesh 2026-11-04) =====================
    The ten machines with the most acres since the season's first sheet date, THROUGH the Day filter's day. Wheat admin only.
    Reads the shared wt* scope (Day · State · Company · Territory · TM · AM · search), so it agrees with the Territory /
