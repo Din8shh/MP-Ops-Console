@@ -941,6 +941,10 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     test. A table row, or a district holding ONE territory, sets the shared Territory filter (`data-act="wcterr"`, again to
     clear), so the pin map below fits to it. Machines with no territory are left out and counted in the note, which is why
     "ran" reads one under the strip's figure on 5 Nov (175 vs 176).
+  · **"IoT" is never NAMED to a UPL / SWAL team login or on the Bayer page (Dinesh 2026-11-06).** Their acres ARE the
+    device's (`IOT_acres`), so they read "Acres sprayed"; only the Wheat admin sees the words "IoT acres". The heat map
+    switches its labels on `wTeam()` (`AC` / `ACs` / `ACl`); the figures are the same for both. Checked on HR SWAL (4832):
+    no "IoT" in the HTML of Retailers, Territories, FOs, Map or the machine panel. Keep it so on any new team-visible text.
   · **IoT acres by territory** (`wchoroHTML` / `wchoroData`, Dinesh 2026-11-04): each DISTRICT filled by
     the IoT acres of the sheet territories in it (aliasTerr: Khanna → Ludhiana, Malerkotla → Sangrur, Abohar → Fazilka,
     Malout → Muktsar, Dabwali → Sirsa), shared districts ADDED. Five equal green steps 0 → largest district, no acres = no
@@ -1353,6 +1357,7 @@ Bayer's. It is `noindex`, registers no service worker, and the console never lin
   CCM → FO → machines, sortable headers on desktop, cards on the phone. A machine opens a panel (drawer / bottom sheet):
   season and day acres, breakdown, operator, days sprayed, last ping, village, who to call (operator, CI, AM, FO, CCM), and
   Navigate to the last ping position. Back and Escape close it. Strip and rows come from one `figs()`, so they reconcile.
+- **The page never says "IoT" (Dinesh 2026-11-06)**: the acres are `IOT_acres`, labelled acres sprayed; the CSV reads `Acres sprayed (<day>)` / `Season acres to <day>`.
 - **No target acres, and TM reads CCM (Dinesh 2026-11-05).** The team logins' flat 650 ac per machine target is gone from
   the strip, the table, the cards, the panel and the CSV; Season acres is the default sort, with acres per machine beside it.
   The sheet's `tm_name` / `tm_number` are labelled **CCM** everywhere, because that is how Bayer addresses the sales team —

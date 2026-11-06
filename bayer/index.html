@@ -505,7 +505,7 @@ function stripHTML(F, sc){
       <div style="font-size:${ph?28:30}px;font-weight:600;margin-top:6px;color:${ta.vc}">${acF(F.acY)}<span class="u"> ac</span></div><div style="font-size:12.5px;color:var(--ink2)">on ${E(day)} · ${fmtN(F.ran)} machines ran</div>
       ${stale?`<div class="warn">⚠ the sheet's acres stop at ${E(dPretty(D.sp.lastDate))}</div>`:''}</div>
     <div><div style="font-size:12.5px;font-weight:500;color:var(--ink2)">Season</div><div style="font-size:22px;font-weight:600;margin-top:6px">${acF(F.acAll)}<span class="u"> ac</span></div>
-      <div style="font-size:12.5px;color:var(--ink2)">${E(dPretty(D.sp.firstDate))} – ${E(day)} · ${F.n?acF(F.acAll/F.n):0} ac per machine · IoT-measured</div></div>
+      <div style="font-size:12.5px;color:var(--ink2)">${E(dPretty(D.sp.firstDate))} – ${E(day)} · ${F.n?acF(F.acAll/F.n):0} ac per machine</div></div>
     </div>`;
   return `<div class="groups"><section aria-label="Machines"><div class="glbl"><b>Machines</b><span>${E(day)}</span></div><div class="mcgrid">${tiles}</div>${brkHTML(sc)}</section>
     <section aria-label="Acres"><div class="glbl"><b>Acres</b><span>${E(day)}</span></div>${acres}</section></div>`;
@@ -629,7 +629,6 @@ function panelHTML(m){
       ${stat('Days sprayed',fmtN(f.nDays),f.lastRun?'last on '+dPretty(f.lastRun):'none yet')}
       ${stat('Last ping',m.ping?dPretty(m.ping):'—',ago==null?'no ping on the sheet':ago<=0?'today':ago===1?'1 day ago':ago+' days ago')}
     </div>
-    <div style="font-size:12px;color:var(--ink2);margin-top:8px">Acres are IoT-measured</div>
     <div class="sect">Village</div><div class="box"><div class="prow" style="min-height:48px;font-weight:600;font-size:14px">${m.vil?E(m.vil):'<i class="mu" style="font-weight:400">Not on the sheet</i>'}</div></div>
     <div class="sect">Who to call</div><div class="box">${person('Operator',m.op,m.opMob)}${person('Cluster officer (CI)',m.ci,m.ciMob)}${person('Area manager',m.am,m.amMob)}${person('Field officer',m.fo,m.foMob)}${person('CCM',m.tm,m.tmMob)}</div>
     <div class="sect">Location</div>${loc}`;
@@ -649,7 +648,7 @@ function csvDownload(name, head, rows){
 function doCSV(){
   const sc=scope(), d=sc.d, w=dPretty(d);
   csvDownload(`Bayer-${PAGES[S.page].slug}_${d}`, ['State','Territory','CCM','CCM mobile','FO','FO mobile','Machine','Village','Operator','Operator mobile','Cluster officer','CO mobile','Area manager','AM mobile',
-      `Ran (${w})`,`Acres (${w}, IoT)`,`Season acres to ${w} (IoT)`,`Breakdown ID (${w})`,'Last ping'],
+      `Ran (${w})`,`Acres sprayed (${w})`,`Season acres to ${w}`,`Breakdown ID (${w})`,'Last ping'],
     sc.list.slice().sort((a,b)=>a.st.localeCompare(b.st)||a.terr.localeCompare(b.terr)||a.mc.localeCompare(b.mc)).map(m=>[m.st,m.terr,m.tm,m.tmMob,m.fo,m.foMob,m.mc,m.vil,m.op,m.opMob,m.ci,m.ciMob,m.am,m.amMob,
       m.f.acY>0?'Yes':'No', Math.round(m.f.acY*10)/10, Math.round(m.f.acAll*10)/10, m.f.brk, m.ping]));
 }

@@ -9747,6 +9747,9 @@ function wchoroData(A){
    and a ranked territory table with the same three figures. A territory row (or a district, on the map) is a SHORTCUT
    into the page's Territory filter — the pin map below then fits to that territory's machines; picking it again clears it. */
 function wchoroHTML(A, mob){
+  // The figure is the device's acres for everyone; only its NAME differs (Dinesh 2026-11-06): the admin reads "IoT acres",
+  // the UPL / SWAL team logins "Acres sprayed" — on those logins the device's acres ARE the acres sprayed.
+  const AC = wTeam() ? 'Acres sprayed' : 'IoT acres', ACs = wTeam() ? 'Acres' : 'IoT ac', ACl = wTeam() ? 'acres sprayed' : 'IoT acres';
   const X=wchoroData(A), day=wpDate(WRET.yday), dw=wtDayShort(), isDay=X.per==='day';
   const step = X.mx/5, rng = i => `${acF(Math.round(step*i))}–${acF(Math.round(step*(i+1)))}`;
   const ranW = isDay ? (dw==='y’day'?'ran yesterday':'ran on '+day) : 'ran this season';
@@ -9759,7 +9762,7 @@ function wchoroHTML(A, mob){
       <span style="font-size:12.5px;font-weight:500;color:${W2.ink2}">${lab}</span><span style="${w2num(mob?20:24,600)}">${val}</span>${sub}</div>`;
   const ranP=pct(X.ran,X.n), terrP=pct(X.tAc,X.nT), zeroT=X.nT-X.tAc;
   const band = `<div style="display:grid;grid-template-columns:repeat(${mob?2:4},minmax(0,1fr));border-bottom:1px solid ${W2.line2};background:${W2.head}">
-      ${cell('IoT acres', `${acF(Math.round(X.ac))}${w2unit('ac',12)}`, `<span style="font-size:12.5px;color:${W2.ink2}">${isDay?day:'season to '+day}</span>`, `border-right:1px solid ${W2.line2};${mob?`border-bottom:1px solid ${W2.line2}`:''}`)}
+      ${cell(AC, `${acF(Math.round(X.ac))}${w2unit('ac',12)}`, `<span style="font-size:12.5px;color:${W2.ink2}">${isDay?day:'season to '+day}</span>`, `border-right:1px solid ${W2.line2};${mob?`border-bottom:1px solid ${W2.line2}`:''}`)}
       ${cell('Machines in territories', fmt(X.n), `<span style="font-size:12.5px;color:${W2.ink2}">across ${fmt(X.nT)} territor${X.nT===1?'y':'ies'}</span>`, mob?`border-bottom:1px solid ${W2.line2}`:`border-right:1px solid ${W2.line2}`)}
       ${cell('Machines ran', `${fmt(X.ran)}<span style="font-size:13px;color:${W2.ink2};font-weight:500"> of ${fmt(X.n)} · ${ranP}%</span>`, meter(ranP, ranCol(ranP)), `border-right:1px solid ${W2.line2}`)}
       ${cell('Territories with acres', `${fmt(X.tAc)}<span style="font-size:13px;color:${W2.ink2};font-weight:500"> of ${fmt(X.nT)}</span>`, zeroT?`<span style="font-size:12.5px;color:${WC_ZERO_INK};font-weight:600">${fmt(zeroT)} with no acres</span>`:`<span style="font-size:12.5px;color:${W2.ink2}">every one has acres</span>`)}</div>`;
@@ -9768,7 +9771,7 @@ function wchoroHTML(A, mob){
   const selDist = sel ? (X.T.find(t=>t.name===sel)||{}).dist : '';
   const paths = WM.base.map(b=>{ const d=X.D[b.st+'|'+b.name], v=d?d.ac:0, c=X.cls(v);
     const tn = d ? Object.keys(d.terrs) : [];
-    const tip = `${b.name}: ${acF(v)} IoT ac`+(d?` · ${fmt(d.ran)} of ${fmt(d.n)} machines ${ranW}`:'')+(tn.length?' — '+Object.entries(d.terrs).sort((a,b)=>b[1]-a[1]).map(([t,a])=>`${t} ${acF(a)}`).join(', '):' — no territory on the sheet');
+    const tip = `${b.name}: ${acF(v)} ${wTeam()?'ac sprayed':'IoT ac'}`+(d?` · ${fmt(d.ran)} of ${fmt(d.n)} machines ${ranW}`:'')+(tn.length?' — '+Object.entries(d.terrs).sort((a,b)=>b[1]-a[1]).map(([t,a])=>`${t} ${acF(a)}`).join(', '):' — no territory on the sheet');
     // A district holding exactly one territory is a tap into that territory; a shared one (Khanna + Ludhiana) is not,
     // since the tap could only guess which of the two was meant — the table beside it lists both.
     const act = tn.length===1 ? ` data-act="wcterr" data-t="${E(tn[0])}" style="cursor:pointer"` : '';
@@ -9795,10 +9798,10 @@ function wchoroHTML(A, mob){
     else placedBx.push(full);
     const h2=use.reduce((a,l)=>a+l[1]*1.12,0); let yy=y-h2/2;
     return use.map(([t,sz,wt,ik])=>{ yy+=sz*1.12; return T_(x, yy-sz*0.22, sz, wt, ik, t); }).join(''); }).join('');
-  const svg = `<svg viewBox="0 0 ${WM.W} ${WM.H}" role="img" aria-label="${E('IoT acres and machines that ran, by district, '+(isDay?day:'season to '+day))}" style="display:block;width:100%;height:${mob?'auto':'clamp(460px,72vh,820px)'}">${paths}${labels}</svg>`;
+  const svg = `<svg viewBox="0 0 ${WM.W} ${WM.H}" role="img" aria-label="${E(AC+' and machines that ran, by district, '+(isDay?day:'season to '+day))}" style="display:block;width:100%;height:${mob?'auto':'clamp(460px,72vh,820px)'}">${paths}${labels}</svg>`;
   const sw = (bg,bd) => `<span aria-hidden="true" style="width:16px;height:12px;border-radius:3px;background:${bg};${bd?`border:1px solid ${W2.line}`:''};flex-shrink:0"></span>`;
   const legend = `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:13px;color:${W2.ink}">
-      ${X.mx>0?`<span style="display:inline-flex;align-items:center;gap:8px;white-space:nowrap"><span style="color:${W2.ink2}">IoT acres</span><span style="display:inline-flex;border-radius:3px;overflow:hidden">${WC_COLS.map(c=>`<span aria-hidden="true" style="width:22px;height:12px;background:${c}"></span>`).join('')}</span><span style="font-variant-numeric:tabular-nums">0 – ${acF(Math.round(X.mx))} ac</span></span>`:''}
+      ${X.mx>0?`<span style="display:inline-flex;align-items:center;gap:8px;white-space:nowrap"><span style="color:${W2.ink2}">${AC}</span><span style="display:inline-flex;border-radius:3px;overflow:hidden">${WC_COLS.map(c=>`<span aria-hidden="true" style="width:22px;height:12px;background:${c}"></span>`).join('')}</span><span style="font-variant-numeric:tabular-nums">0 – ${acF(Math.round(X.mx))} ac</span></span>`:''}
       <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">${sw(WC_ZERO)}Territory, no acres</span>
       <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">${sw(WC_OFF,1)}No territory</span>
       ${mob?'':`<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:${W2.ink2}"><b style="color:${W2.ink};font-weight:600;font-variant-numeric:tabular-nums">5/12 ran</b> = machines that ${ranW.replace(/^ran/,'ran')} / machines there</span>`}</div>`;
@@ -9813,23 +9816,23 @@ function wchoroHTML(A, mob){
     const base = `data-act="wcterr" data-t="${E(t.name)}" aria-pressed="${on}" title="${on?'Show every territory':'Show only '+E(t.name)+' on this page'}" style="display:grid;width:100%;text-align:left;border:0;border-bottom:1px solid ${W2.line2};background:${on?'#EAF4EC':'transparent'};${on?`box-shadow:inset 3px 0 0 ${C.act};`:''}cursor:pointer;font-family:inherit;color:${W2.ink};`;
     if(mob) return `<button ${base}grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 10px;padding:10px 4px;min-height:44px">
         <span style="grid-column:1/-1;min-width:0;display:flex;align-items:baseline;gap:6px"><b style="font-weight:600;font-size:14.5px">${E(t.name)}</b><span style="font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${where}</span></span>
-        <span style="display:flex;flex-direction:column;gap:1px"><span style="font-size:11.5px;color:${W2.ink2}">IoT ac</span>${acCell.replace('text-align:right;','')}</span>
+        <span style="display:flex;flex-direction:column;gap:1px"><span style="font-size:11.5px;color:${W2.ink2}">${ACs}</span>${acCell.replace('text-align:right;','')}</span>
         <span style="display:flex;flex-direction:column;gap:1px"><span style="font-size:11.5px;color:${W2.ink2}">Machines</span>${nCell.replace('text-align:right;','')}</span>
         <span style="display:flex;flex-direction:column;gap:1px"><span style="font-size:11.5px;color:${W2.ink2}">Ran</span>${ranCell.replace('text-align:right;','')}</span>
         ${bar}</button>`;
     return `<button ${base}grid-template-columns:minmax(0,1fr) 56px 70px 64px;gap:4px 10px;padding:9px 10px;align-items:center">
         <span style="min-width:0;display:flex;flex-direction:column"><b style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(t.name)}</b><span style="font-size:12px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${where}</span></span>
         ${nCell}${ranCell}${acCell}${bar}</button>`; };
-  const thead = mob ? '' : `<div style="display:grid;grid-template-columns:minmax(0,1fr) 56px 70px 64px;gap:10px;padding:0 10px 8px;font-size:12px;font-weight:600;color:${W2.ink2};border-bottom:1px solid ${W2.line2}"><span>Territory</span><span style="text-align:right">Machines</span><span style="text-align:right">Ran</span><span style="text-align:right">IoT ac</span></div>`;
+  const thead = mob ? '' : `<div style="display:grid;grid-template-columns:minmax(0,1fr) 56px 70px 64px;gap:10px;padding:0 10px 8px;font-size:12px;font-weight:600;color:${W2.ink2};border-bottom:1px solid ${W2.line2}"><span>Territory</span><span style="text-align:right">Machines</span><span style="text-align:right">Ran</span><span style="text-align:right">${ACs}</span></div>`;
   const clear = sel ? `<button data-act="wcterr" data-t="${E(sel)}" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:${mob?44:34}px;margin-top:10px;border:1px solid ${W2.line};border-radius:9px;background:#fff;font:500 13px ${W2.font};color:${W2.ink};cursor:pointer">Show every territory</button>` : '';
   // On the phone the table stops at 8 rows, so the pin map below is not 25 cards away; "Show all" opens the rest.
   const cut = mob && !state.wcAll && X.T.length>WC_PHONE_ROWS ? WC_PHONE_ROWS : X.T.length;
   const more = cut<X.T.length ? `<button data-act="wcall" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;margin-top:10px;border:1px solid ${W2.line};border-radius:9px;background:#fff;font:500 14px ${W2.font};color:${W2.ink};cursor:pointer">Show all ${fmt(X.T.length)} territories</button>` : '';
   const list = `<div>${thead}${X.T.slice(0,cut).map(row).join('')}${more}${clear}</div>`;
   const unp = Object.keys(X.unplaced);
-  const note = `<div style="font-size:12.5px;color:${W2.ink2};line-height:1.5;margin-top:10px">Each district is coloured by the IoT acres of the sheet territories inside it, in five equal steps up to the largest district; where two territories share a district (Khanna and Ludhiana, Malerkotla and Sangrur …) they are added together. Ran = machines with IoT acres ${isDay?'on '+day:'on at least one day of the season'}, the same test that colours a pin. ${mob?'Tap':'Click'} a territory to see only its machines on this page${mob?'':' (or a district on the map)'}.${X.noTerr?` ${fmt(X.noTerr)} machine${X.noTerr===1?'':'s'} with no territory on the sheet ${X.noTerr===1?'is':'are'} left out.`:''}${unp.length?` <b style="color:#46433d">Not placed on a district:</b> ${unp.map(t=>`${E(t)} (${acF(X.unplaced[t])} ac)`).join(', ')}.`:''}</div>`;
+  const note = `<div style="font-size:12.5px;color:${W2.ink2};line-height:1.5;margin-top:10px">Each district is coloured by the ${ACl} of the sheet territories inside it, in five equal steps up to the largest district; where two territories share a district (Khanna and Ludhiana, Malerkotla and Sangrur …) they are added together. Ran = machines with ${ACl} ${isDay?'on '+day:'on at least one day of the season'}, the same test that colours a pin. ${mob?'Tap':'Click'} a territory to see only its machines on this page${mob?'':' (or a district on the map)'}.${X.noTerr?` ${fmt(X.noTerr)} machine${X.noTerr===1?'':'s'} with no territory on the sheet ${X.noTerr===1?'is':'are'} left out.`:''}${unp.length?` <b style="color:#46433d">Not placed on a district:</b> ${unp.map(t=>`${E(t)} (${acF(X.unplaced[t])} ac)`).join(', ')}.`:''}</div>`;
   const head = `<div style="display:flex;align-items:center;gap:10px 14px;padding:${mob?'14px 16px':'14px 18px'};border-bottom:1px solid ${W2.line2};flex-wrap:wrap">
-      <div style="flex:1;min-width:${mob?'100%':'240px'}"><div style="font-size:${mob?15:16}px;font-weight:600">Territory heat map · IoT acres</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${isDay?day:'Season to '+day} · ${sel?`only ${E(sel)}`:A.narrowed?'what the filters show':'every machine'}</div></div>${toggle}</div>`;
+      <div style="flex:1;min-width:${mob?'100%':'240px'}"><div style="font-size:${mob?15:16}px;font-weight:600">Territory heat map · ${AC}</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${isDay?day:'Season to '+day} · ${sel?`only ${E(sel)}`:A.narrowed?'what the filters show':'every machine'}</div></div>${toggle}</div>`;
   const body = mob
     ? `<div style="padding:8px 8px 0">${svg}</div><div style="padding:12px 16px 14px">${legend}<div style="margin-top:12px">${list}</div>${note}</div>`
     : `<div class="wcGrid">
