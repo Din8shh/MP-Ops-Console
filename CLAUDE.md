@@ -932,7 +932,16 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     desktop unit is ~0.5px and fixed unit sizes came out as 2px dots.
   · A filter change re-fits the map to the machines in view (`WM.sig`); leaving the page resets it. It reuses the
     shared pan/zoom engine and sets the shared `W`/`H` — safe only because Kharif and Wheat never share a page load.
-  · **IoT acres by territory** (`wchoroHTML` / `wchoroData`, below the pin map, Dinesh 2026-11-04): each DISTRICT filled by
+  · **The heat map LEADS the page, the pin map follows (Dinesh 2026-11-06)**, and the heat map now carries machines and
+    machines ran beside acres: a four-figure band (IoT acres · machines in territories · machines ran n of N with % and
+    meter · territories with acres, red count of those without), district labels on desktop in three lines (name · acres ·
+    "ran/machines", decluttered: a crowded district drops to its name, then to nothing; the table and tooltip still carry
+    it), and a territory table (Machines · Ran · IoT ac + acres bar; on the phone a card with three equal columns, first 8
+    then "Show all", `state.wcAll`). **Ran = IoT acres > 0** on the day (Yesterday) or on any day (Season) — the pin colour
+    test. A table row, or a district holding ONE territory, sets the shared Territory filter (`data-act="wcterr"`, again to
+    clear), so the pin map below fits to it. Machines with no territory are left out and counted in the note, which is why
+    "ran" reads one under the strip's figure on 5 Nov (175 vs 176).
+  · **IoT acres by territory** (`wchoroHTML` / `wchoroData`, Dinesh 2026-11-04): each DISTRICT filled by
     the IoT acres of the sheet territories in it (aliasTerr: Khanna → Ludhiana, Malerkotla → Sangrur, Abohar → Fazilka,
     Malout → Muktsar, Dabwali → Sirsa), shared districts ADDED. Five equal green steps 0 → largest district, no acres = no
     colour, red = a territory with no acres, plain = no territory. Season / that-day toggle (`state.wcPer`). **Team logins get the
