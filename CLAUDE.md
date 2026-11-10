@@ -893,6 +893,13 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     operator-mapped bar (`mOpBar`). CSVs add last ping, live and breakdown ID (Territory / AM) and last 7 days / IoT (Retailer).
   · Strip: MTD and "Machines on the sheet" removed; Scanned shows the DAY on top with the total under it (also on the
     Retailer strip). Tile labels may wrap. Layout since 2026-10-30: the four groups above.
+  · **Breakdown is now the word `Open_breakdown`, not an ID (2026-11-10).** `breakdown_id` keeps its name but holds
+    `Open_breakdown` or `0`, the same on every date (a status, no history). gviz types the column by its majority and
+    returned every breakdown BLANK, so all breakdown counts read 0. **`wretFetch` now reads the raw CSV export FIRST**
+    (3.5 MB, ~3.3 s, about the same as the filtered gviz query); gviz is the fallback and warns that text breakdowns will
+    read blank. Parsed as "Open breakdown" (`wBrkLbl` / `wBrkShort`: a numeric ID still reads "ID n"); the columns are
+    headed Breakdown. Future-dated rows are dropped in `wretBuild`, since the export is unfiltered. Live 9 Nov: HR SWAL
+    33 of 106 deployed, matching the sheet territory by territory. The Bayer page already read the export; only its labels changed.
   · **gviz can answer SHORT with no error (2026-11-04):** the Main sheet held 374 rows a day, but every gviz query on it
     (filtered or not, `headers=1` or not) returned ONE row per date — 14 rows — and every Wheat page read 14 machines.
     `loadWRet` now treats fewer than 20 rows a date as truncated and reads the plain CSV export (`/export?format=csv&gid=`,

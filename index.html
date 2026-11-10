@@ -759,13 +759,14 @@ function wretBuild(grid, opt){
   const day=v=>{ v=txt(v); return /^\d{4}-\d\d-\d\d/.test(v)?v.slice(0,10):''; };
   const coord=(v,lo,hi)=>{ const s=txt(v); if(!/^-?\d+(\.\d+)?$/.test(s)) return null; const n=+s; return n>=lo&&n<=hi?n:null; };
   const distSt={}; ['HR','PB'].forEach(s=>Object.keys(NORTH_GEO[s]).forEach(d=>distSt[d.toLowerCase()]=s));
-  const yday=istDay(Date.now()-864e5);
+  const yday=istDay(Date.now()-864e5), today=istDay(Date.now());
   const log={ rows:0, dupDays:0, machines:0, dates:0, firstDate:'', lastDate:'', yday, byLocation:0, bySheetState:0, unplaced:[], planConflict:[], noTerr:[], byState:{} };
   const M={}, seen=new Set(), dates=new Set();
   let lastDate='';
   for(const r of grid.slice(1)){ if(!r||!r.join('').trim()) continue;
     const g=k=>C[k]>=0&&C[k]<r.length?r[C[k]]:'';
     const mc=txt(g('mc')), dt=day(g('date')); if(!mc||!dt) continue;
+    if(dt>today) continue;   // the raw export carries the grid as built; a pre-filled future day is not data
     if(opt.skip && opt.skip.has(mc)){ log.skipped=(log.skipped||0)+1; continue; }
     if(opt.from && dt<opt.from) continue;
     log.rows++;
@@ -807,7 +808,9 @@ function wretBuild(grid, opt){
     const sp=num(g('spruce')), fe=num(g('feego')), fx=num(g('fedge')), it=num(g('iotTag'));
     if(sc||sp||fe||fx||io||it) m.sdays[dt]=[sc,sp,fe,fx,io,it,mo,mt];
     // Breakdown = the day's row carries a breakdown_id (agreed 2026-10-29). It is kept per day: a few machines change.
-    const bd=txt(g('brk')); if(bd && bd!=='0' && bd!=='-') m.brkDays[dt]=bd;
+    // Since ~2026-11-09 the column carries no ID: it reads "Open_breakdown" or 0 (the same on every date, i.e. today's
+    // status). Read as "Open breakdown"; a numeric ID, if the sheet ever goes back to one, still reads as an ID (wBrkLbl).
+    const bd=txt(g('brk')).trim(); if(bd && bd!=='0' && bd!=='-') m.brkDays[dt]=/^open[\s_-]*breakdown$/i.test(bd)?'Open breakdown':bd;
     if(dt===yday){ m.acY+=ac; m.scY+=sc; m.iotY+=io; m.itY+=it; }
   }
   // State from the territory; else the nearest HR/PB district centre to the last ping (150 km); else the sheet's column.
@@ -888,6 +891,10 @@ function wDayFieldHTML(mob, lab){
 // Machines on BOTH sheets that stay UPL (Dinesh 2026-11-05: "consider these 91 machines for UPL" — his Punjab list
 // includes UPL_2782, which Bayer's sheet also carries). Remove an entry once the sheets agree.
 const WRET_UPL_KEEP = new Set(['UPL_2782']);
+// A breakdown cell for display: an ID reads "ID 1234", the sheet's word ("Open breakdown") reads as itself.
+const wBrkLbl = v => v ? (/\d/.test(v) ? 'ID '+v : v) : '';
+// In a narrow column: the ID itself, or just "Open" (the column is headed Breakdown).
+const wBrkShort = v => v ? (/\d/.test(v) ? v : /^open/i.test(v) ? 'Open' : v) : '';
 async function loadWRet(){
   const P=curProject(); if(!P.ret || WRET.loading) return;
   WRET.loading=true; WRET.error=false;
@@ -937,8 +944,12 @@ async function wretFetch(R){
   // The plain CSV export (3 MB, every row, raw values) — gviz's fallback. It redirects to googleusercontent, which
   // answers CORS for this origin.
   const exportAll=()=>get(`https://docs.google.com/spreadsheets/d/${R.sheetId}/export?format=csv&gid=${R.gid}`);
-  try{ return await upToToday(); }catch(e){ console.warn(`wheat sheet ${R.name}: date-filtered fetch failed, reading the whole tab —`, e.message);
-    try{ const r=await exportAll(); if(R===curProject().ret) WRET.src='export'; return r; }catch(e2){ console.warn(`wheat sheet ${R.name}: CSV export failed, trying gviz whole tab —`, e2.message); return await get(base); } }
+  // THE RAW EXPORT IS READ FIRST (2026-11-10). gviz types each column by its majority: once breakdown_id became the
+  // word "Open_breakdown" among a majority of 0s, gviz typed it a number and returned every breakdown BLANK, so every
+  // Wheat breakdown count read 0. The export carries cells as typed and is now about as fast (3.5 MB, ~3.3 s vs ~3 s).
+  // gviz stays as the fallback, and says what it costs.
+  try{ const r=await exportAll(); if(R===curProject().ret) WRET.src='export'; return r; }catch(e){ console.warn(`wheat sheet ${R.name}: CSV export failed, trying the gviz query (breakdowns written as text will read blank) —`, e.message);
+    try{ return await upToToday(); }catch(e2){ console.warn(`wheat sheet ${R.name}: date-filtered gviz failed, reading the whole tab —`, e2.message); return await get(base); } }
 }
 
 /* ===================== cumulative "snake chart" data =====================
@@ -8566,7 +8577,7 @@ function wpMachineHTML(m, mob){
       ${wTeam() ? stat('Operator',m.opName||m.opNum?'Mapped':'Not mapped',m.opName||m.opNum?'':'no operator on the sheet') : stat('Scanned overall',acF(m.scAll),`${acF(m.scY)} ac ${wDayWord()}`)}
       ${stat('Days sprayed',fmt(days.length),last?'last on '+wpDate(last):'none yet')}
       ${stat('Last ping',m.lastPing?wpDate(m.lastPing):'—',m.lastPing?(n=>n<=0?'today':n===1?'1 day ago':n+' days ago')(Math.round((Date.parse(istDay(Date.now()))-Date.parse(m.lastPing))/864e5)):'no ping on the sheet')}
-      ${wTeam() ? stat('Handover',wStageWord(m),wDayOn()?'today':'')+stat('Breakdown',m.stage!=='dep'?'—':m.brk?'ID '+E(m.brkDays[WRET.yday]):'None',m.stage!=='dep'?'not deployed yet':wpDate(WRET.yday)) : ''}
+      ${wTeam() ? stat('Handover',wStageWord(m),wDayOn()?'today':'')+stat('Breakdown',m.stage!=='dep'?'—':m.brk?E(wBrkLbl(m.brkDays[WRET.yday])):'None',m.stage!=='dep'?'not deployed yet':wpDate(WRET.yday)) : ''}
     </div>
     <div style="font-size:11px;color:#6E6A62;margin-top:8px">${wTeam()?`Target = ${fmt(WTEAM_TGT)} ac per machine for the season`:`Plan = retailer's ${fmt(r.planAc)} ac plan ÷ ${r.list.length} machine${r.list.length===1?'':'s'}`}</div>
     ${sect('Village')}<div style="padding:12px 14px;border:1px solid #EFEDE7;border-radius:10px;font-size:13px;font-weight:600">${m.village?E(m.village):'<span style="color:#9C988F;font-weight:400;font-style:italic">Not on the sheet</span>'}</div>
@@ -8648,7 +8659,7 @@ function mOpBar(r){
   return `<div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px"><span style="color:${W2.ink2}">Operator mapped</span><span style="font-variant-numeric:tabular-nums;font-weight:600">${fmt(r.op)}<span style="font-weight:400;color:${W2.ink2}"> of ${fmt(r.n)}</span></span></div>`
     + `<span style="display:block;height:4px;border-radius:2px;background:${W2.line2};overflow:hidden"><span style="display:block;height:100%;width:${r.n?Math.round(100*r.op/r.n):0}%;min-width:${r.op>0?3:0}px;background:#1A9E80;border-radius:2px"></span></span></div>`; }
 function wtMcLiveCell(m){
-  return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:13px;white-space:nowrap"><span style="color:${wtLive(m)?W2.actD:W2.ink2}">${wtLive(m)?'● Live':m.lastPing?'Ping '+wpDate(m.lastPing):'No ping'}</span>${m.brk?`<span style="color:${W2.brkD};font-weight:600" title="breakdown_id ${E(m.brkDays[WRET.yday])}">Breakdown</span>`:''}</div>`; }
+  return `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:13px;white-space:nowrap"><span style="color:${wtLive(m)?W2.actD:W2.ink2}">${wtLive(m)?'● Live':m.lastPing?'Ping '+wpDate(m.lastPing):'No ping'}</span>${m.brk?`<span style="color:${W2.brkD};font-weight:600" title="${E(wBrkLbl(m.brkDays[WRET.yday]))}">Breakdown</span>`:''}</div>`; }
 function wtDays(from){   // the trend axis: first sheet date (or `from`) → yesterday (or the last data day, if the sheet stopped earlier)
   const a=from||(WRET.log&&WRET.log.firstDate), b=WRET.yday; if(!a||!b||a>b) return [];
   const out=[]; for(let t=Date.parse(a+'T00:00:00Z'), e=Date.parse(b+'T00:00:00Z'); t<=e; t+=864e5) out.push(new Date(t).toISOString().slice(0,10));
@@ -8736,7 +8747,7 @@ function wterrCSV(){
   const A=wterrAgg();
   const head=['State','Territory','TM','TM mobile','Machine','Retailer','Company','Machine plan acres (retailer plan ÷ machines)',
     `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Season acres to ${WRET.yday}`,`Scanned ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,'Scanned overall','Operator','Operator mobile',
-    'CI','CI mobile','AM','AM mobile','FO','FO mobile','Territory on sheet','Last ping','Live (pinged since yesterday)',`Breakdown ID (${WRET.yday})`];
+    'CI','CI mobile','AM','AM mobile','FO','FO mobile','Territory on sheet','Last ping','Live (pinged since yesterday)',`Breakdown (${WRET.yday})`];
   const lines=[head.join(',')].concat(A.rows.flatMap(r=>r.list.map(m=>[STATE_NAMES[r.st]||r.st, r.name, m.retailer.tmName, m.retailer.tmMob, m.mc, m.party, m.org,
     Math.round(m.planShare*10)/10, m.acY, wtAc(m), m.scY, m.scAll, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, m.retailer.foName, m.retailer.foMob, m.terrRaw,
     m.lastPing, wtLive(m)?'Yes':'No', m.brkDays[WRET.yday]||''].map(csvCell).join(','))));
@@ -9068,7 +9079,7 @@ function wamAgg(){
 function wamCSV(){
   const W=wamAgg();
   const head=['AM','AM mobile','CI','CI mobile','Machine','State','Territory','Retailer','Company','Machine plan acres (retailer plan ÷ machines)',
-    `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Season acres to ${WRET.yday}`,'Scanned overall','Operator','Operator mobile','Last ping','Live (pinged since yesterday)',`Breakdown ID (${WRET.yday})`];
+    `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Season acres to ${WRET.yday}`,'Scanned overall','Operator','Operator mobile','Last ping','Live (pinged since yesterday)',`Breakdown (${WRET.yday})`];
   const lines=[head.join(',')].concat(W.rows.flatMap(r=>r.subs.flatMap(c=>c.list.map(m=>[m.am, m.amNum, m.co, m.coMob, m.mc, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.org,
     Math.round(m.planShare*10)/10, m.acY, wtAc(m), m.scAll, m.opName, m.opNum, m.lastPing, wtLive(m)?'Yes':'No', m.brkDays[WRET.yday]||''].map(csvCell).join(',')))));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
@@ -9427,13 +9438,13 @@ function wTeamStripHTML(T, F, B, mob, stale, brkList){
 function wTeamBrkHTML(T, B, mob){
   const day=wpDate(WRET.yday), open=!!state.wtmBrkOpen;
   const list=T.mcs.filter(wTeamBrk).sort((a,b)=>String(a.territory).localeCompare(String(b.territory))||a.mc.localeCompare(b.mc));
-  if(!list.length) return B.msg(`No deployed machine carries a breakdown ID on ${day}.`, '16px 18px');
+  if(!list.length) return B.msg(`No deployed machine has an open breakdown on ${day}.`, '16px 18px');
   const noOp=`<span style="color:${W2.brkD}">✕ No operator</span>`, opOf=m=>m.opName||m.opNum?E(m.opName||m.opNum):noOp;
-  const idH=m=>`<span style="color:${W2.brkD};font-weight:600;white-space:nowrap">! <span style="font-family:'IBM Plex Mono',monospace">${E(m.brkDays[WRET.yday])}</span></span>`;
+  const idH=m=>`<span style="color:${W2.brkD};font-weight:600;white-space:nowrap">! <span style="font-family:'IBM Plex Mono',monospace">${E(wBrkShort(m.brkDays[WRET.yday]))}</span></span>`;
   const sprayed=m=>m.acY>0?`<span style="color:${W2.actD}">✓ ${acF(m.acY)} ac</span>`:`<span style="color:${W2.ink2}">Idle</span>`;
   const head=`<button data-act="wtmbrk" aria-expanded="${open}" style="width:100%;min-height:56px;padding:12px ${mob?16:22}px;border:0;background:none;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
       <span style="flex:1;min-width:0"><span style="display:flex;align-items:baseline;gap:7px;font-size:16px;font-weight:600"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:${W2.brk};flex-shrink:0;transform:translateY(-1px)"></span>Breakdown machines · ${fmt(list.length)}</span>
-      <span style="display:block;font-size:13px;color:${W2.ink2};margin-top:2px">${day}${mob?'':' · deployed machines with a breakdown ID on the sheet'} · ${mob?'tap':'click'} a machine for who to call</span></span>
+      <span style="display:block;font-size:13px;color:${W2.ink2};margin-top:2px">${day}${mob?'':' · deployed machines with an open breakdown on the sheet'} · ${mob?'tap':'click'} a machine for who to call</span></span>
       <span style="flex-shrink:0;font-size:14px;font-weight:500;white-space:nowrap">${open?'Hide':'Show'} <span aria-hidden="true" style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></span></button>`;
   if(!open) return B.cardBox(head, `margin-top:${mob?12:16}px;overflow:hidden`);
   if(mob) return B.cardBox(head+`<div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:8px">${list.map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:${W2.head};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
@@ -9443,7 +9454,7 @@ function wTeamBrkHTML(T, B, mob){
   const cols='minmax(120px,1fr) 80px 96px minmax(130px,1.6fr) minmax(90px,1fr) minmax(110px,1.2fr) minmax(100px,1.1fr) 70px';
   const cell=(t,x='')=>`<span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${x}">${t}</span>`;
   return B.cardBox(head+`<div style="overflow-x:auto;border-top:1px solid ${W2.line2}"><div style="min-width:900px">
-      <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2}"><span>Machine</span><span>Breakdown ID</span><span>Handover</span><span>Retailer</span><span>Territory</span><span>Operator</span><span>TM</span><span style="text-align:right">${E(wtDayShort())}</span></div>
+      <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2}"><span>Machine</span><span>Breakdown</span><span>Handover</span><span>Retailer</span><span>Territory</span><span>Operator</span><span>TM</span><span style="text-align:right">${E(wtDayShort())}</span></div>
       ${list.map(m=>`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:13.5px">
         <span style="display:flex;align-items:center;gap:6px;min-width:0"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font:600 13px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</button>${B.orgChip(m.org)}</span>
         ${cell(idH(m))}${cell(wStageH(m))}${cell(E(m.party))}${cell(E(m.territory))}${cell(opOf(m))}${cell(m.retailer.tmName?E(m.retailer.tmName):`<i style="color:${W2.ink2}">not assigned</i>`)}${cell(sprayed(m),'text-align:right')}</div>`).join('')}
@@ -9502,7 +9513,7 @@ function wTeamListHTML(T, B, mob){
   const mRow=(m,lv)=>`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;background:#FBFCFD">
       <div style="min-width:0;padding-left:${22+lv*20}px"><div style="display:flex;align-items:center;gap:6px"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font:600 13px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</button>${orgChip(m.org)}</div><div style="font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(T.view==='wplan'?(m.village||''):m.party)}</div></div>
       <span style="grid-column:span 3;text-align:right;font-size:13px;white-space:nowrap">${wStageH(m)}</span>
-      <span style="text-align:right;font-size:13px;white-space:nowrap;color:${W2.brkD};font-weight:600">${wTeamBrk(m)?`! <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">${E(m.brkDays[WRET.yday])}</span>`:''}</span>
+      <span style="text-align:right;font-size:13px;white-space:nowrap;color:${W2.brkD};font-weight:600">${wTeamBrk(m)?`! <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">${E(wBrkShort(m.brkDays[WRET.yday]))}</span>`:''}</span>
       <span style="text-align:right;font-size:13px;white-space:nowrap;color:${m.acY>0?W2.actD:W2.ink2}">${m.acY>0?'✓ Ran':'Idle'}</span>
       <span style="text-align:right;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasOp(m)?E(m.opName||m.opNum):`<span style="color:${W2.brkD}">✕ No operator</span>`}</span>
       ${numC(acF(m.acY))}${numC(`<span style="color:${W2.ink2}" title="${WTEAM_TGT} ac per machine">${fmt(WTEAM_TGT)}</span>`)}${vsC(wtAc(m),mcPct(m))}</div>`;
@@ -9535,7 +9546,7 @@ function wTeamPageHTML(view, mob){
 // One line per machine shown, with the same figures as the page.
 function wTeamCSV(){
   const T=wTeamTree(state.view), d=WRET.yday, w=wIsYday()?'yesterday':'on day';
-  const head=['State','Territory','Company','Retailer','FO','FO mobile','TM','TM mobile','Machine','Operator','Operator mobile','Handover status',`Breakdown ID ${w} (${d})`,
+  const head=['State','Territory','Company','Retailer','FO','FO mobile','TM','TM mobile','Machine','Operator','Operator mobile','Handover status',`Breakdown ${w} (${d})`,
     `Ran ${w} (${d})`,`Acres ${w} (${d})`,`Target acres (${WTEAM_TGT} per machine)`,`Season acres to ${d}`,'% of target'];
   const lines=[head.join(',')].concat(T.mcs.map(m=>{ const r=m.retailer, ac=wtAc(m);
     return [STATE_NAMES[m.st]||m.st, m.territory, m.org, r.party, r.foName, r.foMob, r.tmName, r.tmMob, m.mc, m.opName, m.opNum, wStageWord(m), wTeamBrk(m)?m.brkDays[d]:'',
