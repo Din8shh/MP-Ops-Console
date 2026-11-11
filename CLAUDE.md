@@ -1052,6 +1052,23 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     carried + new stacked) → Technicians table / cards (expand: his open tickets oldest first + closed on the day, Call) →
     "Still open from earlier days", oldest first, 15 then Show all. CSV = one line per ticket. Checked 11 Nov against a
     direct count from the sheet (41 / 49 / 115 / 82 / 104 machines) at 1280, 375 and 320 (no sideways scroll).
+- **Page 8, Machine summary** (`wmc`, `#/machines`, rail "Machines"; `wmcAgg` / `wmcBodyHTML` / `wmcCSV`, Dinesh 2026-11-11:
+  "search and see any machine's information quickly"). Wheat admin only. Search FIRST (`state.wmcQ`, its own box `wmcSearch`
+  via `wtControlsHTML`'s `sid`/`q`): machine number (digits alone too), operator, retailer, village, territory, every person
+  on the row by name or number, and a breakdown ticket ID / technician. **A full machine number opens its details at once**
+  (`wmcExact`, in the input handler; agreed). Quick filters with counts (`wmcShow`: all · ran · didn't run · breakdown · no
+  operator · no ping 3+ days), the shared wt* scope, sort by machine number (default, numeric) / season acres / acres on the
+  day / last sprayed / last ping. One line per machine — status in word + mark + colour (! Breakdown > ✓ Ran > ○ Didn't run),
+  territory · retailer, operator, acres on the day and season, scanned, last sprayed, last ping; 60 at a time. Desktop table
+  fits unscrolled at 1280 (min-width 960). Checked 11 Nov against the sheet: 360 machines, 155 ran, 104 breakdown, 45 no operator.
+  · **The admin's machine panel gained three blocks** (`wpMcExtraHTML`, every Wheat admin page, never team logins): IoT acres +
+    Breakdown (at the day's end) tiles, **acres sprayed over the last 14 days**, **scanned by product with crops** (season and the
+    day), and the machine's **breakdown tickets** (opened / closed / days, technician with Call).
+  · **Crops come from the "UPL/SWAL product details" tab** (gid `1855112218`, `PROJECTS.wheat.prod`, `wpcBuild` → `WPC`, admin
+    only, logged `[MP-Ops] wheat product details → {…}`): one row per machine-day-product with the crop. Checked 2026-11-11: its
+    scanned acres equal the Main sheet's on every machine-day (21,368 ac, zero differences) and its products ARE the Main sheet's
+    Spruce / Feego / Feego Edge, so the product split still reads `sdays`, and this tab only adds the crop (Wheat 89%, Rice /
+    Paddy 8%, then cotton, okra …). Bayer is not on it: Bayer's panel shows Momiji / Matenomore and says crops are not on its sheet.
 - **The Wheat team view (role `wteam`, asked by Dinesh 2026-10-29).** Six PINs for the UPL and SWAL teams: one per company per
   state (HR UPL 4831, HR SWAL 4832, PB UPL 4731, PB SWAL 4732) and one per company for its leaders across HR + PB (UPL 4050,
   SWAL 4060, State control shown). The company is forced (`allow` = their own), so the Company control is gone and every
