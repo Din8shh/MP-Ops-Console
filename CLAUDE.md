@@ -1069,6 +1069,23 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     scanned acres equal the Main sheet's on every machine-day (21,368 ac, zero differences) and its products ARE the Main sheet's
     Spruce / Feego / Feego Edge, so the product split still reads `sdays`, and this tab only adds the crop (Wheat 89%, Rice /
     Paddy 8%, then cotton, okra …). Bayer is not on it: Bayer's panel shows Momiji / Matenomore and says crops are not on its sheet.
+- **Loading (rebuilt 2026-11-11, Dinesh: "the site opens in seconds but the data takes 2–5 minutes on a first load or a hard
+  refresh").** Measured: the four tabs are only ~600 KB gzipped; the wait is GOOGLE preparing the export (~1.5 s warm, ~8 s right
+  after the sheet is edited, longer while it recalculates). There was **no time limit on any request**, and the page waited for
+  ALL FOUR tabs, so one stalled tab held everything until the browser gave up. Now (`loadWRet` / `wretAssemble` / `wretCached`):
+  · every request has a limit (`WSHEET_MS`: Main 45 s, side tabs 25 s; the gviz fallbacks after a stalled export get half each);
+  · the page shows once the **Main sheet** is in; the side tabs (tickets, product details, Bayer) get `WRET_GRACE_MS` (6 s) and
+    otherwise slot in when they land (`wretAssemble` re-runs; an open machine panel is re-pointed). `WTK.pending` shows
+    "Loading the breakdown tickets…" meanwhile;
+  · **the last copy on the device is shown AT ONCE** (read from the service worker's `ops-data-v1` cache — readable from the page
+    even on a hard refresh), labelled **"Updating · showing data from …"** (`dataMode='updating'`, amber), never as live. If fresh
+    data never comes, the copy stays, labelled "Sheet not answering · data as of …" (online) or "Offline · …";
+  · the loading card counts the seconds and, past 15 s, says Google can be slow after an edit.
+  Checked locally: repeat open → data at 1.6 s from the copy, live at 4.4 s; no copy → live at 3.2 s; every request forced to stall
+  → the copy stays on screen with its age. Every load logs `[MP-Ops] wheat load timing → {…}` (per tab: ms, or why it failed).
+  · **The load time is ON THE PAGE** (`wLoadTxt`: "loaded in 3.1 s · Google 2.8 s" — total to fresh data, and the Main sheet's
+    answer) in the desktop header and sheet stamp, and at the foot of the phone's Breakdowns / Machines / Top 10 / Territory pages,
+    so a slow load can be reported from a phone (asked by Dinesh 2026-11-11).
 - **The Wheat team view (role `wteam`, asked by Dinesh 2026-10-29).** Six PINs for the UPL and SWAL teams: one per company per
   state (HR UPL 4831, HR SWAL 4832, PB UPL 4731, PB SWAL 4732) and one per company for its leaders across HR + PB (UPL 4050,
   SWAL 4060, State control shown). The company is forced (`allow` = their own), so the Company control is gone and every

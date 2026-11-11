@@ -987,45 +987,109 @@ function wpcBuild(grid){
   console.info('[MP-Ops] wheat product details →', log);
   return { by, log };
 }
+/* LOADING (rebuilt 2026-11-11 — "the site opens in seconds but the data takes 2–5 minutes, on a first load or a hard
+   refresh"). Three rules:
+   · EVERY sheet request has a time limit (wretFetch's `ms`). There was none, so one tab Google was slow to export (it takes
+     ~8 s right after the sheet is edited, measured; far longer while it recalculates) held the page until the browser
+     gave up — minutes.
+   · The page shows as soon as the MAIN SHEET is in. The side tabs (breakdown tickets, product details, Bayer) get a short
+     grace (WRET_GRACE_MS) and otherwise slot in when they land (wretAssemble runs again); they never hold the page.
+   · The last copy kept on this device (the service worker's ops-data-v1 cache, readable from the page even on a hard
+     refresh) is shown AT ONCE while the fresh one loads, under an "Updating · showing data from …" label — never as live.
+   Every load logs `[MP-Ops] wheat load timing → {…}`: how long each tab took, or why it failed. Read it first if a load is slow. */
+const WRET_GRACE_MS = 6000;                       // after the Main sheet lands, how long the page waits for the side tabs
+const WSHEET_MS = { main:45000, side:25000 };   // the fallbacks after a stalled export get half each     // per request; a stalled request is abandoned and the next route tried
+const WRET_SIDE = ['maint','prod','bayer'];
+// "loaded in 4.4 s · Google 3.9 s" — the last load's time to fresh data, and how much of it was the Main sheet's answer.
+const wSecs = ms => (ms/1000).toFixed(ms<10000?1:0)+' s';
+const wLoadTxt = () => WRET.tLoad ? `loaded in ${wSecs(WRET.tLoad)}${WRET.tMain?` · Google ${wSecs(WRET.tMain)}`:''}` : '';
+// The last copy of a tab the service worker kept (its key is the export address, the cache-buster removed).
+async function wretCached(R){
+  try{
+    if(!R || !('caches' in window)) return null;
+    const c=await caches.open('ops-data-v1');
+    const hit=await c.match(`https://docs.google.com/spreadsheets/d/${R.sheetId}/export?format=csv&gid=${R.gid}`, { ignoreVary:true });
+    if(!hit) return null;
+    return { cachedAt:hit.headers.get('x-sw-cached-at'), grid:parseCSV(await hit.text()) };
+  }catch(_){ return null; }
+}
+// Build WRET / WTK / WPC from whichever grids are in hand (G.main is required). Runs again when a late side tab lands.
+function wretAssemble(G){
+  const P=curProject();
+  let Bb=null;
+  if(G.bayer){ try{ Bb=wretBuild(G.bayer.grid, { from:P.bayer.from, label:'bayer' }); Bb.machines=Bb.machines.filter(m=>m.org==='Bayer' && !WRET_UPL_KEEP.has(m.mc)); }catch(e){ console.warn('wheat bayer sheet parse failed —', e.message); } }
+  // A machine on both sheets counts as Bayer's only, except WRET_UPL_KEEP, which stays on the Main sheet's side.
+  const B=wretBuild(G.main.grid, { skip: Bb ? new Set(Bb.machines.map(m=>m.mc)) : null });
+  if(!B.machines.length) throw new Error('wheat retailer sheet: no machines parsed');
+  if(Bb && Bb.machines.length){
+    B.machines=B.machines.concat(Bb.machines);
+    B.retailers=B.retailers.concat(Bb.retailers.filter(r=>r.org==='Bayer'));
+    if(Bb.lastDate>B.lastDate) B.lastDate=Bb.lastDate;
+    B.log.bayer={ machines:Bb.machines.length, from:P.bayer.from, lastDate:Bb.lastDate, acAll:Bb.log.acAll, overlap:B.log.skipped||0 };
+  }
+  WRET.bayerErr = !!P.bayer && isAdmin() && G.bayer!==undefined && !(Bb && Bb.machines.length);
+  Object.assign(WRET, B, { loaded:true });
+  WTK.loaded=false; WTK.error=!!P.maint && G.maint!==undefined; WTK.pending=!!P.maint && G.maint===undefined;
+  WPC.loaded=false; WPC.by={};
+  if(G.prod){ try{ Object.assign(WPC, wpcBuild(G.prod.grid), { loaded:true }); }catch(e){ console.warn('wheat product details tab parse failed —', e.message); } }
+  if(G.maint){ try{ Object.assign(WTK, wtkBuild(G.maint.grid), { loaded:true, error:false }); wtkApply(); }catch(e){ WTK.tickets=[]; console.warn('wheat maintenance tab parse failed — breakdowns fall back to the Main sheet flag —', e.message); } }
+  // An open machine panel holds the OLD machine object; point it at the rebuilt one.
+  if(state.selected && state.selected.wret){ const m=WRET.machines.find(x=>x.mc===state.selected.mc); state.selected=m||null; }
+}
 async function loadWRet(){
   const P=curProject(); if(!P.ret || WRET.loading) return;
-  WRET.loading=true; WRET.error=false;
-  // Bayer's workbook is read beside the Main sheet, for the Wheat admin only; a failure there never blocks the Main sheet.
-  const bayerP = P.bayer && isAdmin() ? wretFetch(P.bayer).catch(e=>{ console.warn('wheat bayer sheet load failed —', e.message); return null; }) : Promise.resolve(null);
-  // The breakdown tickets (wtkBuild), for every Wheat login that reads this sheet; a failure never blocks the Main sheet.
-  const prodP = P.prod && isAdmin() ? wretFetch(P.prod).catch(e=>{ console.warn('wheat product details tab load failed — crops will not show —', e.message); return null; }) : Promise.resolve(null);
-  const maintP = P.maint ? wretFetch(P.maint).catch(e=>{ console.warn('wheat maintenance tab load failed — breakdowns fall back to the Main sheet flag —', e.message); return null; }) : Promise.resolve(null);
-  try{
-    const got=await wretFetch(P.ret), bg=await bayerP, mg=await maintP, pg=await prodP;
-    let Bb=null;
-    if(bg){ try{ Bb=wretBuild(bg.grid, { from:P.bayer.from, label:'bayer' }); Bb.machines=Bb.machines.filter(m=>m.org==='Bayer' && !WRET_UPL_KEEP.has(m.mc)); }catch(e){ console.warn('wheat bayer sheet parse failed —', e.message); } }
-    // A machine on both sheets counts as Bayer's only, except WRET_UPL_KEEP, which stays on the Main sheet's side.
-    const B=wretBuild(got.grid, { skip: Bb ? new Set(Bb.machines.map(m=>m.mc)) : null });
-    if(!B.machines.length) throw new Error('wheat retailer sheet: no machines parsed');
-    if(Bb && Bb.machines.length){
-      B.machines=B.machines.concat(Bb.machines);
-      B.retailers=B.retailers.concat(Bb.retailers.filter(r=>r.org==='Bayer'));
-      if(Bb.lastDate>B.lastDate) B.lastDate=Bb.lastDate;
-      B.log.bayer={ machines:Bb.machines.length, from:P.bayer.from, lastDate:Bb.lastDate, acAll:Bb.log.acAll, overlap:B.log.skipped||0 };
+  WRET.loading=true; WRET.error=false; WRET.t0=Date.now();
+  const tick=setInterval(()=>{ if(!WRET.loaded) render(); }, 1000);   // the loading card counts the seconds
+  const t0=performance.now(), timing={}, side={ maint:P.maint||null, prod:P.prod&&isAdmin()?P.prod:null, bayer:P.bayer&&isAdmin()?P.bayer:null };
+  // G[k]: undefined = still loading · null = failed or not wanted · {cachedAt,grid} = in hand.
+  const G={ main:undefined }; WRET_SIDE.forEach(k=>G[k]=side[k]?undefined:null);
+  const go=(k,R,ms)=>wretFetch(R,ms).then(r=>{ const t=Math.round(performance.now()-t0); timing[k]=t+' ms'; if(k==='main') WRET.tMain=t; return r; },
+    e=>{ timing[k]='failed after '+Math.round(performance.now()-t0)+' ms — '+e.message; console.warn(`wheat ${k} tab load failed —`, e.message); return null; });
+  const mainP=go('main',P.ret,WSHEET_MS.main);
+  const sideP={}; WRET_SIDE.forEach(k=>{ sideP[k]=side[k]?go(k,side[k],WSHEET_MS.side).then(r=>(G[k]=r)):Promise.resolve(null); });
+  // 1. The last copy on this device, at once, while the fresh one loads (first open of the session / a hard refresh).
+  let fromCache=false;
+  if(!WRET.loaded){
+    const cm=await wretCached(P.ret);
+    if(cm && G.main===undefined){
+      const C={ main:cm }; for(const k of WRET_SIDE) C[k]=side[k]?((await wretCached(side[k]))||undefined):null;   // undefined = 'still loading'
+      try{ wretAssemble(C); fromCache=true; dataMode='updating'; lastUpdated=cm.cachedAt?istTime(+cm.cachedAt):'earlier'; WRET.at=lastUpdated; timing.cache=Math.round(performance.now()-t0)+' ms'; render(); }
+      catch(e){ console.warn('wheat: the copy kept on this device could not be read —', e.message); }
     }
-    WRET.bayerErr = !!P.bayer && isAdmin() && !(Bb && Bb.machines.length);
-    Object.assign(WRET, B, { loaded:true });
-    WTK.loaded=false; WTK.error=!!P.maint;
-    WPC.loaded=false; WPC.by={};
-    if(pg){ try{ Object.assign(WPC, wpcBuild(pg.grid), { loaded:true }); }catch(e){ console.warn('wheat product details tab parse failed —', e.message); } }
-    if(mg){ try{ Object.assign(WTK, wtkBuild(mg.grid), { loaded:true, error:false }); wtkApply(); }catch(e){ WTK.tickets=[]; console.warn('wheat maintenance tab parse failed — breakdowns fall back to the Main sheet flag —', e.message); } }
+  }
+  try{
+    const got=await mainP;
+    if(!got) throw new Error('Main sheet: no answer');
+    G.main=got;
+    // 2. The side tabs get a short grace; whatever is still loading after it slots in when it lands.
+    await Promise.race([Promise.all(Object.values(sideP)), new Promise(r=>setTimeout(r,WRET_GRACE_MS))]);
+    wretAssemble(G);
     dataMode=got.cachedAt?'offline':'live'; lastUpdated=got.cachedAt?istTime(+got.cachedAt):nowIST(); WRET.at=lastUpdated;
-  }catch(e){ WRET.error=true; dataMode='error'; lastUpdated=nowIST(); console.error('wheat retailer sheet load failed:', e); }
-  finally{ WRET.loading=false; render(); }
+    WRET.tLoad=Date.now()-WRET.t0;   // shown on the page (wLoadTxt) so a slow load can be reported from a phone
+    const late=WRET_SIDE.filter(k=>G[k]===undefined);
+    if(late.length){ timing.late=late.join(', ');
+      late.forEach(k=>sideP[k].then(()=>{ if(WRET.loading || WRET._G!==G) return; try{ wretAssemble(G); }catch(_){} console.info(`[MP-Ops] wheat ${k} tab arrived late — applied`); render(); })); }
+    WRET._G=G;
+  }catch(e){
+    // A copy already on screen stays there, labelled with its age; only an empty page reports the failure.
+    if(WRET.loaded){ dataMode='offline'; if(!fromCache) lastUpdated=WRET.at; console.warn('wheat: fresh data did not arrive — keeping the data on screen —', e.message); }
+    else { WRET.error=true; dataMode='error'; lastUpdated=nowIST(); console.error('wheat retailer sheet load failed:', e); }
+  }
+  finally{ clearInterval(tick); WRET.loading=false; console.info('[MP-Ops] wheat load timing →', timing); render(); }
 }
 // One machine-day tab: `ret` = {sheetId, gid}. Returns {cachedAt, grid}.
-async function wretFetch(R){
+async function wretFetch(R, ms){
   // The grid has run to 1 Jan with every future day pre-filled (7.6 MB where the days up to today were 0.74 MB), and
   // has since carried tens of thousands of empty formula rows instead — both are filtered out at the source. The date column is found BY NAME from a header-only query, then only rows dated up to
   // today are asked for. Any failure on that path falls back to the whole tab — which is also what the offline cache
   // holds, since the filtered address changes every day.
   const base=`https://docs.google.com/spreadsheets/d/${R.sheetId}/gviz/tq?tqx=out:csv&gid=${R.gid}`;
-  const get=async u=>{ const res=await fetch(u+'&t='+Date.now()); if(!res.ok) throw new Error('HTTP '+res.status); return { cachedAt:res.headers.get('x-sw-cached-at'), grid:parseCSV(await res.text()) }; };
+  // Each request has a time limit (`ms`): a stalled answer is abandoned and the next route tried, never waited on for minutes.
+  let lim=ms;
+  const get=async u=>{ const ac=new AbortController(), tm=lim?setTimeout(()=>ac.abort(),lim):0;
+    try{ const res=await fetch(u+'&t='+Date.now(), { signal:ac.signal }); if(!res.ok) throw new Error('HTTP '+res.status); return { cachedAt:res.headers.get('x-sw-cached-at'), grid:parseCSV(await res.text()) }; }
+    catch(e){ if(e.name==='AbortError') throw new Error(`no answer in ${Math.round(lim/1000)} s`); throw e; }
+    finally{ clearTimeout(tm); } };
   const upToToday=async()=>{
     const h=(await get(base+'&tq='+encodeURIComponent('select * limit 0'))).grid[0]||[];
     const at=n=>h.findIndex(x=>String(x).trim().toLowerCase()===n), L=i=>(i>=26?String.fromCharCode(64+Math.floor(i/26)):'')+String.fromCharCode(65+i%26);
@@ -1047,7 +1111,7 @@ async function wretFetch(R){
   // word "Open_breakdown" among a majority of 0s, gviz typed it a number and returned every breakdown BLANK, so every
   // Wheat breakdown count read 0. The export carries cells as typed and is now about as fast (3.5 MB, ~3.3 s vs ~3 s).
   // gviz stays as the fallback, and says what it costs.
-  try{ const r=await exportAll(); if(R===curProject().ret) WRET.src='export'; return r; }catch(e){ console.warn(`wheat sheet ${R.name}: CSV export failed, trying the gviz query (breakdowns written as text will read blank) —`, e.message);
+  try{ const r=await exportAll(); if(R===curProject().ret) WRET.src='export'; return r; }catch(e){ if(ms) lim=Math.round(ms/2); console.warn(`wheat sheet ${R.name}: CSV export failed, trying the gviz query (breakdowns written as text will read blank) —`, e.message);
     try{ return await upToToday(); }catch(e2){ console.warn(`wheat sheet ${R.name}: date-filtered gviz failed, reading the whole tab —`, e2.message); return await get(base); } }
 }
 
@@ -3432,9 +3496,9 @@ function vals(){
     anyFilter, amCount:amKeys.length, bmCount:bmKeys.length, foRows, retRows, foCount:foGroups.length, retCount:retGroups.length, pinCount:F.length, mListCount:F.length, mListShown:mobileList.length,
     pinB10:fmt(F.filter(m=>acD(m)>10).length), pinB5:fmt(F.filter(m=>acD(m)>=5&&acD(m)<=10).length), pinB1:fmt(F.filter(m=>acD(m)>=1&&acD(m)<5).length), pinB0:fmt(F.filter(m=>acD(m)<1).length),
     freshCount:`${fleetDated?'checked '+(lastUpdated||'—')+' · ':''}${fmt(tot.deployed)} machines${anyFilter?' (filtered)':''}`, mobileWeather,
-    statusDot: dataMode==='live'?'#15A24A':dataMode==='offline'?'#E0A008':dataMode==='error'?'#DC3A2B':'#9aa3b1',
-    statusRing: dataMode==='live'?'rgba(21,162,74,.16)':dataMode==='offline'?'rgba(224,160,8,.18)':dataMode==='error'?'rgba(220,58,43,.16)':'rgba(0,0,0,.06)',
-    statusLabel: fleetDated?('Data for '+(isToday()?'today so far':dataDayTxt())) : dataMode==='live'?('Live · '+(lastUpdated||'')+' IST') : dataMode==='offline'?('Offline · data as of '+(lastUpdated||'')+' IST') : dataMode==='error'?(curProject().ret?'Main sheet unreachable':curProject().iot?'IoT sheet unreachable':'Sheet unreachable — demo data') : (curProject().id==='kharif'?'Demo data · add your sheet':curProject().ret?'Loading the sheet…':'Dummy data · sheet tab not added yet'),
+    statusDot: dataMode==='live'?'#15A24A':dataMode==='offline'||dataMode==='updating'?'#E0A008':dataMode==='error'?'#DC3A2B':'#9aa3b1',
+    statusRing: dataMode==='live'?'rgba(21,162,74,.16)':dataMode==='offline'||dataMode==='updating'?'rgba(224,160,8,.18)':dataMode==='error'?'rgba(220,58,43,.16)':'rgba(0,0,0,.06)',
+    statusLabel: fleetDated?('Data for '+(isToday()?'today so far':dataDayTxt())) : dataMode==='live'?('Live · '+(lastUpdated||'')+' IST'+(curProject().ret&&wLoadTxt()?' · '+wLoadTxt():'')) : dataMode==='offline'?((curProject().ret&&navigator.onLine?'Sheet not answering · data as of ':'Offline · data as of ')+(lastUpdated||'')+' IST') : dataMode==='updating'?('Updating · showing data from '+(lastUpdated||'earlier')+(lastUpdated&&lastUpdated!=='earlier'?' IST':'')) : dataMode==='error'?(curProject().ret?'Main sheet unreachable':curProject().iot?'IoT sheet unreachable':'Sheet unreachable — demo data') : (curProject().id==='kharif'?'Demo data · add your sheet':curProject().ret?'Loading the sheet…':'Dummy data · sheet tab not added yet'),
     statusTime: fleetDated?(isToday()?'Today':dataDayTxt(true)):(lastUpdated||'09:42'),
     statusAria: fleetDated?`Refresh data. Figures for ${isToday()?'today so far':dataDayTxt()}, checked ${lastUpdated||''}`:`Refresh data, last updated ${lastUpdated||''}` };
 }
@@ -8546,7 +8610,7 @@ function wpBits(mob){
   const csv = (act,title) => `<button data-act="${act}" title="${title}" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;height:${mob?48:38}px;padding:0 ${mob?16:14}px;border:0;border-radius:${mob?12:10}px;background:${W2.dark};color:#fff;box-shadow:0 6px 16px -8px rgba(22,53,45,0.6);font:500 ${mob?15:14}px ${W2.font};cursor:pointer;white-space:nowrap"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>CSV</button>`;
   const ghost = (act,t) => `<button data-act="${act}" style="height:${mob?48:38}px;padding:0 14px;border:1px solid ${W2.line};border-radius:${mob?12:10}px;background:#fff;color:${W2.ink};font:500 ${mob?15:14}px ${W2.font};cursor:pointer;white-space:nowrap">${t}</button>`;
   const filtersBtn = (act,n) => `<button data-act="${act}" aria-label="Filters${n?`, ${n} active`:''}" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;height:48px;padding:0 14px;border:1px solid ${n?W2.ink:W2.line};border-radius:12px;background:#fff;color:${W2.ink};font:500 15px ${W2.font};cursor:pointer">${I.filter}Filters${n?` <span style="min-width:20px;height:20px;border-radius:10px;background:${W2.ink};color:#fff;font-size:12px;display:inline-flex;align-items:center;justify-content:center;padding:0 6px">${n}</span>`:''}</button>`;
-  const stamp = act => `<span style="font-size:12.5px;color:${W2.ink2}">Main sheet · checked ${E(WRET.at||'—')}${mob?'':` · <button data-act="${act}" title="Reload the sheet" style="border:none;background:none;padding:0;font:inherit;color:${W2.ink};text-decoration:underline;text-underline-offset:2px;cursor:pointer">refresh</button>`}</span>`;
+  const stamp = act => `<span style="font-size:12.5px;color:${dataMode==='updating'?W2.idleD:W2.ink2}">${dataMode==='updating'?`Updating · showing data from ${E(WRET.at||'earlier')}`:dataMode==='offline'?`Could not refresh · data from ${E(WRET.at||'—')}`:`Main sheet · checked ${E(WRET.at||'—')}${wLoadTxt()?' · '+wLoadTxt():''}`}${mob?'':` · <button data-act="${act}" title="Reload the sheet" style="border:none;background:none;padding:0;font:inherit;color:${W2.ink};text-decoration:underline;text-underline-offset:2px;cursor:pointer">refresh</button>`}</span>`;
   const sortSel = (id,label,sorts,cur) => `<div style="position:relative;${mob?'flex:1;min-width:0':''}"><select id="${id}" aria-label="${label}" style="${w2sel(mob)}${mob?';width:100%':''}">${optionsHTML(sorts.map(([v,t])=>({v,t:'Sort: '+t.replace(/yesterday/,wIsYday()?'yesterday':wpDate(WRET.yday))})),cur)}</select>${I.caret}</div>`;
   const cardBox = (inner, extra='') => `<div style="${w2card(mob?18:16)};${extra}">${inner}</div>`;
   const msg = (inner, pad) => cardBox(`<div style="padding:${pad||'44px 20px'};text-align:center;color:${W2.ink2};font-size:14px;line-height:1.55">${inner}</div>`, `margin-top:${mob?12:16}px`);
@@ -8561,7 +8625,9 @@ function wplanBodyHTML(mob){
   if(!wSees()) return B.msg(`<div style="font-size:16px;font-weight:600;color:${W2.ink};margin-bottom:6px">The Wheat dashboard is being rebuilt</div>Pages for this login will appear here as they are finalised.`);
   if(!WRET.loaded){
     if(!WRET.loading && !WRET.error) setTimeout(loadWRet,0);
-    const msg = WRET.error ? 'Could not load the wheat retailer sheet.' : 'Loading the retailer summary…';
+    const sec = WRET.t0 ? Math.round((Date.now()-WRET.t0)/1000) : 0;
+    const msg = WRET.error ? 'Could not load the wheat retailer sheet.'
+      : `Fetching the Main sheet from Google…${sec>=3?` <span style="font-variant-numeric:tabular-nums">${sec} s</span>`:''}${sec>=15?`<div style="font-size:13px;margin-top:8px">Google can be slow to prepare the sheet right after it is edited. The page will try another route if it gets no answer.</div>`:''}`;
     return B.msg(`${WRET.error?'⚠ ':''}${msg}${WRET.error?`<div style="margin-top:14px"><button data-act="wpretry" style="min-height:${mob?48:38}px;padding:0 18px;border:0;border-radius:10px;background:${W2.dark};color:#fff;font:500 14px ${W2.font};cursor:pointer">Retry</button></div>`:''}`, '60px 20px');
   }
   if(wTeam()) return wTeamPageHTML('wplan', mob);
@@ -8718,7 +8784,7 @@ function wpMcExtraHTML(m, mob, sect){
         ${m.org==='Bayer'?`<div style="padding:8px 14px;border-top:1px solid #EFEDE7;font-size:11.5px;color:#6E6A62">Crops are not on Bayer's sheet.</div>`:''}</div>`;
   // ── Breakdown tickets, newest first, up to the day.
   const tk=(m.tickets||[]).filter(t=>t.open<=D).sort((a,b)=>b.open.localeCompare(a.open));
-  const tickets = !WTK.loaded ? box(`<div style="font-size:12.5px;color:#6E6A62">Breakdown tickets could not be loaded.</div>`)
+  const tickets = !WTK.loaded ? box(`<div style="font-size:12.5px;color:#6E6A62">${WTK.pending?'Loading the breakdown tickets…':'Breakdown tickets could not be loaded.'}</div>`)
     : !tk.length ? box(`<div style="font-size:12.5px;color:#6E6A62">No breakdown tickets up to ${wpDate(D)}.</div>`)
     : `<div style="border:1px solid #EFEDE7;border-radius:10px;overflow:hidden">${tk.map((t,i)=>{ const cl=t.close&&t.close<=D, n=cl?wtkDayN(t.open,t.close):wtkDayN(t.open,D);
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;${i?'border-top:1px solid #EFEDE7':''}">
@@ -9812,7 +9878,7 @@ function wtopBodyHTML(mob){
   }
   const card=B.cardBox(head+body, `overflow:hidden;margin-top:${mob?12:16}px`);
   const note=`<div style="font-size:12.5px;color:${W2.ink2};margin-top:10px;line-height:1.5">Per day = the season's ${byName} ÷ the days the machine sprayed. ${by==='iot'?'IoT acres are what the device measured.':'A SWAL machine\'s acres sprayed are its IoT acres.'} ${mob?'Tap':'Click'} a machine for its details and who to call.</div>`;
-  return mob ? `<div>${controls}</div>` + card + note : controls + card + note;
+  return mob ? `<div>${controls}</div>` + card + note + (mob?`<div style="margin-top:10px">${B.stamp('wpretry')}</div>`:'') : controls + card + note;
 }
 function wtopCSV(){
   const A=wterrAgg(), T=wtopList(A), by=T.by;
@@ -9877,6 +9943,7 @@ function wbdAgg(){
 function wbdBodyHTML(mob){
   if(!isAdmin() || !WRET.loaded) return wplanBodyHTML(mob);
   const S=state, B=wpBits(mob), { orgChip, tel, chev } = B;
+  if(!WTK.loaded && WTK.pending) return B.msg('Loading the breakdown tickets…', '60px 20px');
   if(!WTK.loaded) return B.msg(`⚠ Could not load the breakdown tickets (the maintenance data tab).<div style="margin-top:14px"><button data-act="wpretry" style="min-height:${mob?48:38}px;padding:0 18px;border:0;border-radius:10px;background:${W2.dark};color:#fff;font:500 14px ${W2.font};cursor:pointer">Retry</button></div>`, '60px 20px');
   const W=wbdAgg(), A=W.A, D=W.D, dh=wDayHead(), dw=wDayWord(), pd=W.prev?wpDate(W.prev.d):'';
   const controls = wtControlsHTML({ ...A, narrowed:W.narrowed }, mob, true, { csv:'wbdcsv', csvTitle:`Download the ${fmt(W.all.length)} breakdown tickets in view as CSV`,
@@ -9976,7 +10043,7 @@ function wbdBodyHTML(mob){
       <div style="padding:${mob?'0 14px 8px':'0 22px 8px'}">${shown.map(t=>tkLine(t,true)).join('')}</div>
       ${W.carried.length>WBD_OLD?`<button data-act="wbdall" style="display:block;width:100%;min-height:${mob?48:42}px;border:none;border-top:1px solid ${W2.line2};background:${W2.head};font:600 13.5px ${W2.font};color:${W2.ink};cursor:pointer">${S.wbdAll?'Show the oldest '+WBD_OLD:'Show all '+fmt(W.carried.length)}</button>`:''}`, `overflow:hidden;margin-top:${mob?12:16}px`);
   const note = `<div style="font-size:12.5px;color:${W2.ink2};margin-top:10px;line-height:1.5">From the maintenance data sheet: one ticket per breakdown, with the day it opened and the day it closed. A ticket is open at the end of a day if it opened on or before that day and was not closed by it. The Breakdown figures on the other Wheat pages read these same tickets.</div>`;
-  return controls + pageHead + verdict + strip + charts + techCard + carriedCard + note;
+  return controls + pageHead + verdict + strip + charts + techCard + carriedCard + note + (mob?`<div style="margin-top:10px">${B.stamp('wpretry')}</div>`:'');
 }
 function wbdCSV(){
   const W=wbdAgg(), D=W.D;
@@ -10069,7 +10136,7 @@ function wmcBodyHTML(mob){
   const more = W.list.length>shown.length ? `<button data-act="wmcmore" style="display:block;width:100%;min-height:${mob?48:42}px;border:none;border-top:1px solid ${W2.line2};background:${W2.head};font:600 13.5px ${W2.font};color:${W2.ink};cursor:pointer">Show ${fmt(Math.min(WMC_PAGE,W.list.length-shown.length))} more · ${fmt(shown.length)} of ${fmt(W.list.length)} shown</button>` : '';
   const card = B.cardBox(body+more, `overflow:hidden;margin-top:${mob?12:14}px`);
   const note = `<div style="font-size:12.5px;color:${W2.ink2};margin-top:10px;line-height:1.5">Type a full machine number (UPL_2759, or just 2759) to open it straight away. Ran = acres sprayed on ${wpDate(D)}; Breakdown = an open ticket at the end of that day. Season acres and scanned run to ${wpDate(D)}. Operator, people, retailer and last ping are today's.</div>`;
-  return controls + chips + head + card + note;
+  return controls + chips + head + card + note + (mob?`<div style="margin-top:10px">${B.stamp('wpretry')}</div>`:'');
 }
 function wmcCSV(){
   const W=wmcAgg(), D=WRET.yday;
