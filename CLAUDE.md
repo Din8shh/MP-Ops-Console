@@ -1123,6 +1123,8 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     **Machines** card — no deployed / in transit / pending anywhere (strip, rows, sorts `wTeamSorts`, breakdown list, panel, CSV);
     Breakdown still counts deployed machines only (agreed) but no longer says so. New: a **Territories sprayed <day>** tile and the
     **Acres sprayed by day** chart (`wDayBarsHTML` / `wDayBarsFor`, shared with the admin Territory page) on every SWAL page and the Map.
+    Under the heat map, **the machines behind it** (`wcMcListHTML`): every machine in view matching the Show button, narrowed to
+    the territory picked on the map / its table; 30 then "Show all"; a machine opens the shared panel.
     UPL team logins are unchanged.
   · One tree renderer for all three pages: Retailer → machines · Territory → machines (under each TM) · TM → FO → machines. It
     reuses each page's own expand acts / open state / sort state (`wpexp`/`wtexp`/`wfoexp`, `wpSort`/`wtSort`/`wfoSort`) with

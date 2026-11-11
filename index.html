@@ -10212,7 +10212,7 @@ function wmapBodyHTML(mob){
   if(wSwal()){
     const choroS = ready ? wchoroHTML(A, mob, chips) : `<div style="${w2card(mob?18:16)};margin-top:${mob?12:16}px;height:${mob?'300px':'520px'};display:flex;align-items:center;justify-content:center;color:#6E6A62;font-size:13px">Loading the map…</div>`;
     const bars = wDayBarsFor(A.mcs, wpBits(mob), mob, A.narrowed?'what the filters show':'every machine');
-    return (mob ? `<div>${controls}</div>` : controls) + bars + choroS;
+    return (mob ? `<div>${controls}</div>` : controls) + bars + choroS + (ready ? wcMcListHTML(A, mob) : '');
   }
   const choro = ready ? wchoroHTML(A, mob) : '';
   // The heat map leads, the pin map follows (Dinesh 2026-11-06).
@@ -10358,6 +10358,40 @@ function wchoroHTML(A, mob, chips=''){
         <div class="wcList" data-scroll="wchoro">${list}</div></div>
        <div style="padding:14px 18px;border-top:1px solid ${W2.line2}">${legend}${note}</div>`;
   return `<div style="${w2card(mob?18:16)};overflow:hidden;margin-top:${mob?12:16}px">${head}${band}${body}</div>`;
+}
+/* SWAL (Dinesh 2026-11-11): under the heat map, the MACHINES behind it — every machine in view that matches the Show button,
+   narrowed to the territory picked on the map or in its table (the shared Territory filter). A machine opens the shared panel.
+   Sorted by territory, then machine number; 30 at a time. */
+const WC_MC_PAGE = 30;
+function wcMcListHTML(A, mob){
+  const S=state, B=wpBits(mob), show=wmShowKey(), day=wpDate(WRET.yday), dw=wDayWord();
+  const lab=(WM_SHOW.find(x=>x[0]===show)||['','All machines'])[1].replace('{day}', wtDayShort()==='y’day'?'yesterday':'on '+day);
+  const num=m=>parseInt(String(m.mc).replace(/\D/g,''),10)||0;
+  const list=A.mcs.filter(WM_TEST[show]).sort((a,b)=>String(a.territory).localeCompare(String(b.territory))||num(a)-num(b));
+  const sig=show+'|'+A.sig+'|'+WRET.yday; if(S._wcMcSig!==sig){ S._wcMcSig=sig; S.wcMcLim=WC_MC_PAGE; }
+  const lim=S.wcMcLim||WC_MC_PAGE, shown=list.slice(0,lim);
+  const where = A.terr ? `in ${E(A.terr)}` : A.narrowed ? 'in what the filters show' : 'in every territory';
+  const head=`<div style="padding:${mob?'14px 16px':'16px 22px'};border-bottom:1px solid ${W2.line2}">
+      <div style="font-size:${mob?15:16}px;font-weight:600">${E(lab)} · ${fmt(list.length)} machine${list.length===1?'':'s'}</div>
+      <div style="font-size:13px;color:${W2.ink2};margin-top:2px">${where} · ${mob?'tap':'click'} a machine for its details and who to call</div></div>`;
+  if(!list.length) return B.cardBox(head+`<div style="padding:24px 18px;text-align:center;font-size:13.5px;color:${W2.ink2}">No machine ${where.replace(/^in /,'in ')} matches “${E(lab.toLowerCase())}”.</div>`, `margin-top:${mob?12:16}px;overflow:hidden`);
+  const op=m=>m.opName||m.opNum?E(m.opName||m.opNum):`<span style="color:${W2.brkD}">✕ No operator</span>`;
+  const brk=m=>wTeamBrk(m)?`<span style="color:${W2.brkD};font-weight:600;white-space:nowrap">! Breakdown</span>`:'';
+  const dayAc=m=>m.acY>0?`<span style="color:${W2.actD}">✓ ${acF(m.acY)} ac</span>`:`<span style="color:${W2.ink2}">Idle</span>`;
+  const more = list.length>shown.length ? `<div style="padding:12px ${mob?12:22}px"><button data-act="wcmcmore" style="width:100%;min-height:${mob?48:38}px;border:1px solid ${W2.line};border-radius:12px;background:#fff;color:${W2.ink};font:500 14px ${W2.font};cursor:pointer">Show all ${fmt(list.length)} · ${fmt(shown.length)} shown</button></div>` : '';
+  if(mob) return B.cardBox(head+`<div style="padding:12px;display:flex;flex-direction:column;gap:8px">${shown.map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:${W2.head};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
+      <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${B.orgChip(m.org)}${brk(m)}</span>
+        <span style="display:block;font-size:13px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.territory)} · ${E(m.party)}</span>
+        <span style="display:block;font-size:12.5px;color:${W2.ink2};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${op(m)}</span></span>
+      <span style="text-align:right;flex-shrink:0;font-size:12.5px"><span style="display:block;${w2num(14)}">${acF(wtAc(m))} ac</span><span style="display:block">${dayAc(m)}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`).join('')}</div>${more}`, `margin-top:12px;overflow:hidden`);
+  const cols='minmax(130px,1fr) minmax(110px,1fr) minmax(150px,1.6fr) minmax(130px,1.3fr) 110px 90px 100px';
+  const cell=(t,x='')=>`<span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${x}">${t}</span>`;
+  return B.cardBox(head+`<div style="overflow-x:auto"><div style="min-width:860px">
+      <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2}"><span>Machine</span><span>Territory</span><span>Retailer</span><span>Operator</span><span>Breakdown</span><span style="text-align:right">${E(wtDayShort())}</span><span style="text-align:right">Season ac</span></div>
+      ${shown.map(m=>`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:13.5px">
+        <span style="display:flex;align-items:center;gap:6px;min-width:0"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font:600 13px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</button>${B.orgChip(m.org)}</span>
+        ${cell(E(m.territory))}${cell(E(m.party))}${cell(op(m))}${cell(brk(m)||`<span style="color:${W2.ink3}">—</span>`)}${cell(dayAc(m),'text-align:right')}${cell(`<b style="font-weight:600;font-variant-numeric:tabular-nums">${acF(wtAc(m))}</b>`,'text-align:right')}</div>`).join('')}
+    </div></div>${more}`, 'margin-top:16px;overflow:hidden');
 }
 function wmapViewHTML(v){ return `<section style="padding:24px 32px">${wmapBodyHTML(false)}</section>`; }
 // The card for one position: every machine there, each with its operator, season acres and a Details link; one
@@ -12915,6 +12949,7 @@ app.addEventListener('click', e=>{
     case 'wmshow': setState({wmShow:el.dataset.k}); break;
     case 'wcper': setState({wcPer:el.dataset.k}); break;
     case 'wcall': setState({wcAll:true}); break;
+    case 'wcmcmore': setState({wcMcLim:1e9}); break;
     case 'wcterr': { const t=el.dataset.t; setState(s=>({wtTerr:s.wtTerr===t?'':t, wtTm:'', wtAm:''})); break; }
     case 'wtclear': setState({wmcQ:'', wmcShow:'all', wDay:'', wfoOn:'', wmShow:'all', wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
     case 'wamexp': { const k=el.dataset.k; setState(s=>({wamOpen:{...s.wamOpen, [k]:!s.wamOpen[k]}})); break; }
