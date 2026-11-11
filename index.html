@@ -237,7 +237,7 @@ const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
-  wDay:'', wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wmcQ:'', wmcShow:'all', wmcSort:'mc', wmcLimit:60, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
+  wDay:'', wsnSt:'ALL', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wmcQ:'', wmcShow:'all', wmcSort:'mc', wmcLimit:60, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
   wfoSort:'bk', wfoOpen:{}, wfoOn:'',   // Wheat TM → FO page: its own sort, open rows and onboarded filter; the rest is the wt* scope
   wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
   iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60, iotTs:'',   // IoT pages — page-local, shared by the three of them
@@ -358,8 +358,10 @@ const PROJECTS = {
             maint:{ sheetId:'1Tz3OAhykHa144JAufDRwK_G2_LuG0QXxwOsQqhR9mfc', gid:'965231799', name:'maintenance data' },
             // Scanned acres by product AND CROP, per machine-day (2026-11-11) — the "UPL/SWAL product details" tab. Wheat admin only; see wpcBuild.
             prod:{ sheetId:'1Tz3OAhykHa144JAufDRwK_G2_LuG0QXxwOsQqhR9mfc', gid:'1855112218', name:'UPL/SWAL product details' },
-            home:'wplan', views:['wplan','wterr','wam','wfo','wmap','wtop','wbd','wmc'], bar:['wplan','wterr','wam','wfo','wmap','wtop','wbd','wmc'],
-            only:['fo','retailer','wplan','wterr','wam','wfo','wmap','wtop','wbd','wmc'], kharifTabs:false,
+            // Daily acres per state, Apr 2024 → today (2026-11-11) — the "Snake chart raw" tab. Wheat admin's Cumulative page; see wsnBuild.
+            snake:{ sheetId:'1Tz3OAhykHa144JAufDRwK_G2_LuG0QXxwOsQqhR9mfc', gid:'485044081', name:'Snake chart raw' },
+            home:'wplan', views:['wplan','wterr','wam','wfo','wmap','wtop','wbd','wmc','wcum'], bar:['wplan','wterr','wam','wfo','wmap','wtop','wbd','wmc','wcum'],
+            only:['fo','retailer','wplan','wterr','wam','wfo','wmap','wtop','wbd','wmc','wcum'], kharifTabs:false,
             head:sc=>`Wheat Spray Operations · ${sc==='India'?'North':sc}`, sub:'Wheat Spray Programme · Haryana · Punjab',
             mHead:sc=>`Wheat Spray · ${sc==='India'?'North':sc}`, mSub:'Wheat North · AFS' },
   // IoT device monitoring (2026-10-15). Not a programme but a team: the three state IoT technicians and the IoT head
@@ -2514,7 +2516,7 @@ const wSees = () => isAdmin() || wTeam();
 // 'mpprod' is the exception to that constraint rather than a breach of it: its tab holds Madhya Pradesh and
 // nothing else, and it renders NO state picker, so it cannot widen anybody's scope. It is safe to grant to a
 // state-locked MP login, and is granted to exactly those two plus leadership.
-const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wfo','wmap','wtop','wbd','wmc'];   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
+const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wfo','wmap','wtop','wbd','wmc','wcum'];   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
 function roleHidesView(view){
   // The PROJECT is the outer gate and runs first, so it binds admin too: a Wheat login never sees a Kharif-tab
   // view, and the Wheat-only views never appear under Kharif.
@@ -2534,10 +2536,10 @@ function roleHidesView(view){
 }
 // Views that render their OWN controls and so drop the shared machine filter bar + KPI strip (desktop) and the
 // weather banner + KPI cards (mobile): the standalone rollup/insight pages.
-const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','wtop','wbd','wmc','iottamper','iotrisk','iotteam']);
+const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','wtop','wbd','wmc','wcum','iottamper','iotrisk','iotteam']);
 // Pages with no machine rows behind them (Wheat plan, the IoT pages): the machine search and the phone's filter
 // button go, because neither can reach anything on them.
-const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','wtop','wbd','wmc','iottamper','iotrisk','iotteam']);
+const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','wtop','wbd','wmc','wcum','iottamper','iotrisk','iotteam']);
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
@@ -3514,7 +3516,7 @@ const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" 
 // keys and mean nothing to a reader hunting for the cumulative chart.
 const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', norun:'Didn’t run',
   am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Daily recap', leader:'Leaders',
-  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wfo:'TM · FO summary', wmap:'Machine map', wtop:'Top 10 machines', wbd:'Breakdowns', wmc:'Machine summary',
+  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wfo:'TM · FO summary', wmap:'Machine map', wtop:'Top 10 machines', wbd:'Breakdowns', wmc:'Machine summary', wcum:'Cumulative acres',
   iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotteam:'IoT team overview' };
 // The word under each rail icon: short enough for a 64px button at 9.5px. One word where the title is long.
 // ONE NAME TABLE (plan I4). NAV_TITLE is the full name — page heading, browser title, the phone's All pages sheet.
@@ -3522,13 +3524,13 @@ const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machin
 // the same short form in all three. M_VIEWS takes its labels from here.
 const RAIL_LBL = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', am:'AMs', bm:'BMs', norun:'Didn’t run',
   pending:'Pending', recap:'Recap', leader:'Leaders', product:'Products', mpprod:'MP products', snake:'Cumulative', fo:'FOs',
-  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', wbd:'Breakdowns', wmc:'Machines', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
+  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', wbd:'Breakdowns', wmc:'Machines', wcum:'Cumulative', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
 // Rail order, in labelled groups (a hairline between them): the project's own pages, then what happened TODAY,
 // then the PEOPLE tables, then the SEASON reading. Insights used to lead the rail; it now leads the Season group.
 // Group names, index for index with RAIL_GROUPS (the first group is the project's own pages and has none).
 const RAIL_GROUP_NAMES = ['', 'Today', 'People', 'Season'];
 const RAIL_GROUPS = [
-  [['wplan',I.retailer],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['wtop',I.leader],['wbd',I.risk],['wmc',I.machines],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am]],
+  [['wplan',I.retailer],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['wtop',I.leader],['wbd',I.risk],['wmc',I.machines],['wcum',I.snake],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am]],
   [['norun',I.risk],['map',I.map],['machines',I.machines],['weather',I.weather],['recap',I.recap]],
   [['tables',I.tables],['am',I.am],['bm',I.bm],['fo',I.fo],['retailer',I.retailer],['pending',I.pending]],
   [['insights',I.insights],['snake',I.snake],['product',I.product],['mpprod',I.mpprod],['leader',I.leader]],
@@ -3577,9 +3579,11 @@ function topbarHTML(v){
   const iot = curProject().iot ? iotScope() : null;
   const scope = state.view==='wplan' ? (wp ? (wp.st||wp.lockSt||'India') : (state.wpSt||'India'))
     : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
+    : state.view==='wcum' ? (state.wsnSt==='HR'||state.wsnSt==='PB' ? state.wsnSt : 'India')
     : iot ? (iot.st||iot.lockSt||'India') : v.scopeLabel;
   const fresh = state.view==='wplan' ? (wp ? `${fmt(wp.all.length)} retailers · ${fmt(wp.allMc)} machines` : 'Retailer summary')
     : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
+    : state.view==='wcum' ? 'Cumulative acres · 3 seasons'
     : iot ? (IOT.loaded ? `${fmt(IOT.tamper.filter(r=>gateAllowsState(r.st)).length)} potential tamper · ${fmt(IOT.risk.filter(r=>gateAllowsState(r.st)).length)} at risk` : 'IoT sheet')
     : v.freshCount;
   if(isWheat()) return `<header style="height:68px;flex-shrink:0;background-color:#fff;background-image:linear-gradient(90deg,#F5821F,#1FAE43);background-size:100% 3px;background-repeat:no-repeat;border-bottom:1px solid ${W2.line};display:flex;align-items:center;gap:20px;padding:0 32px">
@@ -9847,6 +9851,145 @@ function wmGroups(A){
 }
 // Strong, distinct pin colours (Dinesh 2026-11-05: the two greys were hard to see on the map). Red stays the ring's.
 const WM_TONE = { y:C.act, s:'#2563EB', n:'#E0A008' };
+/* ===================== Wheat North — Cumulative acres (view key `wcum`, Dinesh 2026-11-11) =====================
+   The Kharif snake chart, for the rabi season: this season's cumulative acres against the two before it, off the Wheat
+   workbook's "Snake chart raw" tab (`PROJECTS.wheat.snake`, gid 485044081: transaction_Date × region_name × final_acres,
+   one row per state per day, every state the programme sprays in, Apr 2024 → today). Only HR + PB are read.
+   · A season is 1 Oct → 31 Mar, keyed by the October's year (2026-27 = Oct 2026 → Mar 2027). The three are laid on ONE
+     calendar axis (offset 0 = 1 Oct … 181 = 31 Mar; 29 Feb folds into 28 Feb), so the same date lines up across seasons.
+   · Cumulative starts at the FROM date (default 15 Oct, Dinesh) and is read to the TO date; both are pickers.
+   · This season reads THROUGH YESTERDAY (IST) — the tab writes today's row as the day runs. The badge and the legend are
+     read on the last day this season has, for every season, so the comparison is always the same dates.
+   · A day with no row is 0 acres (nothing sprayed), not missing. Admin only. */
+const WSN = { loaded:false, loading:false, error:'', at:'', D:{ HR:{}, PB:{} }, last:'' };
+const WSN_ST = { HARYANA:'HR', PUNJAB:'PB' };
+const WSN_MD = (()=>{ const o=[]; for(let t=Date.UTC(2025,9,1); t<=Date.UTC(2026,2,31); t+=864e5) o.push(new Date(t).toISOString().slice(5,10)); return o; })();
+const WSN_N = WSN_MD.length;   // 182
+const WSN_IDX = Object.fromEntries(WSN_MD.map((md,i)=>[md,i]));
+const WSN_FROM0 = WSN_IDX['10-15'];
+const WSN_MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const wsnLbl = off => { const md=WSN_MD[off]; return `${+md.slice(3)} ${WSN_MON[+md.slice(0,2)-1]}`; };
+const wsnCurYear = () => { const d=istDay(Date.now()), y=+d.slice(0,4), m=+d.slice(5,7); return m>=7 ? y : y-1; };
+const wsnDate = (y, off) => (WSN_MD[off]>='10' ? y : y+1)+'-'+WSN_MD[off];
+function wsnSeasons(){ const y=wsnCurYear();
+  return [{ y:y-2, color:'#9AA3AD' }, { y:y-1, color:'#4C7399' }, { y, color:'#1F9A55', cur:true }].map(s=>({ ...s, label:`${s.y}-${String(s.y+1).slice(2)}` })); }
+// This season's last offset: yesterday (IST), capped at 31 Mar once the season is over; -1 before 1 Oct.
+function wsnLastOff(){ const y=wsnCurYear(), yd=istDay(Date.now()-864e5);
+  if(yd < y+'-10-01') return -1; if(yd > (y+1)+'-03-31') return WSN_N-1;
+  return WSN_IDX[yd.slice(5)==='02-29'?'02-28':yd.slice(5)]; }
+function wsnBuild(grid){
+  const h=(grid[0]||[]).map(x=>String(x).trim().toLowerCase());
+  const iD=h.findIndex(x=>x.includes('date')), iS=h.findIndex(x=>x.includes('region')||x.includes('state')), iA=h.findIndex(x=>x.includes('acre'));
+  if(iD<0||iS<0||iA<0) throw new Error('snake chart tab: columns not found ('+h.join(', ')+')');
+  const D={ HR:{}, PB:{} }; let rows=0, last='';
+  grid.slice(1).forEach(r=>{ const st=WSN_ST[String(r[iS]||'').trim().toUpperCase()]; if(!st) return;
+    const d=String(r[iD]||'').trim().slice(0,10), v=parseFloat(String(r[iA]||'').replace(/,/g,''));
+    if(!/^\d{4}-\d\d-\d\d$/.test(d) || !isFinite(v)) return;
+    D[st][d]=(D[st][d]||0)+v; rows++; if(d>last) last=d; });
+  return { D, rows, last };
+}
+async function loadWsn(){
+  const R=curProject().snake; if(!R || WSN.loading) return;
+  WSN.loading=true; WSN.error=''; render();
+  try{
+    const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(), WSHEET_MS.side);
+    const res=await fetch(`https://docs.google.com/spreadsheets/d/${R.sheetId}/export?format=csv&gid=${R.gid}&t=${Date.now()}`, { signal:ctl.signal });
+    clearTimeout(t); if(!res.ok) throw new Error('HTTP '+res.status);
+    const B=wsnBuild(parseCSV(await res.text()));
+    Object.assign(WSN, B, { loaded:true, at:new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) });
+    console.log('[MP-Ops] wheat snake tab →', { rows:B.rows, last:B.last, HR:Object.keys(B.D.HR).length, PB:Object.keys(B.D.PB).length });
+  }catch(e){ WSN.error=e.name==='AbortError'?'the sheet did not answer':e.message; console.warn('wheat snake tab failed —', WSN.error); }
+  WSN.loading=false; render();
+}
+// One season's daily acres on the season axis, for the picked state(s). The current season is null after its last day.
+function wsnDaily(st, y, lastOff){
+  const sts = st==='ALL' ? ['HR','PB'] : [st], out=new Array(WSN_N).fill(0);
+  for(let o=0;o<WSN_N;o++){ const d=wsnDate(y,o); sts.forEach(s=>{ out[o]+=WSN.D[s][d]||0; if(WSN_MD[o]==='02-28') out[o]+=WSN.D[s][d.slice(0,5)+'02-29']||0; }); }
+  if(lastOff!=null) for(let o=lastOff+1;o<WSN_N;o++) out[o]=null;
+  return out;
+}
+let WSN_GEO = {};
+// A line chart over offsets [from, to]; series = [{label,color,cur,vals}] where vals[o] is a number or null.
+function wsnSVG(id, series, from, to, mob, H){
+  // Drawn at about the width it is shown at (rail 232 + page padding on desktop; card padding on the phone), so 1 unit ≈ 1px and
+  // the axis text stays readable at any window size instead of shrinking with a fixed 980-unit drawing.
+  const vw=window.innerWidth||1280, W=Math.round(mob ? Math.max(280, Math.min(560, vw-66)) : Math.max(520, Math.min(1500, vw-232-110)));
+  const mL=mob?44:64, mR=mob?12:18, mT=14, mB=mob?30:34, x0=mL, x1=W-mR, y0=mT, y1=H-mB, span=Math.max(1,to-from);
+  let mx=0; series.forEach(s=>{ for(let o=from;o<=to;o++){ const v=s.vals[o]; if(v!=null&&v>mx) mx=v; } });
+  const step=niceNum(Math.max(1,mx)/(mob?4:5)), top=Math.max(step, Math.ceil(mx/step)*step);
+  const X=o=>x0+(o-from)/span*(x1-x0), Y=v=>y1-v/top*(y1-y0);
+  const kf=v=>v>=1e5?(v/1e5).toFixed(v%1e5?1:0)+'L':v>=1e3?(v/1e3).toFixed(v%1e3?1:0)+'k':fmt(v);
+  let g=''; for(let t=0;t<=top+1e-6;t+=step){ const y=Y(t).toFixed(1); g+=`<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="#EEF0F3"/><text x="${x0-8}" y="${(+y+4).toFixed(1)}" text-anchor="end" font-size="${mob?11:12}" fill="${W2.ink2}" font-family="IBM Plex Sans,sans-serif" style="font-variant-numeric:tabular-nums">${mob?kf(t):fmt(t)}</text>`; }
+  // Ticks on the 1st (and the 15th, when the range is short enough to carry them).
+  const ticks=[]; for(let o=from;o<=to;o++){ const dd=+WSN_MD[o].slice(3); if(dd===1||(dd===15&&span<=(mob?75:150))||((dd===8||dd===22)&&span<=(mob?30:50))) ticks.push(o); }
+  for(let i=ticks.length-1;i>0;i--) if((X(ticks[i])-X(ticks[i-1]))<(mob?44:52)) ticks.splice(i,1);
+  let xt=''; ticks.forEach(o=>{ const x=X(o).toFixed(1); xt+=`<line x1="${x}" y1="${y0}" x2="${x}" y2="${y1}" stroke="#F3F4F6"/><text x="${x}" y="${y1+18}" text-anchor="middle" font-size="${mob?11:12}" fill="${W2.ink2}" font-family="IBM Plex Sans,sans-serif">${wsnLbl(o)}</text>`; });
+  let ln=''; series.forEach(s=>{ let d='', pen=false, last=null;
+    for(let o=from;o<=to;o++){ const v=s.vals[o]; if(v==null){ pen=false; continue; } d+=`${pen?'L':'M'}${X(o).toFixed(1)} ${Y(v).toFixed(1)} `; pen=true; last=o; }
+    if(!d) return;
+    ln+=`<path d="${d.trim()}" fill="none" stroke="${s.color}" stroke-width="${s.cur?2.8:1.8}" stroke-linejoin="round" stroke-linecap="round"/>`;
+    ln+=`<circle cx="${X(last).toFixed(1)}" cy="${Y(s.vals[last]).toFixed(1)}" r="${s.cur?4.2:3}" fill="${s.color}"/>`; });
+  WSN_GEO[id]={ W, x0, x1, y0, y1, from, to, span, series:series.map(s=>({ label:s.label, color:s.color, vals:s.vals })) };
+  return `<svg data-wsn="${id}" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${E(id==='cum'?'Cumulative acres by season':'Acres sprayed each day by season')}" style="display:block;touch-action:pan-y">${g}${xt}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D5DAE0"/>${ln}<line data-wsnguide="1" x1="0" y1="${y0}" x2="0" y2="${y1}" stroke="${W2.ink}" stroke-dasharray="3 3" opacity="0"/></svg>`;
+}
+// Hover (mouse) or tap (touch) → the nearest day, every season's figure on it.
+function wsnPoint(e){
+  const svg=e.target.closest && e.target.closest('svg[data-wsn]'); if(!svg) return;
+  const G=WSN_GEO[svg.dataset.wsn], tip=svg.parentNode.querySelector('[data-wsntip]'); if(!G||!tip) return;
+  const r=svg.getBoundingClientRect(), vx=(e.clientX-r.left)/r.width*G.W;
+  const o=Math.max(G.from, Math.min(G.to, Math.round(G.from+(vx-G.x0)/(G.x1-G.x0)*G.span))), x=G.x0+(o-G.from)/G.span*(G.x1-G.x0);
+  const gl=svg.querySelector('[data-wsnguide]'); gl.setAttribute('x1',x); gl.setAttribute('x2',x); gl.setAttribute('opacity','.5');
+  tip.innerHTML=`<div style="font-size:12.5px;font-weight:600;margin-bottom:4px">${wsnLbl(o)}</div>`+G.series.slice().reverse().map(s=>`<div style="display:flex;align-items:center;gap:7px;font-size:12.5px;white-space:nowrap"><span style="width:10px;height:3px;border-radius:2px;background:${s.color}"></span>${s.label}<b style="margin-left:auto;padding-left:10px;font-variant-numeric:tabular-nums;font-weight:600">${s.vals[o]==null?'—':acF(s.vals[o])}</b></div>`).join('');
+  tip.style.display='block';
+  const px=(x/G.W)*r.width, w=tip.offsetWidth; tip.style.left=Math.max(4, Math.min(r.width-w-4, px+(px>r.width/2?-w-12:12)))+'px'; tip.style.top='10px';
+}
+function wsnHide(e){ const svg=e.target.closest && e.target.closest('svg[data-wsn]'); if(!svg) return;
+  const tip=svg.parentNode.querySelector('[data-wsntip]'); if(tip) tip.style.display='none'; const gl=svg.querySelector('[data-wsnguide]'); if(gl) gl.setAttribute('opacity','0'); }
+document.addEventListener('pointermove', e=>{ if(e.pointerType==='mouse') wsnPoint(e); });
+document.addEventListener('pointerdown', e=>{ if(e.pointerType!=='mouse') wsnPoint(e); });
+document.addEventListener('pointerout', e=>{ if(e.pointerType==='mouse' && e.target.closest && e.target.closest('svg[data-wsn]') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('svg[data-wsn]'))) wsnHide(e); });
+function wcumBodyHTML(mob){
+  if(!isAdmin()) return wplanBodyHTML(mob);
+  const S=state, B=wpBits(mob);
+  if(!WSN.loaded){
+    if(!WSN.loading && !WSN.error) setTimeout(loadWsn,0);
+    return B.msg(WSN.error ? `⚠ Could not load the snake chart tab (${E(WSN.error)}).<div style="margin-top:14px"><button data-act="wsnretry" style="min-height:${mob?48:38}px;padding:0 18px;border:0;border-radius:10px;background:${W2.dark};color:#fff;font:600 14px ${W2.font};cursor:pointer">Try again</button></div>` : 'Loading the cumulative acres…', '60px 20px');
+  }
+  const st=['ALL','HR','PB'].includes(S.wsnSt)?S.wsnSt:'ALL', lastOff=wsnLastOff(), seasons=wsnSeasons();
+  const from=Math.max(0,Math.min(WSN_N-1, S.wsnFrom==null?WSN_FROM0:S.wsnFrom));
+  const to=Math.max(from, Math.min(WSN_N-1, S.wsnTo==null?Math.max(from, lastOff<0?WSN_N-1:lastOff):S.wsnTo));
+  const daily=seasons.map(s=>wsnDaily(st, s.y, s.cur?lastOff:null));
+  const cum=daily.map(d=>{ const c=new Array(WSN_N).fill(null); let a=0; for(let o=from;o<WSN_N;o++){ if(d[o]==null) break; a+=d[o]; c[o]=a; } return c; });
+  const ser=(vals)=>seasons.map((s,i)=>({ label:s.label, color:s.color, cur:s.cur, vals:vals[i] }));
+  // The comparison day: the last day of the range this season has; with no current data in range, the range's end.
+  const edge = lastOff>=from ? Math.min(to,lastOff) : to, curHas = lastOff>=from;
+  const at=i=>cum[i][edge], cur=seasons.length-1;
+  const stName = st==='ALL' ? 'Haryana + Punjab' : STATE_NAMES[st];
+  const badge = (i)=>{ const a=at(cur), b=at(i); if(!curHas||a==null||b==null) return '';
+    const d=a-b, up=d>=0, p=b>0?Math.round(100*d/b):null;
+    return `<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:${up?'#E8F6EE':'#FDECEA'};color:${up?W2.actD:W2.brkD};font-size:13px;font-weight:600;white-space:nowrap">${up?'▲':'▼'} ${acF(Math.abs(d))} ac${p!=null?` (${Math.abs(p)}%)`:''} ${up?'ahead of':'behind'} ${seasons[i].label}</span>`; };
+  const seg=`<div style="${w2segBox(mob)}${mob?';width:100%':''}">${[['ALL','HR + PB'],['HR','Haryana'],['PB','Punjab']].map(([k,t])=>`<button data-act="wsnst" data-k="${k}" aria-pressed="${st===k}" style="${w2seg(st===k,mob)};white-space:nowrap">${t}</button>`).join('')}</div>`;
+  const y=wsnCurYear(), dIn=(id,lab,off)=>`<label style="display:flex;${mob?'flex-direction:column;align-items:stretch;gap:4px;flex:1;min-width:0':'align-items:center;gap:8px'};font-size:13px;color:${W2.ink2}">${lab}<input type="date" id="${id}" value="${wsnDate(y,off)}" min="${wsnDate(y,0)}" max="${wsnDate(y,WSN_N-1)}" style="${w2sel(mob)};padding:0 ${mob?8:10}px${mob?';width:100%;min-width:0;box-sizing:border-box':''}"></label>`;
+  const reset = (from!==WSN_FROM0 || S.wsnTo!=null) ? B.ghost('wsnreset','Reset dates') : '';
+  const controls = `<div style="display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap">${seg}<div style="display:flex;gap:10px;${mob?'width:100%':''}">${dIn('wsnFromSel','From',from)}${dIn('wsnToSel','To',to)}</div>${reset}${mob?'':'<div style="flex:1"></div>'}<span style="font-size:12.5px;color:${W2.ink2}">Snake chart tab · checked ${E(WSN.at)} · <button data-act="wsnretry" style="border:0;background:none;padding:0;font:inherit;color:${W2.ink};text-decoration:underline;cursor:pointer;${mob?'min-height:44px':''}">refresh</button></span></div>`;
+  const legend = seasons.slice().reverse().map((s,ri)=>{ const i=seasons.length-1-ri, v=at(i), endV=cum[i][to];
+    return `<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><div style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:${s.cur?600:500}"><span aria-hidden="true" style="width:16px;height:${s.cur?4:3}px;border-radius:2px;background:${s.color}"></span>${s.label}${s.cur?' · this season':''}</div>
+      <div style="${w2num(mob?20:22,600,s.cur?W2.ink:W2.ink)}">${v==null?'—':acF(v)}${w2unit('ac',12)}</div>
+      ${!s.cur && endV!=null && to>edge ? `<div style="font-size:12.5px;color:${W2.ink2}">${acF(endV)} ac by ${wsnLbl(to)}</div>` : ''}</div>`; }).join('');
+  const tipBox = `<div data-wsntip="1" style="position:absolute;display:none;pointer-events:none;background:#fff;border:1px solid ${W2.line};border-radius:10px;box-shadow:0 6px 20px rgba(20,24,28,.12);padding:8px 10px;min-width:150px;z-index:5"></div>`;
+  const cumCard = B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?16:17}px;font-weight:600">Cumulative acres · ${E(stName)}</span><span style="font-size:13px;color:${W2.ink2}">${wsnLbl(from)} – ${wsnLbl(to)} · ${curHas?`read on ${wsnLbl(edge)} for every season`:'this season has no acres in this range yet'}</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${badge(cur-1)}${badge(cur-2)}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:${mob?10:20}px;margin-top:14px">${legend}</div>
+      <div style="position:relative;margin-top:12px">${wsnSVG('cum', ser(cum), from, to, mob, mob?300:400)}${tipBox}</div></div>`, `margin-top:${mob?12:16}px`);
+  const dayTot=daily.map(d=>{ let a=0; for(let o=from;o<=Math.min(to,edge);o++) a+=d[o]||0; return a; });
+  const dayCard = B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?16:17}px;font-weight:600">Acres sprayed each day</span><span style="font-size:13px;color:${W2.ink2}">the same dates in each season · ${mob?'tap':'point at'} a day for its figures</span></div>
+      <div style="display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:10px;font-size:13px">${seasons.slice().reverse().map((s,ri)=>{ const i=seasons.length-1-ri; return `<span style="display:inline-flex;align-items:center;gap:7px"><span aria-hidden="true" style="width:14px;height:3px;border-radius:2px;background:${s.color}"></span>${s.label}<b style="font-weight:600;font-variant-numeric:tabular-nums">${acF(dayTot[i])} ac</b></span>`; }).join('')}<span style="color:${W2.ink2}">${wsnLbl(from)} – ${wsnLbl(Math.min(to,edge))}</span></div>
+      <div style="position:relative;margin-top:12px">${wsnSVG('day', ser(daily), from, to, mob, mob?240:300)}${tipBox}</div></div>`, `margin-top:${mob?12:16}px`);
+  const head = `<div style="margin-bottom:${mob?12:16}px"><div style="font-size:${mob?18:20}px;font-weight:600">Cumulative acres</div><div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">This rabi season’s acres against the two before it, on the same dates. Pick a state and a date range.</div></div>`;
+  return head + controls + cumCard + dayCard;
+}
 /* ===================== Wheat North — Top 10 machines (view key `wtop`, Dinesh 2026-11-04) =====================
    The ten machines with the most acres since the season's first sheet date, THROUGH the Day filter's day. Wheat admin only.
    Reads the shared wt* scope (Day · State · Company · Territory · TM · AM · search), so it agrees with the Territory /
@@ -12095,6 +12238,7 @@ function contentHTML(v){
     case 'wtop': return `<section style="padding:24px 32px">${wtopBodyHTML(false)}</section>`;
     case 'wbd': return `<section style="padding:24px 32px">${wbdBodyHTML(false)}</section>`;
     case 'wmc': return `<section style="padding:24px 32px">${wmcBodyHTML(false)}</section>`;
+    case 'wcum': return `<section style="padding:24px 32px">${wcumBodyHTML(false)}</section>`;
     case 'iottamper': case 'iotrisk': case 'iotteam': return `<section style="padding:18px 22px">${iotBodyHTML(state.view,false)}</section>`;
     case 'recap': return recapViewHTML(v);
     case 'norun': return `<section style="padding:18px 22px">${norunBodyHTML(v,false)}</section>`;
@@ -12142,6 +12286,7 @@ const M_VIEWS = [
   { k:'wtop',     label:RAIL_LBL.wtop,  icon:()=>I.leader },     // Wheat Top 10 machines
   { k:'wbd',      label:RAIL_LBL.wbd,   icon:()=>I.risk },       // Wheat Breakdowns (tickets)
   { k:'wmc',      label:RAIL_LBL.wmc,   icon:()=>I.machines },   // Wheat Machine summary (search any machine)
+  { k:'wcum',     label:RAIL_LBL.wcum,  icon:()=>I.snake },      // Wheat Cumulative acres (snake chart)
   { k:'iottamper',label:RAIL_LBL.iottamper, icon:()=>I.tamper },   // IoT project only
   { k:'iotrisk',  label:RAIL_LBL.iotrisk,   icon:()=>I.risk },
   { k:'iotteam',  label:RAIL_LBL.iotteam,      icon:()=>I.am },               // IoT head (admin) only
@@ -12278,7 +12423,7 @@ function norunBodyHTML(v, mob){
 const M_NEXT = { norun:['machines','bm'], map:['tables','machines'], tables:['machines','am'], machines:['tables','weather'],
   weather:['machines','map'], am:['bm','machines'], bm:['machines','tables'], pending:['am'], recap:['insights','machines'],
   insights:['snake','recap'], snake:['insights','product'], product:['mpprod','snake'], mpprod:['product'], leader:['recap'],
-  wplan:['wterr'], wterr:['wam','wfo'], wam:['wfo'], wfo:['wmap','wplan'], wmap:['wtop','wplan'], wtop:['wbd','wplan'], wbd:['wmc','wplan'], wmc:['wplan'] };   // Wheat: the first one the login has
+  wplan:['wterr'], wterr:['wam','wfo'], wam:['wfo'], wfo:['wmap','wplan'], wmap:['wtop','wplan'], wtop:['wbd','wplan'], wbd:['wmc','wplan'], wmc:['wcum','wplan'], wcum:['wplan'] };   // Wheat: the first one the login has
 function mNextHTML(view){
   const ks=(M_NEXT[view]||[]).filter(k=>!roleHidesView(k)).slice(0, isWheat()?1:9);
   const brk = view==='machines' && !state.health.includes('Breakdown')
@@ -12471,6 +12616,8 @@ function mobileHTML(v){
     body = wbdBodyHTML(true);
   } else if(S.view==='wmc'){
     body = wmcBodyHTML(true);
+  } else if(S.view==='wcum'){
+    body = wcumBodyHTML(true);
   } else if(S.view==='iottamper'||S.view==='iotrisk'||S.view==='iotteam'){
     body = iotBodyHTML(S.view,true);
   } else {
@@ -12665,6 +12812,7 @@ function mPageScope(view){
     case 'mpprod':   return state.mpTerr || 'Madhya Pradesh';
     case 'wplan':    return (lock||state.wpSt) ? nm(lock||state.wpSt) : 'HR + PB';
     case 'wterr': case 'wam': case 'wfo': case 'wmap': case 'wtop': case 'wbd': case 'wmc': return (lock||state.wtSt) ? nm(lock||state.wtSt) : 'HR + PB';
+    case 'wcum': return state.wsnSt==='HR'||state.wsnSt==='PB' ? nm(state.wsnSt) : 'HR + PB';
     case 'iottamper': case 'iotrisk': case 'iotteam': { const sc=iotScope(); return sc.st ? iotStName(sc.st) : (isAdmin()?'All states':'My states'); }
     default:         return nm(lock||pick('st'));   // the fleet pages: the filter bar's state
   }
@@ -12713,7 +12861,7 @@ function render(){
    handling (histSync) owns the history ENTRIES; this only rewrites the address of the current one. A typed or
    pasted address is honoured at boot and on hashchange, and `render()`'s role guard still bounces a view the
    login may not see. */
-const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wam:'area-managers', wfo:'field-officers', wmap:'machine-map', wtop:'top-machines', wbd:'breakdowns', wmc:'machines',
+const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wam:'area-managers', wfo:'field-officers', wmap:'machine-map', wtop:'top-machines', wbd:'breakdowns', wmc:'machines', wcum:'wheat-cumulative',
   iottamper:'tamper', iotrisk:'at-risk', iotteam:'team', am:'area-managers', bm:'business-managers',
   leader:'leaders', product:'products', fo:'field-officers', recap:'daily-recap', norun:'didnt-run' };
 const slugOf = v => VIEW_SLUG[v]||v;
@@ -12851,6 +12999,8 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='wtSortSel') setState({wtSort:e.target.value});
   else if(e.target.id==='wbdSortSel') setState({wbdSort:e.target.value});
   else if(e.target.id==='wmcSortSel') setState({wmcSort:e.target.value});
+  else if(e.target.id==='wsnFromSel'||e.target.id==='wsnToSel'){ const md=String(e.target.value).slice(5), o=WSN_IDX[md==='02-29'?'02-28':md];
+    if(o!=null){ const cur=state.wsnTo==null?null:state.wsnTo; if(e.target.id==='wsnFromSel') setState({wsnFrom:o, wsnTo:cur!=null&&cur<o?o:cur}); else setState({wsnTo:o, wsnFrom:Math.min(o, state.wsnFrom==null?WSN_FROM0:state.wsnFrom)}); } }
   else if(e.target.id==='lbStateSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({lbSt:w, lbAll:false}); }   // page-local; never touches state.st
   else if(e.target.id==='insStateSel') setState({insSt:e.target.value, insAm:'', insCo:''});   // page-local; never touches state.st
   // Changing the AM drops the officer with it — the old officer almost certainly reports to somebody else.
@@ -12950,6 +13100,9 @@ app.addEventListener('click', e=>{
     case 'wcper': setState({wcPer:el.dataset.k}); break;
     case 'wcall': setState({wcAll:true}); break;
     case 'wcmcmore': setState({wcMcLim:1e9}); break;
+    case 'wsnst': setState({wsnSt:el.dataset.k}); break;
+    case 'wsnreset': setState({wsnFrom:null, wsnTo:null}); break;
+    case 'wsnretry': loadWsn(); break;
     case 'wcterr': { const t=el.dataset.t; setState(s=>({wtTerr:s.wtTerr===t?'':t, wtTm:'', wtAm:''})); break; }
     case 'wtclear': setState({wmcQ:'', wmcShow:'all', wDay:'', wfoOn:'', wmShow:'all', wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
     case 'wamexp': { const k=el.dataset.k; setState(s=>({wamOpen:{...s.wamOpen, [k]:!s.wamOpen[k]}})); break; }

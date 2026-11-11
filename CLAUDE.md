@@ -1069,6 +1069,16 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     scanned acres equal the Main sheet's on every machine-day (21,368 ac, zero differences) and its products ARE the Main sheet's
     Spruce / Feego / Feego Edge, so the product split still reads `sdays`, and this tab only adds the crop (Wheat 89%, Rice /
     Paddy 8%, then cotton, okra …). Bayer is not on it: Bayer's panel shows Momiji / Matenomore and says crops are not on its sheet.
+- **Page 9, Cumulative acres** (`wcum`, `#/wheat-cumulative`, rail "Cumulative"; `wcumBodyHTML` / `wsnSVG`, Dinesh 2026-11-11).
+  Wheat admin only. The Kharif snake chart for the rabi season, off the workbook's **"Snake chart raw"** tab (gid `485044081`,
+  `PROJECTS.wheat.snake`, `wsnBuild` → `WSN`, logged `[MP-Ops] wheat snake tab → {…}`): `transaction_Date × region_name ×
+  final_acres`, one row per state per day, every state, Apr 2024 → today; only HARYANA / PUNJAB are read. A season is 1 Oct → 31 Mar,
+  keyed by the October's year; the three seasons share one calendar axis (29 Feb folds into 28 Feb). **Cumulative starts at From
+  (default 15 Oct) and reads to To (default yesterday)**, both date pickers + Reset dates; State = HR + PB / Haryana / Punjab. The badges
+  and legend read every season on the last day this season has (yesterday, IST); past seasons also show their total by To. A second
+  card draws each day's acres for the same dates. A day with no row = 0 ac. **No note about the gap to the Main sheet's acres, by
+  request** — this tab counts all programme acres in the two states. Checked 11 Nov: 15 Oct – 10 Nov = 32,981 / 77,472 / 53,151 ac
+  (2026-27 / 2025-26 / 2024-25), the same as a direct sum of the tab. Charts are drawn at the screen's width (`vw`), so text stays 12px.
 - **Loading (rebuilt 2026-11-11, Dinesh: "the site opens in seconds but the data takes 2–5 minutes on a first load or a hard
   refresh").** Measured: the four tabs are only ~600 KB gzipped; the wait is GOOGLE preparing the export (~1.5 s warm, ~8 s right
   after the sheet is edited, longer while it recalculates). There was **no time limit on any request**, and the page waited for
