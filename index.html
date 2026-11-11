@@ -144,7 +144,8 @@
   .wtGrid{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:12px}
   .wfoKpi{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-top:16px}
   .wteamMc{display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));gap:12px}
-  @media (max-width:1040px){ .wteamMc{grid-template-columns:repeat(3,minmax(0,1fr))} .wteamMc>:first-child{grid-column:1/-1} }
+  .wteamMc.w4{grid-template-columns:minmax(0,1.2fr) repeat(4,minmax(0,1fr))}
+  @media (max-width:1040px){ .wteamMc{grid-template-columns:repeat(3,minmax(0,1fr))} .wteamMc.w4{grid-template-columns:repeat(4,minmax(0,1fr))} .wteamMc>:first-child{grid-column:1/-1} }
   @media (max-width:1240px){ .wfoKpi{grid-template-columns:repeat(3,minmax(0,1fr))} }
   @media (max-width:1240px){ .wtGrid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))} }
   @media (max-width:1180px){ .wtAcres{grid-template-columns:minmax(0,1fr)} }
@@ -2499,6 +2500,10 @@ function isAdmin(){ return !!(GATE.cur && GATE.cur.role==='admin'); }
 // Wheat's UPL / SWAL team logins (role 'wteam'): they read the Wheat sheet like the admin, on three pages, in the
 // trimmed team form (wTeamPageHTML). wSees() is "may load and see the Wheat pages' data".
 const wTeam = () => !!(GATE.cur && GATE.cur.role==='wteam');
+// The SWAL team logins (4832 / 4732 / 4060). Dinesh 2026-11-11: their dashboard drops the pin map (its Show buttons move onto
+// the territory heat map), shows "Machines" with no deployed / in transit / pending split, and adds Territories sprayed + a
+// daily acres chart. UPL team logins are unchanged.
+const wSwal = () => wTeam() && GATE.cur.org==='SWAL';
 const wSees = () => isAdmin() || wTeam();
 // Views a role has to be GRANTED. Map, Machine locations, Weather and Business managers are the baseline every
 // login gets; everything below is granted per role. Admin holds the lot; any other role holds exactly what its
@@ -8742,7 +8747,8 @@ function wpMachineHTML(m, mob){
       ${wTeam() ? stat('Operator',m.opName||m.opNum?'Mapped':'Not mapped',m.opName||m.opNum?'':'no operator on the sheet') : stat('Scanned overall',acF(m.scAll),`${acF(m.scY)} ac ${wDayWord()}`)}
       ${stat('Days sprayed',fmt(days.length),last?'last on '+wpDate(last):'none yet')}
       ${stat('Last ping',m.lastPing?wpDate(m.lastPing):'—',m.lastPing?(n=>n<=0?'today':n===1?'1 day ago':n+' days ago')(Math.round((Date.parse(istDay(Date.now()))-Date.parse(m.lastPing))/864e5)):'no ping on the sheet')}
-      ${wTeam() ? stat('Handover',wStageWord(m),wDayOn()?'today':'')+stat('Breakdown',m.stage!=='dep'?'—':m.brk?E(wBrkLbl(m.brkDays[WRET.yday])):'None',m.stage!=='dep'?'not deployed yet':wpDate(WRET.yday))
+      ${wSwal() ? stat('Breakdown',wTeamBrk(m)?E(wBrkLbl(m.brkDays[WRET.yday])):'None',wpDate(WRET.yday))
+        : wTeam() ? stat('Handover',wStageWord(m),wDayOn()?'today':'')+stat('Breakdown',m.stage!=='dep'?'—':m.brk?E(wBrkLbl(m.brkDays[WRET.yday])):'None',m.stage!=='dep'?'not deployed yet':wpDate(WRET.yday))
         : stat('IoT acres overall',acF(m.iotAll),`${acF(m.iotY)} ac ${wDayWord()}`)+stat('Breakdown',m.brk?`<span style="color:${W2.brkD}">! Open</span>`:'None',`at the end of ${wpDate(WRET.yday)}`)}
     </div>
     <div style="font-size:11px;color:#6E6A62;margin-top:8px">${wTeam()?`Target = ${fmt(WTEAM_TGT)} ac per machine for the season`:`Plan = retailer's ${fmt(r.planAc)} ac plan ÷ ${r.list.length} machine${r.list.length===1?'':'s'}`}</div>
@@ -9002,6 +9008,25 @@ function wtControlsHTML(A, mob, withSort, o){
     : `<div style="display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap">${wtFilterFields(A,false)}</div>
        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px">${search}${clearBtn}<div style="flex:1"></div>${B.stamp('wpretry')}${csvBtn}</div>`;
 }
+// The day-by-day trend for everything in view: one bar per day, a count of acres, the last day in the Active green. Shared by the
+// admin's Territory page and every SWAL team page (Dinesh 2026-11-11). `days` from wtDays(), `tot` the acres on each.
+function wDayBarsHTML(days, tot, B, mob, scope){
+  const A={days,tot}, n=days.length, mx=Math.max(...A.tot,0), every=n<=10?1:Math.ceil(n/(mob?6:12)), showVal=n<=(mob?10:21);
+  const trend = !n ? '' : B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?15:16}px;font-weight:600">Acres sprayed by day</span><span style="font-size:13px;color:${W2.ink2}">${wpDate(A.days[0])} – ${wpDate(A.days[n-1])} · ${E(scope)}</span></div>
+      <div role="img" aria-label="${E('Acres sprayed by day: '+A.days.map((d,i)=>wpDate(d)+' '+acF(A.tot[i])).join(', '))}" style="display:flex;align-items:flex-end;gap:${n>30?2:mob?4:8}px;height:${mob?124:140}px;margin-top:12px;padding-top:18px">
+        ${A.tot.map((v,i)=>`<div style="flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center">
+          ${showVal&&v>0?`<span style="font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;color:${i===n-1?W2.actD:W2.ink2};margin-bottom:3px">${acF(v)}</span>`:''}
+          <span style="display:block;width:100%;max-width:44px;height:${v>0?Math.max(3,Math.round(80*v/mx)):0}%;min-height:${v>0?3:1}px;border-radius:4px 4px 0 0;background:${v>0?(i===n-1?W2.act:'#9FB4C8'):'#E1E5EA'}"></span></div>`).join('')}
+      </div>
+      <div style="display:flex;gap:${n>30?2:mob?4:8}px;border-top:1px solid ${W2.line};padding-top:6px">${A.days.map((d,i)=>`<span style="flex:1;min-width:0;text-align:center;font-size:12px;color:${i===n-1?W2.ink:W2.ink2};font-weight:${i===n-1?600:400};white-space:nowrap;overflow:visible">${(i%every===0&&(n-1-i)>=every/2)||i===n-1?(i===n-1?(wIsYday()?'Yest.':wpDate(d)):wpDate(d)):''}</span>`).join('')}</div>
+    </div>`, `margin-top:${mob?12:16}px`);
+  return trend;
+}
+// The same chart over a list of machines (each machine's per-day acres in m.days).
+function wDayBarsFor(mcs, B, mob, scope){
+  const days=wtDays(); return wDayBarsHTML(days, days.map(d=>mcs.reduce((a,m)=>a+(m.days[d]||0),0)), B, mob, scope);
+}
 function wterrBodyHTML(mob){
   const S=state;
   if(!wSees()) return wplanBodyHTML(mob);   // the "being rebuilt" message (the role guard bounces non-admins anyway)
@@ -9012,17 +9037,7 @@ function wterrBodyHTML(mob){
   const B=wpBits(mob), { orgChip, meter, tel } = B;
   const stale = WRET.lastDate && WRET.lastDate < WRET.yday;
   const kpis = wtStripHTML(A, mob, stale);
-  // ── The day-by-day trend for everything in view. Bars (one per day, a count of acres), yesterday in the Active green.
-  const n=A.days.length, mx=Math.max(...A.tot,0), every=n<=10?1:Math.ceil(n/(mob?6:12)), showVal=n<=(mob?10:21);
-  const trend = !n ? '' : B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
-      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?15:16}px;font-weight:600">Acres sprayed by day</span><span style="font-size:13px;color:${W2.ink2}">${wpDate(A.days[0])} – ${wpDate(A.days[n-1])} · ${A.narrowed?'what is in view':'every territory'}</span></div>
-      <div role="img" aria-label="${E('Acres sprayed by day: '+A.days.map((d,i)=>wpDate(d)+' '+acF(A.tot[i])).join(', '))}" style="display:flex;align-items:flex-end;gap:${n>30?2:mob?4:8}px;height:${mob?124:140}px;margin-top:12px;padding-top:18px">
-        ${A.tot.map((v,i)=>`<div style="flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center">
-          ${showVal&&v>0?`<span style="font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;color:${i===n-1?W2.actD:W2.ink2};margin-bottom:3px">${acF(v)}</span>`:''}
-          <span style="display:block;width:100%;max-width:44px;height:${v>0?Math.max(3,Math.round(80*v/mx)):0}%;min-height:${v>0?3:1}px;border-radius:4px 4px 0 0;background:${v>0?(i===n-1?W2.act:'#9FB4C8'):'#E1E5EA'}"></span></div>`).join('')}
-      </div>
-      <div style="display:flex;gap:${n>30?2:mob?4:8}px;border-top:1px solid ${W2.line};padding-top:6px">${A.days.map((d,i)=>`<span style="flex:1;min-width:0;text-align:center;font-size:12px;color:${i===n-1?W2.ink:W2.ink2};font-weight:${i===n-1?600:400};white-space:nowrap;overflow:visible">${(i%every===0&&(n-1-i)>=every/2)||i===n-1?(i===n-1?(wIsYday()?'Yest.':wpDate(d)):wpDate(d)):''}</span>`).join('')}</div>
-    </div>`, `margin-top:${mob?12:16}px`);
+  const trend = wDayBarsHTML(A.days, A.tot, B, mob, A.narrowed?'what is in view':'every territory');
   const controls = wtControlsHTML(A, mob, true);
   const showSt = !A.st;
   const stName = r => r.st ? STATE_NAMES[r.st]||r.st : 'HR + PB';
@@ -9540,6 +9555,8 @@ function wfoBodyHTML(mob){
      Expanding and sorting reuse each page's own acts and state (wpexp / wtexp / wfoexp, wpSort / wtSort / wfoSort). */
 const WTEAM_TGT = 650; // the team view's target: acres per machine for the season
 const WTEAM_SORTS = [['plan','Target acres'],['acAll','Season acres'],['pct','% of target'],['acY','Acres yesterday'],['ranY','Ran yesterday'],['opPct','Operator mapped %'],['n','Machine plan'],['dep','Deployed'],['transit','In transit'],['brk','Breakdown'],['name','Name']];
+// SWAL reads Machines and has no deployed / in transit split (Dinesh 2026-11-11).
+const wTeamSorts = () => wSwal() ? WTEAM_SORTS.filter(([k])=>k!=='dep'&&k!=='transit').map(([k,t])=>[k,k==='n'?'Machines':t]) : WTEAM_SORTS;
 // A machine's stage as mark + word + colour.
 function wStageH(m){
   const [mark,word,col] = m.stage==='dep' ? ['✓','Deployed',W2.actD] : m.stage==='transit' ? ['→','In transit','#1D4F80'] : ['○','Pending',W2.ink2];
@@ -9557,7 +9574,7 @@ function wTeamFigs(list){
 // The page as a tree of nodes { key, label, name, org, mob, sub, people, warn, tag, none, f, nAll, open, kids | groups }.
 function wTeamTree(view){
   const S=state, raw = view==='wplan'?S.wpSort:view==='wterr'?S.wtSort:S.wfoSort;
-  const sort = WTEAM_SORTS.some(([k])=>k===raw) ? raw : 'plan';
+  const sort = wTeamSorts().some(([k])=>k===raw) ? raw : 'plan';
   const order = l => l.sort((a,b)=> (!!a.none-!!b.none) || (sort==='name' ? String(a.name).localeCompare(String(b.name))
     : ((b.f[sort]==null?-1:b.f[sort])-(a.f[sort]==null?-1:a.f[sort])) || b.f.plan-a.f.plan || String(a.name).localeCompare(String(b.name))));
   if(view==='wplan'){
@@ -9603,14 +9620,23 @@ function wTeamStripHTML(T, F, B, mob, stale, brkList){
       <div style="${w2num(mob?22:24,600,t.vc)};white-space:nowrap">${fmt(val)}${w2unit('of '+fmt(of),12)}</div>
       ${bar!=null?`<div style="height:6px;background:${W2.line2};border-radius:3px;overflow:hidden"><div style="width:${Math.min(100,bar)}%;min-width:${bar>0?4:0}px;height:100%;background:${t.dot};border-radius:3px"></div></div>`:''}
       <div style="font-size:12.5px;color:${W2.ink2};line-height:1.35">${sub}</div></div>`; };
+  const swal=wSwal();
+  // Territories sprayed on the day (SWAL, Dinesh 2026-11-11): a sheet territory with any acres that day, of the territories in view.
+  const terrSp=new Set(T.mcs.filter(m=>m.territory!==WRET_NO_TERR&&m.acY>0).map(m=>m.st+'|'+m.territory)).size, terrP=nTerr?Math.round(100*terrSp/nTerr):0;
   const tiles=[
     tile('Ran '+dw,'Ran',F.ranY,F.n,`${ranP}% of machines`,ranP),
-    tile('Breakdown','Breakdown',F.brk,F.dep,`of deployed · on ${day}${brkRan?` · ${fmt(brkRan)} still sprayed`:''}`),
+    ...(swal?[tile('Territories sprayed '+dw,'Territories',terrSp,nTerr,nTerr-terrSp?`${fmt(nTerr-terrSp)} with no acres on ${day}`:'every territory sprayed',terrP)]:[]),
+    swal ? tile('Breakdown','Breakdown',F.brk,F.n,`on ${day}${brkRan?` · ${fmt(brkRan)} still sprayed`:''}`)
+         : tile('Breakdown','Breakdown',F.brk,F.dep,`of deployed · on ${day}${brkRan?` · ${fmt(brkRan)} still sprayed`:''}`),
     tile('Operators mapped'+(wDayOn()?' today':''),'Operators',F.op,F.n,F.n-F.op ? `of all machines · ${fmt(F.n-F.op)} not mapped` : 'every machine has one'),
   ];
   const tM=w2tone('Machines'), parts=[['Deployed',F.dep,W2.act],['In transit',F.transit,'#3B82C4'],['Pending',F.wait,W2.ink3]];
   const pctOf=v=>F.n?Math.round(100*v/F.n):0;
-  const planCard=`<div style="background:${tM.bg};border:1px solid ${tM.bd};border-radius:14px;${mob?'':`box-shadow:${W2.shadow};`}padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0">
+  const machinesCard=`<div style="background:${tM.bg};border:1px solid ${tM.bd};border-radius:14px;${mob?'':`box-shadow:${W2.shadow};`}padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0">
+    <div style="display:flex;align-items:baseline;gap:7px;font-size:14px;font-weight:600;color:${W2.ink}"><span style="width:8px;height:8px;border-radius:50%;background:${tM.dot};flex-shrink:0;transform:translateY(-1px)"></span>Machines</div>
+    <div><span style="${w2num(mob?26:30,600,tM.vc)};white-space:nowrap">${fmt(F.n)}</span>${w2unit('machines',12)}</div>
+    <div style="font-size:13px;color:${W2.ink2}">${T.A.terr?'in '+E(T.A.terr):`in ${fmt(nTerr)} ${nTerr===1?'territory':'territories'}`}</div></div>`;
+  const planCard = swal ? machinesCard : `<div style="background:${tM.bg};border:1px solid ${tM.bd};border-radius:14px;${mob?'':`box-shadow:${W2.shadow};`}padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0">
     <div style="display:flex;align-items:baseline;gap:7px;font-size:14px;font-weight:600;color:${W2.ink}"><span style="width:8px;height:8px;border-radius:50%;background:${tM.dot};flex-shrink:0;transform:translateY(-1px)"></span>Machine plan</div>
     <div><span style="${w2num(mob?26:24,600,tM.vc)};white-space:nowrap">${fmt(F.n)}</span>${w2unit('machines',12)}<span style="font-size:13px;color:${W2.ink2}"> ${T.A.terr?'in '+E(T.A.terr):`in ${fmt(nTerr)} ${nTerr===1?'territory':'territories'}`}</span></div>
     <div role="img" aria-label="${parts.map(p=>`${p[0]} ${fmt(p[1])}`).join(', ')} of ${fmt(F.n)} machines" style="display:flex;gap:1px;height:8px;border-radius:4px;overflow:hidden;background:${W2.line2}">${parts.map(([,v,c])=>`<span style="width:${pctOf(v)}%;min-width:${v>0?3:0}px;background:${c}"></span>`).join('')}</div>
@@ -9630,8 +9656,9 @@ function wTeamStripHTML(T, F, B, mob, stale, brkList){
   const group=(title,note,inner)=>`<section aria-label="${E(title)}" style="min-width:0"><div style="display:flex;align-items:baseline;gap:4px 8px;flex-wrap:wrap;margin-bottom:8px"><span style="font-size:14px;font-weight:600;color:${W2.ink}">${title}</span>${note?`<span style="font-size:12.5px;color:${W2.ink2}">${note}</span>`:''}</div>${inner}</section>`;
   // Phone: the plan card across, Ran across, Breakdown and Operators side by side.
   const mcInner = mob
-    ? `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px"><div style="grid-column:1/-1;display:flex;flex-direction:column;min-width:0">${planCard}</div><div style="grid-column:1/-1;display:flex;flex-direction:column;min-width:0">${tiles[0]}</div>${tiles[1]}${tiles[2]}</div>`
-    : `<div class="wteamMc">${planCard}${tiles.join('')}</div>`;
+    ? (swal ? `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px"><div style="grid-column:1/-1;display:flex;flex-direction:column;min-width:0">${planCard}</div>${tiles.join('')}</div>`
+      : `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px"><div style="grid-column:1/-1;display:flex;flex-direction:column;min-width:0">${planCard}</div><div style="grid-column:1/-1;display:flex;flex-direction:column;min-width:0">${tiles[0]}</div>${tiles[1]}${tiles[2]}</div>`)
+    : `<div class="wteamMc${swal?' w4':''}">${planCard}${tiles.join('')}</div>`;
   return mob
     ? `<div style="display:flex;flex-direction:column;gap:14px">${group('Machines',day,mcInner+brkList)}${group('Acres','',acresCard)}</div>`
     : `<div class="wtGroups">${group('Machines',day,mcInner+brkList)}${group('Acres','',acresCard)}</div>`;
@@ -9641,44 +9668,45 @@ function wTeamStripHTML(T, F, B, mob, stale, brkList){
 function wTeamBrkHTML(T, B, mob){
   const day=wpDate(WRET.yday), open=!!state.wtmBrkOpen;
   const list=T.mcs.filter(wTeamBrk).sort((a,b)=>String(a.territory).localeCompare(String(b.territory))||a.mc.localeCompare(b.mc));
-  if(!list.length) return B.msg(`No deployed machine has an open breakdown on ${day}.`, '16px 18px');
+  const swal=wSwal();
+  if(!list.length) return B.msg(`No ${swal?'':'deployed '}machine has an open breakdown on ${day}.`, '16px 18px');
   const noOp=`<span style="color:${W2.brkD}">✕ No operator</span>`, opOf=m=>m.opName||m.opNum?E(m.opName||m.opNum):noOp;
   const idH=m=>`<span style="color:${W2.brkD};font-weight:600;white-space:nowrap">! <span style="font-family:'IBM Plex Mono',monospace">${E(wBrkShort(m.brkDays[WRET.yday]))}</span></span>`;
   const sprayed=m=>m.acY>0?`<span style="color:${W2.actD}">✓ ${acF(m.acY)} ac</span>`:`<span style="color:${W2.ink2}">Idle</span>`;
   const head=`<button data-act="wtmbrk" aria-expanded="${open}" style="width:100%;min-height:56px;padding:12px ${mob?16:22}px;border:0;background:none;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
       <span style="flex:1;min-width:0"><span style="display:flex;align-items:baseline;gap:7px;font-size:16px;font-weight:600"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:${W2.brk};flex-shrink:0;transform:translateY(-1px)"></span>Breakdown machines · ${fmt(list.length)}</span>
-      <span style="display:block;font-size:13px;color:${W2.ink2};margin-top:2px">${day}${mob?'':' · deployed machines with an open breakdown on the sheet'} · ${mob?'tap':'click'} a machine for who to call</span></span>
+      <span style="display:block;font-size:13px;color:${W2.ink2};margin-top:2px">${day}${mob?'':` · ${swal?'':'deployed '}machines with an open breakdown on the sheet`} · ${mob?'tap':'click'} a machine for who to call</span></span>
       <span style="flex-shrink:0;font-size:14px;font-weight:500;white-space:nowrap">${open?'Hide':'Show'} <span aria-hidden="true" style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></span></button>`;
   if(!open) return B.cardBox(head, `margin-top:${mob?12:16}px;overflow:hidden`);
   if(mob) return B.cardBox(head+`<div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:8px">${list.map(m=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:${W2.head};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
       <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${B.orgChip(m.org)}<span style="font-size:13px">${idH(m)}</span></span>
         <span style="display:block;font-size:13px;margin-top:2px">${E(m.party)} · ${E(m.territory)}</span>
-        <span style="display:block;font-size:12.5px;color:${W2.ink2};margin-top:2px">${opOf(m)} · ${wStageH(m)} · ${sprayed(m)}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`).join('')}</div>`, `margin-top:12px;overflow:hidden`);
-  const cols='minmax(120px,1fr) 80px 96px minmax(130px,1.6fr) minmax(90px,1fr) minmax(110px,1.2fr) minmax(100px,1.1fr) 70px';
+        <span style="display:block;font-size:12.5px;color:${W2.ink2};margin-top:2px">${opOf(m)}${swal?'':' · '+wStageH(m)} · ${sprayed(m)}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`).join('')}</div>`, `margin-top:12px;overflow:hidden`);
+  const cols=swal?'minmax(120px,1fr) 80px minmax(130px,1.6fr) minmax(90px,1fr) minmax(110px,1.2fr) minmax(100px,1.1fr) 70px':'minmax(120px,1fr) 80px 96px minmax(130px,1.6fr) minmax(90px,1fr) minmax(110px,1.2fr) minmax(100px,1.1fr) 70px';
   const cell=(t,x='')=>`<span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${x}">${t}</span>`;
   return B.cardBox(head+`<div style="overflow-x:auto;border-top:1px solid ${W2.line2}"><div style="min-width:900px">
-      <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2}"><span>Machine</span><span>Breakdown</span><span>Handover</span><span>Retailer</span><span>Territory</span><span>Operator</span><span>TM</span><span style="text-align:right">${E(wtDayShort())}</span></div>
+      <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2}"><span>Machine</span><span>Breakdown</span>${swal?'':'<span>Handover</span>'}<span>Retailer</span><span>Territory</span><span>Operator</span><span>TM</span><span style="text-align:right">${E(wtDayShort())}</span></div>
       ${list.map(m=>`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:13.5px">
         <span style="display:flex;align-items:center;gap:6px;min-width:0"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font:600 13px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</button>${B.orgChip(m.org)}</span>
-        ${cell(idH(m))}${cell(wStageH(m))}${cell(E(m.party))}${cell(E(m.territory))}${cell(opOf(m))}${cell(m.retailer.tmName?E(m.retailer.tmName):`<i style="color:${W2.ink2}">not assigned</i>`)}${cell(sprayed(m),'text-align:right')}</div>`).join('')}
+        ${cell(idH(m))}${swal?'':cell(wStageH(m))}${cell(E(m.party))}${cell(E(m.territory))}${cell(opOf(m))}${cell(m.retailer.tmName?E(m.retailer.tmName):`<i style="color:${W2.ink2}">not assigned</i>`)}${cell(sprayed(m),'text-align:right')}</div>`).join('')}
     </div></div>`, 'margin-top:16px;overflow:hidden');
 }
 function wTeamListHTML(T, B, mob){
   const S=state, { orgChip, meter, tel } = B, dw=wDayWord();
-  const sortName=((WTEAM_SORTS.find(([k])=>k===T.sort)||[])[1]||'').replace(/yesterday/,dw).toLowerCase();
+  const sortName=((wTeamSorts().find(([k])=>k===T.sort)||[])[1]||'').replace(/yesterday/,dw).toLowerCase();
   const none=`<i style="color:${W2.ink2}">not assigned</i>`;
   const warnH=t=>`<div style="font-size:12.5px;color:${W2.idleD};margin-top:3px;line-height:1.4">⚠ ${E(t)}</div>`;
   const tagH=t=>`<span style="font-size:11.5px;font-weight:600;color:${W2.ink2};border:1px solid ${W2.line};border-radius:5px;padding:0 5px;white-space:nowrap">${E(t)}</span>`;
-  const mcPct=m=>100*wtAc(m)/WTEAM_TGT, hasOp=m=>!!(m.opName||m.opNum);
+  const mcPct=m=>100*wtAc(m)/WTEAM_TGT, hasOp=m=>!!(m.opName||m.opNum), swal=wSwal();
   if(!T.nodes.length) return B.msg(`Nothing matches these filters.${T.A.narrowed?`<div style="margin-top:12px">${B.ghost(T.view==='wplan'?'wpclear':'wtclear','Clear filters')}</div>`:''}`, '40px 18px');
   if(mob){
     const stat=(v,l)=>`<div style="display:flex;flex-direction:column;min-width:0"><span style="${w2num(17)}">${v}</span><span style="font-size:12.5px;color:${W2.ink2}">${l}</span></div>`;
     const of=(k,n)=>`${fmt(k)}<span style="font-size:12px;font-weight:500;color:${W2.ink2}"> /${fmt(n)}</span>`;
     const figs=x=>`<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span style="${w2num(22)}">${acF(x.f.acAll)}</span> <span style="font-size:13.5px;color:${W2.ink2}">of ${fmt(x.f.plan)} ac target</span></span><span style="${w2num(14)}">${pctF(x.f.pct)}</span></div>${meter(x.f.pct,'',W2.act)}</div>
-      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 8px">${stat(x.nAll>x.f.n?of(x.f.n,x.nAll):fmt(x.f.n),'plan')}${stat(fmt(x.f.dep),'deployed')}${stat(fmt(x.f.transit),'in transit')}${stat(`<span style="${x.f.brk?`color:${W2.brkD}`:''}">${fmt(x.f.brk)}</span>`,'breakdown')}${stat(of(x.f.ranY,x.f.n),'ran '+dw)}${stat(acF(x.f.acY),'ac '+dw)}</div>${mOpBar({op:x.f.op,n:x.f.n})}`;
+      <div style="display:grid;grid-template-columns:repeat(${swal?2:3},minmax(0,1fr));gap:10px 8px">${stat(x.nAll>x.f.n?of(x.f.n,x.nAll):fmt(x.f.n),swal?'machines':'plan')}${swal?'':stat(fmt(x.f.dep),'deployed')+stat(fmt(x.f.transit),'in transit')}${stat(`<span style="${x.f.brk?`color:${W2.brkD}`:''}">${fmt(x.f.brk)}</span>`,'breakdown')}${stat(of(x.f.ranY,x.f.n),'ran '+dw)}${stat(acF(x.f.acY),'ac '+dw)}</div>${mOpBar({op:x.f.op,n:x.f.n})}`;
     const pRow=(p,last)=>`<div style="display:flex;align-items:center;gap:10px;min-height:52px;${last?'':'border-bottom:1px solid '+W2.line2}"><span style="width:28px;font-size:12px;font-weight:600;color:${W2.ink2};flex-shrink:0">${p.lab}</span><span style="flex:1;min-width:0;font-size:15px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.n?E(p.n):none}</span>${tel(p,p.lab)}</div>`;
     const mcBtn=(m,inBox)=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:58px;padding:10px 12px;border:1px solid ${W2.line2};border-radius:12px;background:${inBox?'#fff':W2.head};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
-        <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${orgChip(m.org)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hasOp(m)?E(m.opName||m.opNum):`<span style="color:${W2.brkD}">No operator</span>`}${T.view==='wplan'?'':' · '+E(m.party)}</span><span style="display:block;font-size:12.5px">${wStageH(m)}${wTeamBrk(m)?` · <span style="color:${W2.brkD};font-weight:600">! Breakdown</span>`:''}</span></span>
+        <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px"><span style="font:600 13.5px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${orgChip(m.org)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hasOp(m)?E(m.opName||m.opNum):`<span style="color:${W2.brkD}">No operator</span>`}${T.view==='wplan'?'':' · '+E(m.party)}</span>${swal?(wTeamBrk(m)?`<span style="display:block;font-size:12.5px;color:${W2.brkD};font-weight:600">! Breakdown</span>`:''):`<span style="display:block;font-size:12.5px">${wStageH(m)}${wTeamBrk(m)?` · <span style="color:${W2.brkD};font-weight:600">! Breakdown</span>`:''}</span>`}</span>
         <span style="text-align:right;flex-shrink:0"><span style="display:block;${w2num(14)}">${acF(wtAc(m))} <span style="font-weight:400;color:${W2.ink2}">/ ${fmt(WTEAM_TGT)} ac</span></span><span style="display:block;font-size:12.5px;color:${m.acY>0?W2.actD:W2.ink2}">${m.acY>0?'✓ '+acF(m.acY)+' ac '+dw:'idle '+dw}</span></span><span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`;
     const tText=x=>x.kids ? `${x.kids.filter(k=>!k.none).length} FO${x.kids.filter(k=>!k.none).length===1?'':'s'}${x.kids.some(k=>k.none)?' + no FO':''}` : `${x.f.n} machine${x.f.n===1?'':'s'}`;
     const toggle=x=>`<button data-act="${T.act}" data-k="${E(x.key)}" aria-expanded="${x.open}" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:${x.open?W2.head:'#fff'};color:${W2.ink};font:500 14px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${x.open?'Hide':'Show'} ${tText(x)} <span aria-hidden="true" style="display:inline-block;transform:rotate(${x.open?180:0}deg)">▾</span></button>`;
@@ -9696,10 +9724,10 @@ function wTeamListHTML(T, B, mob){
       + (T.nodes.length>shown.length ? `<button data-act="${T.more}" style="width:100%;min-height:48px;border:1px solid ${W2.line};border-radius:12px;background:#fff;color:${W2.ink};font:500 14px ${W2.font};cursor:pointer">Load more · ${fmt(shown.length)} of ${fmt(T.nodes.length)} shown</button>` : '')
       + `<div style="margin-top:10px">${B.stamp('wpretry')}</div>`;
   }
-  const cols='minmax(170px,2fr) 46px 60px 60px 72px 84px 96px 58px 62px 112px';
+  const cols=swal?'minmax(170px,2fr) 64px 72px 84px 96px 58px 62px 112px':'minmax(170px,2fr) 46px 60px 60px 72px 84px 96px 58px 62px 112px';
   const hd=B.th(T.sortAct,T.sort);
   const head=`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2};position:sticky;top:0;z-index:1">
-    ${hd('name',T.head)}${hd('n','Plan',1)}${hd('dep','Deployed',1)}${hd('transit','In transit',1)}${hd('brk','Breakdown',1)}${hd('ranY','Ran '+wtDayShort(),1)}${hd('opPct','Operator mapped',1)}${hd('acY','Acres '+wtDayShort(),1)}${hd('plan','Target ac',1)}${hd('acAll','Season ac · % of target',1)}</div>`;
+    ${hd('name',T.head)}${hd('n',swal?'Machines':'Plan',1)}${swal?'':hd('dep','Deployed',1)+hd('transit','In transit',1)}${hd('brk','Breakdown',1)}${hd('ranY','Ran '+wtDayShort(),1)}${hd('opPct','Operator mapped',1)}${hd('acY','Acres '+wtDayShort(),1)}${hd('plan','Target ac',1)}${hd('acAll','Season ac · % of target',1)}</div>`;
   const numC=(v,b)=>`<span style="text-align:right;font-variant-numeric:tabular-nums${b?';font-weight:600':''}">${v}</span>`;
   const ofC=(k,n,col)=>`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums;font-weight:500">${fmt(k)}<span style="color:${W2.ink2};font-weight:400"> of ${fmt(n)}</span></span>${meter(n?100*k/n:null,'100%',col)}</div>`;
   const vsC=(v,p)=>`<div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px"><span style="font-variant-numeric:tabular-nums"><b style="font-weight:600">${acF(v)}</b><span style="font-size:12.5px;color:${W2.ink2}"> · ${pctF(p)}</span></span>${meter(p,'100%',W2.act)}</div>`;
@@ -9712,10 +9740,10 @@ function wTeamListHTML(T, B, mob){
       <div style="min-width:0;display:flex;gap:8px;align-items:flex-start;padding-left:${lv*20}px">${B.chev(x.open)}<div style="min-width:0">
         <div style="display:flex;align-items:center;gap:8px;min-width:0">${x.label?`<b style="font-size:11.5px;font-weight:600;color:${W2.ink2}">${x.label}</b>`:''}<span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${E(x.name)}">${E(x.name)}${phone(x.mob)}</span>${x.org?orgChip(x.org):''}${x.tag?tagH(x.tag):''}</div>
         ${sub?`<div style="font-size:13px;color:${W2.ink2};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div>`:''}${x.warn?warnH(x.warn):''}</div></div>
-      ${numC(fmt(x.f.n)+(x.nAll>x.f.n?`<span style="color:${W2.ink2};font-weight:400"> /${fmt(x.nAll)}</span>`:''))}${numC(fmt(x.f.dep),1)}${numC(fmt(x.f.transit))}${numC(`<span style="${x.f.brk?`color:${W2.brkD};font-weight:600`:`color:${W2.ink2}`}">${fmt(x.f.brk)}</span>`)}${ofC(x.f.ranY,x.f.n,W2.act)}${ofC(x.f.op,x.f.n,'#1A9E80')}${numC(acF(x.f.acY))}${numC(fmt(x.f.plan),1)}${vsC(x.f.acAll,x.f.pct)}</div>`; };
+      ${numC(fmt(x.f.n)+(x.nAll>x.f.n?`<span style="color:${W2.ink2};font-weight:400"> /${fmt(x.nAll)}</span>`:''))}${swal?'':numC(fmt(x.f.dep),1)+numC(fmt(x.f.transit))}${numC(`<span style="${x.f.brk?`color:${W2.brkD};font-weight:600`:`color:${W2.ink2}`}">${fmt(x.f.brk)}</span>`)}${ofC(x.f.ranY,x.f.n,W2.act)}${ofC(x.f.op,x.f.n,'#1A9E80')}${numC(acF(x.f.acY))}${numC(fmt(x.f.plan),1)}${vsC(x.f.acAll,x.f.pct)}</div>`; };
   const mRow=(m,lv)=>`<div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;border-bottom:1px solid ${W2.line2};align-items:center;font-size:14px;background:#FBFCFD">
       <div style="min-width:0;padding-left:${22+lv*20}px"><div style="display:flex;align-items:center;gap:6px"><button data-act="wpmc" data-mc="${E(m.mc)}" style="border:none;background:none;padding:0;cursor:pointer;font:600 13px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</button>${orgChip(m.org)}</div><div style="font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(T.view==='wplan'?(m.village||''):m.party)}</div></div>
-      <span style="grid-column:span 3;text-align:right;font-size:13px;white-space:nowrap">${wStageH(m)}</span>
+      ${swal?'<span></span>':`<span style="grid-column:span 3;text-align:right;font-size:13px;white-space:nowrap">${wStageH(m)}</span>`}
       <span style="text-align:right;font-size:13px;white-space:nowrap;color:${W2.brkD};font-weight:600">${wTeamBrk(m)?`! <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">${E(wBrkShort(m.brkDays[WRET.yday]))}</span>`:''}</span>
       <span style="text-align:right;font-size:13px;white-space:nowrap;color:${m.acY>0?W2.actD:W2.ink2}">${m.acY>0?'✓ Ran':'Idle'}</span>
       <span style="text-align:right;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${hasOp(m)?E(m.opName||m.opNum):`<span style="color:${W2.brkD}">✕ No operator</span>`}</span>
@@ -9725,7 +9753,7 @@ function wTeamListHTML(T, B, mob){
     : x.groups.map(g=>(g.label?lRow(g.label,lv):'')+g.mcs.map(m=>mRow(m,lv)).join('')).join('');
   return B.cardBox(`<div style="padding:18px 22px;border-bottom:1px solid ${W2.line2}"><div style="font-size:16px;font-weight:600">${T.title} · ${fmt(T.count)}${T.extra?` <span style="font-weight:500;font-size:14px;color:${W2.idleD}">${E(T.extra)}</span>`:''}</div>
       <div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">Sorted by ${E(sortName)} · ${T.hint} · target is ${fmt(WTEAM_TGT)} ac per machine</div></div>
-    <div style="overflow-x:auto"><div style="min-width:950px">${head}${T.nodes.map(x=>gRow(x,0)+kids(x,0)).join('')}</div></div>`, 'overflow:hidden;margin-top:16px');
+    <div style="overflow-x:auto"><div style="min-width:${swal?830:950}px">${head}${T.nodes.map(x=>gRow(x,0)+kids(x,0)).join('')}</div></div>`, 'overflow:hidden;margin-top:16px');
 }
 function wTeamPageHTML(view, mob){
   const S=state, B=wpBits(mob), T=wTeamTree(view), F=wTeamFigs(T.mcs), A=T.A;
@@ -9738,21 +9766,21 @@ function wTeamPageHTML(view, mob){
     const csvBtn=B.csv('wteamcsv',csvT), clearBtn=A.narrowed||wDayOn() ? B.ghost('wpclear','Clear') : '';
     controls = mob
       ? `<div style="display:flex;gap:8px">${search}${B.filtersBtn('wpsheet',A.nF+(wDayOn()?1:0))}</div>
-         <div style="display:flex;gap:8px;margin-top:8px">${B.sortSel(T.sortId,'Sort retailers by',WTEAM_SORTS,T.sort)}${clearBtn}${csvBtn}</div>`
+         <div style="display:flex;gap:8px;margin-top:8px">${B.sortSel(T.sortId,'Sort retailers by',wTeamSorts(),T.sort)}${clearBtn}${csvBtn}</div>`
       : `<div style="display:flex;align-items:center;gap:12px 16px;flex-wrap:wrap">${wpFilterFields(A,false)}</div>
          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px">${search}${clearBtn}<div style="flex:1"></div>${B.stamp('wpretry')}${csvBtn}</div>`;
-  } else controls = wtControlsHTML(A, mob, true, { sort:[T.sortId, view==='wfo'?'Sort TMs and FOs by':'Sort territories by', WTEAM_SORTS, T.sort], csv:'wteamcsv', csvTitle:csvT,
+  } else controls = wtControlsHTML(A, mob, true, { sort:[T.sortId, view==='wfo'?'Sort TMs and FOs by':'Sort territories by', wTeamSorts(), T.sort], csv:'wteamcsv', csvTitle:csvT,
     ph: view==='wfo' ? ['Search TM, FO, machine…','Search TM, FO, machine, retailer, person'] : null });
-  const strip=wTeamStripHTML(T, F, B, mob, stale, wTeamBrkHTML(T, B, mob)), list=wTeamListHTML(T, B, mob);
+  const strip=wTeamStripHTML(T, F, B, mob, stale, wTeamBrkHTML(T, B, mob))+(wSwal()?wDayBarsFor(T.mcs, B, mob, A.narrowed?'what is in view':'every machine'):''), list=wTeamListHTML(T, B, mob);
   return mob ? strip + `<div style="margin-top:12px">${controls}</div>` + list : controls + strip + list;
 }
 // One line per machine shown, with the same figures as the page.
 function wTeamCSV(){
-  const T=wTeamTree(state.view), d=WRET.yday, w=wIsYday()?'yesterday':'on day';
-  const head=['State','Territory','Company','Retailer','FO','FO mobile','TM','TM mobile','Machine','Operator','Operator mobile','Handover status',`Breakdown ${w} (${d})`,
+  const T=wTeamTree(state.view), d=WRET.yday, w=wIsYday()?'yesterday':'on day', swal=wSwal();
+  const head=['State','Territory','Company','Retailer','FO','FO mobile','TM','TM mobile','Machine','Operator','Operator mobile',...(swal?[]:['Handover status']),`Breakdown ${w} (${d})`,
     `Ran ${w} (${d})`,`Acres ${w} (${d})`,`Target acres (${WTEAM_TGT} per machine)`,`Season acres to ${d}`,'% of target'];
   const lines=[head.join(',')].concat(T.mcs.map(m=>{ const r=m.retailer, ac=wtAc(m);
-    return [STATE_NAMES[m.st]||m.st, m.territory, m.org, r.party, r.foName, r.foMob, r.tmName, r.tmMob, m.mc, m.opName, m.opNum, wStageWord(m), wTeamBrk(m)?m.brkDays[d]:'',
+    return [STATE_NAMES[m.st]||m.st, m.territory, m.org, r.party, r.foName, r.foMob, r.tmName, r.tmMob, m.mc, m.opName, m.opNum, ...(swal?[]:[wStageWord(m)]), wTeamBrk(m)?m.brkDays[d]:'',
       m.acY>0?'Yes':'No', m.acY, WTEAM_TGT, Math.round(ac*10)/10, Math.round(1000*ac/WTEAM_TGT)/10].map(csvCell).join(','); }));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_${T.file}_${T.A.org==='ALL'?'UPL-SWAL':T.A.org==='ALL3'?'UPL-SWAL-Bayer':T.A.org==='BAYER'?'Bayer':T.A.org}_${T.A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
@@ -10179,6 +10207,13 @@ function wmapBodyHTML(mob){
       <div style="padding:${mob?'14px 16px':'14px 18px'};border-top:1px solid ${W2.line2}">${legend}${notes}</div></div>`;
   const team = wTeam();
   const controls = wtControlsHTML(A, mob, false, team ? { noCsv:true } : undefined);   // the admin CSV carries columns a team does not get
+  // SWAL (Dinesh 2026-11-11): no pin map. Its Show buttons sit on the heat map instead, which then counts the matching
+  // machines per territory (wcCount); the daily acres chart sits above it.
+  if(wSwal()){
+    const choroS = ready ? wchoroHTML(A, mob, chips) : `<div style="${w2card(mob?18:16)};margin-top:${mob?12:16}px;height:${mob?'300px':'520px'};display:flex;align-items:center;justify-content:center;color:#6E6A62;font-size:13px">Loading the map…</div>`;
+    const bars = wDayBarsFor(A.mcs, wpBits(mob), mob, A.narrowed?'what the filters show':'every machine');
+    return (mob ? `<div>${controls}</div>` : controls) + bars + choroS;
+  }
   const choro = ready ? wchoroHTML(A, mob) : '';
   // The heat map leads, the pin map follows (Dinesh 2026-11-06).
   if(team) return mob ? `<div>${controls}</div>` + choro + map : controls + choro + map;   // no admin KPI strip for a team
@@ -10198,8 +10233,13 @@ const WC_COLS = ['#DDF2E3','#AEDDBC','#6FC08A','#2F9A58','#14703A'];
 const WC_ZERO = '#F2B8AE', WC_ZERO_INK = '#8A2A1C', WC_OFF = '#F4F2EE';
 // Per district AND per sheet territory: IoT acres, machines, and machines that RAN — ran = IoT acres on the day (Day
 // mode) or on at least one day of the season (Season mode), the same test that colours a pin green / blue above.
+// SWAL only (Dinesh 2026-11-11): a Show button other than "All machines" turns the heat map into a COUNT of the matching
+// machines per territory, on the picked day. Breakdown / no operator / not sprayed are "bad" counts (red scale, none = good).
+const wcCount = () => wSwal() && wmShowKey()!=='all' ? wmShowKey() : '';
+const WC_BAD = ['#FDE5E0','#F7BFB3','#EE8F7C','#DA5B44','#A63A27'], WC_NONE_OK = '#E3F1E6';
 function wchoroData(A){
-  const per = state.wcPer==='day' ? 'day' : 'season', val = m => per==='day' ? (m.iotY||0) : (m.iotAll||0);
+  const cnt = wcCount(), bad = ['n','brk','noop'].includes(cnt);
+  const per = cnt ? 'day' : state.wcPer==='day' ? 'day' : 'season', val = cnt ? (m => WM_TEST[cnt](m) ? 1 : 0) : (m => per==='day' ? (m.iotY||0) : (m.iotAll||0));
   const byName={}; WM.base.forEach(b=>{ byName[b.st+'|'+String(b.name).toLowerCase()]=b; });
   const D={}, T={}, unplaced={};
   let n=0, ran=0, ac=0, noTerr=0;
@@ -10213,20 +10253,24 @@ function wchoroData(A){
   const mx=Math.max(0,...Object.values(D).map(d=>d.ac));
   const cls = v => v>0 && mx>0 ? Math.min(4, Math.floor(5*v/mx - 1e-9)) : -1;
   const TL=Object.values(T).sort((a,b)=>b.ac-a.ac||b.n-a.n||a.name.localeCompare(b.name));
-  return { per, D, T:TL, unplaced, mx, cls, n, ran, ac, noTerr, nT:TL.length, tAc:TL.filter(t=>t.ac>0).length };
+  return { per, cnt, bad, D, T:TL, unplaced, mx, cls, n, ran, ac, noTerr, nT:TL.length, tAc:TL.filter(t=>t.ac>0).length };
 }
 /* The heat map leads the Map page (Dinesh 2026-11-06), above the pin map. Its card reads top-down: a four-figure band
    (acres · machines · ran · territories with acres), the district map with each district's acres and ran / machines,
    and a ranked territory table with the same three figures. A territory row (or a district, on the map) is a SHORTCUT
    into the page's Territory filter — the pin map below then fits to that territory's machines; picking it again clears it. */
-function wchoroHTML(A, mob){
+function wchoroHTML(A, mob, chips=''){
   // The figure is the device's acres for everyone; only its NAME differs (Dinesh 2026-11-06): the admin reads "IoT acres",
   // the UPL / SWAL team logins "Acres sprayed" — on those logins the device's acres ARE the acres sprayed.
   const AC = wTeam() ? 'Acres sprayed' : 'IoT acres', ACs = wTeam() ? 'Acres' : 'IoT ac', ACl = wTeam() ? 'acres sprayed' : 'IoT acres';
   const X=wchoroData(A), day=wpDate(WRET.yday), dw=wtDayShort(), isDay=X.per==='day';
+  // In count mode every "acres" figure reads as a machine count, and the colours flip for the "bad" counts.
+  const cntLab = X.cnt ? (WM_SHOW.find(x=>x[0]===X.cnt)||['',''])[1].replace('{day}', dw==='y’day'?'yesterday':'on '+day) : '';
+  const vF = v => X.cnt ? fmt(v) : acF(v), uS = X.cnt ? 'mc' : 'ac', uL = X.cnt ? 'machines' : 'ac';
+  const PAL = X.bad ? WC_BAD : WC_COLS, ZERO = X.bad ? WC_NONE_OK : WC_ZERO, ZINK = X.bad ? '#2C5A3C' : WC_ZERO_INK;
   const step = X.mx/5, rng = i => `${acF(Math.round(step*i))}–${acF(Math.round(step*(i+1)))}`;
   const ranW = isDay ? (dw==='y’day'?'ran yesterday':'ran on '+day) : 'ran this season';
-  const toggle=`<div style="${w2segBox(mob)}">${[['season','Season'],['day',dw==='y’day'?'Yesterday':day]].map(([k,t])=>`<button data-act="wcper" data-k="${k}" aria-pressed="${X.per===k}" style="${w2seg(X.per===k,mob)}">${t}</button>`).join('')}</div>`;
+  const toggle= X.cnt ? '' : `<div style="${w2segBox(mob)}">${[['season','Season'],['day',dw==='y’day'?'Yesterday':day]].map(([k,t])=>`<button data-act="wcper" data-k="${k}" aria-pressed="${X.per===k}" style="${w2seg(X.per===k,mob)}">${t}</button>`).join('')}</div>`;
   const pct = (a,b) => b>0 ? Math.round(100*a/b) : 0;
   const meter = (p,col) => `<span aria-hidden="true" style="display:block;height:4px;border-radius:2px;background:${W2.line2};overflow:hidden"><span style="display:block;height:100%;width:${p>0?Math.max(3,Math.min(100,p)):0}%;background:${col};border-radius:2px"></span></span>`;
   const ranCol = p => p>=50 ? C.act : p>=20 ? '#E0A008' : C.brk;
@@ -10235,21 +10279,22 @@ function wchoroHTML(A, mob){
       <span style="font-size:12.5px;font-weight:500;color:${W2.ink2}">${lab}</span><span style="${w2num(mob?20:24,600)}">${val}</span>${sub}</div>`;
   const ranP=pct(X.ran,X.n), terrP=pct(X.tAc,X.nT), zeroT=X.nT-X.tAc;
   const band = `<div style="display:grid;grid-template-columns:repeat(${mob?2:4},minmax(0,1fr));border-bottom:1px solid ${W2.line2};background:${W2.head}">
-      ${cell(AC, `${acF(Math.round(X.ac))}${w2unit('ac',12)}`, `<span style="font-size:12.5px;color:${W2.ink2}">${isDay?day:'season to '+day}</span>`, `border-right:1px solid ${W2.line2};${mob?`border-bottom:1px solid ${W2.line2}`:''}`)}
+      ${cell(X.cnt?cntLab:AC, `${vF(Math.round(X.ac))}${w2unit(uL,12)}`, `<span style="font-size:12.5px;color:${W2.ink2}">${X.cnt?`of ${fmt(X.n)} machines · ${day}`:isDay?day:'season to '+day}</span>`, `border-right:1px solid ${W2.line2};${mob?`border-bottom:1px solid ${W2.line2}`:''}`)}
       ${cell('Machines in territories', fmt(X.n), `<span style="font-size:12.5px;color:${W2.ink2}">across ${fmt(X.nT)} territor${X.nT===1?'y':'ies'}</span>`, mob?`border-bottom:1px solid ${W2.line2}`:`border-right:1px solid ${W2.line2}`)}
       ${cell('Machines ran', `${fmt(X.ran)}<span style="font-size:13px;color:${W2.ink2};font-weight:500"> of ${fmt(X.n)} · ${ranP}%</span>`, meter(ranP, ranCol(ranP)), `border-right:1px solid ${W2.line2}`)}
-      ${cell('Territories with acres', `${fmt(X.tAc)}<span style="font-size:13px;color:${W2.ink2};font-weight:500"> of ${fmt(X.nT)}</span>`, zeroT?`<span style="font-size:12.5px;color:${WC_ZERO_INK};font-weight:600">${fmt(zeroT)} with no acres</span>`:`<span style="font-size:12.5px;color:${W2.ink2}">every one has acres</span>`)}</div>`;
+      ${X.cnt ? cell('Territories with any', `${fmt(X.tAc)}<span style="font-size:13px;color:${W2.ink2};font-weight:500"> of ${fmt(X.nT)}</span>`, `<span style="font-size:12.5px;color:${W2.ink2}">${fmt(zeroT)} with none</span>`)
+        : cell(wSwal()&&isDay?'Territories sprayed':'Territories with acres', `${fmt(X.tAc)}<span style="font-size:13px;color:${W2.ink2};font-weight:500"> of ${fmt(X.nT)}</span>`, zeroT?`<span style="font-size:12.5px;color:${WC_ZERO_INK};font-weight:600">${fmt(zeroT)} with no acres</span>`:`<span style="font-size:12.5px;color:${W2.ink2}">every one has acres</span>`)}</div>`;
   // ---- the map
   const sel = A.terr || '';
   const selDist = sel ? (X.T.find(t=>t.name===sel)||{}).dist : '';
   const paths = WM.base.map(b=>{ const d=X.D[b.st+'|'+b.name], v=d?d.ac:0, c=X.cls(v);
     const tn = d ? Object.keys(d.terrs) : [];
-    const tip = `${b.name}: ${acF(v)} ${wTeam()?'ac sprayed':'IoT ac'}`+(d?` · ${fmt(d.ran)} of ${fmt(d.n)} machines ${ranW}`:'')+(tn.length?' — '+Object.entries(d.terrs).sort((a,b)=>b[1]-a[1]).map(([t,a])=>`${t} ${acF(a)}`).join(', '):' — no territory on the sheet');
+    const tip = `${b.name}: ${X.cnt?`${fmt(v)} ${cntLab.toLowerCase()}`:`${acF(v)} ${wTeam()?'ac sprayed':'IoT ac'}`}`+(d?` · ${fmt(d.ran)} of ${fmt(d.n)} machines ${ranW}`:'')+(tn.length?' — '+Object.entries(d.terrs).sort((a,b)=>b[1]-a[1]).map(([t,a])=>`${t} ${acF(a)}`).join(', '):' — no territory on the sheet');
     // A district holding exactly one territory is a tap into that territory; a shared one (Khanna + Ludhiana) is not,
     // since the tap could only guess which of the two was meant — the table beside it lists both.
     const act = tn.length===1 ? ` data-act="wcterr" data-t="${E(tn[0])}" style="cursor:pointer"` : '';
     const on = selDist && b.name===selDist;
-    return `<path d="${b.d}" fill="${c>=0?WC_COLS[c]:d?WC_ZERO:WC_OFF}" stroke="${on?'#15181C':'#FFFFFF'}" stroke-width="${on?2.6:1.4}" class="wcD"${act}><title>${E(tip)}</title></path>`; }).join('');
+    return `<path d="${b.d}" fill="${c>=0?PAL[c]:d?ZERO:WC_OFF}" stroke="${on?'#15181C':'#FFFFFF'}" stroke-width="${on?2.6:1.4}" class="wcD"${act}><title>${E(tip)}</title></path>`; }).join('');
   // Labels on desktop only (a phone's map is ~350px wide; the table below carries the names). Height-limited map, so a
   // map unit is WM.H ÷ the box's height in px and type is px × that. Three lines where a district has machines:
   // name · acres · "ran / machines"; districts with acres are placed first, biggest first, and a blank one is dropped
@@ -10259,9 +10304,9 @@ function wchoroHTML(A, mob){
   const placedBx=[], hit=bx=>placedBx.some(o=>bx[0]<o[2]&&bx[2]>o[0]&&bx[1]<o[3]&&bx[3]>o[1]);
   const order = WM.base.filter(b=>b.c).map(b=>{ const d=X.D[b.st+'|'+b.name]; return { b, d, v:d?d.ac:0 }; }).sort((a,b)=>b.v-a.v||(!!b.d)-(!!a.d));
   const T_=(x,y,sz,w,ink,t)=>`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" font-size="${sz.toFixed(1)}"${w?` font-weight="${w}"`:''} fill="${ink}" font-family="IBM Plex Sans,sans-serif" style="pointer-events:none;font-variant-numeric:tabular-nums">${E(t)}</text>`;
-  const labels = mob ? '' : order.map(({b,d,v})=>{ const [x,y]=WM.proj(b.c[0],b.c[1]), c=X.cls(v), ink=c>=3?'#FFFFFF':c>=0?'#14321F':d?WC_ZERO_INK:'#9C978E', ink2=c>=3?'rgba(255,255,255,.85)':c>=0?'#2C5A3C':WC_ZERO_INK, nm=SHORT[b.name]||b.name;
+  const labels = mob ? '' : order.map(({b,d,v})=>{ const [x,y]=WM.proj(b.c[0],b.c[1]), c=X.cls(v), ink=c>=3?'#FFFFFF':c>=0?(X.bad?'#4A1A10':'#14321F'):d?ZINK:'#9C978E', ink2=c>=3?'rgba(255,255,255,.85)':c>=0?(X.bad?'#6E2A1C':'#2C5A3C'):ZINK, nm=SHORT[b.name]||b.name;
     const rt = d ? `${fmt(d.ran)}/${fmt(d.n)} ran` : '';
-    const lines = [[nm,fs,0,ink]].concat(v>0?[[acF(v)+' ac',fv,700,ink]]:[]).concat(d?[[rt,fr,500,ink2]]:[]);
+    const lines = [[nm,fs,0,ink]].concat(v>0?[[vF(v)+' '+uS,fv,700,ink]]:[]).concat(d?[[rt,fr,500,ink2]]:[]);
     // Boxes are padded by 2px so neighbours never touch. A district that cannot fit its three lines tries its name alone,
     // and if even that collides it goes unlabelled — the table beside the map and the district's tooltip still carry it.
     const pad=2*u, hgt = lines.reduce((a,l)=>a+l[1]*1.12,0), w=Math.max(...lines.map(l=>l[0].length*l[1]*0.6))/2+pad;
@@ -10271,41 +10316,41 @@ function wchoroHTML(A, mob){
     else placedBx.push(full);
     const h2=use.reduce((a,l)=>a+l[1]*1.12,0); let yy=y-h2/2;
     return use.map(([t,sz,wt,ik])=>{ yy+=sz*1.12; return T_(x, yy-sz*0.22, sz, wt, ik, t); }).join(''); }).join('');
-  const svg = `<svg viewBox="0 0 ${WM.W} ${WM.H}" role="img" aria-label="${E(AC+' and machines that ran, by district, '+(isDay?day:'season to '+day))}" style="display:block;width:100%;height:${mob?'auto':'clamp(460px,72vh,820px)'}">${paths}${labels}</svg>`;
+  const svg = `<svg viewBox="0 0 ${WM.W} ${WM.H}" role="img" aria-label="${E((X.cnt?cntLab:AC)+' and machines that ran, by district, '+(isDay?day:'season to '+day))}" style="display:block;width:100%;height:${mob?'auto':'clamp(460px,72vh,820px)'}">${paths}${labels}</svg>`;
   const sw = (bg,bd) => `<span aria-hidden="true" style="width:16px;height:12px;border-radius:3px;background:${bg};${bd?`border:1px solid ${W2.line}`:''};flex-shrink:0"></span>`;
   const legend = `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:13px;color:${W2.ink}">
-      ${X.mx>0?`<span style="display:inline-flex;align-items:center;gap:8px;white-space:nowrap"><span style="color:${W2.ink2}">${AC}</span><span style="display:inline-flex;border-radius:3px;overflow:hidden">${WC_COLS.map(c=>`<span aria-hidden="true" style="width:22px;height:12px;background:${c}"></span>`).join('')}</span><span style="font-variant-numeric:tabular-nums">0 – ${acF(Math.round(X.mx))} ac</span></span>`:''}
-      <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">${sw(WC_ZERO)}Territory, no acres</span>
+      ${X.mx>0?`<span style="display:inline-flex;align-items:center;gap:8px;white-space:nowrap"><span style="color:${W2.ink2}">${X.cnt?E(cntLab):AC}</span><span style="display:inline-flex;border-radius:3px;overflow:hidden">${PAL.map(c=>`<span aria-hidden="true" style="width:22px;height:12px;background:${c}"></span>`).join('')}</span><span style="font-variant-numeric:tabular-nums">${X.cnt?`1 – ${fmt(X.mx)} machines`:`0 – ${acF(Math.round(X.mx))} ac`}</span></span>`:''}
+      <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">${sw(ZERO)}${X.cnt?'Territory, none':'Territory, no acres'}</span>
       <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap">${sw(WC_OFF,1)}No territory</span>
       ${mob?'':`<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:${W2.ink2}"><b style="color:${W2.ink};font-weight:600;font-variant-numeric:tabular-nums">5/12 ran</b> = machines that ${ranW.replace(/^ran/,'ran')} / machines there</span>`}</div>`;
   // ---- the territory table
   const tmax = X.T.length ? X.T[0].ac : 0;
   const row = t => { const on=t.name===sel, p=pct(t.ran,t.n), c=X.cls(X.D[t.st+'|'+t.dist]?X.D[t.st+'|'+t.dist].ac:0);
     const where = `${t.dist&&t.dist.toLowerCase()!==t.name.toLowerCase()?E(t.dist)+', ':''}${E(STATE_NAMES[t.st]||t.st)}`;
-    const acCell = `<span style="${w2num(mob?15:14,600)};text-align:right;${t.ac>0?'':`color:${WC_ZERO_INK}`}">${t.ac>0?acF(t.ac):'0'}</span>`;
+    const acCell = `<span style="${w2num(mob?15:14,600)};text-align:right;${t.ac>0?(X.bad?`color:${W2.brkD}`:''):`color:${ZINK}`}">${t.ac>0?vF(t.ac):'0'}</span>`;
     const ranCell = `<span style="text-align:right;font-variant-numeric:tabular-nums;font-size:${mob?14:13.5}px"><b style="font-weight:600">${fmt(t.ran)}</b><span style="color:${W2.ink2}"> · ${p}%</span></span>`;
     const nCell = `<span style="text-align:right;font-variant-numeric:tabular-nums;font-size:${mob?14:13.5}px">${fmt(t.n)}</span>`;
-    const bar = `<span aria-hidden="true" style="grid-column:1/-1;display:block;height:5px;border-radius:3px;background:${W2.line2};overflow:hidden"><span style="display:block;height:100%;width:${tmax>0&&t.ac>0?Math.max(2,100*t.ac/tmax):0}%;background:${WC_COLS[Math.max(1,c)]};border-radius:3px"></span></span>`;
+    const bar = `<span aria-hidden="true" style="grid-column:1/-1;display:block;height:5px;border-radius:3px;background:${W2.line2};overflow:hidden"><span style="display:block;height:100%;width:${tmax>0&&t.ac>0?Math.max(2,100*t.ac/tmax):0}%;background:${PAL[Math.max(1,c)]};border-radius:3px"></span></span>`;
     const base = `data-act="wcterr" data-t="${E(t.name)}" aria-pressed="${on}" title="${on?'Show every territory':'Show only '+E(t.name)+' on this page'}" style="display:grid;width:100%;text-align:left;border:0;border-bottom:1px solid ${W2.line2};background:${on?'#EAF4EC':'transparent'};${on?`box-shadow:inset 3px 0 0 ${C.act};`:''}cursor:pointer;font-family:inherit;color:${W2.ink};`;
     if(mob) return `<button ${base}grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 10px;padding:10px 4px;min-height:44px">
         <span style="grid-column:1/-1;min-width:0;display:flex;align-items:baseline;gap:6px"><b style="font-weight:600;font-size:14.5px">${E(t.name)}</b><span style="font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${where}</span></span>
-        <span style="display:flex;flex-direction:column;gap:1px"><span style="font-size:11.5px;color:${W2.ink2}">${ACs}</span>${acCell.replace('text-align:right;','')}</span>
+        <span style="display:flex;flex-direction:column;gap:1px"><span style="font-size:11.5px;color:${W2.ink2}">${X.cnt?'Matching':ACs}</span>${acCell.replace('text-align:right;','')}</span>
         <span style="display:flex;flex-direction:column;gap:1px"><span style="font-size:11.5px;color:${W2.ink2}">Machines</span>${nCell.replace('text-align:right;','')}</span>
         <span style="display:flex;flex-direction:column;gap:1px"><span style="font-size:11.5px;color:${W2.ink2}">Ran</span>${ranCell.replace('text-align:right;','')}</span>
         ${bar}</button>`;
     return `<button ${base}grid-template-columns:minmax(0,1fr) 56px 70px 64px;gap:4px 10px;padding:9px 10px;align-items:center">
         <span style="min-width:0;display:flex;flex-direction:column"><b style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(t.name)}</b><span style="font-size:12px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${where}</span></span>
         ${nCell}${ranCell}${acCell}${bar}</button>`; };
-  const thead = mob ? '' : `<div style="display:grid;grid-template-columns:minmax(0,1fr) 56px 70px 64px;gap:10px;padding:0 10px 8px;font-size:12px;font-weight:600;color:${W2.ink2};border-bottom:1px solid ${W2.line2}"><span>Territory</span><span style="text-align:right">Machines</span><span style="text-align:right">Ran</span><span style="text-align:right">${ACs}</span></div>`;
+  const thead = mob ? '' : `<div style="display:grid;grid-template-columns:minmax(0,1fr) 56px 70px 64px;gap:10px;padding:0 10px 8px;font-size:12px;font-weight:600;color:${W2.ink2};border-bottom:1px solid ${W2.line2}"><span>Territory</span><span style="text-align:right">Machines</span><span style="text-align:right">Ran</span><span style="text-align:right">${X.cnt?'Matching':ACs}</span></div>`;
   const clear = sel ? `<button data-act="wcterr" data-t="${E(sel)}" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:${mob?44:34}px;margin-top:10px;border:1px solid ${W2.line};border-radius:9px;background:#fff;font:500 13px ${W2.font};color:${W2.ink};cursor:pointer">Show every territory</button>` : '';
   // On the phone the table stops at 8 rows, so the pin map below is not 25 cards away; "Show all" opens the rest.
   const cut = mob && !state.wcAll && X.T.length>WC_PHONE_ROWS ? WC_PHONE_ROWS : X.T.length;
   const more = cut<X.T.length ? `<button data-act="wcall" style="display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;margin-top:10px;border:1px solid ${W2.line};border-radius:9px;background:#fff;font:500 14px ${W2.font};color:${W2.ink};cursor:pointer">Show all ${fmt(X.T.length)} territories</button>` : '';
   const list = `<div>${thead}${X.T.slice(0,cut).map(row).join('')}${more}${clear}</div>`;
   const unp = Object.keys(X.unplaced);
-  const note = `<div style="font-size:12.5px;color:${W2.ink2};line-height:1.5;margin-top:10px">Each district is coloured by the ${ACl} of the sheet territories inside it, in five equal steps up to the largest district; where two territories share a district (Khanna and Ludhiana, Malerkotla and Sangrur …) they are added together. Ran = machines with ${ACl} ${isDay?'on '+day:'on at least one day of the season'}, the same test that colours a pin. ${mob?'Tap':'Click'} a territory to see only its machines on this page${mob?'':' (or a district on the map)'}.${X.noTerr?` ${fmt(X.noTerr)} machine${X.noTerr===1?'':'s'} with no territory on the sheet ${X.noTerr===1?'is':'are'} left out.`:''}${unp.length?` <b style="color:#46433d">Not placed on a district:</b> ${unp.map(t=>`${E(t)} (${acF(X.unplaced[t])} ac)`).join(', ')}.`:''}</div>`;
+  const note = `<div style="font-size:12.5px;color:${W2.ink2};line-height:1.5;margin-top:10px">Each district is coloured by ${X.cnt?`how many of its machines are “${E(cntLab.toLowerCase())}”`:`the ${ACl} of the sheet territories inside it`}, in five equal steps up to the largest district; where two territories share a district (Khanna and Ludhiana, Malerkotla and Sangrur …) they are added together. Ran = machines with ${ACl} ${isDay?'on '+day:'on at least one day of the season'}${wSwal()?'':', the same test that colours a pin'}. ${mob?'Tap':'Click'} a territory to see only its machines on this page${mob?'':' (or a district on the map)'}.${X.noTerr?` ${fmt(X.noTerr)} machine${X.noTerr===1?'':'s'} with no territory on the sheet ${X.noTerr===1?'is':'are'} left out.`:''}${unp.length?` <b style="color:#46433d">Not placed on a district:</b> ${unp.map(t=>`${E(t)} (${acF(X.unplaced[t])} ac)`).join(', ')}.`:''}</div>`;
   const head = `<div style="display:flex;align-items:center;gap:10px 14px;padding:${mob?'14px 16px':'14px 18px'};border-bottom:1px solid ${W2.line2};flex-wrap:wrap">
-      <div style="flex:1;min-width:${mob?'100%':'240px'}"><div style="font-size:${mob?15:16}px;font-weight:600">Territory heat map · ${AC}</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${isDay?day:'Season to '+day} · ${sel?`only ${E(sel)}`:A.narrowed?'what the filters show':'every machine'}</div></div>${toggle}</div>`;
+      <div style="flex:1;min-width:${mob?'100%':'240px'}"><div style="font-size:${mob?15:16}px;font-weight:600">Territory heat map · ${X.cnt?E(cntLab):AC}</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${isDay?day:'Season to '+day} · ${sel?`only ${E(sel)}`:A.narrowed?'what the filters show':'every machine'}${X.cnt?' · machines per territory':''}</div></div>${toggle}</div>${chips}`;
   const body = mob
     ? `<div style="padding:8px 8px 0">${svg}</div><div style="padding:12px 16px 14px">${legend}<div style="margin-top:12px">${list}</div>${note}</div>`
     : `<div class="wcGrid">

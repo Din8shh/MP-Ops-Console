@@ -1117,6 +1117,13 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     until 2026-11-05, when Dinesh moved it to ALL machines (`wTeamFigs`: "n of all machines", rows n of plan, the Map's No operator
     button and red ring likewise). Ran and the 650 ac target count the whole plan.** The admin pages do not show any of this yet. Checked on the sheet 30 Oct: UPL 157 = 127 + 8 + 22, SWAL 212 = 184 + 10 + 18 (17 blank in all),
     breakdown 31 UPL + 43 SWAL on 29 Oct (5 of them sprayed; before the deployed-only rule). After it, on the sheet of the evening of 30 Oct: UPL 27 of 127 and operators 98 of 127; SWAL 38 of 186 and operators 145 of 186 (the sheet had moved: 313 deployed then). 14.5 ac were sprayed by machines not marked Done. Table fits unscrolled at 1280 (min-width 950).
+  · **SWAL team logins only (4832 / 4732 / 4060, Dinesh 2026-11-11; `wSwal()`)**: no pin map — its Show buttons sit on the
+    territory heat map, and any button but All turns the map into a COUNT of matching machines per territory (`wcCount`; red scale
+    for breakdown / no operator / not sprayed, where none is good); the Season/Day toggle hides then. "Machine plan" is a plain
+    **Machines** card — no deployed / in transit / pending anywhere (strip, rows, sorts `wTeamSorts`, breakdown list, panel, CSV);
+    Breakdown still counts deployed machines only (agreed) but no longer says so. New: a **Territories sprayed <day>** tile and the
+    **Acres sprayed by day** chart (`wDayBarsHTML` / `wDayBarsFor`, shared with the admin Territory page) on every SWAL page and the Map.
+    UPL team logins are unchanged.
   · One tree renderer for all three pages: Retailer → machines · Territory → machines (under each TM) · TM → FO → machines. It
     reuses each page's own expand acts / open state / sort state (`wpexp`/`wtexp`/`wfoexp`, `wpSort`/`wtSort`/`wfoSort`) with
     `WTEAM_SORTS` (default Target acres); the aggregates clamp those keys to their own lists, and the tree sorts itself.
