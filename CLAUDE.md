@@ -893,6 +893,7 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     operator-mapped bar (`mOpBar`). CSVs add last ping, live and breakdown ID (Territory / AM) and last 7 days / IoT (Retailer).
   · Strip: MTD and "Machines on the sheet" removed; Scanned shows the DAY on top with the total under it (also on the
     Retailer strip). Tile labels may wrap. Layout since 2026-10-30: the four groups above.
+  · **(Superseded 2026-11-11: breakdowns now come from the maintenance tab's tickets — see Page 7. The flag below is the fallback.)**
   · **Breakdown is now the word `Open_breakdown`, not an ID (2026-11-10).** `breakdown_id` keeps its name but holds
     `Open_breakdown` or `0`, the same on every date (a status, no history). gviz types the column by its majority and
     returned every breakdown BLANK, so all breakdown counts read 0. **`wretFetch` now reads the raw CSV export FIRST**
@@ -1024,6 +1025,33 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   2026-11-04). Wheat admin only. The ten machines with the most season acres through the Day filter's day, on the shared wt*
   scope. A toggle ranks by acres sprayed (`wtAc`) or IoT acres (`iotAll`); days / per day follow the chosen measure. Admin's
   phone bar now has six pages, so it shows four + All pages.
+- **Page 7, Breakdowns** (`wbd`, `#/breakdowns`, rail "Breakdowns"; `wbdAgg` / `wbdBodyHTML` / `wbdCSV`, Dinesh 2026-11-11).
+  Wheat admin only. Off the **breakdown TICKETS** in the same workbook's **"maintenance data"** tab (gid `965231799`,
+  `PROJECTS.wheat.maint`; parsed by `wtkBuild` into `WTK`, logged as `[MP-Ops] wheat breakdown tickets → {…}`).
+  · **The tab**: the Main sheet's machine-day grid (+ Bayer's machines) with the ticket on that day: `breakdown_id`,
+    `tech_name` / `tech_contact`, `breakdown_date`, `breakdown_closed_date` (blank = open), `current_BD_status`
+    (`Open_BD` / `Closed_BD`) and `Mcn_status_on_selected_date`. Measured 2026-11-11: 724 tickets from 22 Oct, one machine
+    per ticket, a ticket on exactly the days open → close. The three machines on both sheets (UPL_2681 / 2729 / 2782) are
+    listed twice a day; tickets are keyed on their ID, so they count once. 14 machines carry two open tickets at once — counted
+    as two (agreed) and flagged "! 2 open tickets" for the sheet to clean. No fault / reason column exists.
+  · **THESE TICKETS ARE THE BREAKDOWN ON EVERY WHEAT PAGE** (Dinesh: "consider this page open tickets"). `wtkApply`
+    rewrites each machine's `brkDays`: in breakdown at the END of day d = a ticket opened on or before d and not closed by d.
+    So the Day filter now has breakdown history, and the Territory / AM / Map / team pages follow with no per-page code
+    (checked: Territory rows sum to 104 = the page's machines-in-breakdown at the end of 10 Nov). The Main sheet's
+    `Open_breakdown` flag (below) is only the FALLBACK if the tab fails to load; it missed 7 open tickets on 11 Nov.
+  · **Definitions (agreed)**: opened / closed on the day by the ticket's dates; a same-day ticket counts as both; **carried
+    over** = open at the day's end and opened before it, aged 1–2 / 3–7 / 8+ days. Technician **output = tickets CLOSED**:
+    on the day, overall (through the day), and **average = closed overall ÷ days from his first ticket to the day**.
+    Time to fix = median days open → close of tickets closed so far.
+  · **Technician names are cleaned** (`wtkTech`): keyed on the NUMBER (one per name, checked); the agency typed into the name
+    (`-Utkarsh`, ` IOT`, ` RJ`, ` MP`) becomes a tag beside it; the rest is cased ("Surender KUMAR-Utkarsh" → Surender Kumar ·
+    Utkarsh). Blank = "No technician named", last.
+  · Page: filters (shared wt* scope; its own search also hits ticket ID and technician — `wterrAgg({noQ:true})`) → one
+    verdict line ("▼ The open pile shrank by 8 yesterday: 41 new, 49 closed, 115 still open") → five tiles (New · Closed ·
+    Open at the end of the day · Carried over with ages · Time to fix) → two day charts (new vs closed; open at day end,
+    carried + new stacked) → Technicians table / cards (expand: his open tickets oldest first + closed on the day, Call) →
+    "Still open from earlier days", oldest first, 15 then Show all. CSV = one line per ticket. Checked 11 Nov against a
+    direct count from the sheet (41 / 49 / 115 / 82 / 104 machines) at 1280, 375 and 320 (no sideways scroll).
 - **The Wheat team view (role `wteam`, asked by Dinesh 2026-10-29).** Six PINs for the UPL and SWAL teams: one per company per
   state (HR UPL 4831, HR SWAL 4832, PB UPL 4731, PB SWAL 4732) and one per company for its leaders across HR + PB (UPL 4050,
   SWAL 4060, State control shown). The company is forced (`allow` = their own), so the Company control is gone and every

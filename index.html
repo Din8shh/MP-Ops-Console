@@ -210,7 +210,7 @@ const W2 = { ink:'#15181C', ink2:'#5B636D', ink3:'#8C939B', line:'#E4E7EA', line
 // The tinted tile for a KPI label — the design's tone(): each kind of figure keeps one hue wherever it appears.
 function w2tone(l){
   const T=(a,b,c,d)=>({ bg:`linear-gradient(150deg,${a} 0%,#FFFFFF 75%)`, bd:b, vc:c, dot:d });
-  return l==='Breakdown' ? T('#FDECEA','#F4D8D4',W2.brkD,W2.brk) : l==='Idle' ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle)
+  return l==='Breakdown'||/^(New breakdowns|Open at)/.test(l) ? T('#FDECEA','#F4D8D4',W2.brkD,W2.brk) : /^Carried/.test(l) ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle) : /^Closed/.test(l) ? T('#EEF8F2','#CFE9DA',W2.actD,W2.act) : l==='Idle' ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle)
     : /^Acres/.test(l) ? T('#E8F2FC','#D2E3F4','#1D4F80','#3B82C4') : /^(MTD|Scan|Spruce|Feego)/.test(l) ? T('#F0ECFC','#DED7F4','#4A3A8C','#7A63D1')
     : /^(Deployed|Machines)/.test(l) ? T('#FFF0E2','#F5DEC7','#8A430A',C.orange) : /^(Operators|Retailers|Territories|FOs)/.test(l) ? T('#E6F6F1','#CBEAE0','#0E6B57','#1A9E80')
     : /^(IoT|Pinged)/.test(l) ? T('#ECEFFD','#D8DEF6','#2F3F8F','#5468D4') : /^Ran/.test(l) ? T('#EEF8F2','#CFE9DA',W2.actD,W2.act) : T('#F4F6F8',W2.card,W2.ink,W2.ink3);
@@ -236,7 +236,7 @@ const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
-  wDay:'', wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
+  wDay:'', wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
   wfoSort:'bk', wfoOpen:{}, wfoOn:'',   // Wheat TM → FO page: its own sort, open rows and onboarded filter; the rest is the wt* scope
   wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
   iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60, iotTs:'',   // IoT pages — page-local, shared by the three of them
@@ -353,8 +353,10 @@ const PROJECTS = {
             // Bayer's machines (2026-11-05): their own workbook, the Main sheet's layout, organisation "Bayer". Read from
             // `from` only (Bayer's programme starts 1 Nov). Wheat admin only — see wOrgOk / BAYER.
             bayer:{ sheetId:'14dpDPQtB8GyQFMrjJa28LeTtgz5x5wr2dVv-WmoSH3M', gid:'0', name:'Sheet1', from:'2026-11-01' },
-            home:'wplan', views:['wplan','wterr','wam','wfo','wmap','wtop'], bar:['wplan','wterr','wam','wfo','wmap','wtop'],
-            only:['fo','retailer','wplan','wterr','wam','wfo','wmap','wtop'], kharifTabs:false,
+            // Breakdown tickets (2026-11-11): the same workbook's "maintenance data" tab — see wtkBuild.
+            maint:{ sheetId:'1Tz3OAhykHa144JAufDRwK_G2_LuG0QXxwOsQqhR9mfc', gid:'965231799', name:'maintenance data' },
+            home:'wplan', views:['wplan','wterr','wam','wfo','wmap','wtop','wbd'], bar:['wplan','wterr','wam','wfo','wmap','wtop','wbd'],
+            only:['fo','retailer','wplan','wterr','wam','wfo','wmap','wtop','wbd'], kharifTabs:false,
             head:sc=>`Wheat Spray Operations · ${sc==='India'?'North':sc}`, sub:'Wheat Spray Programme · Haryana · Punjab',
             mHead:sc=>`Wheat Spray · ${sc==='India'?'North':sc}`, mSub:'Wheat North · AFS' },
   // IoT device monitoring (2026-10-15). Not a programme but a team: the three state IoT technicians and the IoT head
@@ -895,13 +897,82 @@ const WRET_UPL_KEEP = new Set(['UPL_2782']);
 const wBrkLbl = v => v ? (/\d/.test(v) ? 'ID '+v : v) : '';
 // In a narrow column: the ID itself, or just "Open" (the column is headed Breakdown).
 const wBrkShort = v => v ? (/\d/.test(v) ? v : /^open/i.test(v) ? 'Open' : v) : '';
+/* ===================== Wheat North — breakdown TICKETS (the "maintenance data" tab, PROJECTS.wheat.maint) =====================
+   Asked by Dinesh 2026-11-11. The tab is the Main sheet's machine-day grid plus the breakdown ticket on that day, so it is
+   the only Wheat source with breakdown HISTORY: one ticket (`breakdown_id`) per breakdown, with the day it opened
+   (`breakdown_date`), the day it closed (`breakdown_closed_date`, blank while open) and the technician who has it.
+   Checked on the live tab 2026-11-11: 9,370 rows / 434 machines (the Main sheet's 362 + Bayer's), 724 tickets, never one
+   ticket on two machines, dates / status / technician the same on every row of a ticket, and a ticket sits on exactly
+   the days open → close (or → today) — except the three machines on both sheets, whose every day is listed twice
+   (read once here: a ticket is keyed on its ID).
+   · THESE TICKETS ARE THE BREAKDOWN on every Wheat page (Dinesh: "consider this page open tickets"). A machine is in
+     breakdown at the END of day d when a ticket opened on or before d and was not closed by d (closed after d, or still
+     open). wtkApply rewrites each machine's brkDays from that, so the Day filter now has real breakdown history and
+     every page's Breakdown figure follows with no per-page code. If the tab fails to load, the Main sheet's own
+     breakdown_id flag stays in use and the load log says so.
+   · The technician is keyed on his NUMBER (one number per name on the live tab) and his name is cleaned (wtkTech):
+     the agency tag typed into it ("-Utkarsh", " IOT", " RJ", " MP") becomes a separate tag, the rest is cased.
+   Every load logs `[MP-Ops] wheat breakdown tickets → {…}`. Read it first if a breakdown count looks wrong. */
+const WTK = { loaded:false, error:false, tickets:[], log:null };
+const WTK_TAGS = [[/[-\s]+utkarsh$/i,'Utkarsh'],[/[-\s]+iot$/i,'IoT'],[/\s+rj$/i,'RJ'],[/\s+mp$/i,'MP']];
+function wtkTech(raw){
+  let n=txt(raw).replace(/\s+/g,' ').trim(), tag='';
+  if(!n||n==='0'||n==='-') return { name:'', tag:'' };
+  for(const [re,t] of WTK_TAGS) if(re.test(n)){ tag=t; n=n.replace(re,'').trim(); break; }
+  return { name:titleCase(n), tag };
+}
+const wtkDayN = (a,b) => Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/864e5);   // b − a, in days
+function wtkBuild(grid){
+  const h=(grid[0]||[]).map(x=>String(x||'').trim().toLowerCase()), ix=n=>h.indexOf(n);
+  const C={ mc:ix('machine_number'), id:ix('breakdown_id'), tech:ix('tech_name'), mob:ix('tech_contact'), open:ix('breakdown_date'),
+    close:ix('breakdown_closed_date'), status:ix('current_bd_status') };
+  const miss=['mc','id','open','close'].filter(k=>C[k]<0);
+  if(miss.length) throw new Error('maintenance tab: missing column(s) '+miss.join(', '));
+  const day=v=>{ v=txt(v); return /^\d{4}-\d\d-\d\d/.test(v)?v.slice(0,10):''; };
+  const ph=v=>{ const d=txt(v).replace(/\D/g,'').slice(-10); return d.length===10?d:''; };
+  const today=istDay(Date.now());
+  const T={}, log={ rows:0, ticketRows:0, tickets:0, open:0, closed:0, conflict:[], noOpenDate:[], closedNoDate:[], future:0 };
+  for(const r of grid.slice(1)){ if(!r||!r.join('').trim()) continue;
+    const g=k=>C[k]>=0&&C[k]<r.length?r[C[k]]:'';
+    log.rows++;
+    const id=txt(g('id')).trim(), mc=txt(g('mc')).trim(); if(!id||id==='0'||!mc) continue;
+    log.ticketRows++;
+    const open=day(g('open')), close=day(g('close')), st=txt(g('status')).trim();
+    if(T[id]){ const t=T[id]; if(t.mc!==mc||t.open!==open||t.close!==close) log.conflict.push(id); continue; }
+    if(!open){ log.noOpenDate.push(id); continue; }
+    if(open>today){ log.future++; continue; }
+    // A ticket the sheet calls closed but gives no closing date is kept OPEN (it cannot be placed on a day) and listed.
+    if(!close && /closed/i.test(st)) log.closedNoDate.push(id);
+    const tk=wtkTech(g('tech'));
+    T[id]={ id, mc, open, close: close&&close<=today?close:'', tech:tk.name, tag:tk.tag, techMob:ph(g('mob')), m:null };
+  }
+  const tickets=Object.values(T);
+  log.tickets=tickets.length; log.open=tickets.filter(t=>!t.close).length; log.closed=log.tickets-log.open;
+  return { tickets, log };
+}
+// Point the tickets at the loaded machines and rewrite each machine's breakdown days from them. A ticket whose machine
+// is not loaded (a Bayer machine on a team login, or a machine off both sheets) is left out and counted.
+function wtkApply(){
+  const byMc={}; WRET.machines.forEach(m=>{ byMc[m.mc]=m; m.brkDays={}; m.tickets=[]; });
+  const today=istDay(Date.now()); let off=0;
+  WTK.tickets.forEach(t=>{ const m=byMc[t.mc]; t.m=m||null; if(!m){ off++; return; }
+    m.tickets.push(t);
+    const end=t.close?new Date(Date.parse(t.close+'T00:00:00Z')-864e5).toISOString().slice(0,10):today;   // open at the END of each day before it closed
+    for(let x=Date.parse(t.open+'T00:00:00Z'), e=Date.parse(end+'T00:00:00Z'); x<=e; x+=864e5){
+      const d=new Date(x).toISOString().slice(0,10); m.brkDays[d]=m.brkDays[d]?m.brkDays[d]+', '+t.id:t.id; } });
+  WRET._dayM=null;   // wDaySync re-reads brk from the new days
+  WTK.log.notLoaded=off; WTK.log.used=WTK.tickets.length-off;
+  console.info('[MP-Ops] wheat breakdown tickets →', WTK.log);
+}
 async function loadWRet(){
   const P=curProject(); if(!P.ret || WRET.loading) return;
   WRET.loading=true; WRET.error=false;
   // Bayer's workbook is read beside the Main sheet, for the Wheat admin only; a failure there never blocks the Main sheet.
   const bayerP = P.bayer && isAdmin() ? wretFetch(P.bayer).catch(e=>{ console.warn('wheat bayer sheet load failed —', e.message); return null; }) : Promise.resolve(null);
+  // The breakdown tickets (wtkBuild), for every Wheat login that reads this sheet; a failure never blocks the Main sheet.
+  const maintP = P.maint ? wretFetch(P.maint).catch(e=>{ console.warn('wheat maintenance tab load failed — breakdowns fall back to the Main sheet flag —', e.message); return null; }) : Promise.resolve(null);
   try{
-    const got=await wretFetch(P.ret), bg=await bayerP;
+    const got=await wretFetch(P.ret), bg=await bayerP, mg=await maintP;
     let Bb=null;
     if(bg){ try{ Bb=wretBuild(bg.grid, { from:P.bayer.from, label:'bayer' }); Bb.machines=Bb.machines.filter(m=>m.org==='Bayer' && !WRET_UPL_KEEP.has(m.mc)); }catch(e){ console.warn('wheat bayer sheet parse failed —', e.message); } }
     // A machine on both sheets counts as Bayer's only, except WRET_UPL_KEEP, which stays on the Main sheet's side.
@@ -915,6 +986,8 @@ async function loadWRet(){
     }
     WRET.bayerErr = !!P.bayer && isAdmin() && !(Bb && Bb.machines.length);
     Object.assign(WRET, B, { loaded:true });
+    WTK.loaded=false; WTK.error=!!P.maint;
+    if(mg){ try{ Object.assign(WTK, wtkBuild(mg.grid), { loaded:true, error:false }); wtkApply(); }catch(e){ WTK.tickets=[]; console.warn('wheat maintenance tab parse failed — breakdowns fall back to the Main sheet flag —', e.message); } }
     dataMode=got.cachedAt?'offline':'live'; lastUpdated=got.cachedAt?istTime(+got.cachedAt):nowIST(); WRET.at=lastUpdated;
   }catch(e){ WRET.error=true; dataMode='error'; lastUpdated=nowIST(); console.error('wheat retailer sheet load failed:', e); }
   finally{ WRET.loading=false; render(); }
@@ -2346,7 +2419,7 @@ const wSees = () => isAdmin() || wTeam();
 // 'mpprod' is the exception to that constraint rather than a breach of it: its tab holds Madhya Pradesh and
 // nothing else, and it renders NO state picker, so it cannot widen anybody's scope. It is safe to grant to a
 // state-locked MP login, and is granted to exactly those two plus leadership.
-const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wfo','wmap','wtop'];   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
+const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wfo','wmap','wtop','wbd'];   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
 function roleHidesView(view){
   // The PROJECT is the outer gate and runs first, so it binds admin too: a Wheat login never sees a Kharif-tab
   // view, and the Wheat-only views never appear under Kharif.
@@ -2366,10 +2439,10 @@ function roleHidesView(view){
 }
 // Views that render their OWN controls and so drop the shared machine filter bar + KPI strip (desktop) and the
 // weather banner + KPI cards (mobile): the standalone rollup/insight pages.
-const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','wtop','iottamper','iotrisk','iotteam']);
+const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','wtop','wbd','iottamper','iotrisk','iotteam']);
 // Pages with no machine rows behind them (Wheat plan, the IoT pages): the machine search and the phone's filter
 // button go, because neither can reach anything on them.
-const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','wtop','iottamper','iotrisk','iotteam']);
+const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','wtop','wbd','iottamper','iotrisk','iotteam']);
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
@@ -3346,7 +3419,7 @@ const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" 
 // keys and mean nothing to a reader hunting for the cumulative chart.
 const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', norun:'Didn’t run',
   am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Daily recap', leader:'Leaders',
-  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wfo:'TM · FO summary', wmap:'Machine map', wtop:'Top 10 machines',
+  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wfo:'TM · FO summary', wmap:'Machine map', wtop:'Top 10 machines', wbd:'Breakdowns',
   iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotteam:'IoT team overview' };
 // The word under each rail icon: short enough for a 64px button at 9.5px. One word where the title is long.
 // ONE NAME TABLE (plan I4). NAV_TITLE is the full name — page heading, browser title, the phone's All pages sheet.
@@ -3354,13 +3427,13 @@ const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machin
 // the same short form in all three. M_VIEWS takes its labels from here.
 const RAIL_LBL = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', am:'AMs', bm:'BMs', norun:'Didn’t run',
   pending:'Pending', recap:'Recap', leader:'Leaders', product:'Products', mpprod:'MP products', snake:'Cumulative', fo:'FOs',
-  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
+  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', wbd:'Breakdowns', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
 // Rail order, in labelled groups (a hairline between them): the project's own pages, then what happened TODAY,
 // then the PEOPLE tables, then the SEASON reading. Insights used to lead the rail; it now leads the Season group.
 // Group names, index for index with RAIL_GROUPS (the first group is the project's own pages and has none).
 const RAIL_GROUP_NAMES = ['', 'Today', 'People', 'Season'];
 const RAIL_GROUPS = [
-  [['wplan',I.retailer],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['wtop',I.leader],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am]],
+  [['wplan',I.retailer],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['wtop',I.leader],['wbd',I.risk],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am]],
   [['norun',I.risk],['map',I.map],['machines',I.machines],['weather',I.weather],['recap',I.recap]],
   [['tables',I.tables],['am',I.am],['bm',I.bm],['fo',I.fo],['retailer',I.retailer],['pending',I.pending]],
   [['insights',I.insights],['snake',I.snake],['product',I.product],['mpprod',I.mpprod],['leader',I.leader]],
@@ -3405,13 +3478,13 @@ function topbarHTML(v){
   // The Wheat Retailer summary reads its own sheet: the header names the PAGE's own state scope, the machine search goes,
   // and the stamp counts retailers on the plan rather than machines.
   const wp = state.view==='wplan' && WRET.loaded && wSees() ? wplanAgg() : null;
-  const wt = (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop') && WRET.loaded && wSees() ? wterrAgg() : null;
+  const wt = (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd') && WRET.loaded && wSees() ? wterrAgg() : null;
   const iot = curProject().iot ? iotScope() : null;
   const scope = state.view==='wplan' ? (wp ? (wp.st||wp.lockSt||'India') : (state.wpSt||'India'))
-    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
+    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
     : iot ? (iot.st||iot.lockSt||'India') : v.scopeLabel;
   const fresh = state.view==='wplan' ? (wp ? `${fmt(wp.all.length)} retailers · ${fmt(wp.allMc)} machines` : 'Retailer summary')
-    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
+    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
     : iot ? (IOT.loaded ? `${fmt(IOT.tamper.filter(r=>gateAllowsState(r.st)).length)} potential tamper · ${fmt(IOT.risk.filter(r=>gateAllowsState(r.st)).length)} at risk` : 'IoT sheet')
     : v.freshCount;
   if(isWheat()) return `<header style="height:68px;flex-shrink:0;background-color:#fff;background-image:linear-gradient(90deg,#F5821F,#1FAE43);background-size:100% 3px;background-repeat:no-repeat;border-bottom:1px solid ${W2.line};display:flex;align-items:center;gap:20px;padding:0 32px">
@@ -8682,7 +8755,7 @@ function wtScan(list){
     K.forEach((k,i)=>{ o[k+'T']+=v[i]||0; if(d===WRET.yday) o[k+'Y']+=v[i]||0; }); }));
   return o;
 }
-function wterrAgg(){
+function wterrAgg(o){   // o.noQ: leave the search out (the Breakdowns page searches tickets itself)
   const S=state, lockSt=gateCanSwitchStates()?'':gateDefaultState();
   const lockOrg=(o=>(o==='UPL'||o==='SWAL')?o:'')(gateDefaultOrg());
   const stOpts=['HR','PB'].filter(gateAllowsState);
@@ -8700,7 +8773,7 @@ function wterrAgg(){
   // AM is a MACHINE field (it arrives with the operator mapping), so it narrows machines, after the retailer-level TM.
   const ams=[...new Set(inTm.map(m=>m.am).filter(Boolean))].sort((a,b)=>a.localeCompare(b)), am=pick(ams,S.wtAm);
   const inAm=inTm.filter(m=>!am||m.am===am);
-  const q=String(S.wtQ||'').trim().toLowerCase(), hit=x=>String(x||'').toLowerCase().includes(q);
+  const q=o&&o.noQ?'':String(S.wtQ||'').trim().toLowerCase(), hit=x=>String(x||'').toLowerCase().includes(q);
   // Bayer alone: its season starts on its own `from` (1 Nov), so the chart and "per machine per day" start there too.
   const days=wtDays(!lockOrg&&org==='BAYER'?(curProject().bayer||{}).from:''), sumOf=(l,f)=>l.reduce((a,x)=>a+f(x),0);
   const series=l=>days.map(d=>sumOf(l,m=>m.days[d]||0));
@@ -8772,7 +8845,7 @@ function wtFilterFields(A, mob){
 }
 function wtSheetHTML(){
   const A=wterrAgg();
-  const foot=`<div style="display:flex;gap:10px">${A.nF||wDayOn()?`<button data-act="wtclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">${state.view==='wam'||state.view==='wfo'||state.view==='wtop'?`Show ${fmt(A.n)} machine${A.n===1?'':'s'}`:`Show ${fmt(A.rows.length)} territor${A.rows.length===1?'y':'ies'}`}</button></div>`;
+  const foot=`<div style="display:flex;gap:10px">${A.nF||wDayOn()?`<button data-act="wtclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">${state.view==='wam'||state.view==='wfo'||state.view==='wtop'||state.view==='wbd'?`Show ${fmt(A.n)} machine${A.n===1?'':'s'}`:`Show ${fmt(A.rows.length)} territor${A.rows.length===1?'y':'ies'}`}</button></div>`;
   return mSheetHTML('Filters', `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px">${wtFilterFields(A,true)}</div>`, 'sheetclose', foot);
 }
 // A row's mini trend: the last WT_SPARK days, one bar each, yesterday dark. Scaled to the row's own best day, so it
@@ -9685,6 +9758,170 @@ function wtopCSV(){
       m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, m.retailer.tmName, m.retailer.tmMob].map(csvCell).join(','); }));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_top-${WTOP_N}-machines_${by==='iot'?'IoT':'acres'}_${A.st||'HR-PB'}_${WRET.yday||new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
+}
+/* ===================== Wheat North — Breakdowns (view key `wbd`, `#/breakdowns`, Dinesh 2026-11-11) =====================
+   The breakdown TICKETS (WTK, the maintenance data tab) for the Wheat admin. It answers three questions, in this order:
+   is the open pile growing or shrinking (opened vs closed on the Day filter's day, and day by day), what is still open
+   from earlier days and how old it is, and what each technician closed on the day, overall and on average.
+   · Reads the shared wt* scope (Day · State · Company · Territory · TM · AM), so its machines are the other pages'.
+     The search is its own (wterrAgg's `noQ`): it also hits the ticket ID and the technician's name / number.
+   · A ticket is OPEN AT THE END of day d when it opened on or before d and was not closed by d. "Carried over" = open at
+     the end of the day and opened BEFORE it. A ticket opened and closed on one day counts as opened AND closed.
+   · A technician's OUTPUT is the tickets he CLOSED (agreed): on the day, overall (through the day), and on average a day
+     = closed overall ÷ the days from his first ticket to the day. Tickets are counted, not machines (agreed) — a machine
+     with two open tickets is marked so, for the sheet to clean up. */
+const WBD_SORTS = [['closedD','Closed on the day'],['closedAll','Closed overall'],['avg','Average closed a day'],['open','Open now'],['oldest','Oldest open'],['name','Name']];
+const WBD_OLD = 15;   // carried-over rows shown before "Show all"
+const wbdNum = v => v==null ? -1 : v;
+const wbdMed = a => !a.length ? null : a.length%2 ? a[(a.length-1)/2] : (a[a.length/2-1]+a[a.length/2])/2;
+const wbdDays = n => n==null ? '—' : n===0 ? 'same day' : `${n%1?n.toFixed(1):n} day${n===1?'':'s'}`;
+function wbdAgg(){
+  const S=state, A=wterrAgg({ noQ:true }), D=WRET.yday, inScope=new Set(A.mcs);
+  const q=String(S.wtQ||'').trim().toLowerCase(), hit=x=>String(x||'').toLowerCase().includes(q);
+  const mcHit=m=>[m.mc,m.party,m.territory,m.opName,m.opNum,m.co,m.am,m.village,m.retailer&&m.retailer.tmName,m.retailer&&m.retailer.foName].some(hit);
+  const all=WTK.tickets.filter(t=>t.m && inScope.has(t.m) && t.open<=D && (!q || hit(t.id) || hit(t.tech) || hit(t.techMob) || mcHit(t.m)));
+  const closedBy=t=>t.close && t.close<=D, openAt=(t,d)=>t.open<=d && (!t.close || t.close>d), age=t=>wtkDayN(t.open,D);
+  const series=A.days.map(d=>{ let nw=0, cl=0, op=0, co=0;
+    all.forEach(t=>{ if(t.open===d) nw++; if(t.close===d) cl++; if(openAt(t,d)){ op++; if(t.open<d) co++; } });
+    return { d, nw, cl, op, co }; });
+  const newD=all.filter(t=>t.open===D), closedD=all.filter(t=>t.close===D), openEnd=all.filter(t=>openAt(t,D));
+  const carried=openEnd.filter(t=>t.open<D).sort((a,b)=>a.open.localeCompare(b.open)||a.m.mc.localeCompare(b.m.mc));
+  const buckets=[['1–2 days',t=>age(t)<=2],['3–7 days',t=>age(t)>=3&&age(t)<=7],['8+ days',t=>age(t)>=8]].map(([l,f])=>({ l, n:carried.filter(f).length }));
+  const closedAll=all.filter(closedBy), fixMed=wbdMed(closedAll.map(t=>wtkDayN(t.open,t.close)).sort((a,b)=>a-b));
+  const openPer={}; openEnd.forEach(t=>{ openPer[t.m.mc]=(openPer[t.m.mc]||0)+1; });
+  // Technicians, keyed on the NUMBER (one number per name on the live tab); a ticket naming nobody is one last row.
+  const G={};
+  all.forEach(t=>{ const k=t.techMob||(t.tech?'n:'+t.tech.toLowerCase():'~none');
+    const g=G[k]||(G[k]={ key:k, name:t.tech, tag:t.tag, mob:t.techMob, none:!t.techMob&&!t.tech, list:[] });
+    if(!g.name&&t.tech) g.name=t.tech; if(!g.tag&&t.tag) g.tag=t.tag; g.list.push(t); });
+  const techs=Object.values(G).map(g=>{
+    const first=g.list.reduce((a,t)=>t.open<a?t.open:a, D), act=wtkDayN(first,D)+1;
+    const cAll=g.list.filter(closedBy), op=g.list.filter(t=>openAt(t,D)).sort((a,b)=>a.open.localeCompare(b.open));
+    return { ...g, name:g.name||'No technician named', assigned:g.list.length, newD:g.list.filter(t=>t.open===D).length,
+      closedD:g.list.filter(t=>t.close===D).length, closedAll:cAll.length, first, act, avg:cAll.length/act,
+      open:op.length, openList:op, oldest:op.length?age(op[0]):null, closedDList:g.list.filter(t=>t.close===D),
+      fix:wbdMed(cAll.map(t=>wtkDayN(t.open,t.close)).sort((a,b)=>a-b)) }; });
+  const sort=WBD_SORTS.some(([k])=>k===S.wbdSort)?S.wbdSort:'closedD';
+  techs.sort((a,b)=>(a.none-b.none) || (sort==='name' ? a.name.localeCompare(b.name)
+    : (wbdNum(b[sort])-wbdNum(a[sort])) || b.closedAll-a.closedAll || b.open-a.open || a.name.localeCompare(b.name)));
+  const prev=series.length>1?series[series.length-2]:null;
+  return { A, D, q, all, series, prev, newD, closedD, openEnd, carried, buckets, closedAll, fixMed, openPer, techs, sort, age,
+    mcOpen:Object.keys(openPer).length, sameDay:closedD.filter(t=>t.open===D).length, multi:Object.values(openPer).filter(n=>n>1).length,
+    first:A.days[0]||'', narrowed:A.nF>0||!!q };
+}
+function wbdBodyHTML(mob){
+  if(!isAdmin() || !WRET.loaded) return wplanBodyHTML(mob);
+  const S=state, B=wpBits(mob), { orgChip, tel, chev } = B;
+  if(!WTK.loaded) return B.msg(`⚠ Could not load the breakdown tickets (the maintenance data tab).<div style="margin-top:14px"><button data-act="wpretry" style="min-height:${mob?48:38}px;padding:0 18px;border:0;border-radius:10px;background:${W2.dark};color:#fff;font:500 14px ${W2.font};cursor:pointer">Retry</button></div>`, '60px 20px');
+  const W=wbdAgg(), A=W.A, D=W.D, dh=wDayHead(), dw=wDayWord(), pd=W.prev?wpDate(W.prev.d):'';
+  const controls = wtControlsHTML({ ...A, narrowed:W.narrowed }, mob, true, { csv:'wbdcsv', csvTitle:`Download the ${fmt(W.all.length)} breakdown tickets in view as CSV`,
+    ph:['Search machine, technician…','Search machine, technician, territory, ticket ID'], sort:['wbdSortSel','Sort technicians by',WBD_SORTS,W.sort] });
+  const pageHead = `<div style="margin-top:${mob?14:18}px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?17:19}px;font-weight:600">Breakdowns</span><span style="font-size:13px;color:${W2.ink2}">${dh===wpDate(D)?'':dh+', '}${wpDate(D)} · tickets from the maintenance sheet${W.narrowed?' · what the filters show':''}</span></div>`;
+  if(!W.all.length) return controls + pageHead + B.msg(`No breakdown tickets ${W.narrowed?'match these filters':'up to '+wpDate(D)}.${W.narrowed?`<div style="margin-top:12px">${B.ghost('wtclear','Clear filters')}</div>`:''}`, '40px 18px');
+  // ── The one-line answer to "is the pile growing or shrinking?" — word + mark, never colour alone.
+  const net=W.newD.length-W.closedD.length;
+  const verdict = `<div style="margin-top:${mob?10:12}px;padding:${mob?'12px 14px':'12px 18px'};border-radius:12px;background:${net>0?'#FDECEA':net<0?'#EEF8F2':W2.head};border:1px solid ${net>0?'#F4D8D4':net<0?'#CFE9DA':W2.line2};font-size:${mob?14:14.5}px;line-height:1.45">
+      <b style="color:${net>0?W2.brkD:net<0?W2.actD:W2.ink}">${net>0?'▲ The open pile grew by '+fmt(net):net<0?'▼ The open pile shrank by '+fmt(-net):'● The open pile held level'}</b> ${dw}: ${fmt(W.newD.length)} new, ${fmt(W.closedD.length)} closed, <b>${fmt(W.openEnd.length)}</b> still open at the end of the day.</div>`;
+  const ages=W.buckets.map(b=>`${fmt(b.n)} · ${b.l}`).join('<br>');
+  const tiles=[
+    B.tile('New breakdowns', fmt(W.newD.length), '', `${dh} · ${W.prev?fmt(W.prev.nw)+' on '+pd:''}`),
+    B.tile('Closed', fmt(W.closedD.length), '', `${dh} · ${W.sameDay?fmt(W.sameDay)+' opened the same day · ':''}${W.prev?fmt(W.prev.cl)+' on '+pd:''}`),
+    B.tile('Open at the end of the day', fmt(W.openEnd.length), '', `on ${fmt(W.mcOpen)} of ${fmt(A.n)} machines${W.prev?` · ${fmt(W.prev.op)} at the end of ${pd}`:''}`),
+    B.tile('Carried over from earlier days', fmt(W.carried.length), '', W.carried.length?ages:'nothing older than the day'),
+    B.tile('Time to fix', W.fixMed==null?'—':W.fixMed===0?'Same day':(W.fixMed%1?W.fixMed.toFixed(1):W.fixMed), W.fixMed?(W.fixMed===1?'day':'days'):'', `typical, over the ${fmt(W.closedAll.length)} tickets closed since ${wpDate(W.first)}`),
+  ];
+  if(mob) tiles[4]=tiles[4].replace('<div style="','<div style="grid-column:1/-1;');   // the odd fifth tile takes the full row
+  const strip = mob ? `<div style="${w2card(16)};overflow:hidden;margin-top:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))">${tiles.join('')}</div>`
+    : `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-top:14px">${tiles.join('')}</div>`;
+  // ── Two day-by-day charts: opened vs closed (paired bars), and the open pile at each day's end (carried + new, stacked).
+  const n=W.series.length, every=n<=8?1:Math.ceil(n/(mob?5:6));
+  const axis = `<div style="display:flex;gap:${mob?2:4}px;border-top:1px solid ${W2.line};padding-top:6px">${W.series.map((x,i)=>`<span style="flex:1;min-width:0;text-align:center;font-size:12px;color:${i===n-1?W2.ink:W2.ink2};font-weight:${i===n-1?600:400};white-space:nowrap;overflow:visible">${(i%every===0&&(n-1-i)>=every)||i===n-1?wpDate(x.d):''}</span>`).join('')}</div>`;
+  const key = (c,t) => `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:${W2.ink2}"><span style="width:10px;height:10px;border-radius:3px;background:${c}"></span>${t}</span>`;
+  const h=mob?110:140;
+  const mx1=Math.max(1,...W.series.map(x=>Math.max(x.nw,x.cl))), mx2=Math.max(1,...W.series.map(x=>x.op));
+  const bar=(v,mx,c)=>`<span style="display:block;flex:1;max-width:16px;height:${v>0?Math.max(3,Math.round(100*v/mx)):0}%;min-height:${v>0?3:1}px;border-radius:3px 3px 0 0;background:${v>0?c:'#E1E5EA'}"></span>`;
+  const lastLbl=(t,c)=>`<span style="position:absolute;top:-17px;left:50%;transform:translateX(-50%);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;color:${c};white-space:nowrap">${t}</span>`;
+  const chart1 = B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
+      <div style="font-size:${mob?15:16}px;font-weight:600">New and closed, day by day</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">${key(W2.brk,'New breakdowns')}${key(W2.act,'Closed')}</div>
+      <div role="img" aria-label="${E('New and closed by day: '+W.series.map(x=>`${wpDate(x.d)} ${x.nw} new, ${x.cl} closed`).join('; '))}" style="display:flex;align-items:flex-end;gap:${mob?2:4}px;height:${h}px;margin-top:22px">
+        ${W.series.map((x,i)=>`<div title="${E(`${wpDate(x.d)}: ${x.nw} new · ${x.cl} closed`)}" style="position:relative;flex:1;min-width:0;height:100%;display:flex;align-items:flex-end;justify-content:center;gap:1px">${i===n-1?lastLbl(`${x.nw} · ${x.cl}`,W2.ink):''}${bar(x.nw,mx1,W2.brk)}${bar(x.cl,mx1,W2.act)}</div>`).join('')}
+      </div>${axis}</div>`);
+  const chart2 = B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
+      <div style="font-size:${mob?15:16}px;font-weight:600">Open at the end of each day</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:6px">${key(W2.idle,'Carried over from earlier days')}${key(W2.brk,'Opened that day')}</div>
+      <div role="img" aria-label="${E('Open at the end of each day: '+W.series.map(x=>`${wpDate(x.d)} ${x.op} (${x.co} carried over)`).join('; '))}" style="display:flex;align-items:flex-end;gap:${mob?2:4}px;height:${h}px;margin-top:22px">
+        ${W.series.map((x,i)=>`<div title="${E(`${wpDate(x.d)}: ${x.op} open · ${x.co} carried over · ${x.op-x.co} opened that day`)}" style="position:relative;flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center">${i===n-1?lastLbl(fmt(x.op),W2.ink):''}
+          <span style="display:flex;flex-direction:column;width:100%;max-width:26px;height:${x.op?Math.max(3,Math.round(100*x.op/mx2)):0}%;min-height:${x.op?3:1}px;border-radius:3px 3px 0 0;overflow:hidden;background:#E1E5EA"><span style="flex:${x.op-x.co};background:${W2.brk}"></span><span style="flex:${x.co};background:${W2.idle}"></span></span></div>`).join('')}
+      </div>${axis}</div>`);
+  const charts = `<div style="display:grid;grid-template-columns:${mob?'1fr':'repeat(auto-fit,minmax(420px,1fr))'};gap:${mob?12:16}px;margin-top:${mob?12:16}px">${chart1}${chart2}</div>`;
+  // ── One ticket, as a line inside a technician's row or the carried-over list.
+  const tkLine = (t, withTech) => { const a=W.age(t), open=!t.close||t.close>D, two=W.openPer[t.m.mc]>1;
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:${mob?'10px 0':'9px 0'};border-top:1px solid ${W2.line2}">
+      <span style="flex-shrink:0;min-width:${mob?46:52}px;padding:3px 0;border-radius:7px;text-align:center;font:600 12.5px ${W2.font};font-variant-numeric:tabular-nums;${open?(a>=8?`background:#FDECEA;color:${W2.brkD}`:a>=3?`background:#FDF4DF;color:${W2.idleD}`:`background:${W2.line2};color:${W2.ink}`):`background:#EEF8F2;color:${W2.actD}`}">${open?(a===0?'new':a+' d'):'✓ closed'}</span>
+      <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+        <span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><button data-act="wpmc" data-mc="${E(t.m.mc)}" style="border:none;background:none;padding:${mob?'6px 0':0};cursor:pointer;font:600 13.5px 'IBM Plex Mono',monospace;color:${W2.ink};text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(t.m.mc)}</button>${orgChip(t.m.org)}${two?`<span style="font-size:12px;font-weight:600;color:${W2.idleD}">! ${W.openPer[t.m.mc]} open tickets</span>`:''}</span>
+        <span style="font-size:13px;color:${W2.ink2};line-height:1.4">${E(t.m.territory)} · ${E(t.m.party)}${withTech?` · <span style="color:${W2.ink}">${E(t.tech||'No technician named')}</span>`:''}</span>
+        <span style="font-size:12.5px;color:${W2.ink2}">Opened ${wpDate(t.open)}${t.close&&t.close<=D?` · closed ${wpDate(t.close)} · took ${wbdDays(wtkDayN(t.open,t.close))}`:''} · ticket ${E(t.id)}</span></span></div>`; };
+  // ── Technicians.
+  const tagChip = g => g.tag ? `<span style="flex-shrink:0;padding:1px 6px;border-radius:5px;font-size:11.5px;font-weight:600;background:${W2.line2};color:${W2.ink2}">${E(g.tag)}</span>` : '';
+  const techBody = g => `<div style="padding:${mob?'0 14px 8px':'2px 22px 12px 58px'}">
+      ${g.openList.length?`<div style="font-size:12.5px;font-weight:600;color:${W2.ink2};margin:8px 0 2px">Open at the end of ${wpDate(D)} · oldest first</div>${g.openList.map(t=>tkLine(t,false)).join('')}`:''}
+      ${g.closedDList.length?`<div style="font-size:12.5px;font-weight:600;color:${W2.ink2};margin:10px 0 2px">Closed ${dw}</div>${g.closedDList.map(t=>tkLine(t,false)).join('')}`:''}
+      ${!g.openList.length&&!g.closedDList.length?`<div style="font-size:13px;color:${W2.ink2};padding:8px 0">Nothing open and nothing closed ${dw}. ${fmt(g.closedAll)} closed since ${wpDate(g.first)}.</div>`:''}</div>`;
+  const oldC = g => g.oldest==null ? `<span style="color:${W2.ink3}">—</span>` : `<span style="color:${g.oldest>=8?W2.brkD:g.oldest>=3?W2.idleD:W2.ink};font-weight:${g.oldest>=8?600:400}">${g.oldest===0?'new':g.oldest+' d'}</span>`;
+  const avgF = g => g.avg.toFixed(1);
+  let techList;
+  if(mob){
+    techList = W.techs.map(g=>{ const open=!!(S.wbdOpen||{})[g.key];
+      const fig=(v,l)=>`<span style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="${w2num(17,600)}">${v}</span><span class="mCap" style="font-size:12px;color:${W2.ink2}">${l}</span></span>`;
+      return `<div style="border-top:1px solid ${W2.line2}">
+        <div style="display:flex;align-items:flex-start;gap:8px;padding:12px 14px">
+          <button data-act="wbdexp" data-k="${E(g.key)}" aria-expanded="${open}" style="flex:1;min-width:0;border:none;background:none;padding:0;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink};display:flex;flex-direction:column;gap:8px">
+            <span style="display:flex;align-items:center;gap:6px;min-width:0">${chev(open)}<span style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${g.none?`color:${W2.ink2};font-style:italic`:''}">${E(g.name)}</span>${tagChip(g)}</span>
+            <span style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding-left:20px">${fig(fmt(g.closedD),'closed '+(wIsYday()?'y’day':wpDate(D)))}${fig(fmt(g.closedAll),'closed overall')}${fig(avgF(g),'a day')}${fig(`<span style="color:${g.open?W2.brkD:'inherit'}">${fmt(g.open)}</span>`,'open'+(g.oldest!=null?` · ${g.oldest?g.oldest+' d':'new'}`:''))}</span>
+          </button>${tel({ mob:g.mob, n:g.name },'technician')}</div>
+        ${open?techBody(g):''}</div>`; }).join('');
+  } else {
+    const cols='minmax(220px,1.8fr) 90px 90px 100px 90px 90px 90px 44px';
+    const th=B.th('wbdsort', W.sort);
+    const numC=(v,c)=>`<span style="text-align:right;font-variant-numeric:tabular-nums${c?';color:'+c+';font-weight:600':''}">${v}</span>`;
+    techList = `<div style="overflow-x:auto"><div style="min-width:900px">
+      <div style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2};align-items:end">
+        ${th('name','Technician')}${th('','New '+(wIsYday()?'y’day':wpDate(D)),1)}${th('closedD','Closed '+(wIsYday()?'y’day':wpDate(D)),1)}${th('closedAll','Closed overall',1)}${th('avg','Avg closed / day',1)}${th('open','Open now',1)}${th('oldest','Oldest open',1)}<span></span></div>
+      ${W.techs.map(g=>{ const open=!!(S.wbdOpen||{})[g.key];
+        return `<div style="border-bottom:1px solid ${W2.line2}">
+          <div style="display:grid;grid-template-columns:${cols};gap:12px;padding:8px 22px;align-items:center;font-size:14px">
+            <button data-act="wbdexp" data-k="${E(g.key)}" aria-expanded="${open}" style="border:none;background:none;padding:4px 0;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink};display:flex;align-items:flex-start;gap:8px;min-width:0">${chev(open)}
+              <span style="min-width:0;display:flex;flex-direction:column;gap:2px"><span style="display:flex;align-items:center;gap:6px;min-width:0"><span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${g.none?`color:${W2.ink2};font-style:italic`:''}">${E(g.name)}</span>${tagChip(g)}</span>
+              <span style="font:12px 'IBM Plex Mono',monospace;color:${W2.ink2}">${E(g.mob||'no number')} · ${fmt(g.assigned)} ticket${g.assigned===1?'':'s'} since ${wpDate(g.first)}</span></span></button>
+            ${numC(fmt(g.newD))}${numC(fmt(g.closedD), g.closedD?W2.actD:'')}${numC(fmt(g.closedAll))}${numC(avgF(g))}${numC(fmt(g.open), g.open?W2.brkD:'')}<span style="text-align:right;font-variant-numeric:tabular-nums">${oldC(g)}</span>
+            <span style="justify-self:end">${g.mob&&realTel(g.mob)?`<a href="tel:${g.mob}" aria-label="Call ${E(g.name)}" title="Call ${E(g.mob)}" style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;border:1px solid ${W2.line};color:${W2.ink}">${I.phone}</a>`:''}</span></div>
+          ${open?techBody(g):''}</div>`; }).join('')}
+    </div></div>`;
+  }
+  const techCard = B.cardBox(`<div style="padding:${mob?'16px 14px 12px':'18px 22px'};border-bottom:1px solid ${W2.line2}">
+      <div style="font-size:${mob?15:16}px;font-weight:600">Technicians</div>
+      <div style="font-size:13px;color:${W2.ink2};margin-top:2px;line-height:1.45">${fmt(W.techs.filter(g=>!g.none).length)} technicians · output = tickets closed · average = closed overall ÷ days since his first ticket · ${mob?'tap':'click'} a name for his tickets</div></div>${techList}`, `overflow:hidden;margin-top:${mob?12:16}px`);
+  // ── Carried over: everything still open from before the day, oldest first.
+  const shown = S.wbdAll ? W.carried : W.carried.slice(0,WBD_OLD);
+  const carriedCard = !W.carried.length ? '' : B.cardBox(`<div style="padding:${mob?'16px 14px 4px':'18px 22px 4px'}">
+      <div style="font-size:${mob?15:16}px;font-weight:600">Still open from earlier days · oldest first</div>
+      <div style="font-size:13px;color:${W2.ink2};margin-top:2px">${fmt(W.carried.length)} ticket${W.carried.length===1?'':'s'} opened before ${wpDate(D)} and not closed by its end${W.multi?` · ${fmt(W.multi)} machine${W.multi===1?' has':'s have'} two open tickets at once (fix on the sheet)`:''}</div></div>
+      <div style="padding:${mob?'0 14px 8px':'0 22px 8px'}">${shown.map(t=>tkLine(t,true)).join('')}</div>
+      ${W.carried.length>WBD_OLD?`<button data-act="wbdall" style="display:block;width:100%;min-height:${mob?48:42}px;border:none;border-top:1px solid ${W2.line2};background:${W2.head};font:600 13.5px ${W2.font};color:${W2.ink};cursor:pointer">${S.wbdAll?'Show the oldest '+WBD_OLD:'Show all '+fmt(W.carried.length)}</button>`:''}`, `overflow:hidden;margin-top:${mob?12:16}px`);
+  const note = `<div style="font-size:12.5px;color:${W2.ink2};margin-top:10px;line-height:1.5">From the maintenance data sheet: one ticket per breakdown, with the day it opened and the day it closed. A ticket is open at the end of a day if it opened on or before that day and was not closed by it. The Breakdown figures on the other Wheat pages read these same tickets.</div>`;
+  return controls + pageHead + verdict + strip + charts + techCard + carriedCard + note;
+}
+function wbdCSV(){
+  const W=wbdAgg(), D=W.D;
+  const head=['Ticket ID','Machine','Company','State','Territory','Retailer','TM','Technician','Technician agency','Technician mobile','Opened','Closed',`Status at the end of ${D}`,'Days open / days taken','Operator','Operator mobile'];
+  const lines=[head.join(',')].concat(W.all.slice().sort((a,b)=>a.open.localeCompare(b.open)||a.id.localeCompare(b.id)).map(t=>{ const m=t.m, cl=t.close&&t.close<=D;
+    return [t.id, m.mc, m.org, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.retailer.tmName, t.tech, t.tag, t.techMob, t.open, cl?t.close:'', cl?'Closed':'Open',
+      cl?wtkDayN(t.open,t.close):wtkDayN(t.open,D), m.opName, m.opNum].map(csvCell).join(','); }));
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
+  a.download=`Wheat-North_breakdown-tickets_${W.A.st||'HR-PB'}_${D||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
 }
 function wmapBodyHTML(mob){
@@ -11552,6 +11789,7 @@ function contentHTML(v){
     case 'wfo': return `<section style="padding:24px 32px">${wfoBodyHTML(false)}</section>`;
     case 'wmap': return wmapViewHTML(v);
     case 'wtop': return `<section style="padding:24px 32px">${wtopBodyHTML(false)}</section>`;
+    case 'wbd': return `<section style="padding:24px 32px">${wbdBodyHTML(false)}</section>`;
     case 'iottamper': case 'iotrisk': case 'iotteam': return `<section style="padding:18px 22px">${iotBodyHTML(state.view,false)}</section>`;
     case 'recap': return recapViewHTML(v);
     case 'norun': return `<section style="padding:18px 22px">${norunBodyHTML(v,false)}</section>`;
@@ -11597,6 +11835,7 @@ const M_VIEWS = [
   { k:'wfo',      label:RAIL_LBL.wfo,   icon:()=>I.fo },         // Wheat TM → FO summary
   { k:'wmap',     label:RAIL_LBL.wmap,  icon:()=>I.map },        // Wheat Machine map
   { k:'wtop',     label:RAIL_LBL.wtop,  icon:()=>I.leader },     // Wheat Top 10 machines
+  { k:'wbd',      label:RAIL_LBL.wbd,   icon:()=>I.risk },       // Wheat Breakdowns (tickets)
   { k:'iottamper',label:RAIL_LBL.iottamper, icon:()=>I.tamper },   // IoT project only
   { k:'iotrisk',  label:RAIL_LBL.iotrisk,   icon:()=>I.risk },
   { k:'iotteam',  label:RAIL_LBL.iotteam,      icon:()=>I.am },               // IoT head (admin) only
@@ -11733,7 +11972,7 @@ function norunBodyHTML(v, mob){
 const M_NEXT = { norun:['machines','bm'], map:['tables','machines'], tables:['machines','am'], machines:['tables','weather'],
   weather:['machines','map'], am:['bm','machines'], bm:['machines','tables'], pending:['am'], recap:['insights','machines'],
   insights:['snake','recap'], snake:['insights','product'], product:['mpprod','snake'], mpprod:['product'], leader:['recap'],
-  wplan:['wterr'], wterr:['wam','wfo'], wam:['wfo'], wfo:['wmap','wplan'], wmap:['wtop','wplan'], wtop:['wplan'] };   // Wheat: the first one the login has
+  wplan:['wterr'], wterr:['wam','wfo'], wam:['wfo'], wfo:['wmap','wplan'], wmap:['wtop','wplan'], wtop:['wbd','wplan'], wbd:['wplan'] };   // Wheat: the first one the login has
 function mNextHTML(view){
   const ks=(M_NEXT[view]||[]).filter(k=>!roleHidesView(k)).slice(0, isWheat()?1:9);
   const brk = view==='machines' && !state.health.includes('Breakdown')
@@ -11922,6 +12161,8 @@ function mobileHTML(v){
     body = wmapBodyHTML(true);
   } else if(S.view==='wtop'){
     body = wtopBodyHTML(true);
+  } else if(S.view==='wbd'){
+    body = wbdBodyHTML(true);
   } else if(S.view==='iottamper'||S.view==='iotrisk'||S.view==='iotteam'){
     body = iotBodyHTML(S.view,true);
   } else {
@@ -12090,7 +12331,7 @@ function mobileHTML(v){
       ${S.sheet==='more'    ? mSheetHTML('All pages', mMoreHTML(), 'sheetclose') : ''}
       ${S.sheet==='iotfilters' && curProject().iot ? iotSheetHTML() : ''}
       ${S.sheet==='wpfilters' && S.view==='wplan' && WRET.loaded && wSees() ? wpSheetHTML() : ''}
-      ${S.sheet==='wtfilters' && (S.view==='wterr'||S.view==='wam'||S.view==='wfo'||S.view==='wmap'||S.view==='wtop') && WRET.loaded && wSees() ? wtSheetHTML() : ''}
+      ${S.sheet==='wtfilters' && (S.view==='wterr'||S.view==='wam'||S.view==='wfo'||S.view==='wmap'||S.view==='wtop'||S.view==='wbd') && WRET.loaded && wSees() ? wtSheetHTML() : ''}
     </div>
   </div>`;
 }
@@ -12115,7 +12356,7 @@ function mPageScope(view){
     case 'snake':    return state.snState&&state.snState!=='ALL' ? nm(state.snState) : 'All India';
     case 'mpprod':   return state.mpTerr || 'Madhya Pradesh';
     case 'wplan':    return (lock||state.wpSt) ? nm(lock||state.wpSt) : 'HR + PB';
-    case 'wterr': case 'wam': case 'wfo': case 'wmap': case 'wtop': return (lock||state.wtSt) ? nm(lock||state.wtSt) : 'HR + PB';
+    case 'wterr': case 'wam': case 'wfo': case 'wmap': case 'wtop': case 'wbd': return (lock||state.wtSt) ? nm(lock||state.wtSt) : 'HR + PB';
     case 'iottamper': case 'iotrisk': case 'iotteam': { const sc=iotScope(); return sc.st ? iotStName(sc.st) : (isAdmin()?'All states':'My states'); }
     default:         return nm(lock||pick('st'));   // the fleet pages: the filter bar's state
   }
@@ -12164,7 +12405,7 @@ function render(){
    handling (histSync) owns the history ENTRIES; this only rewrites the address of the current one. A typed or
    pasted address is honoured at boot and on hashchange, and `render()`'s role guard still bounces a view the
    login may not see. */
-const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wam:'area-managers', wfo:'field-officers', wmap:'machine-map', wtop:'top-machines',
+const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wam:'area-managers', wfo:'field-officers', wmap:'machine-map', wtop:'top-machines', wbd:'breakdowns',
   iottamper:'tamper', iotrisk:'at-risk', iotteam:'team', am:'area-managers', bm:'business-managers',
   leader:'leaders', product:'products', fo:'field-officers', recap:'daily-recap', norun:'didnt-run' };
 const slugOf = v => VIEW_SLUG[v]||v;
@@ -12300,6 +12541,7 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='wamSortSel') setState({wamSort:e.target.value});
   else if(e.target.id==='wfoSortSel') setState({wfoSort:e.target.value});
   else if(e.target.id==='wtSortSel') setState({wtSort:e.target.value});
+  else if(e.target.id==='wbdSortSel') setState({wbdSort:e.target.value});
   else if(e.target.id==='lbStateSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({lbSt:w, lbAll:false}); }   // page-local; never touches state.st
   else if(e.target.id==='insStateSel') setState({insSt:e.target.value, insAm:'', insCo:''});   // page-local; never touches state.st
   // Changing the AM drops the officer with it — the old officer almost certainly reports to somebody else.
@@ -12412,6 +12654,10 @@ app.addEventListener('click', e=>{
     case 'wtmore': setState(s=>({wtLimit:(s.wtLimit||WT_PAGE)+WT_PAGE})); break;
     case 'wtsheet': if(wSees()) setState({sheet:'wtfilters'}); break;
     case 'wtopby': setState({wtopBy:el.dataset.k}); break;
+    case 'wbdsort': setState({wbdSort:el.dataset.k}); break;
+    case 'wbdexp': { const k=el.dataset.k; setState(s=>({wbdOpen:{...s.wbdOpen, [k]:!s.wbdOpen[k]}})); break; }
+    case 'wbdall': setState(s=>({wbdAll:!s.wbdAll})); break;
+    case 'wbdcsv': wbdCSV(); track('wbd_csv',{ st:state.wtSt||'all' }); break;
     case 'wtopcsv': wtopCSV(); track('wtop_csv',{ st:state.wtSt||'all', by:state.wtopBy }); break;
     case 'wtcsv': wterrCSV(); track('wterr_csv',{ st:state.wtSt||'all' }); break;
     case 'mpmeasure': setState({mpMeasure:el.dataset.m}); track('mpprod_measure',{m:el.dataset.m}); break;
