@@ -1079,6 +1079,12 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   card draws each day's acres for the same dates. A day with no row = 0 ac. **No note about the gap to the Main sheet's acres, by
   request** — this tab counts all programme acres in the two states. Checked 11 Nov: 15 Oct – 10 Nov = 32,981 / 77,472 / 53,151 ac
   (2026-27 / 2025-26 / 2024-25), the same as a direct sum of the tab. Charts are drawn at the screen's width (`vw`), so text stays 12px.
+  · **Acres per machine** card (Dinesh 2026-11-11): this season vs last, on the badge's dates, acres from the snake tab ÷ a fleet.
+    **Last season's fleet is FIXED** (`WSN_MCN`, keyed by the season's October year): the Kharif "Acres per mcn" tab's 9 Nov count
+    (HR 260 / PB 274) + 60 / + 40 = **HR 320 · PB 314 · 634**, given by Dinesh. **This season's fleet = every machine on the Main
+    sheet** (UPL + SWAL, Bayer out) in that state — the Territory page's count (357 on 11 Nov). No rabi-only machine count exists for
+    last year anywhere, which is why it is a constant; a new season needs its own `WSN_MCN` entry or the tile says it has none.
+    Live 11 Nov, 15 Oct – 10 Nov, HR + PB: 92.4 ac (32,981 ÷ 357) vs 122 ac (77,472 ÷ 634).
 - **Loading (rebuilt 2026-11-11, Dinesh: "the site opens in seconds but the data takes 2–5 minutes on a first load or a hard
   refresh").** Measured: the four tabs are only ~600 KB gzipped; the wait is GOOGLE preparing the export (~1.5 s warm, ~8 s right
   after the sheet is edited, longer while it recalculates). There was **no time limit on any request**, and the page waited for

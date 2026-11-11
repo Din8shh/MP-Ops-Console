@@ -9861,6 +9861,10 @@ const WM_TONE = { y:C.act, s:'#2563EB', n:'#E0A008' };
    · This season reads THROUGH YESTERDAY (IST) — the tab writes today's row as the day runs. The badge and the legend are
      read on the last day this season has, for every season, so the comparison is always the same dates.
    · A day with no row is 0 acres (nothing sprayed), not missing. Admin only. */
+// Acres per machine (Dinesh 2026-11-11). LAST season's fleet is a fixed count he gave, keyed by the season's October year so it never
+// silently applies to another season: the "Acres per mcn" tab's 9 Nov count (HR 260 / PB 274) + 60 and + 40 = 320 / 314 = 634.
+// THIS season's fleet = every machine on the Wheat Main sheet (UPL + SWAL; Bayer left out) in that state, as the Territory page counts.
+const WSN_MCN = { 2025:{ HR:320, PB:314 } };
 const WSN = { loaded:false, loading:false, error:'', at:'', D:{ HR:{}, PB:{} }, last:'' };
 const WSN_ST = { HARYANA:'HR', PUNJAB:'PB' };
 const WSN_MD = (()=>{ const o=[]; for(let t=Date.UTC(2025,9,1); t<=Date.UTC(2026,2,31); t+=864e5) o.push(new Date(t).toISOString().slice(5,10)); return o; })();
@@ -9983,12 +9987,30 @@ function wcumBodyHTML(mob){
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:${mob?10:20}px;margin-top:14px">${legend}</div>
       <div style="position:relative;margin-top:12px">${wsnSVG('cum', ser(cum), from, to, mob, mob?300:400)}${tipBox}</div></div>`, `margin-top:${mob?12:16}px`);
   const dayTot=daily.map(d=>{ let a=0; for(let o=from;o<=Math.min(to,edge);o++) a+=d[o]||0; return a; });
+  // ── Acres per machine: this season and last, on the same dates (the badge's day), acres from the snake tab.
+  const sts = st==='ALL' ? ['HR','PB'] : [st], prevS=seasons[cur-1];
+  const mcCur = WRET.loaded ? WRET.machines.filter(m=>m.org!=='Bayer' && sts.includes(m.st)).length : null;
+  const mcPrev = WSN_MCN[prevS.y] ? sts.reduce((a,k)=>a+(WSN_MCN[prevS.y][k]||0),0) : null;
+  const pm = (ac,n) => ac!=null && n ? ac/n : null;
+  const perCur = pm(at(cur), mcCur), perPrev = pm(at(cur-1), mcPrev);
+  const apmTile = (s, per, ac, n, note) => `<div style="flex:1;min-width:${mob?0:220}px;border:1px solid ${W2.line2};border-radius:14px;padding:14px 16px;background:${s.cur?'#F4FAF6':W2.head}">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600"><span aria-hidden="true" style="width:16px;height:${s.cur?4:3}px;border-radius:2px;background:${s.color}"></span>${s.label}${s.cur?' · this season':''}</div>
+      <div style="${w2num(mob?26:30,600)};margin-top:6px">${per==null?'—':acF(per)}${w2unit('ac per machine',12)}</div>
+      <div style="font-size:13px;color:${W2.ink2};margin-top:4px;line-height:1.45">${ac==null?'no acres in this range':`${acF(ac)} ac`} ÷ ${n==null?'…':fmt(n)} machines${note?` · ${note}`:''}</div></div>`;
+  const apmDiff = perCur!=null && perPrev!=null ? (()=>{ const d=perCur-perPrev, up=d>=0, p=perPrev>0?Math.round(100*d/perPrev):null;
+    return `<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:${up?'#E8F6EE':'#FDECEA'};color:${up?W2.actD:W2.brkD};font-size:13px;font-weight:600;white-space:nowrap">${up?'▲':'▼'} ${acF(Math.abs(d))} ac per machine${p!=null?` (${Math.abs(p)}%)`:''} ${up?'more than':'less than'} ${prevS.label}</span>`; })() : '';
+  const apmCard = !curHas ? '' : B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?16:17}px;font-weight:600">Acres per machine · ${E(stName)}</span><span style="font-size:13px;color:${W2.ink2}">${wsnLbl(from)} – ${wsnLbl(edge)} in both seasons</span></div>
+      ${apmDiff?`<div style="margin-top:10px">${apmDiff}</div>`:''}
+      <div style="display:flex;${mob?'flex-direction:column':''};gap:${mob?10:14}px;margin-top:12px">
+        ${apmTile(seasons[cur], perCur, at(cur), mcCur, 'machines on the Main sheet')}
+        ${apmTile(prevS, perPrev, at(cur-1), mcPrev, mcPrev==null?'no machine count for this season':st==='ALL'?'Haryana 320 + Punjab 314':'')}</div></div>`, `margin-top:${mob?12:16}px`);
   const dayCard = B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
       <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?16:17}px;font-weight:600">Acres sprayed each day</span><span style="font-size:13px;color:${W2.ink2}">the same dates in each season · ${mob?'tap':'point at'} a day for its figures</span></div>
       <div style="display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:10px;font-size:13px">${seasons.slice().reverse().map((s,ri)=>{ const i=seasons.length-1-ri; return `<span style="display:inline-flex;align-items:center;gap:7px"><span aria-hidden="true" style="width:14px;height:3px;border-radius:2px;background:${s.color}"></span>${s.label}<b style="font-weight:600;font-variant-numeric:tabular-nums">${acF(dayTot[i])} ac</b></span>`; }).join('')}<span style="color:${W2.ink2}">${wsnLbl(from)} – ${wsnLbl(Math.min(to,edge))}</span></div>
       <div style="position:relative;margin-top:12px">${wsnSVG('day', ser(daily), from, to, mob, mob?240:300)}${tipBox}</div></div>`, `margin-top:${mob?12:16}px`);
   const head = `<div style="margin-bottom:${mob?12:16}px"><div style="font-size:${mob?18:20}px;font-weight:600">Cumulative acres</div><div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">This rabi season’s acres against the two before it, on the same dates. Pick a state and a date range.</div></div>`;
-  return head + controls + cumCard + dayCard;
+  return head + controls + cumCard + apmCard + dayCard;
 }
 /* ===================== Wheat North — Top 10 machines (view key `wtop`, Dinesh 2026-11-04) =====================
    The ten machines with the most acres since the season's first sheet date, THROUGH the Day filter's day. Wheat admin only.
