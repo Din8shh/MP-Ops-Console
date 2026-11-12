@@ -10460,10 +10460,10 @@ function wmcBodyHTML(mob){
 }
 function wmcCSV(){
   const W=wmcAgg(), D=WRET.yday;
-  const head=['Machine','Company','State','Territory','Retailer','Village','Status ('+D+')','Did not run till '+D,'IoT acres on '+D,'IoT acres to '+D,'Acres sprayed on '+D,'Acres sprayed to '+D,'Scanned to '+D,'Last day with IoT acres','Days with IoT acres','Open breakdown tickets','Breakdown age (days)','Last ping','Operator','Operator mobile','CI','CI mobile','AM','AM mobile','State head','State head mobile','FO','FO mobile','TM','TM mobile'];
+  const head=['Machine','Company','State','Territory','Retailer','Village','Status ('+D+')','Did not run till '+D,'IoT acres on '+D,'IoT acres to '+D,'Acres sprayed on '+D,'Acres sprayed to '+D,'Scanned to '+D,'Last day with IoT acres','Days with IoT acres','Open breakdown tickets','Breakdown age (days)','Maintenance age','Last ping','Operator','Operator mobile','CI','CI mobile','AM','AM mobile','State head','State head mobile','FO','FO mobile','TM','TM mobile'];
   const lines=[head.join(',')].concat(W.list.map(m=>{ const days=Object.keys(m.days).filter(d=>d<=D&&m.days[d]>0).length, open=(m.tickets||[]).filter(t=>t.open<=D&&(!t.close||t.close>D)).map(t=>t.id).join(' ');
     return [m.mc, m.org, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.village, wmcStatus(m)[1], (b=>b?(W_NR.never.find(([x])=>x===b)||[])[1]:'')(wNrSeason(m)), Math.round((m.iotY||0)*10)/10, Math.round((m.iotAll||0)*10)/10, Math.round(m.acY*10)/10, Math.round(wtAc(m)*10)/10,
-      Math.round(m.scAll*10)/10, wmcLast(m), wmcIotDays(m), open, (n=>n==null?'':n)(wMaintDays(m,false)), m.lastPing, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob,
+      Math.round(m.scAll*10)/10, wmcLast(m), wmcIotDays(m), open, (n=>n==null?'':n)(wMaintDays(m,false)), (n=>n==null?'':W_AGE.find(([a])=>a===wAgeBand(n))[1])(wMaintDays(m,false)), m.lastPing, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob,
       m.retailer.foName, m.retailer.foMob, m.retailer.tmName, m.retailer.tmMob].map(csvCell).join(','); }));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_machine-summary_${W.A.st||'HR-PB'}_${D||new Date().toISOString().slice(0,10)}.csv`;

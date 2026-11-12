@@ -1131,6 +1131,7 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   now, each a link; the Machines page adds a multi-select age chip row once the maintenance bucket is ticked (third key part,
   `idle:maint,noop:a3,a8` — it narrows only the maintenance machines; `data-act="wmcage"`), a machine's status reads "Maintenance ·
   down N days", and the CSV has "Breakdown age (days)". Live 11 Nov: yesterday 60 = 25 / 27 / 8; till now 15 = 5 / 7 / 3.
+  The Machines CSV also has **Maintenance age** (the band, beside the days). A "Maintenance status" column was offered and declined.
 - **Loading (rebuilt 2026-11-11, Dinesh: "the site opens in seconds but the data takes 2–5 minutes on a first load or a hard
   refresh").** Measured: the four tabs are only ~600 KB gzipped; the wait is GOOGLE preparing the export (~1.5 s warm, ~8 s right
   after the sheet is edited, longer while it recalculates). There was **no time limit on any request**, and the page waited for
