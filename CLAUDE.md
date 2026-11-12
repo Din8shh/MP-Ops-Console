@@ -1124,6 +1124,13 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   the state heads in the current State + Company scope (`wShList`); a pick the scope lacks is ignored, not cleared. Picking one
   clears territory / TM / FO / AM / CI in both scopes; Clear / Reset clear it. Counts in nF. Cumulative (snake tab, state
   grain) cannot follow it. Live 11 Nov: Dushyant 124 machines / 11,672 ac; Amit 66 retailers.
+- **Maintenance AGE in Didn't run (Dinesh 2026-11-12, Wheat ADMIN only).** Days down = the OLDEST relevant ticket's open date →
+  the Day filter's day, both included (opened that day = 1 day; `wMaintDays`): Maintenance on the day reads tickets open at any point
+  of the day, In maintenance now those open at its end. Bands 1–2 / 3–7 / 8+ days (`W_AGE`, `wAgeBand`; the Breakdowns page's);
+  "Age not known" appears only if the tickets tab failed to load. The strip cards list the bands under Maintenance / In maintenance
+  now, each a link; the Machines page adds a multi-select age chip row once the maintenance bucket is ticked (third key part,
+  `idle:maint,noop:a3,a8` — it narrows only the maintenance machines; `data-act="wmcage"`), a machine's status reads "Maintenance ·
+  down N days", and the CSV has "Breakdown age (days)". Live 11 Nov: yesterday 60 = 25 / 27 / 8; till now 15 = 5 / 7 / 3.
 - **Loading (rebuilt 2026-11-11, Dinesh: "the site opens in seconds but the data takes 2–5 minutes on a first load or a hard
   refresh").** Measured: the four tabs are only ~600 KB gzipped; the wait is GOOGLE preparing the export (~1.5 s warm, ~8 s right
   after the sheet is edited, longer while it recalculates). There was **no time limit on any request**, and the page waited for
