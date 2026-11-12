@@ -1104,6 +1104,11 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     Machines page has "Didn't run y'day" and "Didn't run till now" chips with a second row of bucket chips (keys `idle:maint`,
     `never:repaired` …; `wmcKeyOk` / `wmcTestK`), a machine's status names its bucket (`wmcStatus`), and the CSV adds a
     "Did not run till" column. Live 11 Nov (deployed): 160 didn't run = 62 / 17 / 81; till now 54 = 12 / 23 / 3 / 16.
+- **Didn't run: multi-select buckets + "No ping in 2+ days" (Dinesh 2026-11-12).** A fifth bucket, `ping` (`wPing2`: last ping 2+
+  days before today, IST, or none — today's status whatever day is picked), sits between Operator not mapped and Other in BOTH
+  breakups, so the strip cards and the Machines page still add up. The Machines page's bucket chips are multi-select
+  (`data-act="wmcsub"`; key `idle:maint,ping`, OR of the ticked buckets; ticking every bucket = All of them). A machine's status
+  reads "No ping 2+ days" for that bucket. Live 11 Nov: yesterday 160 = 62 / 17 / 30 / 51; till now 54 = 12 / 23 / 3 / 7 / 9.
 - **State head in every admin CSV (Dinesh 2026-11-12)**: "State head" + "State head mobile" (`wShName` / `m.shMob`, the sheet's
   `SH_name` / `SH_contact`, a trailing " SH" tag dropped) after AM — or after Operator where a CSV has no AM (FO, Breakdowns) — in
   the Retailer, Territory, No-IoT, AM, FO, Top 10, Breakdowns and Machines CSVs. Punjab has two: Dushyant Saxena (124 machines on
