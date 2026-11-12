@@ -882,7 +882,8 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   · **IoT acres** = `IOT_acres` (every acre the device measured); **IoT tagged acres** = `IOT_tagged_Acres` (a new column:
     the part of the acres sprayed that carries an IoT tag, 106 of 733 ac sprayed through 28 Oct; see the KPI strip note). Both kept per day in `m.sdays` ([4] and [5]).
   · **Acres per machine** = season acres ÷ machines that ran at least once (to the Day filter's day). **Acres / machine /
-    day** = that ÷ the season's CALENDAR days (first sheet date → the day), idle days counted.
+    day** = season acres ÷ MACHINE-DAYS that ran (a machine counts on a day only if it sprayed that day; first sheet date →
+    the day). Changed 2026-11-12 by Dinesh: it used to divide by the season's calendar days with idle days counted.
   · **Live** = last ping on/after the calendar's yesterday (`wtLive`; the sheet keeps only the latest ping, so always today's
     status). **Breakdown** = that day's row carries a `breakdown_id` (`m.brkDays`, per day; 75 machines on 29 Oct, and some
     of them still spray — Dinesh accepted that).

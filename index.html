@@ -9110,14 +9110,17 @@ function wterrBodyHTML(mob){
 // yesterday; the tables count it), so Idle is simply "did not run"; no last season, so the season tile carries acres
 // against the PLAN, with no direction to colour. Pinged counts machines whose last ping is yesterday or later — the sheet
 // keeps only the latest ping, so a past day cannot say who pinged then and the tile goes.
-// Acres per machine = season acres ÷ machines that have run at least once; per day = that ÷ the season's calendar days
-// (first sheet date → the day). Totals and Scan % read through the day, as the sprayed acres do.
+// Acres per machine = season acres ÷ machines that have run at least once; per day = season acres ÷ machine-days that
+// ran (each machine counted only on the days it sprayed, first sheet date → the day). Totals and Scan % read through the day, as the sprayed acres do.
 // Scan % follows the same rule: the day's scanned ÷ the day's sprayed, then the total's. `cardOnly` is the phone map's one
 // summary card, which keeps Worked and Season together.
 function wtStripHTML(A, mob, stale, cardOnly){
   const pctW = A.n ? Math.round(100*A.worked/A.n) : 0, pctIot = A.n ? Math.round(100*A.workedIot/A.n) : 0, idle = A.n - A.worked, day = wpDate(WRET.yday), past = wDayOn();
   const staleTxt = stale ? `⚠ the sheet's acres stop at ${wpDate(WRET.lastDate)}` : '';
-  const nDays = A.days.length, perMc = A.ranAll ? A.acAll/A.ranAll : null, perDay = A.ranAll && nDays ? A.acAll/A.ranAll/nDays : null;
+  // Per machine per day = acres ÷ MACHINE-DAYS that ran (a machine counts on a day only if it sprayed that day), over the
+  // same axis as the acres (A.days: season start → the Day filter's day). Idle days are not in the divisor (Dinesh 2026-11-12).
+  const mcDays = (A.mcs||[]).reduce((n,m)=>n+A.days.reduce((k,d)=>k+((m.days[d]||0)>0?1:0),0),0);
+  const perMc = A.ranAll ? A.acAll/A.ranAll : null, perDay = mcDays ? A.acAll/mcDays : null;
   const avgF = v => v==null ? '—' : acF(Math.round(v*10)/10);
   const scanPct = pctF(A.acAll>0 ? 100*A.scT/A.acAll : null), scanPctY = pctF(A.acY>0 ? 100*A.scY/A.acY : null);
   const tagPct = pctF(A.acAll>0 ? 100*A.itT/A.acAll : null), tagPctY = pctF(A.acY>0 ? 100*A.itY/A.acY : null);
@@ -9192,7 +9195,7 @@ function wtStripHTML(A, mob, stale, cardOnly){
           </div>
           <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
             <div style="${rule};display:flex;flex-direction:column;gap:6px">${stat('Against plan',planNote,pctF(A.pct))}${splitBar([[planDone,toneAc.dot]],A.plan,`${pctF(A.pct)} of the ${fmt(A.plan)} acre plan`)}</div>
-            <div style="${rule};display:flex;flex-direction:column;gap:8px">${stat('Per machine',`÷ ${fmt(A.ranAll)} that ran`,`${avgF(perMc)}${perMc==null?'':' ac'}`)}${stat('Per machine per day',`÷ ${fmt(nDays)} day${nDays===1?'':'s'} of season`,`${avgF(perDay)}${perDay==null?'':' ac'}`)}</div>
+            <div style="${rule};display:flex;flex-direction:column;gap:8px">${stat('Per machine',`÷ ${fmt(A.ranAll)} that ran`,`${avgF(perMc)}${perMc==null?'':' ac'}`)}${stat('Per machine per day',`÷ ${fmt(mcDays)} machine-day${mcDays===1?'':'s'} that ran`,`${avgF(perDay)}${perDay==null?'':' ac'}`)}</div>
           </div></div>`),
     acCard(toneSc,'Scanned acres', top(toneSc, acF(A.scY), acF(A.scT))
       + `<div style="${rule};display:flex;flex-direction:column;gap:6px">${colHead('Scan %')}${row('of acres sprayed',scanPctY,scanPct)}</div>`
