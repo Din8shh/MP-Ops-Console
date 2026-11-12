@@ -1109,6 +1109,12 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   the Retailer, Territory, No-IoT, AM, FO, Top 10, Breakdowns and Machines CSVs. Punjab has two: Dushyant Saxena (124 machines on
   11 Nov) and Sudershan Chauhan (61); Haryana is Amit Kumar (159). The sheet also files 2 Haryana machines under Sudershan and
   1 Punjab machine under Amit — shown as the sheet has them. Team CSVs unchanged.
+- **State head filter (Dinesh 2026-11-12, Wheat ADMIN only)**: one value, `state.wSh`, shared by every admin page — a "State head"
+  dropdown after Company in both filter bars and both phone Filters sheets (`wShSelP` / `wShSelT`). Applied in `wplanAgg` and
+  `wterrAgg` right after State / Company, so Territory / TM / FO / AM options narrow to that state head's machines. Options =
+  the state heads in the current State + Company scope (`wShList`); a pick the scope lacks is ignored, not cleared. Picking one
+  clears territory / TM / FO / AM / CI in both scopes; Clear / Reset clear it. Counts in nF. Cumulative (snake tab, state
+  grain) cannot follow it. Live 11 Nov: Dushyant 124 machines / 11,672 ac; Amit 66 retailers.
 - **Loading (rebuilt 2026-11-11, Dinesh: "the site opens in seconds but the data takes 2–5 minutes on a first load or a hard
   refresh").** Measured: the four tabs are only ~600 KB gzipped; the wait is GOOGLE preparing the export (~1.5 s warm, ~8 s right
   after the sheet is edited, longer while it recalculates). There was **no time limit on any request**, and the page waited for

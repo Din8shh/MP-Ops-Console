@@ -237,7 +237,7 @@ const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
-  wDay:'', wsnSt:'ALL', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wDep:'dep', wmcQ:'', wmcShow:'all', wmcSort:'mc', wmcLimit:60, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
+  wDay:'', wsnSt:'ALL', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wDep:'dep', wSh:'', wmcQ:'', wmcShow:'all', wmcSort:'mc', wmcLimit:60, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
   wfoSort:'bk', wfoOpen:{}, wfoOn:'',   // Wheat TM → FO page: its own sort, open rows and onboarded filter; the rest is the wt* scope
   wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
   iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60, iotTs:'',   // IoT pages — page-local, shared by the three of them
@@ -913,6 +913,11 @@ const wNoOp = m => !(m.opName||m.opNum);
 // after one name ("Dushyant Saxena SH"); it is dropped. Like CI / AM, SH arrives with the operator mapping, so a machine
 // with no operator has none.
 const wShName = m => String(m.sh||'').replace(/\s+SH$/i,'').trim();
+/* State head FILTER (Dinesh 2026-11-12, Wheat ADMIN only): one value, `state.wSh`, shared by every admin page (both scopes,
+   wp* and wt*). Applied right after State / Company, so the territory / TM / AM lists narrow to that state head's machines.
+   The options are the state heads in the current State + Company scope; a pick that scope does not hold is ignored (not
+   cleared), so switching back restores it. Cumulative is state-grain (the snake tab) and cannot follow it. */
+const wShList = ms => [...new Set(ms.map(wShName).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
 const wTkOpenDuring = (m,d) => (m.tickets&&m.tickets.length) ? m.tickets.some(t=>t.open<=d&&(!t.close||t.close>=d)) : !!(m.brkDays&&m.brkDays[d]);
 const wTkOpenEnd = (m,d) => (m.tickets&&m.tickets.length) ? m.tickets.some(t=>t.open<=d&&(!t.close||t.close>d)) : !!(m.brkDays&&m.brkDays[d]);
 function wNrDay(m){ if(m.acY>0) return ''; const d=WRET.yday; return wTkOpenDuring(m,d)?'maint':wNoOp(m)?'noop':'other'; }
@@ -8562,20 +8567,23 @@ function wplanAgg(){
   const uniq = (l,f) => [...new Set(l.map(f).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const pick = (opts,v) => opts.includes(v) ? v : '';   // a stale pick falls back to All, never empties the page
   const inOrg = all.filter(r=>(!st||r.st===st) && (org==='ALL'||r.org===org));
-  const terrs=uniq(inOrg,r=>r.territory), terr=pick(terrs,S.wpTerr);
-  const inTerr=inOrg.filter(r=>!terr||r.territory===terr);
+  const shs = wDepAdmin() ? wShList(inOrg.flatMap(r=>r.list.filter(wDepOk))) : [], sh = pick(shs, S.wSh);
+  const shOk = m => !sh || wShName(m)===sh;
+  const inSh = inOrg.filter(r=>!sh || r.list.some(m=>wDepOk(m)&&shOk(m)));
+  const terrs=uniq(inSh,r=>r.territory), terr=pick(terrs,S.wpTerr);
+  const inTerr=inSh.filter(r=>!terr||r.territory===terr);
   const tms=uniq(inTerr,r=>r.tmName), tm=pick(tms,S.wpTm);
   const inTm=inTerr.filter(r=>!tm||r.tmName===tm);
   const fos=uniq(inTm,r=>r.foName), fo=pick(fos,S.wpFo);
   const inFo=inTm.filter(r=>!fo||r.foName===fo);
-  const mcs=inFo.flatMap(r=>r.list);
+  const mcs=inFo.flatMap(r=>r.list.filter(shOk));
   const ams=uniq(mcs,m=>m.am), am=pick(ams,S.wpAm);
   const cis=uniq(mcs.filter(m=>!am||m.am===am),m=>m.co), ci=pick(cis,S.wpCi);
   const q=String(S.wpQ||'').trim().toLowerCase(), hit=x=>String(x||'').toLowerCase().includes(q);
   const sumOf=(l,f)=>l.reduce((a,x)=>a+f(x),0);
   const rows=inFo.map(r=>{
     const rHit = !q || [r.party,r.territory,r.foName,r.foMob,r.tmName,r.tmMob].some(hit);
-    let list=r.list.filter(m=>wDepOk(m)&&(!am||m.am===am)&&(!ci||m.co===ci));
+    let list=r.list.filter(m=>wDepOk(m)&&shOk(m)&&(!am||m.am===am)&&(!ci||m.co===ci));
     if(!rHit) list=list.filter(m=>[m.mc,m.opName,m.opNum,m.co,m.coMob,m.am,m.amNum,m.village].some(hit));
     if(!list.length) return null;
     list=list.slice().sort((a,b)=>b.acAll-a.acAll||a.mc.localeCompare(b.mc));
@@ -8588,12 +8596,12 @@ function wplanAgg(){
   rows.sort(sort==='party' ? (a,b)=>a.party.localeCompare(b.party)
     : (a,b)=>((b[sort]==null?-1:b[sort])-(a[sort]==null?-1:a[sort])) || b.plan-a.plan || a.party.localeCompare(b.party));
   const plan=sumOf(rows,r=>r.plan), acAll=sumOf(rows,r=>r.acAll);
-  const nF = (!lockOrg&&org!=='ALL'?1:0)+(st&&!lockSt?1:0)+[terr,tm,fo,am,ci].filter(Boolean).length;
-  return { st, org, lockSt, lockOrg, stOpts, terrs, terr, tms, tm, fos, fo, ams, am, cis, ci, q, sort, rows, all,
+  const nF = (!lockOrg&&org!=='ALL'?1:0)+(st&&!lockSt?1:0)+[sh,terr,tm,fo,am,ci].filter(Boolean).length;
+  return { st, org, lockSt, lockOrg, stOpts, shs, sh, terrs, terr, tms, tm, fos, fo, ams, am, cis, ci, q, sort, rows, all,
     allMc: all.reduce((a,r)=>a+r.list.filter(wDepOk).length,0), nF, narrowed: nF>0 || !!q,
     n: sumOf(rows,r=>r.n), plan, acAll, acY:sumOf(rows,r=>r.acY), scAll:sumOf(rows,r=>r.scAll), scY:sumOf(rows,r=>r.scY),
     pct: plan>0 ? 100*acAll/plan : null, nTerr: new Set(rows.map(r=>r.st+'|'+r.territory)).size,
-    sig: [st,org,terr,tm,fo,am,ci,q,sort].join('|') };
+    sig: [st,org,sh,terr,tm,fo,am,ci,q,sort].join('|') };
 }
 function wplanCSV(){
   const A=wplanAgg(), ppl=l=>l.map(p=>p.n).join(' / ');
@@ -8619,6 +8627,7 @@ function wpFilterFields(A, mob){
     wDepFieldHTML(mob, lab),
     A.lockSt || A.stOpts.length<2 ? '' : lab('State',`<div style="position:relative"><select id="wpStSel" style="${sel}${mob?';width:100%':';width:160px'}">${optionsHTML([{v:'',t:P.allLabel}].concat(A.stOpts.map(c=>({v:c,t:STATE_NAMES[c]||c}))),A.st)}</select>${I.caret}</div>`, true),
     A.lockOrg ? '' : lab('Company',`<div style="${w2segBox(mob)}">${['ALL','UPL','SWAL'].map(c=>`<button data-act="wporg" data-org="${c}" aria-pressed="${A.org===c}" style="${w2seg(A.org===c,mob)}">${c==='ALL'?'Both':c}</button>`).join('')}</div>`, true),
+    wDepAdmin() ? lab('State head', dd('wShSelP','All state heads',A.shs,A.sh)) : '',
     lab('Territory', dd('wpTerrSel','All territories',A.terrs,A.terr)),
     lab('TM', dd('wpTmSel','All TMs',A.tms,A.tm)),
     lab('FO', dd('wpFoSel','All FOs',A.fos,A.fo)),
@@ -8942,8 +8951,10 @@ function wterrAgg(o){   // o.noQ: leave the search out (the Breakdowns page sear
   const inOrg = all.filter(m=>(!st||m.st===st) && (lockOrg ? m.org===lockOrg : wOrgOk(m.org,org)));
   const byName = (a,b) => (a===WRET_NO_TERR)-(b===WRET_NO_TERR) || a.localeCompare(b);
   const pick = (opts,v) => opts.includes(v) ? v : '';
-  const terrs=[...new Set(inOrg.map(m=>m.territory))].sort(byName), terr=pick(terrs,S.wtTerr);
-  const inTerr=inOrg.filter(m=>!terr||m.territory===terr);
+  const shs = wDepAdmin() ? wShList(inOrg) : [], sh = pick(shs, S.wSh);
+  const inSh = inOrg.filter(m=>!sh||wShName(m)===sh);
+  const terrs=[...new Set(inSh.map(m=>m.territory))].sort(byName), terr=pick(terrs,S.wtTerr);
+  const inTerr=inSh.filter(m=>!terr||m.territory===terr);
   const tms=[...new Set(inTerr.map(m=>tmOf(m).n).filter(Boolean))].sort((a,b)=>a.localeCompare(b)), tm=pick(tms,S.wtTm);
   const inTm=inTerr.filter(m=>!tm||tmOf(m).n===tm);
   // AM is a MACHINE field (it arrives with the operator mapping), so it narrows machines, after the retailer-level TM.
@@ -8978,8 +8989,8 @@ function wterrAgg(o){   // o.noQ: leave the search out (the Breakdowns page sear
     : ((b[sort]==null?-1:b[sort])-(a[sort]==null?-1:a[sort])) || b.plan-a.plan || a.name.localeCompare(b.name)));
   const mcs=rows.flatMap(r=>r.list), named=rows.filter(r=>!r.none);
   const tot=series(mcs), plan=sumOf(rows,r=>r.plan), acAll=sumOf(rows,r=>r.acAll);
-  const nF = (!lockOrg&&org!=='ALL'?1:0)+(st&&!lockSt?1:0)+[terr,tm,am].filter(Boolean).length;
-  return { st, org, lockSt, lockOrg, stOpts, terrs, terr, tms, tm, ams, am, q, sort, rows, days, tot,
+  const nF = (!lockOrg&&org!=='ALL'?1:0)+(st&&!lockSt?1:0)+[sh,terr,tm,am].filter(Boolean).length;
+  return { st, org, lockSt, lockOrg, stOpts, shs, sh, terrs, terr, tms, tm, ams, am, q, sort, rows, days, tot,
     // The header's count follows the Company choice (UPL + SWAL by default), so Bayer is counted only when it is picked.
     allTerr: new Set(all.filter(m=>m.territory!==WRET_NO_TERR && wOrgOk(m.org,lockOrg||org)).map(m=>m.st+'|'+m.territory)).size, allMc: all.filter(m=>wOrgOk(m.org,lockOrg||org)).length,
     nF, narrowed: nF>0 || !!q, n:mcs.length, plan, acAll, acY:sumOf(rows,r=>r.acY), scAll:sumOf(rows,r=>r.scAll), scY:sumOf(rows,r=>r.scY),
@@ -8992,7 +9003,7 @@ function wterrAgg(o){   // o.noQ: leave the search out (the Breakdowns page sear
       if(a){ c.idle.n++; c.idle[a]=(c.idle[a]||0)+1; } if(b){ c.never.n++; c.never[b]=(c.never[b]||0)+1; } }); return c; })(),
     ...wtScan(mcs),
     nNamed: named.length, nSprayedY: named.filter(r=>r.acY>0).length, none: rows.find(r=>r.none)||null,
-    sig: [st,org,terr,tm,am,q,sort].join('|') };
+    sig: [st,org,sh,terr,tm,am,q,sort].join('|') };
 }
 function wterrCSV(){
   const A=wterrAgg();
@@ -9017,6 +9028,7 @@ function wtFilterFields(A, mob){
     wDepFieldHTML(mob, lab),
     A.lockSt || A.stOpts.length<2 ? '' : lab('State',`<div style="position:relative"><select id="wtStSel" style="${sel}${mob?';width:100%':';width:160px'}">${optionsHTML([{v:'',t:P.allLabel}].concat(A.stOpts.map(c=>({v:c,t:STATE_NAMES[c]||c}))),A.st)}</select>${I.caret}</div>`, true),
     A.lockOrg ? '' : lab('Company',`<div style="${w2segBox(mob)}${mob?';flex-wrap:wrap':''}">${wOrgOpts().map(([c,n])=>`<button data-act="wtorg" data-org="${c}" aria-pressed="${A.org===c}" style="${w2seg(A.org===c,mob)}${mob?';flex:1 0 auto':''}">${n}</button>`).join('')}</div>`, true),
+    wDepAdmin() ? lab('State head', dd('wShSelT','All state heads',A.shs,A.sh)) : '',
     lab('Territory', dd('wtTerrSel','All territories',A.terrs,A.terr)),
     lab('TM', dd('wtTmSel','All TMs',A.tms,A.tm)),
     wTeam() ? '' : lab('AM', dd('wtAmSel','All AMs',A.ams,A.am)),
@@ -13093,6 +13105,7 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='wDayInput'){ const v=e.target.value; if(v) setState({wDay: v===WRET.ydayCal?'':v}); }   // shared by the four Wheat pages
   else if(e.target.id==='wtStSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({wtSt:w, wtTerr:'', wtTm:'', wtAm:''}); }
   else if(e.target.id==='wtTerrSel') setState({wtTerr:e.target.value, wtTm:'', wtAm:''});
+  else if(e.target.id==='wShSelT'||e.target.id==='wShSelP') setState({wSh:e.target.value, wtTerr:'', wtTm:'', wtAm:'', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:''});   // one value for every admin page; its children clear in both scopes
   else if(e.target.id==='wtTmSel') setState({wtTm:e.target.value, wtAm:''});
   else if(e.target.id==='wtAmSel') setState({wtAm:e.target.value});
   else if(e.target.id==='wamSortSel') setState({wamSort:e.target.value});
@@ -13174,7 +13187,7 @@ app.addEventListener('click', e=>{
     case 'mppretry': MPP.loaded=false; MPP.error=false; loadMPProduct(); break;
     case 'mpco': setState({mpCo:el.dataset.co}); track('mpprod_company',{co:el.dataset.co}); break;
     case 'wporg': setState({wpOrg:el.dataset.org, wpTerr:'', wpTm:'', wpFo:''}); break;
-    case 'wpclear': setState({wDay:'', wDep:'dep', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:''}); break;
+    case 'wpclear': setState({wDay:'', wDep:'dep', wSh:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:''}); break;
     case 'wpretry': loadWRet(); break;
     case 'wpexp': { const k=el.dataset.k; setState(s=>({wpOpen:{...s.wpOpen, [k]:!s.wpOpen[k]}})); break; }
     case 'wpmc': { const m=WRET.machines.find(x=>x.mc===el.dataset.mc); if(m){ setState({selected:m}); track('machine_open',{ machine:m.mc, project:'wheat' }); } break; }
@@ -13205,7 +13218,7 @@ app.addEventListener('click', e=>{
     case 'wsnreset': setState({wsnFrom:null, wsnTo:null}); break;
     case 'wsnretry': loadWsn(); break;
     case 'wcterr': { const t=el.dataset.t; setState(s=>({wtTerr:s.wtTerr===t?'':t, wtTm:'', wtAm:''})); break; }
-    case 'wtclear': setState({wmcQ:'', wmcShow:'all', wDay:'', wDep:'dep', wfoOn:'', wmShow:'all', wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
+    case 'wtclear': setState({wmcQ:'', wmcShow:'all', wDay:'', wDep:'dep', wSh:'', wfoOn:'', wmShow:'all', wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
     case 'wamexp': { const k=el.dataset.k; setState(s=>({wamOpen:{...s.wamOpen, [k]:!s.wamOpen[k]}})); break; }
     case 'wamsort': setState({wamSort:el.dataset.k}); break;
     case 'wfoexp': { const k=el.dataset.k; setState(s=>({wfoOpen:{...s.wfoOpen, [k]:!s.wfoOpen[k]}})); break; }
