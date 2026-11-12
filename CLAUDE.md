@@ -1104,6 +1104,11 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     Machines page has "Didn't run y'day" and "Didn't run till now" chips with a second row of bucket chips (keys `idle:maint`,
     `never:repaired` …; `wmcKeyOk` / `wmcTestK`), a machine's status names its bucket (`wmcStatus`), and the CSV adds a
     "Did not run till" column. Live 11 Nov (deployed): 160 didn't run = 62 / 17 / 81; till now 54 = 12 / 23 / 3 / 16.
+- **State head in every admin CSV (Dinesh 2026-11-12)**: "State head" + "State head mobile" (`wShName` / `m.shMob`, the sheet's
+  `SH_name` / `SH_contact`, a trailing " SH" tag dropped) after AM — or after Operator where a CSV has no AM (FO, Breakdowns) — in
+  the Retailer, Territory, No-IoT, AM, FO, Top 10, Breakdowns and Machines CSVs. Punjab has two: Dushyant Saxena (124 machines on
+  11 Nov) and Sudershan Chauhan (61); Haryana is Amit Kumar (159). The sheet also files 2 Haryana machines under Sudershan and
+  1 Punjab machine under Amit — shown as the sheet has them. Team CSVs unchanged.
 - **Loading (rebuilt 2026-11-11, Dinesh: "the site opens in seconds but the data takes 2–5 minutes on a first load or a hard
   refresh").** Measured: the four tabs are only ~600 KB gzipped; the wait is GOOGLE preparing the export (~1.5 s warm, ~8 s right
   after the sheet is edited, longer while it recalculates). There was **no time limit on any request**, and the page waited for

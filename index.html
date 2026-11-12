@@ -909,6 +909,10 @@ function wDepFieldHTML(mob, lab){
      → Repaired, not run since = had a ticket, none open now → Operator not mapped → Other.
    Without the tickets tab (it failed to load), the Main sheet's breakdown flag (brkDays) stands in for "open". */
 const wNoOp = m => !(m.opName||m.opNum);
+// State head (SH) for the CSVs (Dinesh 2026-11-12: Punjab has two — Dushyant and Sudershan). The sheet types a role tag
+// after one name ("Dushyant Saxena SH"); it is dropped. Like CI / AM, SH arrives with the operator mapping, so a machine
+// with no operator has none.
+const wShName = m => String(m.sh||'').replace(/\s+SH$/i,'').trim();
 const wTkOpenDuring = (m,d) => (m.tickets&&m.tickets.length) ? m.tickets.some(t=>t.open<=d&&(!t.close||t.close>=d)) : !!(m.brkDays&&m.brkDays[d]);
 const wTkOpenEnd = (m,d) => (m.tickets&&m.tickets.length) ? m.tickets.some(t=>t.open<=d&&(!t.close||t.close>d)) : !!(m.brkDays&&m.brkDays[d]);
 function wNrDay(m){ if(m.acY>0) return ''; const d=WRET.yday; return wTkOpenDuring(m,d)?'maint':wNoOp(m)?'noop':'other'; }
@@ -8595,10 +8599,10 @@ function wplanCSV(){
   const A=wplanAgg(), ppl=l=>l.map(p=>p.n).join(' / ');
   const head=['State','Territory','Company','Retailer','Retailer plan acres','Machines (retailer)','Machine','Machine plan acres (plan ÷ machines)',
     `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Acres last 7 days (to ${WRET.yday})`,'Acres overall','% of machine plan',`Scanned ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,'Scanned overall','IoT acres overall','Village',
-    'Operator','Operator mobile','CI','CI mobile','AM','AM mobile','FO','FO mobile','TM','TM mobile','Last ping'];
+    'Operator','Operator mobile','CI','CI mobile','AM','AM mobile','State head','State head mobile','FO','FO mobile','TM','TM mobile','Last ping'];
   const lines=[head.join(',')].concat(A.rows.flatMap(r=>r.list.map(m=>[STATE_NAMES[r.st]||r.st, r.territory, r.org, r.party, r.planAc, r.nAll, m.mc,
     Math.round(m.planShare*10)/10, m.acY, m.ac7, m.acAll, m.planShare>0?Math.round(1000*m.acAll/m.planShare)/10:'', m.scY, m.scAll, Math.round(m.iotAll*10)/10, m.village,
-    m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, r.foName, r.foMob, r.tmName, r.tmMob, m.lastPing].map(csvCell).join(','))));
+    m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob, r.foName, r.foMob, r.tmName, r.tmMob, m.lastPing].map(csvCell).join(','))));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_retailer-summary_${A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
@@ -8994,9 +8998,9 @@ function wterrCSV(){
   const A=wterrAgg();
   const head=['State','Territory','TM','TM mobile','Machine','Retailer','Company','Machine plan acres (retailer plan ÷ machines)',
     `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Season acres to ${WRET.yday}`,`Scanned ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,'Scanned overall','Operator','Operator mobile',
-    'CI','CI mobile','AM','AM mobile','FO','FO mobile','Territory on sheet','Last ping','Live (pinged since yesterday)',`Breakdown (${WRET.yday})`];
+    'CI','CI mobile','AM','AM mobile','State head','State head mobile','FO','FO mobile','Territory on sheet','Last ping','Live (pinged since yesterday)',`Breakdown (${WRET.yday})`];
   const lines=[head.join(',')].concat(A.rows.flatMap(r=>r.list.map(m=>[STATE_NAMES[r.st]||r.st, r.name, m.retailer.tmName, m.retailer.tmMob, m.mc, m.party, m.org,
-    Math.round(m.planShare*10)/10, m.acY, wtAc(m), m.scY, m.scAll, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, m.retailer.foName, m.retailer.foMob, m.terrRaw,
+    Math.round(m.planShare*10)/10, m.acY, wtAc(m), m.scY, m.scAll, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob, m.retailer.foName, m.retailer.foMob, m.terrRaw,
     m.lastPing, wtLive(m)?'Yes':'No', m.brkDays[WRET.yday]||''].map(csvCell).join(','))));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_territory-summary_${A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
@@ -9313,9 +9317,9 @@ function wNoIotHTML(A, mob){
 function wNoIotCSV(){
   const A=wterrAgg(), list=A.noIot.slice().sort((a,b)=>b.acY-a.acY||a.mc.localeCompare(b.mc));
   const head=['State','Territory','Machine','Company','Retailer',`Acres sprayed (${WRET.yday})`,`IoT acres (${WRET.yday})`,`IoT acres to ${WRET.yday}`,`Season acres to ${WRET.yday}`,
-    'Operator','Operator mobile','CI','CI mobile','AM','AM mobile','TM','TM mobile','Last ping'];
+    'Operator','Operator mobile','CI','CI mobile','AM','AM mobile','State head','State head mobile','TM','TM mobile','Last ping'];
   const lines=[head.join(',')].concat(list.map(m=>[STATE_NAMES[m.st]||m.st, m.territory, m.mc, m.org, m.party, m.acY, m.iotY||0, m.iotAll||0, wtAc(m),
-    m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, m.retailer.tmName, m.retailer.tmMob, m.lastPing].map(csvCell).join(',')));
+    m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob, m.retailer.tmName, m.retailer.tmMob, m.lastPing].map(csvCell).join(',')));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_sprayed-no-IoT_${A.st||'HR-PB'}_${WRET.yday||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
@@ -9361,9 +9365,9 @@ function wamAgg(){
 }
 function wamCSV(){
   const W=wamAgg();
-  const head=['AM','AM mobile','CI','CI mobile','Machine','State','Territory','Retailer','Company','Machine plan acres (retailer plan ÷ machines)',
+  const head=['AM','AM mobile','State head','State head mobile','CI','CI mobile','Machine','State','Territory','Retailer','Company','Machine plan acres (retailer plan ÷ machines)',
     `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Season acres to ${WRET.yday}`,'Scanned overall','Operator','Operator mobile','Last ping','Live (pinged since yesterday)',`Breakdown (${WRET.yday})`];
-  const lines=[head.join(',')].concat(W.rows.flatMap(r=>r.subs.flatMap(c=>c.list.map(m=>[m.am, m.amNum, m.co, m.coMob, m.mc, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.org,
+  const lines=[head.join(',')].concat(W.rows.flatMap(r=>r.subs.flatMap(c=>c.list.map(m=>[m.am, m.amNum, wShName(m), m.shMob, m.co, m.coMob, m.mc, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.org,
     Math.round(m.planShare*10)/10, m.acY, wtAc(m), m.scAll, m.opName, m.opNum, m.lastPing, wtLive(m)?'Yes':'No', m.brkDays[WRET.yday]||''].map(csvCell).join(',')))));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_area-managers_${W.A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
@@ -9499,10 +9503,10 @@ function wfoAgg(){
 function wfoCSV(){
   const W=wfoAgg(), d=WRET.yday, w=wIsYday()?'yesterday':'on day';
   const head=['TM','TM mobile','FO','FO mobile','FO onboarded','Machine','Retailer','State','Territory','Company','Bookings given','Booked acres',
-    `Bookings completed to ${d}`,`Acres completed to ${d}`,`Bookings completed ${w} (${d})`,`Acres ${w} (${d})`,'Operator','Operator mobile'];
+    `Bookings completed to ${d}`,`Acres completed to ${d}`,`Bookings completed ${w} (${d})`,`Acres ${w} (${d})`,'Operator','Operator mobile','State head','State head mobile'];
   const lines=[head.join(',')].concat(W.rows.flatMap(r=>r.fos.flatMap(f=>f.list.map(m=>[r.none?'':r.name, r.mob, f.none?'':f.name, f.mob,
     f.none?'':f.on?'Onboarded':'Yet to onboard', m.mc, m.party, STATE_NAMES[m.st]||m.st, m.territory, m.org, '', '',
-    m.bkAll, Math.round(wtAc(m)*10)/10, m.bkY, m.acY, m.opName, m.opNum].map(csvCell).join(',')))));
+    m.bkAll, Math.round(wtAc(m)*10)/10, m.bkY, m.acY, m.opName, m.opNum, wShName(m), m.shMob].map(csvCell).join(',')))));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_tm-fo-summary_${W.A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
@@ -10136,10 +10140,10 @@ function wtopBodyHTML(mob){
 }
 function wtopCSV(){
   const A=wterrAgg(), T=wtopList(A), by=T.by;
-  const head=['Rank','Machine','Company','State','Territory','Retailer',`Acres sprayed to ${WRET.yday}`,`IoT acres to ${WRET.yday}`,'Days sprayed','Acres per day sprayed','Operator','Operator mobile','CI','CI mobile','AM','AM mobile','TM','TM mobile'];
+  const head=['Rank','Machine','Company','State','Territory','Retailer',`Acres sprayed to ${WRET.yday}`,`IoT acres to ${WRET.yday}`,'Days sprayed','Acres per day sprayed','Operator','Operator mobile','CI','CI mobile','AM','AM mobile','State head','State head mobile','TM','TM mobile'];
   const lines=[head.join(',')].concat(T.list.map((m,i)=>{ const v=wtopVal(m,by), d=wtopDays(m,by).length;
     return [i+1, m.mc, m.org, STATE_NAMES[m.st]||m.st, m.territory, m.party, Math.round(wtAc(m)*10)/10, Math.round((m.iotAll||0)*10)/10, d, d?Math.round(10*v/d)/10:'',
-      m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, m.retailer.tmName, m.retailer.tmMob].map(csvCell).join(','); }));
+      m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob, m.retailer.tmName, m.retailer.tmMob].map(csvCell).join(','); }));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_top-${WTOP_N}-machines_${by==='iot'?'IoT':'acres'}_${A.st||'HR-PB'}_${WRET.yday||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
@@ -10301,10 +10305,10 @@ function wbdBodyHTML(mob){
 }
 function wbdCSV(){
   const W=wbdAgg(), D=W.D;
-  const head=['Ticket ID','Machine','Company','State','Territory','Retailer','TM','Technician','Technician agency','Technician mobile','Opened','Closed',`Status at the end of ${D}`,'Days open / days taken','Operator','Operator mobile'];
+  const head=['Ticket ID','Machine','Company','State','Territory','Retailer','TM','Technician','Technician agency','Technician mobile','Opened','Closed',`Status at the end of ${D}`,'Days open / days taken','Operator','Operator mobile','State head','State head mobile'];
   const lines=[head.join(',')].concat(W.all.slice().sort((a,b)=>a.open.localeCompare(b.open)||a.id.localeCompare(b.id)).map(t=>{ const m=t.m, cl=t.close&&t.close<=D;
     return [t.id, m.mc, m.org, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.retailer.tmName, t.tech, t.tag, t.techMob, t.open, cl?t.close:'', cl?'Closed':'Open',
-      cl?wtkDayN(t.open,t.close):wtkDayN(t.open,D), m.opName, m.opNum].map(csvCell).join(','); }));
+      cl?wtkDayN(t.open,t.close):wtkDayN(t.open,D), m.opName, m.opNum, wShName(m), m.shMob].map(csvCell).join(','); }));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_breakdown-tickets_${W.A.st||'HR-PB'}_${D||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
@@ -10408,10 +10412,10 @@ function wmcBodyHTML(mob){
 }
 function wmcCSV(){
   const W=wmcAgg(), D=WRET.yday;
-  const head=['Machine','Company','State','Territory','Retailer','Village','Status ('+D+')','Did not run till '+D,'Acres on '+D,'Season acres to '+D,'IoT acres to '+D,'Scanned to '+D,'Last sprayed','Days sprayed','Open breakdown tickets','Last ping','Operator','Operator mobile','CI','CI mobile','AM','AM mobile','FO','FO mobile','TM','TM mobile'];
+  const head=['Machine','Company','State','Territory','Retailer','Village','Status ('+D+')','Did not run till '+D,'Acres on '+D,'Season acres to '+D,'IoT acres to '+D,'Scanned to '+D,'Last sprayed','Days sprayed','Open breakdown tickets','Last ping','Operator','Operator mobile','CI','CI mobile','AM','AM mobile','State head','State head mobile','FO','FO mobile','TM','TM mobile'];
   const lines=[head.join(',')].concat(W.list.map(m=>{ const days=Object.keys(m.days).filter(d=>d<=D&&m.days[d]>0).length, open=(m.tickets||[]).filter(t=>t.open<=D&&(!t.close||t.close>D)).map(t=>t.id).join(' ');
     return [m.mc, m.org, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.village, wmcStatus(m)[1], (b=>b?(W_NR.never.find(([x])=>x===b)||[])[1]:'')(wNrSeason(m)), Math.round(m.acY*10)/10, Math.round(wtAc(m)*10)/10,
-      Math.round((m.iotAll||0)*10)/10, Math.round(m.scAll*10)/10, wmcLast(m), days, open, m.lastPing, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum,
+      Math.round((m.iotAll||0)*10)/10, Math.round(m.scAll*10)/10, wmcLast(m), days, open, m.lastPing, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob,
       m.retailer.foName, m.retailer.foMob, m.retailer.tmName, m.retailer.tmMob].map(csvCell).join(','); }));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_machine-summary_${W.A.st||'HR-PB'}_${D||new Date().toISOString().slice(0,10)}.csv`;
