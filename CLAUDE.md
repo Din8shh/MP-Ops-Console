@@ -1109,6 +1109,10 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   breakups, so the strip cards and the Machines page still add up. The Machines page's bucket chips are multi-select
   (`data-act="wmcsub"`; key `idle:maint,ping`, OR of the ticked buckets; ticking every bucket = All of them). A machine's status
   reads "No ping 2+ days" for that bucket. Live 11 Nov: yesterday 160 = 62 / 17 / 30 / 51; till now 54 = 12 / 23 / 3 / 7 / 9.
+- **Didn't run and the Machines page read IoT ACRES (Dinesh 2026-11-12).** "Ran" = `iotY` > 0 on the day / `iotAll` > 0 to the
+  day, in `wNrDay` / `wNrSeason` (so the strip cards match the "Ran on IoT acres" tile: 195 + 152 = 347 on 11 Nov) and on the
+  Machines page (`wmcRan`, the acre columns, sorts, "Last IoT acres" via `sdays[d][4]`, CSV leading with IoT acres and keeping
+  acres sprayed beside). The Worked tile, acres cards and per-machine figures stay on acres sprayed.
 - **State head in every admin CSV (Dinesh 2026-11-12)**: "State head" + "State head mobile" (`wShName` / `m.shMob`, the sheet's
   `SH_name` / `SH_contact`, a trailing " SH" tag dropped) after AM — or after Operator where a CSV has no AM (FO, Breakdowns) — in
   the Retailer, Territory, No-IoT, AM, FO, Top 10, Breakdowns and Machines CSVs. Punjab has two: Dushyant Saxena (124 machines on

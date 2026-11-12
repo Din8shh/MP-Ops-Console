@@ -908,6 +908,8 @@ function wDepFieldHTML(mob, lab){
    · TILL NOW (no acres from the season's first day to the day): In maintenance now = a ticket open at the end of the day
      → Repaired, not run since = had a ticket, none open now → Operator not mapped → Other.
    Without the tickets tab (it failed to load), the Main sheet's breakdown flag (brkDays) stands in for "open".
+   RAN = IoT ACRES above zero (Dinesh 2026-11-12: "consider IoT acres, not acres sprayed"), on the day (iotY) / to the day
+   (iotAll) — the cards and the Machines page alike; the Worked tile, acres and per-machine figures stay on acres sprayed.
    No ping in 2+ days (Dinesh 2026-11-12) sits between Operator not mapped and Other in BOTH: last ping 2 or more days before
    today (IST), or none. The sheet keeps only the latest ping, so it is always today's status, whatever day is picked. */
 const wPing2 = m => !m.lastPing || m.lastPing <= istDay(Date.now()-2*864e5);
@@ -923,9 +925,9 @@ const wShName = m => String(m.sh||'').replace(/\s+SH$/i,'').trim();
 const wShList = ms => [...new Set(ms.map(wShName).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
 const wTkOpenDuring = (m,d) => (m.tickets&&m.tickets.length) ? m.tickets.some(t=>t.open<=d&&(!t.close||t.close>=d)) : !!(m.brkDays&&m.brkDays[d]);
 const wTkOpenEnd = (m,d) => (m.tickets&&m.tickets.length) ? m.tickets.some(t=>t.open<=d&&(!t.close||t.close>d)) : !!(m.brkDays&&m.brkDays[d]);
-function wNrDay(m){ if(m.acY>0) return ''; const d=WRET.yday; return wTkOpenDuring(m,d)?'maint':wNoOp(m)?'noop':wPing2(m)?'ping':'other'; }
+function wNrDay(m){ if(m.iotY>0) return ''; const d=WRET.yday; return wTkOpenDuring(m,d)?'maint':wNoOp(m)?'noop':wPing2(m)?'ping':'other'; }
 function wNrSeason(m){
-  if(wtAc(m)>0) return ''; const d=WRET.yday;
+  if(m.iotAll>0) return ''; const d=WRET.yday;
   return wTkOpenEnd(m,d)?'maintNow':(m.tickets||[]).some(t=>t.open<=d)?'repaired':wNoOp(m)?'noop':wPing2(m)?'ping':'other';
 }
 const W_NR = { idle:[['maint','Maintenance'],['noop','Operator not mapped'],['ping','No ping in 2+ days'],['other','Other']],
@@ -9297,8 +9299,8 @@ function wNrCardsHTML(A, mob){
         <span style="font-size:12.5px;color:${W2.ink2}">${note}</span></button>
       ${bar}<div>${parts.map(row).join('')}</div></div>`; };
   return `<div style="display:grid;grid-template-columns:${mob?'minmax(0,1fr)':'repeat(auto-fit,minmax(300px,1fr))'};gap:${mob?8:12}px;margin-top:${mob?8:12}px">
-    ${card('idle', `Didn’t run ${wDayWord()}`, `no acres on ${day} · ${mob?'tap':'click'} a line to see the machines`)}
-    ${card('never', `Didn’t run till ${wIsYday()?'now':day}`, `no acres from ${wpDate(first)} to ${day}`)}</div>`;
+    ${card('idle', `Didn’t run ${wDayWord()}`, `no IoT acres on ${day} · ${mob?'tap':'click'} a line to see the machines`)}
+    ${card('never', `Didn’t run till ${wIsYday()?'now':day}`, `no IoT acres from ${wpDate(first)} to ${day}`)}</div>`;
 }
 function wNoIotHTML(A, mob){
   if(!isAdmin()) return '';
@@ -10338,9 +10340,11 @@ function wbdCSV(){
    the breakdown tickets (wpMcExtraHTML). Status on a line is word + mark + colour: ! Breakdown > ✓ Ran > ○ Didn't run. */
 const WMC_PAGE = 60;
 const WMC_SHOW = [['all','All'],['ran','Ran'],['idle','Didn’t run'],['never','Didn’t run till now'],['brk','Breakdown'],['noop','No operator'],['stale','No ping 3+ days']];
-const WMC_SORTS = [['mc','Machine number'],['acAll','Season acres'],['acY','Acres on the day'],['last','Last sprayed'],['ping','Last ping']];
-const wmcRan = m => m.acY>0;
-const wmcLast = m => { let l=''; for(const d in m.days) if(d<=WRET.yday && m.days[d]>0 && d>l) l=d; return l; };
+const WMC_SORTS = [['mc','Machine number'],['acAll','Season IoT acres'],['acY','IoT acres on the day'],['last','Last IoT acres'],['ping','Last ping']];
+// The Machines page reads IoT ACRES throughout (Dinesh 2026-11-12): ran, the acre columns, last day with acres, the sorts.
+const wmcRan = m => m.iotY>0;
+const wmcLast = m => { let l=''; for(const d in m.sdays) if(d<=WRET.yday && m.sdays[d][4]>0 && d>l) l=d; return l; };
+const wmcIotDays = m => Object.keys(m.sdays).filter(d=>d<=WRET.yday&&m.sdays[d][4]>0).length;
 const wmcTest = { all:()=>true, ran:wmcRan, idle:m=>!wmcRan(m), never:m=>!!wNrSeason(m), brk:m=>m.brk, noop:m=>!(m.opName||m.opNum), stale:m=>wmStale(m) };
 // A Show key is a quick filter ("idle") or one of its Didn't run buckets ("idle:maint", "never:repaired" — see W_NR).
 // Buckets are MULTI-select (Dinesh 2026-11-12): "idle:maint,ping" shows machines in either bucket.
@@ -10371,7 +10375,7 @@ function wmcAgg(){
   Object.entries(W_NR).forEach(([g,l])=>l.forEach(([b])=>counts[g+':'+b]=found.filter(wmcTestK(g+':'+b)).length));
   const show=wmcKeyOk(S.wmcShow)?S.wmcShow:'all';
   const sort=WMC_SORTS.some(([k])=>k===S.wmcSort)?S.wmcSort:'mc';
-  const key={ acAll:m=>wtAc(m), acY:m=>m.acY, last:wmcLast, ping:m=>m.lastPing||'' }[sort];
+  const key={ acAll:m=>m.iotAll||0, acY:m=>m.iotY||0, last:wmcLast, ping:m=>m.lastPing||'' }[sort];
   const list=found.filter(wmcTestK(show)).sort((a,b)=>{ if(sort==='mc') return a.mc.localeCompare(b.mc,undefined,{numeric:true});
     const x=key(a), y=key(b); return (x<y?1:x>y?-1:0) || a.mc.localeCompare(b.mc,undefined,{numeric:true}); });
   return { A, q, found, counts, show, sort, list, narrowed:A.nF>0||!!q||show!=='all', sig:[A.sig,q,show,sort].join('|') };
@@ -10400,39 +10404,39 @@ function wmcBodyHTML(mob){
         <span style="font-size:13.5px;line-height:1.4;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(m.territory)} · ${E(m.party)}</span>
         <span style="font-size:13px;color:${W2.ink2}">${op(m)}${m.opNum&&m.opName?` · <span style="font-family:'IBM Plex Mono'">${E(m.opNum)}</span>`:''}</span>
         <span style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:100%;margin-top:2px">
-          <span style="display:flex;flex-direction:column;gap:1px"><span style="${w2num(16,600)}">${acF(m.acY)}</span><span style="font-size:12px;color:${W2.ink2}">ac ${wIsYday()?'y’day':wpDate(D)}</span></span>
-          <span style="display:flex;flex-direction:column;gap:1px"><span style="${w2num(16,600)}">${acF(wtAc(m))}</span><span style="font-size:12px;color:${W2.ink2}">ac season</span></span>
-          <span style="display:flex;flex-direction:column;gap:1px"><span style="font-size:14px;font-weight:500">${last?wpDate(last):'—'}</span><span style="font-size:12px;color:${W2.ink2}">last sprayed</span></span></span>
+          <span style="display:flex;flex-direction:column;gap:1px"><span style="${w2num(16,600)}">${acF(m.iotY||0)}</span><span style="font-size:12px;color:${W2.ink2}">IoT ac ${wIsYday()?'y’day':wpDate(D)}</span></span>
+          <span style="display:flex;flex-direction:column;gap:1px"><span style="${w2num(16,600)}">${acF(m.iotAll||0)}</span><span style="font-size:12px;color:${W2.ink2}">IoT ac season</span></span>
+          <span style="display:flex;flex-direction:column;gap:1px"><span style="font-size:14px;font-weight:500">${last?wpDate(last):'—'}</span><span style="font-size:12px;color:${W2.ink2}">last IoT acres</span></span></span>
         <span style="font-size:12.5px;color:${W2.ink2}">Scanned ${acF(m.scAll)} ac · last ping ${ping(m)}</span></button>`; }).join('')}</div>`;
   else {
     const cols='140px 104px minmax(170px,1.6fr) minmax(130px,1fr) 64px 78px 70px 100px';
     const th=B.th('wmcsort', W.sort);
     body = `<div style="overflow-x:auto"><div style="min-width:960px">
       <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2};align-items:end">
-        ${th('mc','Machine')}${th('','Status · '+dw)}${th('','Territory · retailer')}${th('','Operator')}${th('acY','Acres '+(wIsYday()?'y’day':wpDate(D)),1)}${th('acAll','Season acres',1)}${th('','Scanned',1)}<span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">${th('last','Last sprayed',1)}${th('ping','Last ping',1)}</span></div>
+        ${th('mc','Machine')}${th('','Status · '+dw)}${th('','Territory · retailer')}${th('','Operator')}${th('acY','IoT ac '+(wIsYday()?'y’day':wpDate(D)),1)}${th('acAll','Season IoT ac',1)}${th('','Scanned',1)}<span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">${th('last','Last IoT acres',1)}${th('ping','Last ping',1)}</span></div>
       ${shown.map(m=>{ const last=wmcLast(m);
         return `<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:grid;grid-template-columns:${cols};gap:10px;width:100%;padding:11px 22px;border:none;border-bottom:1px solid ${W2.line2};background:#fff;text-align:left;cursor:pointer;font:14px ${W2.font};color:${W2.ink};align-items:center" onmouseover="this.style.background='${W2.head}'" onmouseout="this.style.background='#fff'">
           <span style="display:flex;align-items:center;gap:6px;min-width:0"><span style="font:600 13.5px 'IBM Plex Mono',monospace;text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</span>${orgChip(m.org)}</span>
           <span>${status(m)}</span>
           <span style="min-width:0;display:flex;flex-direction:column;gap:2px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500">${E(m.party)}</span><span style="font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.territory)} · ${E(STATE_NAMES[m.st]||m.st||'')}${m.village?' · '+E(m.village):''}</span></span>
           <span style="min-width:0;display:flex;flex-direction:column;gap:2px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${op(m)}</span>${m.opNum&&m.opName?`<span style="font:12px 'IBM Plex Mono',monospace;color:${W2.ink2}">${E(m.opNum)}</span>`:''}</span>
-          <span style="text-align:right;font-variant-numeric:tabular-nums;${m.acY>0?`color:${W2.actD};font-weight:600`:`color:${W2.ink2}`}">${acF(m.acY)}</span>
-          <span style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${acF(wtAc(m))}</span>
+          <span style="text-align:right;font-variant-numeric:tabular-nums;${m.iotY>0?`color:${W2.actD};font-weight:600`:`color:${W2.ink2}`}">${acF(m.iotY||0)}</span>
+          <span style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${acF(m.iotAll||0)}</span>
           <span style="text-align:right;font-variant-numeric:tabular-nums;color:${W2.ink2}">${acF(m.scAll)}</span>
           <span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-variant-numeric:tabular-nums"><span>${last?wpDate(last):'—'}</span><span style="font-size:12.5px">${ping(m)}</span></span></button>`; }).join('')}
     </div></div>`;
   }
   const more = W.list.length>shown.length ? `<button data-act="wmcmore" style="display:block;width:100%;min-height:${mob?48:42}px;border:none;border-top:1px solid ${W2.line2};background:${W2.head};font:600 13.5px ${W2.font};color:${W2.ink};cursor:pointer">Show ${fmt(Math.min(WMC_PAGE,W.list.length-shown.length))} more · ${fmt(shown.length)} of ${fmt(W.list.length)} shown</button>` : '';
   const card = B.cardBox(body+more, `overflow:hidden;margin-top:${mob?12:14}px`);
-  const note = `<div style="font-size:12.5px;color:${W2.ink2};margin-top:10px;line-height:1.5">Type a full machine number (UPL_2759, or just 2759) to open it straight away. Ran = acres sprayed on ${wpDate(D)}; Breakdown = an open ticket at the end of that day. Season acres and scanned run to ${wpDate(D)}. Operator, people, retailer and last ping are today's.</div>`;
+  const note = `<div style="font-size:12.5px;color:${W2.ink2};margin-top:10px;line-height:1.5">Type a full machine number (UPL_2759, or just 2759) to open it straight away. Ran = IoT acres on ${wpDate(D)} (acre columns and last sprayed are IoT acres too); Breakdown = an open ticket at the end of that day. Season acres and scanned run to ${wpDate(D)}. Operator, people, retailer and last ping are today's.</div>`;
   return controls + chips + head + card + note + (mob?`<div style="margin-top:10px">${B.stamp('wpretry')}</div>`:'');
 }
 function wmcCSV(){
   const W=wmcAgg(), D=WRET.yday;
-  const head=['Machine','Company','State','Territory','Retailer','Village','Status ('+D+')','Did not run till '+D,'Acres on '+D,'Season acres to '+D,'IoT acres to '+D,'Scanned to '+D,'Last sprayed','Days sprayed','Open breakdown tickets','Last ping','Operator','Operator mobile','CI','CI mobile','AM','AM mobile','State head','State head mobile','FO','FO mobile','TM','TM mobile'];
+  const head=['Machine','Company','State','Territory','Retailer','Village','Status ('+D+')','Did not run till '+D,'IoT acres on '+D,'IoT acres to '+D,'Acres sprayed on '+D,'Acres sprayed to '+D,'Scanned to '+D,'Last day with IoT acres','Days with IoT acres','Open breakdown tickets','Last ping','Operator','Operator mobile','CI','CI mobile','AM','AM mobile','State head','State head mobile','FO','FO mobile','TM','TM mobile'];
   const lines=[head.join(',')].concat(W.list.map(m=>{ const days=Object.keys(m.days).filter(d=>d<=D&&m.days[d]>0).length, open=(m.tickets||[]).filter(t=>t.open<=D&&(!t.close||t.close>D)).map(t=>t.id).join(' ');
-    return [m.mc, m.org, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.village, wmcStatus(m)[1], (b=>b?(W_NR.never.find(([x])=>x===b)||[])[1]:'')(wNrSeason(m)), Math.round(m.acY*10)/10, Math.round(wtAc(m)*10)/10,
-      Math.round((m.iotAll||0)*10)/10, Math.round(m.scAll*10)/10, wmcLast(m), days, open, m.lastPing, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob,
+    return [m.mc, m.org, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.village, wmcStatus(m)[1], (b=>b?(W_NR.never.find(([x])=>x===b)||[])[1]:'')(wNrSeason(m)), Math.round((m.iotY||0)*10)/10, Math.round((m.iotAll||0)*10)/10, Math.round(m.acY*10)/10, Math.round(wtAc(m)*10)/10,
+      Math.round(m.scAll*10)/10, wmcLast(m), wmcIotDays(m), open, m.lastPing, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob,
       m.retailer.foName, m.retailer.foMob, m.retailer.tmName, m.retailer.tmMob].map(csvCell).join(','); }));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_machine-summary_${W.A.st||'HR-PB'}_${D||new Date().toISOString().slice(0,10)}.csv`;
