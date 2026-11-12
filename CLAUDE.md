@@ -1086,6 +1086,24 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     sheet** (UPL + SWAL, Bayer out) in that state — the Territory page's count (357 on 11 Nov). No rabi-only machine count exists for
     last year anywhere, which is why it is a constant; a new season needs its own `WSN_MCN` entry or the tile says it has none.
     Live 11 Nov, 15 Oct – 10 Nov, HR + PB: 92.4 ac (32,981 ÷ 357) vs 122 ac (77,472 ÷ 634).
+- **Deployed / All machines + Didn't run breakup (Dinesh 2026-11-12, Wheat ADMIN only — team logins unchanged).**
+  · **Deployed = `handover_status` "Done" (old "Yes"), the sheet's own word for UPL AND SWAL** (`m.depA`, set in `wretBuild`);
+    the team logins' SWAL step-behind reading (`wStageOf`) does not apply here. Bayer has no status, so every Bayer machine counts.
+    Live 12 Nov: 347 of 357 (10 Pending: 5 UPL, 5 SWAL); no machine read "In transit".
+  · **A "Machines: Deployed · All machines" control** (`state.wDep`, default deployed; `wDepFieldHTML`) sits after Day in both
+    admin filter bars and phone Filters sheets. `wDepOk` is applied ONCE where machines are picked — `wterrAgg` (Territory, AM,
+    FO, Map, Top 10, Breakdowns, Machines), `wplanAgg`'s machine lists (a retailer's plan follows its machines in view) and the
+    Cumulative fleet count (no control on that page; it follows the choice made elsewhere and says "deployed machines").
+    "All machines" counts as one on the phone Filters badge; Clear / Reset return to Deployed.
+  · **Didn't run, one bucket per machine** (`wNrDay` / `wNrSeason`, `W_NR`). On the DAY (no acres that day): Maintenance = a
+    ticket open at ANY point of the day (closed that evening still counts) → Operator not mapped → Other. TILL NOW (no acres
+    from the season's first day to the day): In maintenance now = a ticket open at the day's end → Repaired, not run since = had
+    a ticket, none open → Operator not mapped → Other. No tickets tab → the Main sheet's flag (`brkDays`) stands in.
+  · Shown as two cards in the Machines piece of the Territory / AM / Map strip (`wNrCardsHTML`; the admin's Idle tile went,
+    it was the same number unbroken); every bucket is a button → the Machines page filtered to it (`data-act="wnr"`). The
+    Machines page has "Didn't run y'day" and "Didn't run till now" chips with a second row of bucket chips (keys `idle:maint`,
+    `never:repaired` …; `wmcKeyOk` / `wmcTestK`), a machine's status names its bucket (`wmcStatus`), and the CSV adds a
+    "Did not run till" column. Live 11 Nov (deployed): 160 didn't run = 62 / 17 / 81; till now 54 = 12 / 23 / 3 / 16.
 - **Loading (rebuilt 2026-11-11, Dinesh: "the site opens in seconds but the data takes 2–5 minutes on a first load or a hard
   refresh").** Measured: the four tabs are only ~600 KB gzipped; the wait is GOOGLE preparing the export (~1.5 s warm, ~8 s right
   after the sheet is edited, longer while it recalculates). There was **no time limit on any request**, and the page waited for
