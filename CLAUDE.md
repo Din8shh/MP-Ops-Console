@@ -950,6 +950,14 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     test. A table row, or a district holding ONE territory, sets the shared Territory filter (`data-act="wcterr"`, again to
     clear), so the pin map below fits to it. Machines with no territory are left out and counted in the note, which is why
     "ran" reads one under the strip's figure on 5 Nov (175 vs 176).
+  · **Heat-map labels are MOVED, not dropped, and the map downloads as a PNG (Dinesh 2026-11-13).** The old placer dropped any
+    label that hit a bigger neighbour's, so Karnal / Kurukshetra lost their figures beside Kaithal and Gurdaspur / Barnala vanished.
+    `wcPlace` now tries the district centre, then rings of twelve angles outward (nearest free spot wins, leader line + dot back to
+    the district), then fewer lines; widths are MEASURED in the drawn face (`wcMeasure`), every label has a white halo, and a
+    district's label names its TERRITORIES ("Sangrur + Malerkotla"). The **Image** button (`wcdl` → `wchoroDownload` /
+    `wchoroExportSVG`) redraws the card for a slide: ~2140 × 2260 units at 2× (≈4300 px wide, ~2 MB), a stronger palette
+    (`WCX_*`), the figure band, every district labelled with acres + ran / machines, the full territory table (machines · ran · acres
+    + total), legend and source line. Same `wchoroData` as the page; system fonts only (`WCX_FF`), as for every rasterised export.
   · **"IoT" is never NAMED to a UPL / SWAL team login or on the Bayer page (Dinesh 2026-11-06).** Their acres ARE the
     device's (`IOT_acres`), so they read "Acres sprayed"; only the Wheat admin sees the words "IoT acres". The heat map
     switches its labels on `wTeam()` (`AC` / `ACs` / `ACl`); the figures are the same for both. Checked on HR SWAL (4832):

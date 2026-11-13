@@ -10547,6 +10547,163 @@ function wchoroData(A){
   const TL=Object.values(T).sort((a,b)=>b.ac-a.ac||b.n-a.n||a.name.localeCompare(b.name));
   return { per, cnt, bad, D, T:TL, unplaced, mx, cls, n, ran, ac, noTerr, nT:TL.length, tAc:TL.filter(t=>t.ac>0).length };
 }
+/* ---- Heat-map labels, shared by the page and the PNG export (2026-11-13).
+   Each district with machines gets name (its TERRITORIES, as the table names them) · acres · ran / machines. Placed
+   biggest first; a label that does not fit on its district is tried beside it — eight directions, three distances —
+   and drawn there with a leader line to a dot on the district, then with fewer lines, and only then dropped. A district
+   with no territory is a plain grey name, centre only, never moved. Widths are MEASURED in the face the label is drawn
+   in (a canvas 2D context), so boxes neither overlap nor waste room. Every label wears a halo, so it reads on any fill. */
+const WC_SCREEN_FF = "'IBM Plex Sans', sans-serif";
+const WC_SHORT = { 'Shahid Bhagat Singh Nagar':'SBS Nagar', 'Sri Muktsar Sahib':'Muktsar', 'Fatehgarh Sahib':'Fatehgarh', 'S.A.S. Nagar':'Mohali' };
+let _wcCx = null;
+function wcMeasure(t, px, wt, fam){ if(!_wcCx) _wcCx=document.createElement('canvas').getContext('2d'); _wcCx.font=`${wt||400} ${px}px ${fam}`; return _wcCx.measureText(t).width; }
+function wcLabelItems(X, proj, vF, uS, fsN, fsV, fsR){
+  return WM.base.filter(b=>b.c).map(b=>{ const d=X.D[b.st+'|'+b.name], v=d?d.ac:0, [x,y]=proj(b.c[0],b.c[1]);
+    const nm = d ? Object.entries(d.terrs).sort((a,c)=>c[1]-a[1]).map(([t])=>t).join(' + ') : (WC_SHORT[b.name]||b.name);
+    const N=[nm,fsN,600,'ink'], V=[vF(v)+' '+uS,fsV,700,'ink'], R=d?[`${fmt(d.ran)}/${fmt(d.n)} ran`,fsR,500,'ink2']:null;
+    const forms = !d ? [[[nm,fsN*0.95,400,'off']]] : v>0 ? [[N,V,R],[N,V],[N]] : [[N,R],[N]];
+    return { x, y, v, has:!!d, fixed:!d, forms };
+  }).sort((a,b)=>b.v-a.v || b.has-a.has);
+}
+const WC_ANG = [-90,90,0,180,-30,-150,30,150,-60,-120,60,120].map(d=>d*Math.PI/180);
+function wcPlace(items, o){
+  const placed=[], out=[], B=o.bounds;
+  const hit = b => b[0]<B[0]||b[1]<B[1]||b[2]>B[2]||b[3]>B[3] || placed.some(p=>b[0]<p[2]&&b[2]>p[0]&&b[1]<p[3]&&b[3]>p[1]);
+  for(const it of items){
+    let got=null;
+    for(const lines of it.forms){
+      const w=Math.max(...lines.map(l=>wcMeasure(l[0],l[1],l[2],o.fam)))*o.u, h=lines.reduce((a,l)=>a+l[1]*1.18,0)*o.u, pad=o.pad*o.u;
+      const cands=[[it.x,it.y]];
+      // Rings outward, twelve angles each (above and below first): the nearest free spot wins, so a moved label stays
+      // beside its own district instead of drifting into a neighbour's.
+      if(!it.fixed) for(const g of [0.2,0.5,0.85,1.25,1.7,2.2]) for(const a of WC_ANG){ const dx=Math.cos(a), dy=Math.sin(a);
+        cands.push([it.x+dx*(w/2+g*h*0.55), it.y+dy*(h/2+g*h*0.55)]); }
+      for(const [cx,cy] of cands){ const box=[cx-w/2-pad, cy-h/2-pad, cx+w/2+pad, cy+h/2+pad];
+        if(!hit(box)){ got={ cx, cy, w, h, box, lines, lead:(cx!==it.x||cy!==it.y)?[it.x,it.y]:null }; break; } }
+      if(got) break;
+    }
+    if(!got) continue;
+    placed.push(got.box);
+    if(got.lead){ const r=4*o.u; placed.push([it.x-r,it.y-r,it.x+r,it.y+r]); }   // keep the dot clear of later labels
+    out.push(got);
+  }
+  return out;
+}
+function wcLabelsSVG(P, o){
+  const ink = r => r==='ink2' ? o.ink2 : r==='off' ? o.inkOff : o.ink, u=o.u;
+  const leads = P.filter(p=>p.lead).map(p=>{ const [ax,ay]=p.lead, bx=Math.max(p.box[0],Math.min(ax,p.box[2])), by=Math.max(p.box[1],Math.min(ay,p.box[3]));
+    return `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${o.halo}" stroke-width="${(3.2*u).toFixed(2)}" stroke-linecap="round"/>`
+      + `<line x1="${ax.toFixed(1)}" y1="${ay.toFixed(1)}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}" stroke="${o.lead}" stroke-width="${(1.2*u).toFixed(2)}" stroke-linecap="round"/>`
+      + `<circle cx="${ax.toFixed(1)}" cy="${ay.toFixed(1)}" r="${(2.8*u).toFixed(2)}" fill="${o.lead}" stroke="${o.halo}" stroke-width="${(1.2*u).toFixed(2)}"/>`; }).join('');
+  const texts = P.map(p=>{ let yy=p.cy-p.h/2;
+    return p.lines.map(([t,px,wt,role])=>{ const sz=px*u; yy+=sz*1.18;
+      return `<text x="${p.cx.toFixed(1)}" y="${(yy-sz*0.3).toFixed(1)}" text-anchor="middle" font-size="${sz.toFixed(2)}" font-weight="${wt}" fill="${ink(role)}" stroke="${o.halo}" stroke-width="${(sz*0.3).toFixed(2)}" stroke-linejoin="round" paint-order="stroke" font-family="${o.fam.replace(/"/g,"'")}" style="pointer-events:none;font-variant-numeric:tabular-nums">${E(t)}</text>`; }).join(''); }).join('');
+  return `<g>${leads}${texts}</g>`;
+}
+
+/* ---- The heat map as one PNG for a slide (Dinesh 2026-11-13). Redrawn, not screenshotted: a 2000-unit canvas rasterised
+   at 2× (4000 px wide), a stronger palette than the page's so the steps survive a projector, dark labels with a white halo
+   on every district, and the territory table beside the map carrying each territory's acres, machines and machines ran.
+   Same aggregate as the page (wchoroData on the same scope), so the image can never disagree with the screen.
+   System fonts only, measured in the same stack — a webfont does not exist inside a rasterised SVG. */
+const WCX_FF = "-apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+const WCX_COLS = ['#D3EEDB','#97D3AB','#4FB277','#1C8748','#0A5A2D'], WCX_BAD = ['#FCD9D0','#F4A592','#E46D52','#C2432B','#8E2615'];
+const WCX_ZERO = '#F3A496', WCX_NONE_OK = '#CFEBD7', WCX_OFF = '#ECEAE5';
+function wchoroExportSVG(A){
+  if(!wmGeo()) return null;
+  const X=wchoroData(A), day=wpDate(WRET.yday), isDay=X.per==='day', dw=wtDayShort();
+  const AC = wTeam() ? 'Acres sprayed' : 'IoT acres', ACs = wTeam() ? 'Acres' : 'IoT acres', ACl = wTeam() ? 'acres sprayed' : 'IoT acres';
+  const cntLab = X.cnt ? (WM_SHOW.find(x=>x[0]===X.cnt)||['',''])[1].replace('{day}', dw==='y’day'?'yesterday':'on '+day) : '';
+  const vF = v => X.cnt ? fmt(v) : acF(Math.round(v*10)/10), uS = X.cnt ? 'mc' : 'ac';
+  const PAL = X.bad ? WCX_BAD : WCX_COLS, ZERO = X.bad ? WCX_NONE_OK : WCX_ZERO;
+  const F=WCX_FF, INK='#0F1418', INK2='#4A525B', LINE='#D9DDE2';
+  const tx=(x,y,t,sz,wt=400,col=INK,anc='start',extra='')=>`<text x="${x}" y="${y}" font-size="${sz}" font-weight="${wt}" fill="${col}" text-anchor="${anc}" font-family="${F.replace(/"/g,"'")}" style="font-variant-numeric:tabular-nums"${extra}>${E(String(t))}</text>`;
+  const fit=(t,sz,wt,maxW)=>{ t=String(t); if(wcMeasure(t,sz,wt,F)<=maxW) return t; while(t.length>1&&wcMeasure(t+'…',sz,wt,F)>maxW) t=t.slice(0,-1); return t+'…'; };
+  // The map sets the height (HR + PB is a tall shape); the table takes the right; the canvas width follows from both.
+  const PAD=64, mapH=1560, mapW=Math.round(mapH*WM.W/WM.H), TW=900, W=PAD*2+mapW+64+TW;
+  // ---- header
+  const stTxt = A.st ? (STATE_NAMES[A.st]||A.st) : 'Haryana + Punjab';
+  const orgTxt = A.lockOrg || ((W_ORGS.find(o=>o[0]===A.org)||[])[1]) || '';
+  const scope = [stTxt, orgTxt, A.sh?('State head '+A.sh):'', A.terr?('Territory '+A.terr):'', A.tm?('TM '+A.tm):'', A.am?('AM '+A.am):''].filter(Boolean).join(' · ');
+  const when = isDay ? `On ${day}` : `Season to ${day}`;
+  let y=PAD, out='';
+  out+=`<rect x="0" y="0" width="${W}" height="10" fill="#1C8748"/><rect x="0" y="10" width="${W}" height="4" fill="#F5821F"/>`;
+  y+=40; out+=tx(PAD,y,curProject().title.toUpperCase(),22,700,'#1C8748','start',' letter-spacing="2"');
+  y+=62; out+=tx(PAD,y,`Territory heat map · ${X.cnt?cntLab:AC}`,52,700);
+  y+=46; out+=tx(PAD,y,`${when} · ${scope}`,28,500,INK2);
+  // ---- figure band: acres · machines · ran · territories with acres
+  y+=40;
+  const ranP = X.n ? Math.round(100*X.ran/X.n) : 0, bw=(W-2*PAD)/4, bh=150;
+  const figs = [
+    [X.cnt?cntLab:AC, `${vF(X.ac)} ${X.cnt?'machines':'ac'}`, isDay?day:'season to '+day],
+    ['Machines in territories', fmt(X.n), `across ${fmt(X.nT)} territor${X.nT===1?'y':'ies'}`],
+    [isDay?`Machines ran ${dw==='y’day'?'yesterday':'on '+day}`:'Machines ran this season', `${fmt(X.ran)} of ${fmt(X.n)}`, `${ranP}% of the machines`],
+    [X.cnt?'Territories with any':'Territories with acres', `${fmt(X.tAc)} of ${fmt(X.nT)}`, X.nT-X.tAc?`${fmt(X.nT-X.tAc)} with ${X.cnt?'none':'no acres'}`:'every one has acres']];
+  out+=`<rect x="${PAD}" y="${y}" width="${W-2*PAD}" height="${bh}" rx="16" fill="#F4F6F8" stroke="${LINE}" stroke-width="2"/>`;
+  figs.forEach(([l,v,s],i)=>{ const x=PAD+i*bw+28;
+    if(i) out+=`<line x1="${PAD+i*bw}" y1="${y+24}" x2="${PAD+i*bw}" y2="${y+bh-24}" stroke="${LINE}" stroke-width="2"/>`;
+    out+=tx(x,y+44,fit(l,22,600,bw-50),22,600,INK2)+tx(x,y+98,v,46,700)+tx(x,y+132,fit(s,21,500,bw-50),21,500,i===3&&X.nT-X.tAc&&!X.cnt?'#A33A27':INK2); });
+  y+=bh+40;
+  // ---- the map (left) and the territory table (right)
+  const s=mapW/WM.W, mx=PAD, my=y;
+  const paths = WM.base.map(b=>{ const d=X.D[b.st+'|'+b.name], c=X.cls(d?d.ac:0);
+    return `<path d="${b.d}" fill="${c>=0?PAL[c]:d?ZERO:WCX_OFF}" stroke="#FFFFFF" stroke-width="${(1.8/s).toFixed(2)}" stroke-linejoin="round"/>`; }).join('');
+  out+=`<g transform="translate(${mx},${my}) scale(${s.toFixed(5)})">${paths}</g>`;
+  const items = wcLabelItems(X, (lon,lat)=>{ const [px,py]=WM.proj(lon,lat); return [mx+px*s, my+py*s]; }, vF, uS, 25, 29, 21);
+  out+=wcLabelsSVG(wcPlace(items, { u:1, fam:F, pad:4, bounds:[mx,my,mx+mapW,my+mapH] }), { u:1, fam:F, halo:'#FFFFFF', lead:'#2A3036', ink:INK, ink2:'#2F3A33', inkOff:'#7A8189' });
+  // table
+  const tx0=mx+mapW+64, tw=TW, rh=Math.max(46, Math.min(58, Math.floor((mapH-130)/Math.max(1,X.T.length))));
+  const cM=tx0+tw*0.60, cR=tx0+tw*0.79, cA=tx0+tw, ty0=Math.round(rh*0.64);   // right edges: Machines · Ran · Acres
+  let ty=my;
+  out+=tx(tx0,ty+28,'Territory',22,700,INK2)+tx(cM,ty+28,'Machines',22,700,INK2,'end')+tx(cR,ty+28,'Ran',22,700,INK2,'end')+tx(cA,ty+28,X.cnt?'Matching':ACs,22,700,INK2,'end');
+  ty+=40; out+=`<line x1="${tx0}" y1="${ty}" x2="${cA}" y2="${ty}" stroke="${INK}" stroke-width="2"/>`;
+  const tmax = X.T.length ? Math.max(...X.T.map(t=>t.ac)) : 0;
+  X.T.forEach((t,i)=>{ const p=t.n?Math.round(100*t.ran/t.n):0, c=X.cls(X.D[t.st+'|'+t.dist]?X.D[t.st+'|'+t.dist].ac:0), yb=ty+i*rh;
+    if(i%2===0) out+=`<rect x="${tx0-10}" y="${yb}" width="${tw+20}" height="${rh}" fill="#F6F7F9"/>`;
+    const nm = fit(t.name,25,600,tw*0.42), stS = t.st;
+    out+=tx(tx0,yb+ty0,nm,25,600)+tx(tx0+wcMeasure(nm,25,600,F)+10,yb+ty0,stS,17,600,INK2);
+    out+=tx(cM,yb+ty0,fmt(t.n),25,500,INK,'end')+tx(cR,yb+ty0,`${fmt(t.ran)} · ${p}%`,25,500,INK,'end');
+    out+=tx(cA,yb+ty0,t.ac>0?vF(t.ac):'0',25,700,t.ac>0?INK:'#A33A27','end');
+    if(tmax>0&&t.ac>0) out+=`<rect x="${tx0}" y="${yb+rh-7}" width="${Math.max(3,(tw*0.95)*t.ac/tmax).toFixed(1)}" height="4" rx="2" fill="${PAL[Math.max(1,c)]}"/>`; });
+  ty+=X.T.length*rh;
+  out+=`<line x1="${tx0}" y1="${ty}" x2="${cA}" y2="${ty}" stroke="${INK}" stroke-width="2"/>`;
+  ty+=40; out+=tx(tx0,ty,`Total · ${fmt(X.nT)} territories`,25,700)+tx(cM,ty,fmt(X.n),25,700,INK,'end')+tx(cR,ty,`${fmt(X.ran)} · ${ranP}%`,25,700,INK,'end')+tx(cA,ty,vF(X.ac),25,700,INK,'end');
+  y = Math.max(my+mapH, ty+10)+40;
+  // ---- legend
+  const step=X.mx/5; let lx=PAD;
+  out+=tx(lx,y+22,X.cnt?cntLab:AC,22,600,INK2); lx+=wcMeasure(X.cnt?cntLab:AC,22,600,F)+18;
+  PAL.forEach((c,i)=>{ out+=`<rect x="${lx}" y="${y}" width="78" height="28" fill="${c}" stroke="#FFFFFF" stroke-width="2"/>`; out+=tx(lx+39,y+56,X.cnt?`${Math.ceil(step*i)||1}`:acF(Math.round(step*(i+1))),19,500,INK2,'middle'); lx+=78; });
+  lx+=34;
+  const key=(fill,t)=>{ out+=`<rect x="${lx}" y="${y}" width="40" height="28" rx="4" fill="${fill}" stroke="#B9BEC4" stroke-width="1.5"/>`+tx(lx+52,y+22,t,22,500); lx+=52+wcMeasure(t,22,500,F)+34; };
+  key(ZERO, X.cnt?'Territory, none':'Territory, no acres'); key(WCX_OFF,'No territory');
+  out+=`<circle cx="${lx+8}" cy="${y+14}" r="6" fill="#2A3036"/><line x1="${lx+8}" y1="${y+14}" x2="${lx+40}" y2="${y+14}" stroke="#2A3036" stroke-width="2.5"/>`+tx(lx+52,y+22,'Label moved off a crowded district',22,500);
+  y+=92;
+  const note = `Each district is coloured by the ${X.cnt?'count of matching machines':ACl} of the territories inside it, in five equal steps up to the largest. “ran” = machines with ${ACl} ${isDay?'on '+day:'on at least one day of the season'} / machines there.`
+    + (X.noTerr?` ${fmt(X.noTerr)} machine${X.noTerr===1?'':'s'} with no territory on the sheet ${X.noTerr===1?'is':'are'} left out.`:'');
+  // wrap the note to the canvas width
+  const words=note.split(' '); let line='';
+  words.forEach(wd=>{ const t=line?line+' '+wd:wd; if(wcMeasure(t,20,400,F)>W-2*PAD){ out+=tx(PAD,y,line,20,400,INK2); y+=30; line=wd; } else line=t; });
+  if(line){ out+=tx(PAD,y,line,20,400,INK2); y+=30; }
+  y+=10; out+=tx(PAD,y,`Source: programme machine-day sheet · data to ${day} · exported ${new Date().toLocaleString('en-IN',{day:'numeric',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'})}`,18,500,'#7A8189');
+  const H=Math.round(y+PAD-10);
+  out+=`<rect x="0" y="${H-8}" width="${W}" height="8" fill="#1C8748"/>`;
+  return { W, H, xml:`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#FFFFFF"/>${out}</svg>`,
+    file:`Wheat-heat-map_${isDay?'day':'season'}_${A.st||'HR-PB'}${A.terr?'_'+A.terr:''}_${WRET.yday}.png`.replace(/[^A-Za-z0-9._-]+/g,'-') };
+}
+function wchoroDownload(){
+  const built = wchoroExportSVG(wterrAgg()); if(!built){ alert('The map is still loading — try again in a moment.'); return; }
+  const scale=2, img=new Image();
+  img.onload=()=>{
+    const cv=document.createElement('canvas'); cv.width=built.W*scale; cv.height=built.H*scale;
+    const ctx=cv.getContext('2d'); ctx.fillStyle='#FFFFFF'; ctx.fillRect(0,0,cv.width,cv.height); ctx.drawImage(img,0,0,cv.width,cv.height);
+    cv.toBlob(blob=>{ if(!blob){ console.error('heat map export: toBlob failed'); return; }
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=built.file;
+      document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500);
+      track('heatmap_download',{ per:state.wcPer, st:state.wtSt||'all' }); },'image/png');
+  };
+  img.onerror=()=>{ console.error('heat map export: SVG rasterisation failed'); alert('Sorry — could not generate the map image.'); };
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(built.xml);
+}
 /* The heat map leads the Map page (Dinesh 2026-11-06), above the pin map. Its card reads top-down: a four-figure band
    (acres · machines · ran · territories with acres), the district map with each district's acres and ran / machines,
    and a ranked territory table with the same three figures. A territory row (or a district, on the map) is a SHORTCUT
@@ -10591,23 +10748,11 @@ function wchoroHTML(A, mob, chips=''){
   // map unit is WM.H ÷ the box's height in px and type is px × that. Three lines where a district has machines:
   // name · acres · "ran / machines"; districts with acres are placed first, biggest first, and a blank one is dropped
   // where it would overlap.
-  const boxH = Math.max(460, Math.min(820, 0.72*(window.innerHeight||900))), u = WM.H/boxH, fs = 10.5*u, fv = 12*u, fr = 9.5*u;
-  const SHORT = { 'Shahid Bhagat Singh Nagar':'SBS Nagar', 'Sri Muktsar Sahib':'Muktsar', 'Fatehgarh Sahib':'Fatehgarh', 'S.A.S. Nagar':'Mohali' };
-  const placedBx=[], hit=bx=>placedBx.some(o=>bx[0]<o[2]&&bx[2]>o[0]&&bx[1]<o[3]&&bx[3]>o[1]);
-  const order = WM.base.filter(b=>b.c).map(b=>{ const d=X.D[b.st+'|'+b.name]; return { b, d, v:d?d.ac:0 }; }).sort((a,b)=>b.v-a.v||(!!b.d)-(!!a.d));
-  const T_=(x,y,sz,w,ink,t)=>`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" font-size="${sz.toFixed(1)}"${w?` font-weight="${w}"`:''} fill="${ink}" font-family="IBM Plex Sans,sans-serif" style="pointer-events:none;font-variant-numeric:tabular-nums">${E(t)}</text>`;
-  const labels = mob ? '' : order.map(({b,d,v})=>{ const [x,y]=WM.proj(b.c[0],b.c[1]), c=X.cls(v), ink=c>=3?'#FFFFFF':c>=0?(X.bad?'#4A1A10':'#14321F'):d?ZINK:'#9C978E', ink2=c>=3?'rgba(255,255,255,.85)':c>=0?(X.bad?'#6E2A1C':'#2C5A3C'):ZINK, nm=SHORT[b.name]||b.name;
-    const rt = d ? `${fmt(d.ran)}/${fmt(d.n)} ran` : '';
-    const lines = [[nm,fs,0,ink]].concat(v>0?[[vF(v)+' '+uS,fv,700,ink]]:[]).concat(d?[[rt,fr,500,ink2]]:[]);
-    // Boxes are padded by 2px so neighbours never touch. A district that cannot fit its three lines tries its name alone,
-    // and if even that collides it goes unlabelled — the table beside the map and the district's tooltip still carry it.
-    const pad=2*u, hgt = lines.reduce((a,l)=>a+l[1]*1.12,0), w=Math.max(...lines.map(l=>l[0].length*l[1]*0.6))/2+pad;
-    const full=[x-w, y-hgt/2-pad, x+w, y+hgt/2+pad];
-    let use=lines;
-    if(hit(full)){ if(!d) return ''; use=[lines[0]]; const sw2=nm.length*fs*0.3+pad, sm=[x-sw2, y-fs*0.6-pad, x+sw2, y+fs*0.6+pad]; if(hit(sm)) return ''; placedBx.push(sm); }
-    else placedBx.push(full);
-    const h2=use.reduce((a,l)=>a+l[1]*1.12,0); let yy=y-h2/2;
-    return use.map(([t,sz,wt,ik])=>{ yy+=sz*1.12; return T_(x, yy-sz*0.22, sz, wt, ik, t); }).join(''); }).join('');
+  // A label that cannot sit on its district is MOVED beside it with a leader line (wcPlace) rather than dropped — the old
+  // rule dropped it, which is how Karnal, Kurukshetra and Gurdaspur lost their figures next to Kaithal and Amritsar.
+  const boxH = Math.max(460, Math.min(820, 0.72*(window.innerHeight||900))), u = WM.H/boxH;
+  const labels = mob ? '' : wcLabelsSVG(wcPlace(wcLabelItems(X, WM.proj, vF, uS, 10.5, 12, 9.5), { u, fam:WC_SCREEN_FF, pad:2, bounds:[0,0,WM.W,WM.H] }),
+    { u, fam:WC_SCREEN_FF, halo:'#FFFFFF', lead:'#3B4148', ink:'#14321F', ink2:'#33503D', inkOff:'#8C939B' });
   const svg = `<svg viewBox="0 0 ${WM.W} ${WM.H}" role="img" aria-label="${E((X.cnt?cntLab:AC)+' and machines that ran, by district, '+(isDay?day:'season to '+day))}" style="display:block;width:100%;height:${mob?'auto':'clamp(460px,72vh,820px)'}">${paths}${labels}</svg>`;
   const sw = (bg,bd) => `<span aria-hidden="true" style="width:16px;height:12px;border-radius:3px;background:${bg};${bd?`border:1px solid ${W2.line}`:''};flex-shrink:0"></span>`;
   const legend = `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;font-size:13px;color:${W2.ink}">
@@ -10641,8 +10786,9 @@ function wchoroHTML(A, mob, chips=''){
   const list = `<div>${thead}${X.T.slice(0,cut).map(row).join('')}${more}${clear}</div>`;
   const unp = Object.keys(X.unplaced);
   const note = `<div style="font-size:12.5px;color:${W2.ink2};line-height:1.5;margin-top:10px">Each district is coloured by ${X.cnt?`how many of its machines are “${E(cntLab.toLowerCase())}”`:`the ${ACl} of the sheet territories inside it`}, in five equal steps up to the largest district; where two territories share a district (Khanna and Ludhiana, Malerkotla and Sangrur …) they are added together. Ran = machines with ${ACl} ${isDay?'on '+day:'on at least one day of the season'}${wSwal()?'':', the same test that colours a pin'}. ${mob?'Tap':'Click'} a territory to see only its machines on this page${mob?'':' (or a district on the map)'}.${X.noTerr?` ${fmt(X.noTerr)} machine${X.noTerr===1?'':'s'} with no territory on the sheet ${X.noTerr===1?'is':'are'} left out.`:''}${unp.length?` <b style="color:#46433d">Not placed on a district:</b> ${unp.map(t=>`${E(t)} (${acF(X.unplaced[t])} ac)`).join(', ')}.`:''}</div>`;
+  const dl = `<button data-act="wcdl" title="Download this heat map as a high-resolution PNG for a presentation" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;height:${mob?44:36}px;padding:0 ${mob?14:12}px;border:0;border-radius:${mob?12:10}px;background:${W2.dark};color:#fff;font:500 ${mob?14:13.5}px ${W2.font};cursor:pointer;white-space:nowrap"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Image</button>`;
   const head = `<div style="display:flex;align-items:center;gap:10px 14px;padding:${mob?'14px 16px':'14px 18px'};border-bottom:1px solid ${W2.line2};flex-wrap:wrap">
-      <div style="flex:1;min-width:${mob?'100%':'240px'}"><div style="font-size:${mob?15:16}px;font-weight:600">Territory heat map · ${X.cnt?E(cntLab):AC}</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${isDay?day:'Season to '+day} · ${sel?`only ${E(sel)}`:A.narrowed?'what the filters show':'every machine'}${X.cnt?' · machines per territory':''}</div></div>${toggle}</div>${chips}`;
+      <div style="flex:1;min-width:${mob?'100%':'240px'}"><div style="font-size:${mob?15:16}px;font-weight:600">Territory heat map · ${X.cnt?E(cntLab):AC}</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${isDay?day:'Season to '+day} · ${sel?`only ${E(sel)}`:A.narrowed?'what the filters show':'every machine'}${X.cnt?' · machines per territory':''}</div></div>${toggle}${dl}</div>${chips}`;
   const body = mob
     ? `<div style="padding:8px 8px 0">${svg}</div><div style="padding:12px 16px 14px">${legend}<div style="margin-top:12px">${list}</div>${note}</div>`
     : `<div class="wcGrid">
@@ -13249,6 +13395,7 @@ app.addEventListener('click', e=>{
     case 'wmshow': setState({wmShow:el.dataset.k}); break;
     case 'wcper': setState({wcPer:el.dataset.k}); break;
     case 'wcall': setState({wcAll:true}); break;
+    case 'wcdl': wchoroDownload(); break;
     case 'wcmcmore': setState({wcMcLim:1e9}); break;
     case 'wsnst': setState({wsnSt:el.dataset.k}); break;
     case 'wsnreset': setState({wsnFrom:null, wsnTo:null}); break;
