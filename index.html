@@ -8623,10 +8623,10 @@ function wplanAgg(){
 function wplanCSV(){
   const A=wplanAgg(), ppl=l=>l.map(p=>p.n).join(' / ');
   const head=['State','Territory','Company','Retailer','Retailer plan acres','Machines (retailer)','Machine','Machine plan acres (plan ÷ machines)',
-    `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Acres last 7 days (to ${WRET.yday})`,'Acres overall','% of machine plan',`Scanned ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,'Scanned overall','IoT acres overall','Village',
+    `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Acres last 7 days (to ${WRET.yday})`,'Acres overall','% of machine plan',`Scanned ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,'Scanned overall',`IoT acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,'IoT acres overall','Village',
     'Operator','Operator mobile','CI','CI mobile','AM','AM mobile','State head','State head mobile','FO','FO mobile','TM','TM mobile','Last ping'];
   const lines=[head.join(',')].concat(A.rows.flatMap(r=>r.list.map(m=>[STATE_NAMES[r.st]||r.st, r.territory, r.org, r.party, r.planAc, r.nAll, m.mc,
-    Math.round(m.planShare*10)/10, m.acY, m.ac7, m.acAll, m.planShare>0?Math.round(1000*m.acAll/m.planShare)/10:'', m.scY, m.scAll, Math.round(m.iotAll*10)/10, m.village,
+    Math.round(m.planShare*10)/10, m.acY, m.ac7, m.acAll, m.planShare>0?Math.round(1000*m.acAll/m.planShare)/10:'', m.scY, m.scAll, Math.round((m.iotY||0)*10)/10, Math.round(m.iotAll*10)/10, m.village,
     m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob, r.foName, r.foMob, r.tmName, r.tmMob, m.lastPing].map(csvCell).join(','))));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_retailer-summary_${A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
@@ -9027,10 +9027,10 @@ function wterrAgg(o){   // o.noQ: leave the search out (the Breakdowns page sear
 function wterrCSV(){
   const A=wterrAgg();
   const head=['State','Territory','TM','TM mobile','Machine','Retailer','Company','Machine plan acres (retailer plan ÷ machines)',
-    `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Season acres to ${WRET.yday}`,`Scanned ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,'Scanned overall','Operator','Operator mobile',
+    `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Season acres to ${WRET.yday}`,`IoT acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`IoT acres to ${WRET.yday}`,`Scanned ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,'Scanned overall','Operator','Operator mobile',
     'CI','CI mobile','AM','AM mobile','State head','State head mobile','FO','FO mobile','Territory on sheet','Last ping','Live (pinged since yesterday)',`Breakdown (${WRET.yday})`];
   const lines=[head.join(',')].concat(A.rows.flatMap(r=>r.list.map(m=>[STATE_NAMES[r.st]||r.st, r.name, m.retailer.tmName, m.retailer.tmMob, m.mc, m.party, m.org,
-    Math.round(m.planShare*10)/10, m.acY, wtAc(m), m.scY, m.scAll, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob, m.retailer.foName, m.retailer.foMob, m.terrRaw,
+    Math.round(m.planShare*10)/10, m.acY, wtAc(m), Math.round((m.iotY||0)*10)/10, Math.round((m.iotAll||0)*10)/10, m.scY, m.scAll, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob, m.retailer.foName, m.retailer.foMob, m.terrRaw,
     m.lastPing, wtLive(m)?'Yes':'No', m.brkDays[WRET.yday]||''].map(csvCell).join(','))));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_territory-summary_${A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
@@ -9403,9 +9403,9 @@ function wamAgg(){
 function wamCSV(){
   const W=wamAgg();
   const head=['AM','AM mobile','State head','State head mobile','CI','CI mobile','Machine','State','Territory','Retailer','Company','Machine plan acres (retailer plan ÷ machines)',
-    `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Season acres to ${WRET.yday}`,'Scanned overall','Operator','Operator mobile','Last ping','Live (pinged since yesterday)',`Breakdown (${WRET.yday})`];
+    `Acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`Season acres to ${WRET.yday}`,`IoT acres ${wIsYday()?'yesterday':'on day'} (${WRET.yday})`,`IoT acres to ${WRET.yday}`,'Scanned overall','Operator','Operator mobile','Last ping','Live (pinged since yesterday)',`Breakdown (${WRET.yday})`];
   const lines=[head.join(',')].concat(W.rows.flatMap(r=>r.subs.flatMap(c=>c.list.map(m=>[m.am, m.amNum, wShName(m), m.shMob, m.co, m.coMob, m.mc, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.org,
-    Math.round(m.planShare*10)/10, m.acY, wtAc(m), m.scAll, m.opName, m.opNum, m.lastPing, wtLive(m)?'Yes':'No', m.brkDays[WRET.yday]||''].map(csvCell).join(',')))));
+    Math.round(m.planShare*10)/10, m.acY, wtAc(m), Math.round((m.iotY||0)*10)/10, Math.round((m.iotAll||0)*10)/10, m.scAll, m.opName, m.opNum, m.lastPing, wtLive(m)?'Yes':'No', m.brkDays[WRET.yday]||''].map(csvCell).join(',')))));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_area-managers_${W.A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
@@ -9540,10 +9540,10 @@ function wfoAgg(){
 function wfoCSV(){
   const W=wfoAgg(), d=WRET.yday, w=wIsYday()?'yesterday':'on day';
   const head=['TM','TM mobile','FO','FO mobile','FO onboarded','Machine','Retailer','State','Territory','Company','Bookings given','Booked acres',
-    `Bookings completed to ${d}`,`Acres completed to ${d}`,`Bookings completed ${w} (${d})`,`Acres ${w} (${d})`,'Operator','Operator mobile','State head','State head mobile'];
+    `Bookings completed to ${d}`,`Acres completed to ${d}`,`Bookings completed ${w} (${d})`,`Acres ${w} (${d})`,`IoT acres ${w} (${d})`,`IoT acres to ${d}`,'Operator','Operator mobile','State head','State head mobile'];
   const lines=[head.join(',')].concat(W.rows.flatMap(r=>r.fos.flatMap(f=>f.list.map(m=>[r.none?'':r.name, r.mob, f.none?'':f.name, f.mob,
     f.none?'':f.on?'Onboarded':'Yet to onboard', m.mc, m.party, STATE_NAMES[m.st]||m.st, m.territory, m.org, '', '',
-    m.bkAll, Math.round(wtAc(m)*10)/10, m.bkY, m.acY, m.opName, m.opNum, wShName(m), m.shMob].map(csvCell).join(',')))));
+    m.bkAll, Math.round(wtAc(m)*10)/10, m.bkY, m.acY, Math.round((m.iotY||0)*10)/10, Math.round((m.iotAll||0)*10)/10, m.opName, m.opNum, wShName(m), m.shMob].map(csvCell).join(',')))));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_tm-fo-summary_${W.A.st||'HR-PB'}_${WRET.lastDate||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
@@ -10342,10 +10342,10 @@ function wbdBodyHTML(mob){
 }
 function wbdCSV(){
   const W=wbdAgg(), D=W.D;
-  const head=['Ticket ID','Machine','Company','State','Territory','Retailer','TM','Technician','Technician agency','Technician mobile','Opened','Closed',`Status at the end of ${D}`,'Days open / days taken','Operator','Operator mobile','State head','State head mobile'];
+  const head=['Ticket ID','Machine','Company','State','Territory','Retailer','TM','Technician','Technician agency','Technician mobile','Opened','Closed',`Status at the end of ${D}`,'Days open / days taken',`IoT acres on ${D}`,`IoT acres to ${D}`,'Operator','Operator mobile','State head','State head mobile'];
   const lines=[head.join(',')].concat(W.all.slice().sort((a,b)=>a.open.localeCompare(b.open)||a.id.localeCompare(b.id)).map(t=>{ const m=t.m, cl=t.close&&t.close<=D;
     return [t.id, m.mc, m.org, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.retailer.tmName, t.tech, t.tag, t.techMob, t.open, cl?t.close:'', cl?'Closed':'Open',
-      cl?wtkDayN(t.open,t.close):wtkDayN(t.open,D), m.opName, m.opNum, wShName(m), m.shMob].map(csvCell).join(','); }));
+      cl?wtkDayN(t.open,t.close):wtkDayN(t.open,D), Math.round((m.iotY||0)*10)/10, Math.round((m.iotAll||0)*10)/10, m.opName, m.opNum, wShName(m), m.shMob].map(csvCell).join(','); }));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_breakdown-tickets_${W.A.st||'HR-PB'}_${D||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
