@@ -1034,6 +1034,20 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   2026-11-04). Wheat admin only. The ten machines with the most season acres through the Day filter's day, on the shared wt*
   scope. A toggle ranks by acres sprayed (`wtAc`) or IoT acres (`iotAll`); days / per day follow the chosen measure. Admin's
   phone bar now has six pages, so it shows four + All pages.
+- **Page 6b, 250-acre machines** (`w250`, `#/250-acres`, rail "250 ac"; `w250Info` / `w250Agg` / `w250BodyHTML` / `w250CSV`,
+  Dinesh 2026-11-16). Wheat admin only. Which machines have crossed **250 IoT acres** (`IOT_acres`, season to the Day filter's day)
+  and which have not, on the shared wt* scope (search included). Head line + five tiles (Crossed · Crossed on the day · Close
+  200–249 · Not crossed with median to go · median days to cross) → **distance bands** (stacked bar + chips: All · Crossed · Not
+  crossed · 200–249 · 100–199 · 1–99 · No IoT acres; the chip filters the list AND the CSV, `state.w250Show`) → **machines past 250
+  day by day** (running count, a machine counted from the day it crossed) → **Where they are** by territory / AM (`w250By`; most
+  crossed % first; a row sets the shared Territory / AM filter, again to clear; first 12/8 then Show all) → the machine list (60 at a
+  time; sorts `W250_SORTS`). Per machine: crossed on + days taken (first IoT day → crossing, both included) + running days to cross;
+  or acres to go, days ran of DAYS POSSIBLE (season's first sheet date → the day; Bayer from its own start), breakdown days (a ticket
+  open at any point of the day), acres a day ran and running days needed at that pace, plus ONE reason: never ran → its Didn't run
+  (till now) bucket; idle more days than it ran → "Idle most days" ("Mostly in breakdown" when tickets cover half the idle days);
+  else "Runs, low acres a day". A machine under 250 never displays as 250 (`w250AcF`: 249.8, not 250). Checked 16 Nov (data to
+  15 Nov, deployed UPL + SWAL): 74 of 351 crossed, 5 on 15 Nov, 21 at 200–249, bands add to 351; desktop fits unscrolled at 1280
+  (list min-width 960), phone at 375 / 320 with no sideways scroll; a team login is bounced.
 - **Page 7, Breakdowns** (`wbd`, `#/breakdowns`, rail "Breakdowns"; `wbdAgg` / `wbdBodyHTML` / `wbdCSV`, Dinesh 2026-11-11).
   Wheat admin only. Off the **breakdown TICKETS** in the same workbook's **"maintenance data"** tab (gid `965231799`,
   `PROJECTS.wheat.maint`; parsed by `wtkBuild` into `WTK`, logged as `[MP-Ops] wheat breakdown tickets → {…}`).
