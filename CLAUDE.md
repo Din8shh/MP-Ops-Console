@@ -1113,6 +1113,14 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   card draws each day's acres for the same dates. A day with no row = 0 ac. **No note about the gap to the Main sheet's acres, by
   request** — this tab counts all programme acres in the two states. Checked 11 Nov: 15 Oct – 10 Nov = 32,981 / 77,472 / 53,151 ac
   (2026-27 / 2025-26 / 2024-25), the same as a direct sum of the tab. Charts are drawn at the screen's width (`vw`), so text stays 12px.
+  · **Acres per running machine** card (Dinesh 2026-11-16, `wsnRunData` / `wsnRunCardHTML`), two tabs (`state.wsnRun`):
+    **Machines run till now** = IoT acres From → the day ÷ machines that ran at least once in that span; **Each day** = the day's
+    IoT acres ÷ machines that ran that day, headline average = Σ acres ÷ Σ machine-days (ratio of sums). **This season only, agreed**:
+    no tab has a rabi-only count of machines that ran for a past season (the Kharif "Acres per mcn" tab counts from 1 April, Kharif
+    machines included, and stops at 9 Nov), so nothing is drawn for them. Both numerator and count come from the Main sheet (ran =
+    IoT acres > 0, the Machines page's test; UPL + SWAL, Bayer out, follows Deployed / All and the page's State + From–To), so it
+    starts at the sheet's first date (22 Oct) and does NOT use the snake tab's acres (52,850 vs Main sheet IoT 50,472, 22 Oct–15 Nov).
+    Checked 16 Nov: 50,470 ac ÷ 323 deployed machines = 156 ac; 15 Nov 3,299 ac ÷ 200 = 16.5; average 18.1 over 2,793 machine-days.
   · **Acres per machine** card (Dinesh 2026-11-11): this season vs last, on the badge's dates, acres from the snake tab ÷ a fleet.
     **Last season's fleet is FIXED** (`WSN_MCN`, keyed by the season's October year): the Kharif "Acres per mcn" tab's 9 Nov count
     (HR 260 / PB 274) + 60 / + 40 = **HR 320 · PB 314 · 634**, given by Dinesh. **This season's fleet = every machine on the Main
