@@ -1047,13 +1047,18 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     loss is the cause. **Late start is measured against the fleet's median first running day**, not the season's first sheet
     date — the first build used the sheet date and filed 59% of machines behind as "started late" (most began 1–2 weeks in);
     measured against the median it is 13% (16 Nov). "Where the acres went" sums the four losses; estimates, and the page says so.
-  · Cards: target bar → 6 tiles (reached · reached on the day · close · behind · days to reach · benchmark) → by-date projection →
-    Why behind (multi-select, with a lever line each) + Where the acres went → Reached vs behind (running days %, acres a running
-    day, breakdown / idle days per machine, median first running day, operator mapped, pinged 2 days) → bands (multi-select) → day
-    chart → Where they are (territory / AM, **multi-select ticks, page-local** `w250Terrs` / `w250Ams` — the shared wt* filters still
-    narrow first; sort most reached / most acres to go / fewest running days; columns incl. main cause) → machine list (bands AND
-    causes filter it and the CSV). Checked 16 Nov (data to 15 Nov, deployed UPL + SWAL, T 250): 74 of 351 reached; causes
-    28 / 101 / 73 / 35 / 20 / 20 = 277 behind; T 180 by 30 Nov: 108 there + 63 / 20 / 160 = 351. Desktop 1440, phone 375 no sideways scroll.
+  · **Simplified 2026-11-16 (Dinesh: "easy to understand").** Cards: target bar → 4 tiles (Reached · Almost there · Behind ·
+    Didn't run <day> of those behind) → by-date card (only with a date: Already there / Will make it / Close call / Won't make it)
+    → Why behind (reason rows, tap = filter) → "What the machines that made it do differently" (4 rows: ran on % of days, acres on
+    a day it ran, days in breakdown, days idle no ticket) → Where they are (Territory / AM, ticks, Most reached / Furthest behind,
+    main reason) → **Machines card with every filter in one place**: Target (All · **Not reached T** one tap · each band), Reason
+    (multi), and **Yesterday** = the Machines page's own filter (All · Ran · Didn't run · Never ran → its Didn't run reasons,
+    multi-select → maintenance age), on the SAME key and helpers (`state.w250Run`, `wmcKeyOk` / `wmcTestK` / `wmcShowLbl`; the
+    `wmcshow` / `wmcsub` / `wmcage` handlers now write the field named in `data-f`, default `wmcShow`), so the two pages count
+    alike and keep separate picks. Yesterday counts are over what Target + Reason leave. Removed by the simplification: the
+    benchmark and days-to-reach tiles, "Where the acres went", the day-by-day chart, acres-lost column / sort / CSV columns; the
+    CSV gained IoT acres + status on the day. Checked 16 Nov: Not reached 277 → didn't run yesterday 136 = maintenance 29 · no
+    operator 24 · no ping 21 · other 62; maintenance 8+ days 4. Desktop 1440, phone 375 (no sideways scroll).
 - **Page 7, Breakdowns** (`wbd`, `#/breakdowns`, rail "Breakdowns"; `wbdAgg` / `wbdBodyHTML` / `wbdCSV`, Dinesh 2026-11-11).
   Wheat admin only. Off the **breakdown TICKETS** in the same workbook's **"maintenance data"** tab (gid `965231799`,
   `PROJECTS.wheat.maint`; parsed by `wtkBuild` into `WTK`, logged as `[MP-Ops] wheat breakdown tickets → {…}`).
