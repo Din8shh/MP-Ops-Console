@@ -1059,6 +1059,12 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     benchmark and days-to-reach tiles, "Where the acres went", the day-by-day chart, acres-lost column / sort / CSV columns; the
     CSV gained IoT acres + status on the day. Checked 16 Nov: Not reached 277 → didn't run yesterday 136 = maintenance 29 · no
     operator 24 · no ping 21 · other 62; maintenance 8+ days 4. Desktop 1440, phone 375 (no sideways scroll).
+- **Days ran filter + sort on Acre target and Machines (Dinesh 2026-11-16).** Days ran = days with IoT acres, season to the Day
+  filter's day (`wmcIotDays` / `w250Info().ran`, the same count). A multi-select row of bands `W_RUND` (0 · 1–5 · 6–10 · 11–15 ·
+  16+ days, `wRunDBand`) with counts over what the page's other filters leave; separate picks per page (`state.wmcRunD` /
+  `w250RunD`, act `wrund` + `data-f`), cleared by Clear filters. Sort "Days ran (high to low)" on both (`days` / `ran`); the
+  Machines table shows the count under Season IoT ac (desktop) and "Ran N days" on the phone card. Checked 16 Nov: 28 / 98 / 103 /
+  98 / 24 = 351 deployed, and 0 days = 351 − the 323 that have run.
 - **Page 7, Breakdowns** (`wbd`, `#/breakdowns`, rail "Breakdowns"; `wbdAgg` / `wbdBodyHTML` / `wbdCSV`, Dinesh 2026-11-11).
   Wheat admin only. Off the **breakdown TICKETS** in the same workbook's **"maintenance data"** tab (gid `965231799`,
   `PROJECTS.wheat.maint`; parsed by `wtkBuild` into `WTK`, logged as `[MP-Ops] wheat breakdown tickets → {…}`).
