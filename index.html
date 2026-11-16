@@ -204,6 +204,8 @@ let BASE = MP_BASE, COORDS = MP_COORDS;   // ACTIVE geometry — defaults to MP;
 const C = { orange:'#F5821F', orangeD:'#D96A12', green:'#1FAE43', greenD:'#159234', open:'#4C7399', openD:'#3A5B7D', act:'#15A24A', idle:'#E0A008', brk:'#DC3A2B', ink:'#1B1A17', ink2:'#6E6A62', ink3:'#9C988F', line:'#E9E6DF', line2:'#F2F0EB', softO:'#FBEDDF', softG:'#E6F5EA', softB:'#EAF0F6', softR:'#FBEAE7', softA:'#FBF1DA' };
 // ── Wheat v2 tokens (design "Ops Console Refresh v2", 2026-10-28). Wheat's pages and shell are drawn in these; Kharif
 // keeps C. Cool neutrals, one type family with tabular figures, tinted KPI tiles. ink3 is DECORATIVE only (3.1:1).
+// Per-device read used by the state defaults (the Acre target page's target and by-date), before `state` exists.
+const w250Load0 = (k, d) => { try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(_){ return d; } };
 const W2 = { ink:'#15181C', ink2:'#5B636D', ink3:'#8C939B', line:'#E4E7EA', line2:'#EEF0F2', card:'#E8ECF1', head:'#F8F9FA', track:'#EAEEF3',
   act:'#12924A', actD:'#0F7A3D', idle:'#D69A00', idleD:'#8A6200', brk:'#D23B2C', brkD:'#B42D20',
   font:"'IBM Plex Sans',system-ui,sans-serif", shadow:'0 1px 2px rgba(20,30,45,0.04),0 10px 28px -16px rgba(20,30,45,0.14)',
@@ -237,7 +239,7 @@ const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
-  wDay:'', wsnSt:'ALL', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wDep:'dep', wSh:'', wmcQ:'', wmcShow:'all', wmcSort:'mc', wmcLimit:60, w250Show:'all', w250Sort:'ac', w250By:'terr', w250Limit:60, w250GAll:false, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
+  wDay:'', wsnSt:'ALL', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wDep:'dep', wSh:'', wmcQ:'', wmcShow:'all', wmcSort:'mc', wmcLimit:60, w250Tgt:+w250Load0('mpoc_w250_tgt',250)||250, w250Dl:w250Load0('mpoc_w250_dl',''), w250Bands:[], w250Why:[], w250Terrs:[], w250Ams:[], w250GSort:'over', w250Sort:'ac', w250By:'terr', w250Limit:60, w250GAll:false, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
   wfoSort:'bk', wfoOpen:{}, wfoOn:'',   // Wheat TM → FO page: its own sort, open rows and onboarded filter; the rest is the wt* scope
   wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
   iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60, iotTs:'',   // IoT pages — page-local, shared by the three of them
@@ -3573,7 +3575,7 @@ const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" 
 // keys and mean nothing to a reader hunting for the cumulative chart.
 const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', norun:'Didn’t run',
   am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Daily recap', leader:'Leaders',
-  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wfo:'TM · FO summary', wmap:'Machine map', wtop:'Top 10 machines', w250:'250-acre machines', wbd:'Breakdowns', wmc:'Machine summary', wcum:'Cumulative acres',
+  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wfo:'TM · FO summary', wmap:'Machine map', wtop:'Top 10 machines', w250:'Acre target', wbd:'Breakdowns', wmc:'Machine summary', wcum:'Cumulative acres',
   iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotteam:'IoT team overview' };
 // The word under each rail icon: short enough for a 64px button at 9.5px. One word where the title is long.
 // ONE NAME TABLE (plan I4). NAV_TITLE is the full name — page heading, browser title, the phone's All pages sheet.
@@ -3581,7 +3583,7 @@ const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machin
 // the same short form in all three. M_VIEWS takes its labels from here.
 const RAIL_LBL = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', am:'AMs', bm:'BMs', norun:'Didn’t run',
   pending:'Pending', recap:'Recap', leader:'Leaders', product:'Products', mpprod:'MP products', snake:'Cumulative', fo:'FOs',
-  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', w250:'250 ac', wbd:'Breakdowns', wmc:'Machines', wcum:'Cumulative', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
+  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', w250:'Acre target', wbd:'Breakdowns', wmc:'Machines', wcum:'Cumulative', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
 // Rail order, in labelled groups (a hairline between them): the project's own pages, then what happened TODAY,
 // then the PEOPLE tables, then the SEASON reading. Insights used to lead the rail; it now leads the Season group.
 // Group names, index for index with RAIL_GROUPS (the first group is the project's own pages and has none).
@@ -10185,207 +10187,338 @@ function wtopCSV(){
   a.download=`Wheat-North_top-${WTOP_N}-machines_${by==='iot'?'IoT':'acres'}_${A.st||'HR-PB'}_${WRET.yday||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
 }
-/* ===================== Wheat North — 250-acre machines (view key `w250`, `#/250-acres`, Dinesh 2026-11-16) =====================
-   Which machines have crossed 250 IoT ACRES this season and which have not, THROUGH the Day filter's day. Wheat admin only.
-   Reads the shared wt* scope (Day · Machines · State · Company · State head · Territory · TM · AM · search), so its machines
-   are the Territory / AM / Map / Top 10 pages' machines. It answers, in this order:
-   · how many have crossed, how many are close, and how that count grew day by day;
-   · how far the rest have got (distance BANDS 200–249 · 100–199 · 1–99 · none), and where (by territory / AM);
-   · per machine: for a crosser the day it crossed and how long it took; for the rest, why it is behind (days ran of the
-     days possible, days in breakdown, operator, last ping) and its pace — acres per day it ran, and the running days it
-     still needs at that pace.
+/* ===================== Wheat North — Acre target (view key `w250`, `#/250-acres`, Dinesh 2026-11-16) =====================
+   Which machines have reached an IoT-ACRE TARGET this season (250 by default; the reader types any figure and the whole page
+   follows), and — for the rest — WHY they are behind and what would close the gap. Wheat admin only. Reads the shared wt*
+   scope (Day · Machines · State · Company · State head · Territory · TM · AM · search), so its machines are the Territory /
+   AM / Map / Top 10 pages' machines. Top-down it answers:
+   · how many reached the target, how many are close, how the count grew day by day, and (with an optional "by" date) who
+     will make it at the pace they are running;
+   · WHY the rest are behind — one cause per machine — and where the acres went, in acres at a benchmark pace;
+   · how machines that reached it differ from those that have not (running days, acres a running day, breakdown days …);
+   · where they are (territory / AM, multi-select) and, per machine, its cause, its pace and what it still needs.
    Definitions (agreed 2026-11-16): IoT acres = `IOT_acres` per day (sdays[d][4]); a RUNNING day = a day with IoT acres;
-   DAYS POSSIBLE = the season's first sheet date (Bayer: its own `from`) → the day, both included, whatever the machine's
-   handover date (the sheet has none); BREAKDOWN DAYS = days a ticket was open at any point (wTkOpenDuring); CROSSED ON =
-   the first day the running total reached 250; DAYS TAKEN = first running day → that day, both included. */
-const W250 = 250;
+   DAYS POSSIBLE = the season's first sheet date (Bayer: its own `from`) → the day, both included (the sheet has no
+   handover date); BREAKDOWN DAYS = days a ticket was open at any point (wTkOpenDuring); REACHED ON = the first day the
+   running total reached the target; DAYS TAKEN = first running day → that day, both included.
+   Cause and acres lost (2026-11-16): the BENCHMARK is the median acres a running day of the machines in view that ran 3+
+   days. Every day a machine did NOT run is valued at that benchmark and filed as a breakdown day (ticket open), a late-start
+   day (before its first running day) or an idle day (no ticket); a running day below the benchmark loses the difference.
+   A machine's CAUSE is the largest of those losses (never ran → its Didn't run reason; small losses everywhere → running
+   well, needs time). These are estimates at the benchmark, and the page says so. */
+const W250_DEF = 250;
 const W250_PAGE = 60;
-const W250_BANDS = [['over','Crossed 250','#15A24A'],['b200','200–249','#3B6EA8'],['b100','100–199','#7C9FC7'],['b1','1–99','#B7C9DE'],['b0','No IoT acres','#8A94A0']];
-const W250_SHOW = [['all','All'],['over','Crossed 250'],['under','Not crossed'],['b200','200–249 ac'],['b100','100–199 ac'],['b1','1–99 ac'],['b0','No IoT acres']];
-const W250_SORTS = [['ac','Season IoT acres'],['go','Acres to go'],['pace','Acres per day ran'],['need','Days needed'],['ran','Days ran'],['brk','Breakdown days'],['cross','Date crossed'],['mc','Machine number']];
-const w250Band = v => v>=W250?'over':v>=200?'b200':v>=100?'b100':v>0?'b1':'b0';
-// A machine short of the line never READS as 250: 249.6 would round to it, so it shows one decimal, rounded down.
-const w250AcF = v => v<W250 && Math.round(v)>=W250 ? (Math.floor(v*10)/10).toFixed(1) : acF(v);
+const W250_PRESETS = [150, 200, 250, 300, 400];
+const W250_SORTS = [['ac','Season IoT acres'],['go','Acres to go'],['lost','Acres lost'],['pace','Acres per day ran'],['need','Days needed'],['ran','Days ran'],['brk','Breakdown days'],['cross','Date reached'],['mc','Machine number']];
+// The target and the optional deadline are per-reader conveniences, kept on the device (never shared state).
+const w250Load = (k, d) => { try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(_){ return d; } };
+const w250Save = (k, v) => { try{ v==null||v===''?localStorage.removeItem(k):localStorage.setItem(k, String(v)); }catch(_){ } };
+const w250T = () => { const t=Math.round(+state.w250Tgt); return t>=1 && t<=5000 ? t : W250_DEF; };
+// Distance bands are SHARES of the target, so 250 keeps its old 200 / 100 cut-offs (80% / 40%).
+function w250Bands(){ const T=w250T(), a=Math.round(T*0.8), b=Math.round(T*0.4);
+  return [['over',`Reached ${fmt(T)}`,'#15A24A'],['near',`${fmt(a)}–${fmt(T-1)}`,'#3B6EA8'],['mid',`${fmt(b)}–${fmt(Math.max(b,a-1))}`,'#7C9FC7'],['low',`1–${fmt(Math.max(1,b-1))}`,'#B7C9DE'],['none','No IoT acres','#8A94A0']]; }
+const w250Band = v => { const T=w250T(); return v>=T?'over':v>=Math.round(T*0.8)?'near':v>=Math.round(T*0.4)?'mid':v>0?'low':'none'; };
+// A machine short of the line never READS as the line: 249.6 would round to 250, so it shows one decimal, rounded down.
+const w250AcF = v => { const T=w250T(); return v<T && Math.round(v)>=T ? (Math.floor(v*10)/10).toFixed(1) : acF(v); };
+const W250_CAUSES = [
+  ['never','Never ran','#DC3A2B','Get it started: close its ticket, map an operator, check the device.'],
+  ['brk','Breakdown days','#E8857B','Days down with a ticket open are the loss: push open tickets and time to fix (Breakdowns page).'],
+  ['idle','Idle days, no ticket','#E0A008','Days with no acres and no ticket: operator, bookings or demand. Ring the CI / FO.'],
+  ['late','Started late','#9B7BC4','Its first running day came well after the season opened; it has run since. Watch its pace.'],
+  ['slow','Few acres a running day','#3B6EA8','It runs, but covers little ground a day: bookings per day, field size, operator.'],
+  ['ok','Running well, needs time','#7FB894','No lever: at its pace it gets there.']];
+const w250CauseOf = k => W250_CAUSES.find(c=>c[0]===k) || ['','','',''];
 let _w250Memo = { sig:'', map:null };
 function w250Info(m){
-  const D=WRET.yday, sig=D+'|'+(WRET.at||'')+'|'+WRET.machines.length+'|'+(WTK.loaded?1:0);
+  const T=w250T(), D=WRET.yday, sig=T+'|'+D+'|'+(WRET.at||'')+'|'+WRET.machines.length+'|'+(WTK.loaded?1:0);
   if(_w250Memo.sig!==sig) _w250Memo={ sig, map:new Map(), poss:{} };
   const M=_w250Memo; if(M.map.has(m)) return M.map.get(m);
   const from = m.org==='Bayer' ? ((curProject().bayer||{}).from||'') : '';
   const poss = M.poss[from] || (M.poss[from]=wtDays(from));
   let cum=0, ran=0, firstRun='', cross='', ranTo=0, last='';
-  Object.keys(m.sdays).filter(d=>d<=D).sort().forEach(d=>{ const v=m.sdays[d][4]||0;
+  const acOn = d => (m.sdays[d]&&m.sdays[d][4])||0;
+  Object.keys(m.sdays).filter(d=>d<=D).sort().forEach(d=>{ const v=acOn(d);
     if(v>0){ ran++; last=d; if(!firstRun) firstRun=d; }
-    cum+=v; if(!cross && cum>=W250){ cross=d; ranTo=ran; } });
-  const v=m.iotAll||0, band=w250Band(v), brkD=poss.filter(d=>wTkOpenDuring(m,d)).length;
-  const pace = ran ? v/ran : 0, go = Math.max(0, W250-v), need = band!=='over' && pace>0 ? Math.ceil(go/pace) : null;
+    cum+=v; if(!cross && cum>=T){ cross=d; ranTo=ran; } });
+  // Every idle day filed once: a ticket open → breakdown; before the first running day → late start; else idle.
+  let brkD=0, brkIdle=0, lateD=0, idleD=0;
+  poss.forEach(d=>{ const tk=wTkOpenDuring(m,d), r=acOn(d)>0; if(tk) brkD++; if(r) return;
+    if(tk) brkIdle++; else if(firstRun && d<firstRun) lateD++; else idleD++; });
+  const v=m.iotAll||0, band=w250Band(v);
+  const pace = ran ? v/ran : 0, go = Math.max(0, T-v), need = band!=='over' && pace>0 ? Math.ceil(go/pace) : null;
   const taken = cross && firstRun ? wtkDayN(firstRun, cross)+1 : null;
-  const idle = poss.length - ran;
-  // One reason for a machine that has not crossed (word first, figures after): never ran → its Didn't run bucket;
-  // idle more days than it ran → "Idle most days" (and how many of those were breakdown); else it runs but slowly.
-  let why='', whyCol=W2.ink2;
-  if(band!=='over'){
-    if(!ran){ const b=wNrSeason(m); why=(W_NR.never.find(([k])=>k===b)||[,'Not run yet'])[1]; whyCol=W_NR_COL[b]||W2.ink2; }
-    else if(idle>ran){ why= brkD>=Math.ceil(idle/2) ? 'Mostly in breakdown' : 'Idle most days'; whyCol= brkD>=Math.ceil(idle/2) ? W2.brkD : W2.idleD; }
-    else { why='Runs, low acres a day'; whyCol='#3B6EA8'; }
-  }
-  const o={ v, band, ran, poss:poss.length, idle, brkD, pace, go, need, cross, ranTo, taken, firstRun, last, why, whyCol };
+  const o={ v, band, ran, poss:poss.length, idle:poss.length-ran, brkD, brkIdle, lateD, idleD, pace, go, need, cross, ranTo, taken, firstRun, last,
+    lateBy: firstRun && poss.length ? wtkDayN(poss[0], firstRun) : null, rate: poss.length ? v/poss.length : 0 };
   M.map.set(m,o); return o;
 }
+// Cause + acres lost at the benchmark P (null P = too few running machines to set one: cause from day counts only).
+// Late start is measured against the FLEET's typical first running day (`ml`, median in view), not the season's first
+// sheet date: most machines began a week or two in, and counting those days would file nearly everyone as "started late".
+function w250Cause(m, i, P, ml){
+  if(i.band==='over') return { cause:'', lost:0, L:{brk:0,idle:0,late:0,slow:0} };
+  const late = Math.max(0, i.lateD-(ml||0));
+  const p = P||0, L = { brk:i.brkIdle*p, idle:i.idleD*p, late:late*p, slow:i.ran*Math.max(0,p-i.pace) };
+  const lost = L.brk+L.idle+L.late+L.slow;
+  let cause;
+  if(!i.ran) cause='never';
+  else if(!P){ const top=Math.max(i.brkIdle,i.idleD,late); cause = top<=i.ran*0.4 ? 'slow' : top===i.brkIdle?'brk':top===late?'late':'idle'; }
+  else { const sinceFirst = i.poss - i.lateD;
+    // Running most days since it started and close to the benchmark: nothing to fix, it needs days.
+    if(i.ran >= 0.7*sinceFirst && i.pace >= 0.85*P) cause = late >= 5 ? 'late' : 'ok';
+    else cause = Object.entries(L).sort((a,b)=>b[1]-a[1])[0][0]; }
+  const sub = cause==='never' ? (W_NR.never.find(([k])=>k===wNrSeason(m))||[,'Not run yet'])[1]
+    : cause==='idle' ? (wNoOp(m)?'no operator mapped':wPing2(m)?'no ping in 2+ days':'') : '';
+  return { cause, lost, L, sub };
+}
 function w250Agg(){
-  const S=state, A=wterrAgg(), D=WRET.yday;
-  const all=A.mcs.map(m=>({ m, i:w250Info(m) }));
-  const counts={}; W250_SHOW.forEach(([k])=>counts[k]=0);
-  all.forEach(({i})=>{ counts.all++; counts[i.band]++; if(i.band!=='over') counts.under++; });
-  const show=W250_SHOW.some(([k])=>k===S.w250Show)?S.w250Show:'all';
-  const keep = x => show==='all' || (show==='under' ? x.i.band!=='over' : x.i.band===show);
+  const S=state, T=w250T(), A=wterrAgg(), D=WRET.yday, bands=w250Bands();
+  const by = S.w250By==='am' ? 'am' : 'terr';
+  const gKey = m => by==='am' ? (m.am ? (m.amNum||m.am) : '~none') : (m.territory===WRET_NO_TERR ? '~none' : m.st+'|'+m.territory);
+  const scopeAll = A.mcs.map(m=>({ m, i:w250Info(m) }));
+  // The benchmark: median acres a running day of the machines in the SCOPE (before the page's own picks) that ran 3+ days.
+  const med = arr => { const s=arr.filter(x=>x!=null&&isFinite(x)).sort((a,b)=>a-b); if(!s.length) return null; const k=s.length>>1; return s.length%2?s[k]:(s[k-1]+s[k])/2; };
+  const runners = scopeAll.filter(x=>x.i.ran>=3);
+  const P = runners.length>=5 ? med(runners.map(x=>x.i.pace)) : null;
+  const ML = med(scopeAll.filter(x=>x.i.lateBy!=null).map(x=>x.i.lateBy)) || 0;
+  scopeAll.forEach(x=>{ x.c=w250Cause(x.m, x.i, P, ML); });
+  // Page-local multi-select of territories / AMs (from "Where they are"). Picks the scope no longer holds are ignored.
+  const picks = new Set((by==='am'?S.w250Ams:S.w250Terrs)||[]);
+  const gAll = {}; scopeAll.forEach(x=>{ gAll[gKey(x.m)]=1; });
+  const pickOn = [...picks].filter(k=>gAll[k]);
+  const all = pickOn.length ? scopeAll.filter(x=>pickOn.includes(gKey(x.m))) : scopeAll;
+  // Groups are built on the whole scope so the reader can pick across them.
+  const G={}; scopeAll.forEach(x=>{ const m=x.m, k=gKey(m), none=k==='~none';
+    const g=G[k]||(G[k]={ key:k, none, name: none ? (by==='am'?'No AM — operator not mapped':m.territory) : by==='am'?m.am:m.territory, mob: by==='am'?m.amNum:'', st:m.st, n:0, v:0, go:0, ran:0, poss:0, brk:0, b:{over:0,near:0,mid:0,low:0,none:0}, c:{} });
+    if(g.st!==m.st) g.st=''; g.n++; g.v+=x.i.v; g.go+=x.i.go; g.ran+=x.i.ran; g.poss+=x.i.poss; g.brk+=x.i.brkD; g.b[x.i.band]++; if(x.c.cause) g.c[x.c.cause]=(g.c[x.c.cause]||0)+1; });
+  const gs = S.w250GSort==='gap'?'gap':S.w250GSort==='util'?'util':'over';
+  const groups=Object.values(G).map(g=>{ const top=Object.entries(g.c).sort((a,b)=>b[1]-a[1])[0];
+      return { ...g, pct: g.n?100*g.b.over/g.n:0, avg: g.n?g.v/g.n:0, util: g.poss?100*g.ran/g.poss:0, pace: g.ran?g.v/g.ran:0, top: top?{k:top[0],n:top[1]}:null, picked: pickOn.includes(g.key) }; })
+    .sort((a,b)=>(a.none-b.none) || (gs==='gap' ? b.go-a.go : gs==='util' ? a.util-b.util : b.pct-a.pct || b.b.over-a.b.over) || b.n-a.n || String(a.name).localeCompare(String(b.name)));
+  // Counts on the page's machines (after the group picks).
+  const counts={ all:0, under:0 }; bands.forEach(([k])=>counts[k]=0);
+  const cc={}; W250_CAUSES.forEach(([k])=>cc[k]={ n:0, go:0 });
+  all.forEach(({i,c})=>{ counts.all++; counts[i.band]++; if(i.band!=='over'){ counts.under++; cc[c.cause].n++; cc[c.cause].go+=i.go; } });
+  // The list: bands and causes are multi-select (empty = all); a cause only ever matches a machine that is behind.
+  const bSel = (S.w250Bands||[]).filter(k=>bands.some(([x])=>x===k)), cSel = (S.w250Why||[]).filter(k=>cc[k]);
+  const keep = x => (!bSel.length || bSel.includes(x.i.band)) && (!cSel.length || cSel.includes(x.c.cause));
   const sort=W250_SORTS.some(([k])=>k===S.w250Sort)?S.w250Sort:'ac';
   const nmc=(a,b)=>a.m.mc.localeCompare(b.m.mc,undefined,{numeric:true});
-  const num=(f,asc)=>(a,b)=>{ const x=f(a.i), y=f(b.i); if(x==null&&y==null) return nmc(a,b); if(x==null) return 1; if(y==null) return -1; return (asc?x-y:y-x)||nmc(a,b); };
+  const num=(f,asc)=>(a,b)=>{ const x=f(a), y=f(b); if(x==null&&y==null) return nmc(a,b); if(x==null) return 1; if(y==null) return -1; return (asc?x-y:y-x)||nmc(a,b); };
   const cmp = sort==='mc' ? nmc : sort==='cross' ? (a,b)=>((a.i.cross||'~')<(b.i.cross||'~')?-1:(a.i.cross||'~')>(b.i.cross||'~')?1:nmc(a,b))
-    : sort==='go' ? num(i=>i.band==='over'?null:i.go,true) : sort==='need' ? num(i=>i.need,true)
-    : sort==='pace' ? num(i=>i.ran?i.pace:null) : sort==='ran' ? num(i=>i.ran) : sort==='brk' ? num(i=>i.brkD) : num(i=>i.v);
+    : sort==='go' ? num(x=>x.i.band==='over'?null:x.i.go,true) : sort==='need' ? num(x=>x.i.need,true) : sort==='lost' ? num(x=>x.i.band==='over'?null:x.c.lost)
+    : sort==='pace' ? num(x=>x.i.ran?x.i.pace:null) : sort==='ran' ? num(x=>x.i.ran) : sort==='brk' ? num(x=>x.i.brkD) : num(x=>x.i.v);
   const list=all.filter(keep).sort(cmp);
-  // The day-by-day count of machines past 250 (each machine counted from the day it crossed).
+  // Day-by-day count of machines past the target (each counted from the day it reached it).
   const crossed=all.filter(x=>x.i.cross).map(x=>x.i.cross).sort();
   let j=0; const run=A.days.map(d=>{ while(j<crossed.length&&crossed[j]<=d) j++; return j; });
-  const med = arr => { const s=arr.filter(x=>x!=null).sort((a,b)=>a-b); if(!s.length) return null; const k=s.length>>1; return s.length%2?s[k]:(s[k-1]+s[k])/2; };
   const over=all.filter(x=>x.i.band==='over'), under=all.filter(x=>x.i.band!=='over');
-  // By territory / AM: one row each, the no-territory / no-AM machines last, never ranked.
-  const by = S.w250By==='am' ? 'am' : 'terr';
-  const G={}; all.forEach(x=>{ const m=x.m, none = by==='am' ? !m.am : m.territory===WRET_NO_TERR;
-    const k = none ? '~none' : by==='am' ? (m.amNum||m.am) : m.st+'|'+m.territory;
-    const g=G[k]||(G[k]={ key:k, none, name: none ? (by==='am'?'No AM — operator not mapped':m.territory) : by==='am'?m.am:m.territory, mob: by==='am'?m.amNum:'', st:m.st, n:0, v:0, b:{over:0,b200:0,b100:0,b1:0,b0:0} });
-    if(g.st!==m.st) g.st=''; g.n++; g.v+=x.i.v; g.b[x.i.band]++; });
-  const groups=Object.values(G).map(g=>({ ...g, pct: g.n?100*g.b.over/g.n:0, avg: g.n?g.v/g.n:0 }))
-    .sort((a,b)=>(a.none-b.none) || b.pct-a.pct || b.b.over-a.b.over || b.n-a.n || String(a.name).localeCompare(String(b.name)));
-  return { A, D, all, counts, show, sort, list, run, over, under, groups, by,
+  // Where the acres went (machines behind): each loss summed, at the benchmark.
+  const lost={ brk:0, idle:0, late:0, slow:0 }; under.forEach(x=>{ for(const k in lost) lost[k]+=x.c.L[k]; });
+  // Reached vs behind, side by side.
+  const prof = arr => { const n=arr.length, sum=f=>arr.reduce((a,x)=>a+f(x),0), ranS=sum(x=>x.i.ran), possS=sum(x=>x.i.poss);
+    return n ? { n, util: possS?100*ranS/possS:null, pace: ranS?sum(x=>x.i.v)/ranS:null, brk: sum(x=>x.i.brkD)/n, idle: sum(x=>x.i.idleD)/n,
+      late: med(arr.filter(x=>x.i.lateBy!=null).map(x=>x.i.lateBy)), op: 100*arr.filter(x=>!wNoOp(x.m)).length/n, ping: 100*arr.filter(x=>!wPing2(x.m)).length/n } : null; };
+  // By-date projection (optional): days left AFTER the data day; a machine keeps its season rate (acres per possible day).
+  const dl = /^\d{4}-\d{2}-\d{2}$/.test(S.w250Dl||'') ? S.w250Dl : '';
+  const left = dl && D && dl>D ? wtkDayN(D, dl) : 0;
+  const proj = left ? (() => { const r={ track:0, risk:0, off:0 };
+    under.forEach(x=>{ const p=x.i.v + x.i.rate*left; x.pj = { p, need: x.i.go/left, st: p>=T?'track':p>=0.8*T?'risk':'off' }; r[x.pj.st]++; }); return r; })() : null;
+  return { A, D, T, bands, all, scopeAll, counts, cc, bSel, cSel, sort, list, run, over, under, groups, by, gs, pickOn, P, ML, lost,
+    pOver: prof(over), pUnder: prof(under), dl, left, proj,
     newOnDay: over.filter(x=>x.i.cross===D).length,
     medTaken: med(over.map(x=>x.i.taken)), medRanTo: med(over.map(x=>x.i.ranTo)), medGo: med(under.map(x=>x.i.go)),
-    narrowed: A.narrowed || show!=='all', sig:[A.sig,D,show,sort,by].join('|') };
+    narrowed: A.narrowed || pickOn.length>0, filtered: bSel.length>0 || cSel.length>0,
+    sig:[A.sig,D,T,bSel,cSel,sort,by,pickOn.join(';'),dl].join('|') };
 }
-const w250ShowLbl = k => (W250_SHOW.find(([x])=>x===k)||[,''])[1];
 function w250BodyHTML(mob){
   if(!isAdmin() || !WRET.loaded) return wplanBodyHTML(mob);
-  const S=state, B=wpBits(mob), { orgChip, meter } = B, W=w250Agg(), A=W.A, D=W.D, dw=wIsYday()?'yesterday':wpDate(D), N=W.all.length;
+  const S=state, B=wpBits(mob), { orgChip, meter } = B, W=w250Agg(), A=W.A, D=W.D, T=W.T, dw=wIsYday()?'yesterday':wpDate(D), N=W.all.length;
   if(S._w250Sig!==W.sig){ S._w250Sig=W.sig; S.w250Limit=W250_PAGE; }
   const controls = wtControlsHTML(A, mob, true, { csv:'w250csv', csvTitle:`Download the ${fmt(W.list.length)} machines shown as CSV`, sort:['w250SortSel','Sort machines by',W250_SORTS,W.sort] });
-  const first = A.days[0]||'';
+  const first = A.days[0]||'', pad = mob?'16px':'18px 22px', gap = `margin-top:${mob?12:16}px`;
+  const ttl = (t,sub) => `<div style="display:flex;align-items:baseline;gap:4px 8px;flex-wrap:wrap"><span style="font-size:${mob?15:16}px;font-weight:600">${t}</span>${sub?`<span style="font-size:13px;color:${W2.ink2}">${sub}</span>`:''}</div>`;
+  const pill = (act,k,t,on,sw,n) => `<button data-act="${act}" data-k="${E(k)}" aria-pressed="${on}" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;min-height:${mob?44:34}px;padding:0 ${mob?14:12}px;border-radius:999px;border:1px solid ${on?W2.ink:W2.line};background:${on?W2.ink:'#fff'};color:${on?'#fff':W2.ink};font:500 ${mob?14:13.5}px ${W2.font};cursor:pointer;white-space:nowrap">${on?'✓ ':''}${sw?`<span aria-hidden="true" style="width:9px;height:9px;border-radius:2px;background:${sw}"></span>`:''}${t}${n!=null?`<span style="font-variant-numeric:tabular-nums;color:${on?'#fff':W2.ink2};font-weight:600">${fmt(n)}</span>`:''}</button>`;
+  const pillRow = inner => `<div role="group" style="display:flex;gap:6px;margin-top:12px;${mob?'overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px':'flex-wrap:wrap'}">${inner}</div>`;
+  // ---- the target: a number field, presets, and an optional "by" date
+  const inpCss = `height:${mob?48:38}px;border:1px solid ${W2.ink};border-radius:${mob?12:10}px;background:#fff;padding:0 10px;font:600 ${mob?16:15}px ${W2.font};color:${W2.ink};font-variant-numeric:tabular-nums`;
+  const tgtBar = B.cardBox(`<div style="padding:${mob?'14px 16px':'14px 22px'};display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap">
+      <label for="w250Tgt" style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600">Target<input id="w250Tgt" type="number" inputmode="numeric" min="1" max="5000" step="10" value="${T}" aria-label="Target IoT acres per machine" style="${inpCss};width:${mob?96:92}px"><span style="font-weight:500;color:${W2.ink2}">IoT acres a machine</span></label>
+      <div role="group" aria-label="Quick targets" style="display:flex;gap:4px;${mob?'width:100%;overflow-x:auto':''}">${W250_PRESETS.map(p=>`<button data-act="w250tgt" data-k="${p}" aria-pressed="${p===T}" style="flex-shrink:0;min-height:${mob?40:30}px;padding:0 10px;border-radius:8px;border:1px solid ${p===T?W2.ink:W2.line};background:${p===T?W2.ink:'#fff'};color:${p===T?'#fff':W2.ink};font:500 13px ${W2.font};cursor:pointer;font-variant-numeric:tabular-nums">${p}</button>`).join('')}</div>
+      ${mob?'':'<span style="flex:1"></span>'}
+      <label for="w250Dl" style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;${mob?'width:100%':''}">By<input id="w250Dl" type="date" min="${D||''}" value="${E(W.dl)}" aria-label="Target date (optional)" style="${inpCss};font-weight:500;${mob?'flex:1;min-width:0':''}">${W.dl?`<button data-act="w250dl" aria-label="Remove the target date" style="min-height:${mob?44:32}px;padding:0 10px;border:1px solid ${W2.line};border-radius:8px;background:#fff;font:500 13px ${W2.font};color:${W2.ink};cursor:pointer">✕</button>`:`<span style="font-weight:400;font-size:12.5px;color:${W2.ink2}">optional</span>`}</label></div>`, gap);
   const nOver=W.counts.over, pOver=N?100*nOver/N:0;
-  const head = `<div style="margin-top:${mob?14:20}px"><div style="font-size:${mob?18:20}px;font-weight:600">250-acre machines</div>
-    <div style="font-size:13.5px;color:${W2.ink2};margin-top:2px;line-height:1.45">${N?`<b style="color:${W2.ink};font-weight:600">${fmt(nOver)} of ${fmt(N)} machines (${pctF(pOver)}) have crossed ${W250} IoT acres</b> by ${wpDate(D)}${W.counts.b200?` · ${fmt(W.counts.b200)} more are within 50 acres`:''}.`:'No machine in view.'} Season ${first?wpDate(first)+' – ':'to '}${wpDate(D)}${A.narrowed?' · what the filters show':''}.</div></div>`;
-  if(!N) return controls + head + B.msg(`No machine matches these filters.${A.narrowed?`<div style="margin-top:12px">${B.ghost('wtclear','Clear filters')}</div>`:''}`);
-  // KPI strip
+  const head = `<div style="margin-top:${mob?14:20}px"><div style="font-size:${mob?18:20}px;font-weight:600">${fmt(T)}-acre target</div>
+    <div style="font-size:13.5px;color:${W2.ink2};margin-top:2px;line-height:1.45">${N?`<b style="color:${W2.ink};font-weight:600">${fmt(nOver)} of ${fmt(N)} machines (${pctF(pOver)}) have reached ${fmt(T)} IoT acres</b> by ${wpDate(D)}${W.counts.near?` · ${fmt(W.counts.near)} more are within ${fmt(T-Math.round(T*0.8))} acres`:''}.`:'No machine in view.'} Season ${first?wpDate(first)+' – ':'to '}${wpDate(D)}${W.narrowed?' · what the filters show':''}.</div></div>`;
+  if(!N) return controls + head + tgtBar + B.msg(`No machine matches these filters.${W.narrowed?`<div style="margin-top:12px">${B.ghost('wtclear','Clear filters')}</div>`:''}`);
+  // ---- KPI strip
+  const pu=W.pUnder, po=W.pOver;
   const tiles = [
-    B.tile(`Crossed ${W250} ac`, fmt(nOver), '', `of ${fmt(N)} machines · ${pctF(pOver)}`),
-    B.tile(`Crossed ${dw}`, fmt(W.newOnDay), '', W.newOnDay?`new past ${W250} ac ${wDayWord()}`:`none crossed ${wDayWord()}`),
-    B.tile('Close: 200–249 ac', fmt(W.counts.b200), '', 'within 50 ac of the line'),
-    B.tile(`Not crossed ${W250} ac`, fmt(W.counts.under), '', W.medGo!=null?`typically ${acF(Math.round(W.medGo))} ac to go (median)`:''),
-    B.tile('Days to cross', W.medTaken!=null?acF(W.medTaken):'—', W.medTaken!=null?'days':'', W.medTaken!=null?`median, first IoT day → crossing · ${acF(W.medRanTo)} running days`:'no machine has crossed yet'),
+    B.tile(`Reached ${fmt(T)} ac`, fmt(nOver), '', `of ${fmt(N)} machines · ${pctF(pOver)}`),
+    B.tile(`Reached ${dw}`, fmt(W.newOnDay), '', W.newOnDay?`new past ${fmt(T)} ac ${wDayWord()}`:`none reached it ${wDayWord()}`),
+    B.tile(`Close: ${W.bands[1][1]} ac`, fmt(W.counts.near), '', 'within 20% of the target'),
+    B.tile(`Behind ${fmt(T)} ac`, fmt(W.counts.under), '', W.medGo!=null?`typically ${acF(Math.round(W.medGo))} ac to go (median)`:'every machine is past it'),
+    B.tile('Days to reach it', W.medTaken!=null?acF(W.medTaken):'—', W.medTaken!=null?'days':'', W.medTaken!=null?`median, first IoT day → target · ${acF(W.medRanTo)} running days`:'no machine has reached it yet'),
+    B.tile('Benchmark pace', W.P!=null?acF(Math.round(W.P*10)/10):'—', W.P!=null?'ac a day':'', W.P!=null?'median acres a running day, machines that ran 3+ days':'too few machines have run 3+ days'),
   ];
   const strip = mob
-    ? B.cardBox(`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr))">${tiles.slice(0,4).join('')}<div style="grid-column:1/-1;display:grid">${tiles[4]}</div></div>`, `overflow:hidden;margin-top:12px`)
-    : `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:16px">${tiles.join('')}</div>`;
-  // Distance bands: a stacked bar (shares of the whole), and the chips that filter the list below.
-  const segs = W250_BANDS.map(([k,l,c])=>({k,l,c,n:W.counts[k]})).filter(s=>s.n>0);
+    ? B.cardBox(`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr))">${tiles.join('')}</div>`, `overflow:hidden;margin-top:12px`)
+    : `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:16px">${tiles.join('')}</div>`;
+  // ---- by-date projection
+  const pj = W.proj, pjCol = { track:W2.actD, risk:W2.idleD, off:W2.brkD };
+  const projCard = !pj ? (W.dl && W.dl<=D ? B.msg(`The target date ${wpDate(W.dl)} is not after the data day (${wpDate(D)}). Pick a later date to see who will make it.`,'18px 16px') : '')
+    : B.cardBox(`<div style="padding:${pad}">${ttl(`Will they reach ${fmt(T)} ac by ${wpDate(W.dl)}?`, `${fmt(W.left)} day${W.left===1?'':'s'} left after ${wpDate(D)} · at each machine’s season rate (acres ÷ days possible, idle days included)`)}
+      <div style="display:grid;grid-template-columns:repeat(${mob?2:4},minmax(0,1fr));gap:${mob?8:12}px;margin-top:12px">
+        ${[['Already there',nOver,W2.actD,'reached the target'],['On track',pj.track,pjCol.track,'projected to reach it'],['At risk',pj.risk,pjCol.risk,'projected 80–99% of it'],['Off track',pj.off,pjCol.off,'projected under 80%']].map(([l,n,c,s])=>`<div style="border:1px solid ${W2.line2};border-radius:12px;padding:12px 14px;background:${W2.head}"><div style="font-size:12.5px;color:${W2.ink2};font-weight:500">${l}</div><div style="${w2num(mob?22:26,600,c)}">${fmt(n)}</div><div style="font-size:12.5px;color:${W2.ink2}">${s}</div></div>`).join('')}</div>
+      <div style="font-size:13px;color:${W2.ink2};margin-top:10px;line-height:1.45">To make it, a machine behind needs <b style="color:${W2.ink}">${acF(Math.round(10*(W.medGo||0)/W.left)/10)} ac a day</b> every day from here (median); the benchmark running day is ${W.P!=null?acF(Math.round(W.P*10)/10)+' ac':'—'}.</div></div>`, gap);
+  // ---- why they are behind (cause), multi-select
+  const under=W.counts.under;
+  const causeRows = W250_CAUSES.filter(([k])=>W.cc[k].n>0);
+  const lostTot = W.lost.brk+W.lost.idle+W.lost.late+W.lost.slow;
+  const LOSS = [['brk','Breakdown days','#E8857B'],['idle','Idle days, no ticket','#E0A008'],['late','Late start','#9B7BC4'],['slow','Slow running days','#3B6EA8']];
+  const lossBar = W.P==null || lostTot<=0 ? '' : `<div style="margin-top:16px;padding-top:14px;border-top:1px solid ${W2.line2}">
+      ${ttl('Where the acres went', `machines behind · ≈ acres lost at the benchmark of ${acF(Math.round(W.P*10)/10)} ac a running day`)}
+      <div role="img" aria-label="${E(LOSS.map(([k,l])=>`${l} ${Math.round(W.lost[k])} ac`).join(', '))}" style="display:flex;gap:2px;height:${mob?20:22}px;border-radius:6px;overflow:hidden;margin-top:10px">${LOSS.filter(([k])=>W.lost[k]>0).map(([k,,c])=>`<span style="flex:${W.lost[k]} 0 0;min-width:3px;background:${c}"></span>`).join('')}</div>
+      <div style="display:grid;grid-template-columns:repeat(${mob?2:4},minmax(0,1fr));gap:8px 16px;margin-top:10px">${LOSS.map(([k,l,c])=>`<div style="display:flex;flex-direction:column;gap:1px"><span style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:${W2.ink2}"><span aria-hidden="true" style="width:9px;height:9px;border-radius:2px;background:${c}"></span>${l}</span><span style="${w2num(mob?16:18,600)}">${acF(Math.round(W.lost[k]))}${w2unit('ac',12)}<span style="font-size:12.5px;font-weight:500;color:${W2.ink2}"> · ${pctF(100*W.lost[k]/lostTot)}</span></span></div>`).join('')}</div></div>`;
+  const cRow = ([k,l,c,lever]) => { const x=W.cc[k], on=W.cSel.includes(k), p=under?100*x.n/under:0;
+    return `<button data-act="w250why" data-k="${k}" aria-pressed="${on}" style="display:grid;grid-template-columns:${mob?'minmax(0,1fr) auto':'minmax(200px,1.1fr) 150px 110px minmax(240px,2fr)'};gap:6px 14px;width:100%;align-items:center;padding:${mob?'12px 14px':'11px 14px'};border:1px solid ${on?W2.ink:W2.line2};border-radius:12px;background:${on?W2.head:'#fff'};text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
+      <span style="display:flex;align-items:center;gap:8px;min-width:0"><span aria-hidden="true" style="width:11px;height:11px;border-radius:3px;background:${c};flex-shrink:0"></span><span style="font-weight:600;font-size:14px">${on?'✓ ':''}${l}</span></span>
+      <span style="display:flex;flex-direction:column;gap:4px;${mob?'text-align:right;align-items:flex-end':''}"><span style="font-variant-numeric:tabular-nums;font-size:14px"><b style="font-weight:600">${fmt(x.n)}</b><span style="color:${W2.ink2}"> machine${x.n===1?'':'s'} · ${pctF(p)}</span></span>${mob?'':meter(p,'100%',c)}</span>
+      ${mob?'':`<span style="font-variant-numeric:tabular-nums;font-size:13.5px;text-align:right"><b style="font-weight:600">${acF(Math.round(x.go))}</b><span style="color:${W2.ink2}"> ac to go</span></span>`}
+      <span style="font-size:12.5px;color:${W2.ink2};line-height:1.4;${mob?'grid-column:1/-1':''}">${mob?`${acF(Math.round(x.go))} ac to go · `:''}${lever}</span></button>`; };
+  const whyCard = !under ? '' : B.cardBox(`<div style="padding:${pad}">${ttl(`Why ${fmt(under)} machine${under===1?' is':'s are'} behind`, `one main cause each · ${mob?'tap':'pick'} one or more to list their machines`)}
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">${causeRows.map(cRow).join('')}</div>
+      ${W.cSel.length?`<div style="margin-top:10px">${B.ghost('w250whyclr','Show every cause')}</div>`:''}${lossBar}</div>`, gap);
+  // ---- reached vs behind
+  const cmpRows = [
+    ['Running days', p=>p.util!=null?pctF(p.util):'—', 'of the days possible', (a,b)=>a.util>b.util],
+    ['Acres a running day', p=>p.pace!=null?acF(Math.round(p.pace*10)/10):'—', 'IoT acres', (a,b)=>a.pace>b.pace],
+    ['Breakdown days', p=>acF(Math.round(p.brk*10)/10), 'per machine', (a,b)=>a.brk<b.brk],
+    ['Idle days, no ticket', p=>acF(Math.round(p.idle*10)/10), 'per machine', (a,b)=>a.idle<b.idle],
+    ['First running day', p=>p.late!=null?`day ${fmt(p.late+1)}`:'—', 'of the season (median)', (a,b)=>a.late<b.late],
+    ['Operator mapped', p=>pctF(p.op), 'of the machines', (a,b)=>a.op>b.op],
+    ['Pinged in the last 2 days', p=>pctF(p.ping), 'today', (a,b)=>a.ping>b.ping]];
+  const cmpCard = !(po&&pu) ? '' : B.cardBox(`<div style="padding:${pad}">${ttl(`Reached vs behind`, `what the ${fmt(po.n)} that reached ${fmt(T)} ac do differently from the ${fmt(pu.n)} behind`)}
+      <div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:0 12px;margin-top:12px;font-size:${mob?13.5:14}px">
+        <span style="font-size:12px;font-weight:600;color:${W2.ink2};padding-bottom:6px;border-bottom:1px solid ${W2.line2}"></span>
+        <span style="font-size:12px;font-weight:600;color:${W2.actD};padding-bottom:6px;border-bottom:1px solid ${W2.line2};text-align:right">Reached · ${fmt(po.n)}</span>
+        <span style="font-size:12px;font-weight:600;color:${W2.brkD};padding-bottom:6px;border-bottom:1px solid ${W2.line2};text-align:right">Behind · ${fmt(pu.n)}</span>
+        ${cmpRows.map(([l,f,s])=>`<span style="padding:8px 0;border-bottom:1px solid ${W2.line2};min-width:0"><span style="display:block;font-weight:500">${l}</span><span style="display:block;font-size:12px;color:${W2.ink2}">${s}</span></span>
+          <span style="padding:8px 0;border-bottom:1px solid ${W2.line2};text-align:right;${w2num(mob?15:16,600)}">${f(po)}</span>
+          <span style="padding:8px 0;border-bottom:1px solid ${W2.line2};text-align:right;${w2num(mob?15:16,600)}">${f(pu)}</span>`).join('')}</div></div>`, gap);
+  // ---- distance bands (multi-select)
+  const segs = W.bands.map(([k,l,c])=>({k,l,c,n:W.counts[k]})).filter(s=>s.n>0);
   const bandBar = `<div role="img" aria-label="${E(segs.map(s=>`${s.l}: ${s.n}`).join(', '))}" style="display:flex;gap:2px;height:${mob?22:24}px;border-radius:6px;overflow:hidden;margin-top:12px">${segs.map(s=>{ const p=100*s.n/N;
-      return `<span style="flex:${s.n} 0 0;min-width:3px;background:${s.c};display:flex;align-items:center;justify-content:center;color:${s.k==='b1'?W2.ink:'#fff'};font-size:12px;font-weight:600;font-variant-numeric:tabular-nums">${p>=8?fmt(s.n):''}</span>`; }).join('')}</div>`;
-  const chip=(k,t,on,sw)=>`<button data-act="w250show" data-k="${k}" aria-pressed="${on}" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;min-height:${mob?44:34}px;padding:0 ${mob?14:12}px;border-radius:999px;border:1px solid ${on?W2.ink:W2.line};background:${on?W2.ink:'#fff'};color:${on?'#fff':W2.ink};font:500 ${mob?14:13.5}px ${W2.font};cursor:pointer;white-space:nowrap">${sw?`<span aria-hidden="true" style="width:9px;height:9px;border-radius:2px;background:${sw}"></span>`:''}${t}<span style="font-variant-numeric:tabular-nums;color:${on?'#fff':W2.ink2};font-weight:600">${fmt(W.counts[k])}</span></button>`;
-  const col = k => (W250_BANDS.find(([x])=>x===k)||[])[2];
-  const chips = `<div role="group" aria-label="Show" style="display:flex;gap:6px;margin-top:12px;${mob?'overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px':'flex-wrap:wrap'}">${W250_SHOW.map(([k,t])=>chip(k,t,W.show===k,col(k))).join('')}</div>`;
-  const bandCard = B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
-      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?15:16}px;font-weight:600">How far each machine has got</span><span style="font-size:13px;color:${W2.ink2}">season IoT acres to ${wpDate(D)} · ${mob?'tap':'pick'} a band to list its machines</span></div>
-      ${bandBar}${chips}</div>`, `margin-top:${mob?12:16}px`);
-  // Running count of machines past 250, one bar a day.
+      return `<span style="flex:${s.n} 0 0;min-width:3px;background:${s.c};display:flex;align-items:center;justify-content:center;color:${s.k==='low'?W2.ink:'#fff'};font-size:12px;font-weight:600;font-variant-numeric:tabular-nums">${p>=8?fmt(s.n):''}</span>`; }).join('')}</div>`;
+  const bandCard = B.cardBox(`<div style="padding:${pad}">${ttl('How far each machine has got', `season IoT acres to ${wpDate(D)} · ${mob?'tap':'pick'} one or more bands to list their machines`)}
+      ${bandBar}${pillRow(pill('w250band','','All',!W.bSel.length,'',N)+W.bands.map(([k,l,c])=>pill('w250band',k,l==='No IoT acres'?l:l+' ac',W.bSel.includes(k),c,W.counts[k])).join(''))}</div>`, gap);
+  // ---- running count past the target, one bar a day
   const n=A.days.length, mx=Math.max(...W.run,1), every=n<=10?1:Math.ceil(n/(mob?6:12)), showVal=n<=(mob?12:31);
-  const chart = !n ? '' : B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
-      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?15:16}px;font-weight:600">Machines past ${W250} ac, day by day</span><span style="font-size:13px;color:${W2.ink2}">${wpDate(A.days[0])} – ${wpDate(A.days[n-1])} · a machine counts from the day it crossed</span></div>
-      <div role="img" aria-label="${E('Machines past 250 IoT acres: '+A.days.map((d,i)=>wpDate(d)+' '+W.run[i]).join(', '))}" style="display:flex;align-items:flex-end;gap:${n>30?2:mob?3:6}px;height:${mob?124:140}px;margin-top:12px;padding-top:18px">
+  const chart = !n ? '' : B.cardBox(`<div style="padding:${pad}">${ttl(`Machines past ${fmt(T)} ac, day by day`, `${wpDate(A.days[0])} – ${wpDate(A.days[n-1])} · a machine counts from the day it reached it`)}
+      <div role="img" aria-label="${E(`Machines past ${T} IoT acres: `+A.days.map((d,i)=>wpDate(d)+' '+W.run[i]).join(', '))}" style="display:flex;align-items:flex-end;gap:${n>30?2:mob?3:6}px;height:${mob?124:140}px;margin-top:12px;padding-top:18px">
         ${W.run.map((v,i)=>`<div style="flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center">
           ${showVal&&v>0&&(!mob||i%2===(n-1)%2)?`<span style="font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;color:${i===n-1?W2.actD:W2.ink2};margin-bottom:3px">${fmt(v)}</span>`:''}
           <span style="display:block;width:100%;max-width:40px;height:${v>0?Math.max(3,Math.round(80*v/mx)):0}%;min-height:${v>0?3:1}px;border-radius:4px 4px 0 0;background:${v>0?(i===n-1?W2.act:'#9BCBAA'):'#E1E5EA'}"></span></div>`).join('')}
       </div>
       <div style="display:flex;gap:${n>30?2:mob?3:6}px;border-top:1px solid ${W2.line};padding-top:6px">${A.days.map((d,i)=>`<span style="flex:1;min-width:0;text-align:center;font-size:12px;color:${i===n-1?W2.ink:W2.ink2};font-weight:${i===n-1?600:400};white-space:nowrap;overflow:visible">${(i%every===0&&(n-1-i)>=every/2)||i===n-1?wpDate(d):''}</span>`).join('')}</div>
-    </div>`, `margin-top:${mob?12:16}px`);
-  // By territory / AM.
+    </div>`, gap);
+  // ---- where they are: territory / AM, multi-select (page-local; the shared filters still narrow first)
   const gTog = `<div style="${w2segBox(mob)}">${[['terr','By territory'],['am','By AM']].map(([k,t])=>`<button data-act="w250by" data-k="${k}" aria-pressed="${W.by===k}" style="${w2seg(W.by===k,mob)}">${t}</button>`).join('')}</div>`;
-  const gPicked = g => W.by==='am' ? (A.am && A.am===g.name) : (A.terr && A.terr===g.name);
-  const gAct = g => g.none ? '' : ` data-act="w250grp" data-k="${E(g.name)}"`;
+  const gSortTog = `<div style="${w2segBox(mob)}">${[['over','Most reached'],['gap','Most acres to go'],['util','Fewest running days']].map(([k,t])=>`<button data-act="w250gsort" data-k="${k}" aria-pressed="${W.gs===k}" style="${w2seg(W.gs===k,mob)}">${t}</button>`).join('')}</div>`;
+  const gAct = g => g.none ? '' : ` data-act="w250grp" data-k="${E(g.key)}" aria-pressed="${g.picked}"`;
   const gList = S.w250GAll ? W.groups : W.groups.slice(0, mob?8:12);
-  const bandsMini = g => W250_BANDS.slice(1).map(([k,l])=>`<span style="display:flex;flex-direction:column;gap:1px"><span style="${w2num(15,600)}">${fmt(g.b[k])}</span><span style="font-size:12px;color:${W2.ink2}">${l==='No IoT acres'?'none':l}</span></span>`).join('');
+  const box = on => `<span aria-hidden="true" style="width:18px;height:18px;border-radius:5px;border:1.5px solid ${on?W2.ink:'#B9BEC4'};background:${on?W2.ink:'#fff'};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">${on?'✓':''}</span>`;
+  const gBands = g => `<span role="img" aria-label="${E(W.bands.map(([k,l])=>`${l} ${g.b[k]}`).join(', '))}" style="display:flex;gap:1px;height:8px;border-radius:4px;overflow:hidden;background:${W2.line2}">${W.bands.filter(([k])=>g.b[k]).map(([k,,c])=>`<span style="flex:${g.b[k]} 0 0;background:${c}"></span>`).join('')}</span>`;
+  const topC = g => g.top ? `<span style="display:inline-flex;align-items:center;gap:6px;min-width:0"><span aria-hidden="true" style="width:9px;height:9px;border-radius:2px;background:${w250CauseOf(g.top.k)[2]};flex-shrink:0"></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w250CauseOf(g.top.k)[1]}</span><span style="color:${W2.ink2};font-variant-numeric:tabular-nums">${fmt(g.top.n)}</span></span>` : `<span style="color:${W2.ink3}">—</span>`;
   let gBody;
-  if(mob) gBody = `<div style="padding:4px 12px 12px;display:flex;flex-direction:column;gap:8px">${gList.map(g=>`<${g.none?'div':'button'}${gAct(g)} style="display:flex;flex-direction:column;gap:8px;width:100%;padding:12px 14px;border:1px solid ${gPicked(g)?W2.ink:W2.line2};border-radius:12px;background:#fff;text-align:left;${g.none?'':'cursor:pointer;'}font-family:inherit;color:${W2.ink}">
-      <span style="display:flex;align-items:baseline;gap:8px;width:100%"><span style="font-size:14.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${g.none?`;color:${W2.ink2}`:''}">${E(g.name)}</span><span style="flex:1"></span><span style="font-variant-numeric:tabular-nums;font-size:14px;white-space:nowrap"><b style="font-weight:600;color:${W2.actD}">${fmt(g.b.over)}</b><span style="color:${W2.ink2}"> of ${fmt(g.n)} · ${pctF(g.pct)}</span></span></span>
-      ${meter(g.pct,'100%',W2.act)}
-      <span style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;width:100%">${bandsMini(g)}</span></${g.none?'div':'button'}>`).join('')}</div>`;
+  if(mob) gBody = `<div style="padding:4px 12px 12px;display:flex;flex-direction:column;gap:8px">${gList.map(g=>`<${g.none?'div':'button'}${gAct(g)} style="display:flex;flex-direction:column;gap:8px;width:100%;padding:12px 14px;border:1px solid ${g.picked?W2.ink:W2.line2};border-radius:12px;background:${g.picked?W2.head:'#fff'};text-align:left;${g.none?'':'cursor:pointer;'}font-family:inherit;color:${W2.ink}">
+      <span style="display:flex;align-items:center;gap:8px;width:100%">${g.none?'':box(g.picked)}<span style="font-size:14.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${g.none?`;color:${W2.ink2}`:''}">${E(g.name)}</span><span style="flex:1"></span><span style="font-variant-numeric:tabular-nums;font-size:14px;white-space:nowrap"><b style="font-weight:600;color:${W2.actD}">${fmt(g.b.over)}</b><span style="color:${W2.ink2}"> of ${fmt(g.n)} · ${pctF(g.pct)}</span></span></span>
+      ${gBands(g)}
+      <span style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:100%">
+        <span style="display:flex;flex-direction:column;gap:1px"><span style="${w2num(15,600)}">${acF(Math.round(g.go))}</span><span style="font-size:12px;color:${W2.ink2}">ac to go</span></span>
+        <span style="display:flex;flex-direction:column;gap:1px"><span style="${w2num(15,600)}">${pctF(g.util)}</span><span style="font-size:12px;color:${W2.ink2}">running days</span></span>
+        <span style="display:flex;flex-direction:column;gap:1px"><span style="${w2num(15,600)}">${g.ran?acF(Math.round(g.pace*10)/10):'—'}</span><span style="font-size:12px;color:${W2.ink2}">ac a running day</span></span></span>
+      <span style="font-size:12.5px;width:100%">${g.top?'Main cause: ':''}${topC(g)}</span></${g.none?'div':'button'}>`).join('')}</div>`;
   else {
-    const cols='minmax(180px,1.6fr) 80px minmax(170px,1.3fr) 76px 76px 76px 76px 90px';
-    gBody = `<div style="overflow-x:auto"><div style="min-width:900px">
-      <div style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2}"><span>${W.by==='am'?'Area manager':'Territory'}</span><span style="text-align:right">Machines</span><span>Crossed ${W250} ac</span><span style="text-align:right">200–249</span><span style="text-align:right">100–199</span><span style="text-align:right">1–99</span><span style="text-align:right">No IoT ac</span><span style="text-align:right">IoT ac each</span></div>
-      ${gList.map(g=>`<${g.none?'div':'button'}${gAct(g)} style="display:grid;grid-template-columns:${cols};gap:12px;width:100%;padding:11px 22px;border:none;border-bottom:1px solid ${W2.line2};background:${gPicked(g)?W2.head:'#fff'};text-align:left;${g.none?'':'cursor:pointer;'}font:14px ${W2.font};color:${W2.ink};align-items:center"${g.none?'':` onmouseover="this.style.background='${W2.head}'" onmouseout="this.style.background='${gPicked(g)?W2.head:'#fff'}'"`}>
-        <span style="min-width:0;display:flex;flex-direction:column;gap:2px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500${g.none?`;color:${W2.ink2}`:''}">${gPicked(g)?'● ':''}${E(g.name)}</span>${g.mob||(!A.st&&g.st)?`<span style="font-size:12.5px;color:${W2.ink2}">${[!A.st&&g.st?STATE_NAMES[g.st]||g.st:'', g.mob?`<span style="font-family:'IBM Plex Mono'">${E(g.mob)}</span>`:''].filter(Boolean).join(' · ')}</span>`:''}</span>
+    const cols='minmax(190px,1.5fr) 70px minmax(150px,1.1fr) minmax(110px,0.9fr) 92px 84px 80px minmax(170px,1.3fr)';
+    gBody = `<div style="overflow-x:auto"><div style="min-width:1000px">
+      <div style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2}"><span>${W.by==='am'?'Area manager':'Territory'}</span><span style="text-align:right">Machines</span><span>Reached ${fmt(T)} ac</span><span>How far</span><span style="text-align:right">Ac to go</span><span style="text-align:right">Running days</span><span style="text-align:right">Ac a run day</span><span>Main cause (behind)</span></div>
+      ${gList.map(g=>`<${g.none?'div':'button'}${gAct(g)} style="display:grid;grid-template-columns:${cols};gap:12px;width:100%;padding:11px 22px;border:none;border-bottom:1px solid ${W2.line2};background:${g.picked?W2.head:'#fff'};text-align:left;${g.none?'':'cursor:pointer;'}font:14px ${W2.font};color:${W2.ink};align-items:center"${g.none?'':` onmouseover="this.style.background='${W2.head}'" onmouseout="this.style.background='${g.picked?W2.head:'#fff'}'"`}>
+        <span style="min-width:0;display:flex;align-items:center;gap:10px">${g.none?'<span style="width:18px;flex-shrink:0"></span>':box(g.picked)}<span style="min-width:0;display:flex;flex-direction:column;gap:2px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500${g.none?`;color:${W2.ink2}`:''}">${E(g.name)}</span>${g.mob||(!A.st&&g.st)?`<span style="font-size:12.5px;color:${W2.ink2}">${[!A.st&&g.st?STATE_NAMES[g.st]||g.st:'', g.mob?`<span style="font-family:'IBM Plex Mono'">${E(g.mob)}</span>`:''].filter(Boolean).join(' · ')}</span>`:''}</span></span>
         <span style="text-align:right;font-variant-numeric:tabular-nums">${fmt(g.n)}</span>
         <span style="display:flex;flex-direction:column;gap:4px"><span style="font-variant-numeric:tabular-nums"><b style="font-weight:600;color:${W2.actD}">${fmt(g.b.over)}</b><span style="color:${W2.ink2}"> · ${pctF(g.pct)}</span></span>${meter(g.pct,'100%',W2.act)}</span>
-        ${['b200','b100','b1','b0'].map(k=>`<span style="text-align:right;font-variant-numeric:tabular-nums;color:${g.b[k]?W2.ink:W2.ink3}">${fmt(g.b[k])}</span>`).join('')}
-        <span style="text-align:right;font-variant-numeric:tabular-nums">${acF(Math.round(g.avg))}</span></${g.none?'div':'button'}>`).join('')}
+        ${gBands(g)}
+        <span style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${acF(Math.round(g.go))}</span>
+        <span style="text-align:right;font-variant-numeric:tabular-nums">${pctF(g.util)}</span>
+        <span style="text-align:right;font-variant-numeric:tabular-nums">${g.ran?acF(Math.round(g.pace*10)/10):'—'}</span>
+        <span style="min-width:0;font-size:13.5px">${topC(g)}</span></${g.none?'div':'button'}>`).join('')}
     </div></div>`;
   }
   const gMore = W.groups.length>gList.length || S.w250GAll && W.groups.length>(mob?8:12) ? `<button data-act="w250gall" style="display:block;width:100%;min-height:${mob?48:42}px;border:none;border-top:1px solid ${W2.line2};background:${W2.head};font:600 13.5px ${W2.font};color:${W2.ink};cursor:pointer">${S.w250GAll?'Show fewer':`Show all ${fmt(W.groups.length)}`}</button>` : '';
+  const pickNames = W.groups.filter(g=>g.picked).map(g=>g.name);
   const gCard = B.cardBox(`<div style="padding:${mob?'16px 16px 10px':'18px 22px'};display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;${mob?'':`border-bottom:1px solid ${W2.line2}`}">
-      <div style="flex:1;min-width:${mob?'100%':'260px'}"><div style="font-size:${mob?15:16}px;font-weight:600">Where they are</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">Most crossed first · ${mob?'tap':'click'} a ${W.by==='am'?'manager':'territory'} to filter the page${(W.by==='am'?A.am:A.terr)?', again to clear':''}</div></div>${gTog}</div>${gBody}${gMore}`, `overflow:hidden;margin-top:${mob?12:16}px`);
-  // The machines.
+      <div style="flex:1;min-width:${mob?'100%':'260px'}"><div style="font-size:${mob?15:16}px;font-weight:600">Where they are</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${pickNames.length?`<b style="color:${W2.ink};font-weight:600">${fmt(pickNames.length)} picked</b> — the page shows only ${pickNames.length===1?'it':'these'} · `:''}${mob?'tap':'tick'} one or more ${W.by==='am'?'managers':'territories'} to narrow the page</div></div>${gTog}${gSortTog}
+      ${pickNames.length?`<button data-act="w250grpclr" style="min-height:${mob?44:34}px;padding:0 12px;border:1px solid ${W2.line};border-radius:${mob?12:10}px;background:#fff;color:${W2.ink};font:500 13.5px ${W2.font};cursor:pointer">Clear ${fmt(pickNames.length)} picked</button>`:''}</div>${gBody}${gMore}`, `overflow:hidden;${gap}`);
+  // ---- the machines
   const shown=W.list.slice(0,S.w250Limit);
+  const col = k => (W.bands.find(([x])=>x===k)||[])[2];
   const op = m => m.opName||m.opNum ? E(m.opName||m.opNum) : `<span style="color:${W2.brkD}">✕ No operator</span>`;
   const ping = m => !m.lastPing ? `<span style="color:${W2.brkD}">no ping</span>` : `<span style="color:${wmStale(m)?W2.idleD:W2.ink2}">ping ${wpDate(m.lastPing)}</span>`;
-  const bar250 = i => `<span style="display:block;height:6px;border-radius:3px;background:${W2.line2};overflow:hidden"><span style="display:block;height:100%;width:${Math.min(100,100*i.v/W250)}%;min-width:${i.v>0?3:0}px;background:${col(i.band)};border-radius:3px"></span></span>`;
-  const status = i => i.band==='over' ? `<span style="color:${W2.actD};font-weight:600;white-space:nowrap">✓ Crossed ${wpDate(i.cross)}</span>` : `<span style="color:${i.whyCol};font-weight:600;white-space:nowrap">${i.ran?'○':'!'} ${E(i.why)}</span>`;
-  const paceTxt = i => i.ran ? `${acF(Math.round(i.pace*10)/10)} ac a day ran` : 'no running day yet';
-  const goTxt = i => i.band==='over' ? (i.taken!=null?`took ${fmt(i.taken)} day${i.taken===1?'':'s'} (${fmt(i.ranTo)} running)`:'') : `${acF(Math.round(i.go*10)/10)} ac to go${i.need!=null?` · ≈${fmt(i.need)} running day${i.need===1?'':'s'} at this pace`:''}`;
-  const listHead = `<div style="padding:${mob?'16px 16px 6px':'18px 22px'};${mob?'':`border-bottom:1px solid ${W2.line2}`}"><div style="font-size:${mob?15:16}px;font-weight:600">${W.show==='all'?'Every machine':E(w250ShowLbl(W.show))} · ${fmt(W.list.length)}</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${mob?'Tap':'Click'} a machine for its details and who to call</div></div>`;
+  const barT = i => `<span style="display:block;height:6px;border-radius:3px;background:${W2.line2};overflow:hidden"><span style="display:block;height:100%;width:${Math.min(100,100*i.v/T)}%;min-width:${i.v>0?3:0}px;background:${col(i.band)};border-radius:3px"></span></span>`;
+  const status = (i,c) => i.band==='over' ? `<span style="color:${W2.actD};font-weight:600;white-space:nowrap">✓ Reached ${wpDate(i.cross)}</span>`
+    : `<span style="display:inline-flex;align-items:center;gap:6px;font-weight:600;white-space:nowrap;min-width:0"><span aria-hidden="true" style="width:9px;height:9px;border-radius:2px;background:${w250CauseOf(c.cause)[2]};flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis">${w250CauseOf(c.cause)[1]}${c.sub?` · <span style="font-weight:500">${E(c.sub)}</span>`:''}</span></span>`;
+  const goTxt = (x) => { const i=x.i, c=x.c;
+    if(i.band==='over') return i.taken!=null?`took ${fmt(i.taken)} day${i.taken===1?'':'s'} (${fmt(i.ranTo)} running)`:'';
+    const pjT = x.pj ? ` · by ${wpDate(W.dl)}: <b style="color:${pjCol[x.pj.st]};font-weight:600">${x.pj.st==='track'?'on track':x.pj.st==='risk'?'at risk':'off track'}</b>, needs ${acF(Math.round(x.pj.need*10)/10)} ac a day` : '';
+    return `${acF(Math.round(i.go*10)/10)} ac to go${i.need!=null?` · ≈${fmt(i.need)} running day${i.need===1?'':'s'} at its pace`:''}${W.P!=null&&c.lost>=1?` · ≈${acF(Math.round(c.lost))} ac lost`:''}${pjT}`; };
+  const fTxt = [W.bSel.map(k=>(W.bands.find(([x])=>x===k)||[])[1]).join(' + '), W.cSel.map(k=>w250CauseOf(k)[1]).join(' + ')].filter(Boolean).join(' · ');
+  const listHead = `<div style="padding:${mob?'16px 16px 6px':'18px 22px'};${mob?'':`border-bottom:1px solid ${W2.line2}`};display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div style="flex:1;min-width:${mob?'100%':'240px'}"><div style="font-size:${mob?15:16}px;font-weight:600">${fTxt?E(fTxt):'Every machine'} · ${fmt(W.list.length)}</div><div style="font-size:13px;color:${W2.ink2};margin-top:2px">${mob?'Tap':'Click'} a machine for its details and who to call</div></div>${W.filtered?B.ghost('w250fclr','Clear band and cause picks'):''}</div>`;
   let body;
-  if(!W.list.length) body = `<div style="padding:36px 18px;text-align:center;color:${W2.ink2};font-size:14px">No machine in view is in “${E(w250ShowLbl(W.show))}”.<div style="margin-top:12px"><button data-act="w250show" data-k="all" style="height:${mob?48:38}px;padding:0 14px;border:1px solid ${W2.line};border-radius:${mob?12:10}px;background:#fff;color:${W2.ink};font:500 ${mob?15:14}px ${W2.font};cursor:pointer">Show every machine</button></div></div>`;
-  else if(mob) body = `<div style="padding:4px 12px 12px;display:flex;flex-direction:column;gap:8px">${shown.map(({m,i})=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;flex-direction:column;gap:6px;width:100%;padding:12px 14px;border:1px solid ${W2.line2};border-radius:12px;background:#fff;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
+  if(!W.list.length) body = `<div style="padding:36px 18px;text-align:center;color:${W2.ink2};font-size:14px">No machine in view matches these picks.<div style="margin-top:12px">${B.ghost('w250fclr','Show every machine')}</div></div>`;
+  else if(mob) body = `<div style="padding:4px 12px 12px;display:flex;flex-direction:column;gap:8px">${shown.map(x=>{ const {m,i,c}=x; return `<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;flex-direction:column;gap:6px;width:100%;padding:12px 14px;border:1px solid ${W2.line2};border-radius:12px;background:#fff;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
       <span style="display:flex;align-items:center;gap:6px;width:100%"><span style="font:600 15px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${orgChip(m.org)}<span style="flex:1"></span><span style="${w2num(18,600)}">${w250AcF(i.v)}${w2unit('ac',12)}</span></span>
-      <span style="display:block;width:100%">${bar250(i)}</span>
-      <span style="font-size:13.5px">${status(i)}</span>
+      <span style="display:block;width:100%">${barT(i)}</span>
+      <span style="font-size:13.5px;max-width:100%;overflow:hidden">${status(i,c)}</span>
       <span style="font-size:13px;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(m.territory)} · ${E(m.party)}</span>
       <span style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:100%">
         <span style="display:flex;flex-direction:column;gap:1px"><span style="${w2num(15,600)}">${fmt(i.ran)}<span style="font-weight:400;color:${W2.ink2}"> / ${fmt(i.poss)}</span></span><span style="font-size:12px;color:${W2.ink2}">days ran</span></span>
         <span style="display:flex;flex-direction:column;gap:1px"><span style="${w2num(15,600,i.brkD?W2.brkD:'')}">${fmt(i.brkD)}</span><span style="font-size:12px;color:${W2.ink2}">breakdown days</span></span>
         <span style="display:flex;flex-direction:column;gap:1px"><span style="${w2num(15,600)}">${i.ran?acF(Math.round(i.pace*10)/10):'—'}</span><span style="font-size:12px;color:${W2.ink2}">ac a day ran</span></span></span>
-      <span style="font-size:12.5px;color:${W2.ink2};line-height:1.4">${goTxt(i)}</span>
-      <span style="font-size:12.5px;color:${W2.ink2}">${op(m)} · ${ping(m)}</span></button>`).join('')}</div>`;
+      <span style="font-size:12.5px;color:${W2.ink2};line-height:1.4">${goTxt(x)}</span>
+      <span style="font-size:12.5px;color:${W2.ink2}">${op(m)} · ${ping(m)}</span></button>`; }).join('')}</div>`;
   else {
-    const cols='124px minmax(140px,1.3fr) minmax(110px,1fr) minmax(110px,1fr) 70px 70px 62px minmax(170px,1.4fr)';
+    const cols='124px minmax(140px,1.2fr) minmax(110px,1fr) minmax(110px,1fr) 70px 70px 62px minmax(220px,1.8fr)';
     const th=B.th('w250sort', W.sort);
-    body = `<div style="overflow-x:auto"><div style="min-width:960px">
+    body = `<div style="overflow-x:auto"><div style="min-width:1000px">
       <div style="display:grid;grid-template-columns:${cols};gap:10px;padding:10px 22px;background:${W2.head};border-bottom:1px solid ${W2.line2};font-size:12px;font-weight:600;color:${W2.ink2};align-items:end">
-        ${th('mc','Machine')}${th('','Territory · retailer')}${th('','Operator · last ping')}${th('ac','Season IoT acres')}<span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">${th('ran','Days ran',1)}<span style="font-weight:400">of possible</span></span>${th('brk','Breakdown days',1)}${th('pace','Ac a day ran',1)}<span style="display:flex;flex-direction:column;gap:2px">${th('cross','Crossed on · or why behind')}<span style="display:flex;gap:10px">${th('go','to go')}${th('need','days needed')}</span></span></div>
-      ${shown.map(({m,i})=>`<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:grid;grid-template-columns:${cols};gap:10px;width:100%;padding:11px 22px;border:none;border-bottom:1px solid ${W2.line2};background:#fff;text-align:left;cursor:pointer;font:14px ${W2.font};color:${W2.ink};align-items:center" onmouseover="this.style.background='${W2.head}'" onmouseout="this.style.background='#fff'">
+        ${th('mc','Machine')}${th('','Territory · retailer')}${th('','Operator · last ping')}${th('ac','Season IoT acres')}<span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">${th('ran','Days ran',1)}<span style="font-weight:400">of possible</span></span>${th('brk','Breakdown days',1)}${th('pace','Ac a day ran',1)}<span style="display:flex;flex-direction:column;gap:2px">${th('cross','Reached on · or main cause')}<span style="display:flex;gap:10px">${th('go','to go')}${th('need','days needed')}${W.P!=null?th('lost','acres lost'):''}</span></span></div>
+      ${shown.map(x=>{ const {m,i,c}=x; return `<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:grid;grid-template-columns:${cols};gap:10px;width:100%;padding:11px 22px;border:none;border-bottom:1px solid ${W2.line2};background:#fff;text-align:left;cursor:pointer;font:14px ${W2.font};color:${W2.ink};align-items:center" onmouseover="this.style.background='${W2.head}'" onmouseout="this.style.background='#fff'">
         <span style="display:flex;align-items:center;gap:6px;min-width:0"><span style="font:600 13.5px 'IBM Plex Mono',monospace;text-decoration:underline;text-decoration-color:#C9CFD6;text-underline-offset:3px">${E(m.mc)}</span>${orgChip(m.org)}</span>
         <span style="min-width:0;display:flex;flex-direction:column;gap:2px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500">${E(m.territory)}</span><span style="font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.party)}${!A.st?' · '+E(STATE_NAMES[m.st]||m.st||''):''}</span></span>
         <span style="min-width:0;display:flex;flex-direction:column;gap:2px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${op(m)}</span><span style="font-size:12.5px">${ping(m)}</span></span>
-        <span style="min-width:0;display:flex;flex-direction:column;gap:4px"><span style="${w2num(15,600)}">${w250AcF(i.v)}${w2unit('ac',12)}</span>${bar250(i)}</span>
+        <span style="min-width:0;display:flex;flex-direction:column;gap:4px"><span style="${w2num(15,600)}">${w250AcF(i.v)}${w2unit('ac',12)}</span>${barT(i)}</span>
         <span style="text-align:right;font-variant-numeric:tabular-nums">${fmt(i.ran)}<span style="color:${W2.ink2}"> / ${fmt(i.poss)}</span></span>
         <span style="text-align:right;font-variant-numeric:tabular-nums;${i.brkD?`color:${W2.brkD};font-weight:600`:`color:${W2.ink2}`}">${fmt(i.brkD)}</span>
         <span style="text-align:right;font-variant-numeric:tabular-nums">${i.ran?acF(Math.round(i.pace*10)/10):'—'}</span>
-        <span style="min-width:0;display:flex;flex-direction:column;gap:2px">${status(i)}<span style="font-size:12.5px;color:${W2.ink2}">${goTxt(i)}</span></span></button>`).join('')}
+        <span style="min-width:0;display:flex;flex-direction:column;gap:2px">${status(i,c)}<span style="font-size:12.5px;color:${W2.ink2};line-height:1.35">${goTxt(x)}</span></span></button>`; }).join('')}
     </div></div>`;
   }
   const more = W.list.length>shown.length ? `<button data-act="w250more" style="display:block;width:100%;min-height:${mob?48:42}px;border:none;border-top:1px solid ${W2.line2};background:${W2.head};font:600 13.5px ${W2.font};color:${W2.ink};cursor:pointer">Show ${fmt(Math.min(W250_PAGE,W.list.length-shown.length))} more · ${fmt(shown.length)} of ${fmt(W.list.length)} shown</button>` : '';
-  const listCard = B.cardBox(listHead+body+more, `overflow:hidden;margin-top:${mob?12:16}px`);
-  const note = `<div style="font-size:12.5px;color:${W2.ink2};margin-top:10px;line-height:1.5">All acres here are IoT acres, season to ${wpDate(D)}. A running day = a day with IoT acres; days possible run from ${first?wpDate(first):'the first sheet date'}${A.org==='ALL3'?' (Bayer from its own start)':''} to ${wpDate(D)}; breakdown days = days a ticket was open. Days needed = acres to go ÷ acres a day ran. Why behind: never ran → its Didn’t run reason; idle more days than it ran → idle most days (mostly in breakdown when tickets cover half of those); otherwise it runs, but covers few acres a day. Operator and last ping are today’s.</div>`;
-  return controls + head + strip + bandCard + chart + gCard + listCard + note + (mob?`<div style="margin-top:10px">${B.stamp('wpretry')}</div>`:'');
+  const listCard = B.cardBox(listHead+body+more, `overflow:hidden;${gap}`);
+  const note = `<div style="font-size:12.5px;color:${W2.ink2};margin-top:10px;line-height:1.5">All acres here are IoT acres, season to ${wpDate(D)}; the target is yours to set and stays on this device. A running day = a day with IoT acres; days possible run from ${first?wpDate(first):'the first sheet date'}${A.org==='ALL3'?' (Bayer from its own start)':''} to ${wpDate(D)}; breakdown days = days a ticket was open. <b style="color:${W2.ink};font-weight:600">Main cause and acres lost are estimates:</b> each day a machine did not run is valued at the benchmark (the median acres a running day of the machines in view that ran 3+ days) and filed as a breakdown day (ticket open), a late-start day (before its first running day, beyond the fleet’s typical start${W.ML?` of day ${fmt(Math.round(W.ML)+1)}`:''}) or an idle day; a running day under the benchmark loses the difference. The largest loss is the cause; a machine running most days near the benchmark is “running well, needs time”. Days needed = acres to go ÷ its acres a day ran.${W.dl?` By-date projection: season acres + acres a possible day × days left.`:''} Operator and last ping are today’s.</div>`;
+  return controls + head + tgtBar + strip + projCard + whyCard + cmpCard + bandCard + chart + gCard + listCard + note + (mob?`<div style="margin-top:10px">${B.stamp('wpretry')}</div>`:'');
 }
 function w250CSV(){
-  const W=w250Agg(), D=W.D;
-  const head=['Machine','Company','State','Territory','Retailer','Village',`IoT acres to ${D}`,'Band',`Crossed ${W250} on`,'Days taken to cross','Running days to cross',`Acres to ${W250}`,'Days ran (IoT acres)','Days possible','Breakdown days','IoT acres per day ran','Running days needed at this pace','Why behind','First day with IoT acres','Last day with IoT acres','Last ping','Operator','Operator mobile','CI','CI mobile','AM','AM mobile','State head','State head mobile','FO','FO mobile','TM','TM mobile'];
-  const bandLbl=k=>(W250_BANDS.find(([x])=>x===k)||[])[1];
-  const lines=[head.join(',')].concat(W.list.map(({m,i})=>[m.mc, m.org, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.village, Math.round(i.v*10)/10, bandLbl(i.band), i.cross, i.taken==null?'':i.taken, i.cross?i.ranTo:'',
-    i.band==='over'?0:Math.round(i.go*10)/10, i.ran, i.poss, i.brkD, i.ran?Math.round(i.pace*10)/10:'', i.need==null?'':i.need, i.why, i.firstRun, i.last, m.lastPing,
-    m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob, m.retailer.foName, m.retailer.foMob, m.retailer.tmName, m.retailer.tmMob].map(csvCell).join(',')));
+  const W=w250Agg(), D=W.D, T=W.T;
+  const head=['Machine','Company','State','Territory','Retailer','Village',`IoT acres to ${D}`,'Target (IoT acres)','Band',`Reached ${T} on`,'Days taken to reach','Running days to reach',`Acres to ${T}`,'Main cause','Cause detail','Acres lost (est., at benchmark)','Lost to breakdown days','Lost to idle days','Lost to late start','Lost to slow running','Days ran (IoT acres)','Days possible','Breakdown days','Idle days (no ticket)','Days before first running day','IoT acres per day ran','Running days needed at this pace',
+    ...(W.dl?[`Projected by ${W.dl}`,'By-date status','Acres a day needed']:[]),'First day with IoT acres','Last day with IoT acres','Last ping','Operator','Operator mobile','CI','CI mobile','AM','AM mobile','State head','State head mobile','FO','FO mobile','TM','TM mobile'];
+  const bandLbl=k=>(W.bands.find(([x])=>x===k)||[])[1], r1=v=>Math.round(v*10)/10;
+  const lines=[head.join(',')].concat(W.list.map(({m,i,c,pj})=>[m.mc, m.org, STATE_NAMES[m.st]||m.st, m.territory, m.party, m.village, r1(i.v), T, bandLbl(i.band), i.cross, i.taken==null?'':i.taken, i.cross?i.ranTo:'',
+    i.band==='over'?0:r1(i.go), w250CauseOf(c.cause)[1], c.sub||'', W.P!=null&&c.cause?Math.round(c.lost):'', ...['brk','idle','late','slow'].map(k=>W.P!=null&&c.cause?Math.round(c.L[k]):''),
+    i.ran, i.poss, i.brkD, i.idleD, i.lateD, i.ran?r1(i.pace):'', i.need==null?'':i.need,
+    ...(W.dl?(pj?[r1(pj.p), pj.st==='track'?'On track':pj.st==='risk'?'At risk':'Off track', r1(pj.need)]:['', i.band==='over'?'Reached':'', '']):[]),
+    i.firstRun, i.last, m.lastPing, m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), m.shMob, m.retailer.foName, m.retailer.foMob, m.retailer.tmName, m.retailer.tmMob].map(csvCell).join(',')));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
-  a.download=`Wheat-North_250-acre-machines_${W.show}_${W.A.st||'HR-PB'}_${D||new Date().toISOString().slice(0,10)}.csv`;
+  a.download=`Wheat-North_${T}-acre-target_${W.A.st||'HR-PB'}_${D||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
 }
 /* ===================== Wheat North — Breakdowns (view key `wbd`, `#/breakdowns`, Dinesh 2026-11-11) =====================
@@ -13491,6 +13624,8 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='wpAmSel') setState({wpAm:e.target.value, wpCi:''});
   else if(e.target.id==='wpCiSel') setState({wpCi:e.target.value});
   else if(e.target.id==='wpSortSel') setState({wpSort:e.target.value});
+  else if(e.target.id==='w250Tgt'){ const t=Math.round(+e.target.value); if(t>=1&&t<=5000){ w250Save('mpoc_w250_tgt',t); setState({w250Tgt:t}); track('w250_target',{ t }); } else e.target.value=w250T(); }
+  else if(e.target.id==='w250Dl'){ const v=e.target.value||''; w250Save('mpoc_w250_dl',v); setState({w250Dl:v}); }
   else if(e.target.id==='wDayInput'){ const v=e.target.value; if(v) setState({wDay: v===WRET.ydayCal?'':v}); }   // shared by the four Wheat pages
   else if(e.target.id==='wtStSel'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({wtSt:w, wtTerr:'', wtTm:'', wtAm:''}); }
   else if(e.target.id==='wtTerrSel') setState({wtTerr:e.target.value, wtTm:'', wtAm:''});
@@ -13609,7 +13744,7 @@ app.addEventListener('click', e=>{
     case 'wsnreset': setState({wsnFrom:null, wsnTo:null}); break;
     case 'wsnretry': loadWsn(); break;
     case 'wcterr': { const t=el.dataset.t; setState(s=>({wtTerr:s.wtTerr===t?'':t, wtTm:'', wtAm:''})); break; }
-    case 'wtclear': setState({wmcQ:'', wmcShow:'all', w250Show:'all', wDay:'', wDep:'dep', wSh:'', wfoOn:'', wmShow:'all', wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
+    case 'wtclear': setState({wmcQ:'', wmcShow:'all', w250Bands:[], w250Why:[], w250Terrs:[], w250Ams:[], wDay:'', wDep:'dep', wSh:'', wfoOn:'', wmShow:'all', wtSt:gateCanSwitchStates()?'':state.wtSt, wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:''}); break;
     case 'wamexp': { const k=el.dataset.k; setState(s=>({wamOpen:{...s.wamOpen, [k]:!s.wamOpen[k]}})); break; }
     case 'wamsort': setState({wamSort:el.dataset.k}); break;
     case 'wfoexp': { const k=el.dataset.k; setState(s=>({wfoOpen:{...s.wfoOpen, [k]:!s.wfoOpen[k]}})); break; }
@@ -13625,12 +13760,19 @@ app.addEventListener('click', e=>{
     case 'wbdsort': setState({wbdSort:el.dataset.k}); break;
     case 'wmcsort': setState({wmcSort:el.dataset.k}); break;
     case 'w250sort': setState({w250Sort:el.dataset.k}); break;
-    case 'w250show': setState({w250Show:el.dataset.k}); break;
+    case 'w250band': { const k=el.dataset.k; setState(s=>({w250Bands: !k ? [] : s.w250Bands.includes(k) ? s.w250Bands.filter(x=>x!==k) : [...s.w250Bands,k]})); break; }
+    case 'w250why': { const k=el.dataset.k; setState(s=>({w250Why: s.w250Why.includes(k) ? s.w250Why.filter(x=>x!==k) : [...s.w250Why,k]})); break; }
+    case 'w250whyclr': setState({w250Why:[]}); break;
+    case 'w250fclr': setState({w250Bands:[], w250Why:[]}); break;
+    case 'w250gsort': setState({w250GSort:el.dataset.k}); break;
+    case 'w250grpclr': setState(s=>s.w250By==='am'?{w250Ams:[]}:{w250Terrs:[]}); break;
+    case 'w250tgt': { const t=+el.dataset.k; w250Save('mpoc_w250_tgt',t); setState({w250Tgt:t}); track('w250_target',{ t }); break; }
+    case 'w250dl': w250Save('mpoc_w250_dl',''); setState({w250Dl:''}); break;
     case 'w250by': setState({w250By:el.dataset.k, w250GAll:false}); break;
     case 'w250gall': setState(s=>({w250GAll:!s.w250GAll})); break;
     case 'w250more': setState(s=>({w250Limit:s.w250Limit+W250_PAGE})); break;
-    case 'w250grp': { const k=el.dataset.k; setState(s=>s.w250By==='am' ? {wtAm:s.wtAm===k?'':k} : {wtTerr:s.wtTerr===k?'':k, wtTm:'', wtAm:''}); break; }
-    case 'w250csv': w250CSV(); track('w250_csv',{ st:state.wtSt||'all', show:state.w250Show }); break;
+    case 'w250grp': { const k=el.dataset.k, f=state.w250By==='am'?'w250Ams':'w250Terrs'; setState(s=>({[f]: s[f].includes(k) ? s[f].filter(x=>x!==k) : [...s[f],k]})); break; }
+    case 'w250csv': w250CSV(); track('w250_csv',{ st:state.wtSt||'all', t:w250T() }); break;
     case 'wmcshow': setState({wmcShow:el.dataset.k}); break;
     case 'wmcsub': { const [g,b]=el.dataset.k.split(':'), [cg,cb,ca]=String(state.wmcShow||'').split(':'), cur=new Set(cg===g&&cb?cb.split(','):[]);
       cur.has(b)?cur.delete(b):cur.add(b); const ord=W_NR[g].map(([x])=>x).filter(x=>cur.has(x));

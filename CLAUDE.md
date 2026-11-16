@@ -1034,20 +1034,26 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   2026-11-04). Wheat admin only. The ten machines with the most season acres through the Day filter's day, on the shared wt*
   scope. A toggle ranks by acres sprayed (`wtAc`) or IoT acres (`iotAll`); days / per day follow the chosen measure. Admin's
   phone bar now has six pages, so it shows four + All pages.
-- **Page 6b, 250-acre machines** (`w250`, `#/250-acres`, rail "250 ac"; `w250Info` / `w250Agg` / `w250BodyHTML` / `w250CSV`,
-  Dinesh 2026-11-16). Wheat admin only. Which machines have crossed **250 IoT acres** (`IOT_acres`, season to the Day filter's day)
-  and which have not, on the shared wt* scope (search included). Head line + five tiles (Crossed · Crossed on the day · Close
-  200–249 · Not crossed with median to go · median days to cross) → **distance bands** (stacked bar + chips: All · Crossed · Not
-  crossed · 200–249 · 100–199 · 1–99 · No IoT acres; the chip filters the list AND the CSV, `state.w250Show`) → **machines past 250
-  day by day** (running count, a machine counted from the day it crossed) → **Where they are** by territory / AM (`w250By`; most
-  crossed % first; a row sets the shared Territory / AM filter, again to clear; first 12/8 then Show all) → the machine list (60 at a
-  time; sorts `W250_SORTS`). Per machine: crossed on + days taken (first IoT day → crossing, both included) + running days to cross;
-  or acres to go, days ran of DAYS POSSIBLE (season's first sheet date → the day; Bayer from its own start), breakdown days (a ticket
-  open at any point of the day), acres a day ran and running days needed at that pace, plus ONE reason: never ran → its Didn't run
-  (till now) bucket; idle more days than it ran → "Idle most days" ("Mostly in breakdown" when tickets cover half the idle days);
-  else "Runs, low acres a day". A machine under 250 never displays as 250 (`w250AcF`: 249.8, not 250). Checked 16 Nov (data to
-  15 Nov, deployed UPL + SWAL): 74 of 351 crossed, 5 on 15 Nov, 21 at 200–249, bands add to 351; desktop fits unscrolled at 1280
-  (list min-width 960), phone at 375 / 320 with no sideways scroll; a team login is bounced.
+- **Page 6b, Acre target** (`w250`, `#/250-acres` kept for bookmarks, rail "Acre target"; `w250Info` / `w250Cause` / `w250Agg` /
+  `w250BodyHTML` / `w250CSV`; built 2026-11-16 as "250-acre machines", made configurable the same day by Dinesh). Wheat admin only.
+  · **The target is an input** (`state.w250Tgt`, default 250, presets 150–400, kept on the DEVICE under `mpoc_w250_tgt` — a
+    per-reader convenience, never shared). Everything follows it: bands are SHARES of it (≥T · 80–99% · 40–79% · 1–39% · none, so
+    250 keeps its 200 / 100 cut-offs), reached-on dates, the day chart, the CSV. An optional **By date** (`w250Dl`, also per device)
+    adds on track / at risk / off track (season acres + acres a possible day × days left after the data day; ≥T / ≥80% / below).
+  · **Main cause per machine behind** (`w250Cause`, mutually exclusive, adds to "behind"): Never ran (→ its Didn't run reason) ·
+    Breakdown days · Idle days, no ticket (with no operator / no ping 2+ days) · Started late · Few acres a running day · Running
+    well, needs time. Each idle day is valued at the BENCHMARK (median acres a running day of machines in view that ran 3+ days)
+    and filed as breakdown (ticket open) / late start / idle; a running day under the benchmark loses the difference; the largest
+    loss is the cause. **Late start is measured against the fleet's median first running day**, not the season's first sheet
+    date — the first build used the sheet date and filed 59% of machines behind as "started late" (most began 1–2 weeks in);
+    measured against the median it is 13% (16 Nov). "Where the acres went" sums the four losses; estimates, and the page says so.
+  · Cards: target bar → 6 tiles (reached · reached on the day · close · behind · days to reach · benchmark) → by-date projection →
+    Why behind (multi-select, with a lever line each) + Where the acres went → Reached vs behind (running days %, acres a running
+    day, breakdown / idle days per machine, median first running day, operator mapped, pinged 2 days) → bands (multi-select) → day
+    chart → Where they are (territory / AM, **multi-select ticks, page-local** `w250Terrs` / `w250Ams` — the shared wt* filters still
+    narrow first; sort most reached / most acres to go / fewest running days; columns incl. main cause) → machine list (bands AND
+    causes filter it and the CSV). Checked 16 Nov (data to 15 Nov, deployed UPL + SWAL, T 250): 74 of 351 reached; causes
+    28 / 101 / 73 / 35 / 20 / 20 = 277 behind; T 180 by 30 Nov: 108 there + 63 / 20 / 160 = 351. Desktop 1440, phone 375 no sideways scroll.
 - **Page 7, Breakdowns** (`wbd`, `#/breakdowns`, rail "Breakdowns"; `wbdAgg` / `wbdBodyHTML` / `wbdCSV`, Dinesh 2026-11-11).
   Wheat admin only. Off the **breakdown TICKETS** in the same workbook's **"maintenance data"** tab (gid `965231799`,
   `PROJECTS.wheat.maint`; parsed by `wtkBuild` into `WTK`, logged as `[MP-Ops] wheat breakdown tickets → {…}`).
