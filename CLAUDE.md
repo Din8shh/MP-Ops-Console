@@ -1062,6 +1062,20 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     benchmark and days-to-reach tiles, "Where the acres went", the day-by-day chart, acres-lost column / sort / CSV columns; the
     CSV gained IoT acres + status on the day. Checked 16 Nov: Not reached 277 → didn't run yesterday 136 = maintenance 29 · no
     operator 24 · no ping 21 · other 62; maintenance 8+ days 4. Desktop 1440, phone 375 (no sideways scroll).
+- **Page 6c, 500 Drive** (`w500`, `#/500-drive`, rail "500 Drive", second in the rail and the phone bar; `w500Agg` / `w500BodyHTML` /
+  `w500CSV`, Dinesh 2026-11-17). Wheat admin only. The goal **500 IoT acres a machine by 5 Dec** (`W500`, fixed constants, not a
+  per-device setting), built as a page to DRIVE the CIs by, kept deliberately simple:
+  · ONE number: machines that will make 500 (reached + on pace), with its change since the day before. Pace = IoT acres ÷ days
+    since the season's first sheet date, kept up over the days after the data day to 5 Dec (the Acre target by-date rule);
+    80–99% projected = close call. "Can still make it" = would reach 500 running EVERY day from here at its own pace (3+ running
+    days) or the benchmark (median IoT acres a running day, machines that ran 3+ days), whichever is higher.
+  · THREE to-do lists of machines not at 500 that did not run on the day, one each, from `wNrDay`: **Fix it** (ticket open →
+    technician + CI call), **Staff it** (no operator → CI), **Use it** (operator, no ticket → operator + CI; no ping 2+ days is
+    tagged there). Close calls first, then on pace, then by acres a day needed. Each list states acres lost a day (n × benchmark).
+  · A proof line (machines off the day before that ran on the day, and their acres) and a CI scoreboard (keyed on the CI's
+    number; will make it n of N, change, ran, on the lists; sort Most on track / Most improved).
+  Checked 17 Nov (data to 16 Nov): 62 of 350 will make it (8 + 54), 26 close, 262 behind; lists 31 / 24 / 105; matches the Acre
+  target page set to 500 by 5 Dec. Desktop 1280, phone 375 / 320 with no sideways scroll.
 - **Days ran filter + sort on Acre target and Machines (Dinesh 2026-11-16).** Days ran = days with IoT acres, season to the Day
   filter's day (`wmcIotDays` / `w250Info().ran`, the same count). A multi-select row of bands `W_RUND` (0 · 1–5 · 6–10 · 11–15 ·
   16+ days, `wRunDBand`) with counts over what the page's other filters leave; separate picks per page (`state.wmcRunD` /
