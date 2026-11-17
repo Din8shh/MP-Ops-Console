@@ -834,7 +834,10 @@ function wretBuild(grid, opt){
     const t0=String(m._t0||'').toLowerCase();
     m.territory = !t0||WRET_TERR_BAD.has(t0) ? WRET_NO_TERR : WRET_TERR[t0] || titleCase(m._t0);
     if(m.territory===WRET_NO_TERR) log.noTerr.push(m.mc+(m.terrRaw?' ('+m.terrRaw+')':''));
-    for(const s of ['HR','PB']){ const a=aliasTerr(s,m._t0); if(distSt[String(a).toLowerCase()]===s){ m.st=s; break; } }
+    // Bayer's sheet writes "Mansa Territory" / "Jind District": the suffix is dropped for the district lookup only,
+    // or the machine falls through to its last ping (Mansa's lands nearer a Haryana district).
+    const tD=String(m._t0||'').replace(/\s+(territory|district)$/i,'');
+    for(const s of ['HR','PB']){ const a=aliasTerr(s,tD); if(distSt[String(a).toLowerCase()]===s){ m.st=s; break; } }
     if(!m.st && m.lat!=null){ let best='', d=150; ['HR','PB'].forEach(s=>Object.values(NORTH_GEO[s]).forEach(([lo,la])=>{ const k=km(m,{lat:la,lon:lo}); if(k<d){ d=k; best=s; } }));
       if(best){ m.st=best; log.byLocation++; } }
     if(!m.st){ const o=canonState(m._st); if(o==='HR'||o==='PB'){ m.st=o; log.bySheetState++; } }
@@ -954,9 +957,9 @@ function wDayFieldHTML(mob, lab){
       <div style="${w2segBox(mob)}${mob?';flex:1':''}"><button data-act="wday" aria-pressed="${y}" style="${w2seg(y,mob)}">Yesterday</button></div>
       <input id="wDayInput" type="date" min="${lo}" max="${WRET.ydayCal||''}" value="${WRET.yday||''}" aria-label="Pick a day" style="${w2sel(mob)};padding:0 10px${mob?';flex:1;min-width:0':''}${y?'':`;border-color:${W2.ink};font-weight:600`}"></div>`, true);
 }
-// Machines on BOTH sheets that stay UPL (Dinesh 2026-11-05: "consider these 91 machines for UPL" — his Punjab list
-// includes UPL_2782, which Bayer's sheet also carries). Remove an entry once the sheets agree.
-const WRET_UPL_KEEP = new Set(['UPL_2782']);
+// Machines on BOTH sheets that stay UPL. Empty since 2026-11-17: UPL_2782 was kept UPL on 2026-11-05 (Dinesh's UPL
+// Punjab list of 91), then moved to Bayer by him on 2026-11-17 so Bayer reads PB 45 / HR 30 as its sheet does.
+const WRET_UPL_KEEP = new Set([]);
 // A breakdown cell for display: an ID reads "ID 1234", the sheet's word ("Open breakdown") reads as itself.
 const wBrkLbl = v => v ? (/\d/.test(v) ? 'ID '+v : v) : '';
 // In a narrow column: the ID itself, or just "Open" (the column is headed Breakdown).

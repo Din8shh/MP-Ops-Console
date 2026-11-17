@@ -1024,7 +1024,10 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     the Scanned card (`sdays[6]`/`[7]`, `wtScan` keys `mo`/`mt`). Bayer alone: the day axis, per-day average and Top 10
     "Season" start on 1 Nov (`wtDays(from)`).
   · A machine on both sheets counts as **Bayer's only** (`skip` in `wretBuild`), except those in `WRET_UPL_KEEP`, which stay
-    on the Main sheet's side. UPL_2782 is there (Dinesh 2026-11-05: his UPL Punjab list of 91 includes it). On 5 Nov the
+    on the Main sheet's side. **The list is empty since 2026-11-17**: UPL_2782 was kept UPL on 2026-11-05 (his UPL Punjab list
+    of 91), then moved to Bayer by Dinesh on 2026-11-17, so Bayer reads 75 = PB 45 / HR 30, as its sheet does. Bayer's sheet
+    writes territories with a suffix ("Mansa Territory", "Jind District"); `wretBuild` drops it for the district lookup, or
+    the machine falls back to its last ping (Mansa's lands nearer Haryana, which read HR 31 / PB 44). On 5 Nov the
     overlap was UPL_2782 (UPL PB), UPL_2681 (UPL HR, Jind) and UPL_2729 (SWAL HR, Jind); UPL_2657 had left the Main sheet. Duplicate
     machine-days (UPL_2698, UPL_3048) are read once, so totals sit a few acres under Sheet4's (1,525 vs 1,532 ac to 4 Nov).
   · FO page: Bayer's sheet has no "FO onboarded", so FOs whose machines are all Bayer's are left out of the onboarding
@@ -1538,7 +1541,7 @@ Bayer's. It is `noindex`, registers no service worker, and the console never lin
   tiles, pill tab bar on the phone) — no code is shared with `index.html`, by the rule above.
 - **Source: Bayer's machine-DAY workbook** (`SPRAY.id` = `14dpDPQtB8GyQFMrjJa28LeTtgz5x5wr2dVv-WmoSH3M`, gid 0, the same sheet
   the Wheat admin's Bayer choice reads), as a plain CSV export (~1.4 MB). **Acres = `IOT_acres`** (as on the team logins),
-  read **from 1 Nov**, machine-days read once, `UPL_2782` left out (`SPRAY.notBayer`, = the console's `WRET_UPL_KEEP`).
+  read **from 1 Nov**, machine-days read once, `SPRAY.notBayer` (= the console's `WRET_UPL_KEEP`) empty since 2026-11-17, when UPL_2782 moved to Bayer: 75 machines.
   Logs `[Bayer] spray sheet → {…}`. Person fields, village and position are the latest row's.
 - **Two pages, `#/territories` (Territory summary) and `#/ccm-fo` (CCM · FO summary; the old `#/tm-fo` still opens it)**, the team logins' Territories and FOs
   pages; no Retailers (every retailer on the sheet is "0") and **no map, by request**. Each: Day filter (Yesterday / a date
