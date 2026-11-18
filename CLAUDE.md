@@ -1171,6 +1171,12 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     Machines page has "Didn't run y'day" and "Didn't run till now" chips with a second row of bucket chips (keys `idle:maint`,
     `never:repaired` …; `wmcKeyOk` / `wmcTestK`), a machine's status names its bucket (`wmcStatus`), and the CSV adds a
     "Did not run till" column. Live 11 Nov (deployed): 160 didn't run = 62 / 17 / 81; till now 54 = 12 / 23 / 3 / 16.
+- **Didn't run by territory / by CI (Dinesh 2026-11-18, Wheat ADMIN only)** — `wNrByHTML` / `wNrByAgg`, a card under the
+  strip on Territory / AM / Map (after the two Didn't run cards, before "Sprayed, no IoT acres"). The SAME machines as the
+  "Didn't run <day>" card (`wNrDay`), grouped by territory or by CI (`state.wnrBy`; CI keyed on the NUMBER, a machine with no
+  CI in one last row). Each row: n of N didn't run, % and the reason split; a CI row carries a Call button. A row opens its
+  machines inline (`state.wnrOpen`): reason (maintenance with days down), operator, territory / CI, last ran, season IoT ac;
+  a machine opens the shared panel. 10 rows then Show all (`wnrAll`). Checked 18 Nov: both groupings sum to 140 = the card.
 - **Didn't run: multi-select buckets + "No ping in 2+ days" (Dinesh 2026-11-12).** A fifth bucket, `ping` (`wPing2`: last ping 2+
   days before today, IST, or none — today's status whatever day is picked), sits between Operator not mapped and Other in BOTH
   breakups, so the strip cards and the Machines page still add up. The Machines page's bucket chips are multi-select
