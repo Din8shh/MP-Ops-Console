@@ -9327,42 +9327,61 @@ function wNrCardsHTML(A, mob){
     ${card('idle', `Didn’t run ${wDayWord()}`, `no IoT acres on ${day} · ${mob?'tap':'click'} a line to see the machines`)}
     ${card('never', `Didn’t run till ${wIsYday()?'now':day}`, `no IoT acres from ${wpDate(first)} to ${day}`)}</div>`;
 }
-/* Didn't run on the day — BY TERRITORY and BY CI (Dinesh 2026-11-18, Wheat ADMIN only). The same machines as the "Didn't
-   run <day>" card (wNrDay: no IoT acres on the Day filter's day), grouped one level down so it reads who / where to chase.
+/* Didn't run — BY TERRITORY and BY CI (Dinesh 2026-11-18, Wheat ADMIN only). The same machines as the two Didn't run cards,
+   grouped one level down so it reads who / where to chase. Sub filters as on the Machines page (y'day / till now → reasons →
+   maintenance age, `state.wnrF`), and a CSV of the summary under that filter (`wNrByCSV`).
    A toggle picks the grouping (`state.wnrBy` = terr | ci); a row opens its machines inline (`state.wnrOpen`), each with its
    reason and a link to the shared machine panel. Rows rank by machines that did not run, then by the share of the group.
    CI is keyed on the NUMBER (two CIs can share a name); machines with no operator have no CI and sit in ONE last row. */
 const WNR_ROWS = 10;
+// The card's filter is a Machines-page Show key (`state.wnrF`): "idle" | "never", optionally with buckets and maintenance
+// age ("idle:maint,ping", "never:maintNow:a8"). Same keys, tests and click handlers as the Machines page (wmcKeyOk /
+// wmcTestK, data-f="wnrF"), so the two pages count alike.
+const wNrKey = () => { const k=String(state.wnrF||'idle'); return (k.split(':')[0]==='idle'||k.split(':')[0]==='never') && wmcKeyOk(k) ? k : 'idle'; };
 function wNrByAgg(A){
-  const by = state.wnrBy==='ci' ? 'ci' : 'terr', G={};
-  A.mcs.forEach(m=>{ let k, name, sub='', mob='', none=false;
+  const by = state.wnrBy==='ci' ? 'ci' : 'terr', key=wNrKey(), g0=key.split(':')[0], test=wmcTestK(key), reason=g0==='idle'?wNrDay:wNrSeason;
+  const mk=W_MAINT[g0], G={};
+  const counts={}; [['idle'],['never']].forEach(([g])=>{ counts[g]=A.mcs.filter(wmcTest[g]).length; });
+  W_NR[g0].forEach(([b])=>counts[g0+':'+b]=A.mcs.filter(wmcTestK(g0+':'+b)).length);
+  W_AGE.forEach(([a])=>counts[g0+':'+mk+':'+a]=A.mcs.filter(wmcTestK(g0+':'+mk+':'+a)).length);
+  A.mcs.forEach(m=>{ let k, name, mob='', none=false;
     if(by==='ci'){ const num=String(m.coMob||'').replace(/\D/g,'').slice(-10), nm=String(m.co||'').trim();
       if(!num && !nm){ k='~none'; name='No CI — operator not mapped'; none=true; }
       else { k=num||('n:'+nm.toLowerCase()); name=nm||num; mob=m.coMob||''; } }
     else { none=m.territory===WRET_NO_TERR; k=none?'~none':m.st+'|'+m.territory; name=m.territory; }
-    const g=G[k]||(G[k]={ key:by+':'+k, name, mob, none, sts:new Set(), terrs:new Set(), all:0, idle:[] });
-    g.all++; g.sts.add(m.st); if(by==='ci' && m.territory!==WRET_NO_TERR) g.terrs.add(m.territory);
-    const r=wNrDay(m); if(r) g.idle.push({ m, r }); });
-  const rows=Object.values(G).filter(g=>g.idle.length).map(g=>{ const c={}; g.idle.forEach(x=>c[x.r]=(c[x.r]||0)+1);
-    g.idle.sort((a,b)=>W_NR.idle.findIndex(([k])=>k===a.r)-W_NR.idle.findIndex(([k])=>k===b.r) || a.m.mc.localeCompare(b.m.mc,undefined,{numeric:true}));
+    const g=G[k]||(G[k]={ key:by+':'+k, name, mob, none, sts:new Set(), terrs:new Set(), ams:new Set(), all:0, idle:[] });
+    g.all++; g.sts.add(m.st); if(m.territory!==WRET_NO_TERR) g.terrs.add(m.territory); if(m.am) g.ams.add(m.am);
+    if(test(m)){ const r=reason(m); g.idle.push({ m, r, age: r===mk ? wAgeBand(wMaintDays(m, g0==='never')) : '' }); } });
+  const ord=W_NR[g0].map(([k])=>k);
+  const rows=Object.values(G).filter(g=>g.idle.length).map(g=>{ const c={}; g.idle.forEach(x=>{ c[x.r]=(c[x.r]||0)+1; if(x.age) c['age:'+x.age]=(c['age:'+x.age]||0)+1; });
+    g.idle.sort((a,b)=>ord.indexOf(a.r)-ord.indexOf(b.r) || a.m.mc.localeCompare(b.m.mc,undefined,{numeric:true}));
     return { ...g, n:g.idle.length, c, pct:100*g.idle.length/g.all }; });
   rows.sort((a,b)=>(a.none-b.none) || b.n-a.n || b.pct-a.pct || a.name.localeCompare(b.name));
-  return { by, rows, groups:Object.keys(G).length };
+  const subs=(key.split(':')[1]||'').split(',').filter(Boolean), ages=(key.split(':')[2]||'').split(',').filter(Boolean);
+  return { by, key, g0, mk, subs, ages, parts: W_NR[g0].filter(([k])=>!subs.length||subs.includes(k)), counts, rows, n:rows.reduce((a,r)=>a+r.n,0), sig:[A.sig,by,key].join('|') };
 }
 function wNrByHTML(A, mob){
-  if(!wDepAdmin() || !A.nr || !A.nr.idle.n) return '';
-  const B=wpBits(mob), S=state, Z=wNrByAgg(A), day=wpDate(WRET.yday), isCi=Z.by==='ci';
+  if(!wDepAdmin() || !A.nr || !(A.nr.idle.n||A.nr.never.n)) return '';
+  const B=wpBits(mob), S=state, Z=wNrByAgg(A), D=WRET.yday, day=wpDate(D), isCi=Z.by==='ci', g0=Z.g0, mk=Z.mk;
   const shown = S.wnrAll ? Z.rows : Z.rows.slice(0, WNR_ROWS);
-  const lbl = Object.fromEntries(W_NR.idle);
+  const lbl = Object.fromEntries(W_NR[g0]);
   const seg = `<div role="group" aria-label="Group by" style="${w2segBox(mob)}${mob?';width:100%':''}">${[['terr','By territory'],['ci','By CI']].map(([k,l])=>`<button data-act="wnrby" data-k="${k}" aria-pressed="${Z.by===k}" style="${w2seg(Z.by===k,mob)}">${l}</button>`).join('')}</div>`;
-  const mix = c => `<span role="img" aria-label="${E(W_NR.idle.filter(([k])=>c[k]).map(([k,l])=>`${l} ${c[k]}`).join(', '))}" style="display:flex;gap:2px;height:6px;border-radius:3px;overflow:hidden;background:${W2.line2}">${W_NR.idle.map(([k])=>`<span style="flex:${c[k]||0} 0 0;min-width:${c[k]?3:0}px;background:${W_NR_COL[k]}"></span>`).join('')}</span>`;
-  const chips = c => W_NR.idle.filter(([k])=>c[k]).map(([k,l])=>`<span style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap"><span aria-hidden="true" style="width:8px;height:8px;border-radius:2px;background:${W_NR_COL[k]}"></span>${E(l)} ${fmt(c[k])}</span>`).join('');
+  // Filter chips, the Machines page's look and behaviour (multi-select reasons, age only while maintenance is ticked).
+  const chip=(k,t,on,sw,act,n)=>`<button data-act="${act||'wmcshow'}" data-f="wnrF" data-k="${k}" aria-pressed="${on}" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;min-height:${mob?44:34}px;padding:0 ${mob?14:12}px;border-radius:999px;border:1px solid ${on?W2.ink:W2.line};background:${on?W2.ink:'#fff'};color:${on?'#fff':W2.ink};font:500 ${mob?14:13.5}px ${W2.font};cursor:pointer;white-space:nowrap">${sw?`<span aria-hidden="true" style="width:9px;height:9px;border-radius:2px;background:${sw}"></span>`:''}${t}${n!=null?`<span style="font-variant-numeric:tabular-nums;color:${on?'#fff':W2.ink2};font-weight:600">${fmt(n)}</span>`:''}</button>`;
+  const rowCss=`display:flex;gap:6px;${mob?'overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px':'flex-wrap:wrap'}`;
+  const subs=new Set(Z.subs), ages=new Set(Z.ages);
+  const filters = `<div style="padding:0 ${mob?16:22}px 14px;display:flex;flex-direction:column;gap:8px">
+    <div role="group" aria-label="Which machines" style="${rowCss}">${chip('idle',`Didn’t run ${wIsYday()?'y’day':day}`,g0==='idle','','wmcshow',Z.counts.idle)}${chip('never',`Didn’t run till ${wIsYday()?'now':day}`,g0==='never','','wmcshow',Z.counts.never)}</div>
+    <div role="group" aria-label="Why they did not run" style="${rowCss};padding-left:${mob?0:12}px;${mob?'':`border-left:2px solid ${W2.line}`}">${chip(g0,'All reasons',!subs.size,'','wmcshow',null)}${W_NR[g0].map(([b,l])=>chip(g0+':'+b,l,subs.has(b),W_NR_COL[b],'wmcsub',Z.counts[g0+':'+b])).join('')}</div>
+    ${subs.has(mk)?`<div role="group" aria-label="How long in maintenance" style="${rowCss};padding-left:${mob?0:24}px;${mob?'':`border-left:2px solid ${W2.line}`}"><span style="flex-shrink:0;align-self:center;font-size:13px;color:${W2.ink2};padding-right:2px">${E(lbl[mk])}, down:</span>${chip(g0+':'+mk,'Any time',!ages.size,'','wmcage',null)}${W_AGE.filter(([a])=>a!=='unk'||Z.counts[g0+':'+mk+':unk']).map(([a,l])=>chip(g0+':'+mk+':'+a,l,ages.has(a),W_AGE_COL[a],'wmcage',Z.counts[g0+':'+mk+':'+a])).join('')}</div>`:''}</div>`;
+  const mix = c => `<span role="img" aria-label="${E(Z.parts.filter(([k])=>c[k]).map(([k,l])=>`${l} ${c[k]}`).join(', '))}" style="display:flex;gap:2px;height:6px;border-radius:3px;overflow:hidden;background:${W2.line2}">${Z.parts.map(([k])=>`<span style="flex:${c[k]||0} 0 0;min-width:${c[k]?3:0}px;background:${W_NR_COL[k]}"></span>`).join('')}</span>`;
+  const chips = c => Z.parts.filter(([k])=>c[k]).map(([k,l])=>`<span style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap"><span aria-hidden="true" style="width:8px;height:8px;border-radius:2px;background:${W_NR_COL[k]}"></span>${E(l)} ${fmt(c[k])}</span>`).join('');
   const subOf = g => isCi ? (g.none ? 'machines with no operator have no CI' : [...g.terrs].join(', ')+(g.sts.size>1?' · '+[...g.sts].join(' + '):''))
     : (g.none ? 'territory not on the sheet' : (STATE_NAMES[[...g.sts][0]]||[...g.sts][0]||''));
-  const mcLine = ({m,r}) => { const last=wmcLast(m);
+  const mcLine = ({m,r}) => { const last=wmcLast(m), dn=r===mk?wMaintDays(m, g0==='never'):null;
     return `<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:flex;align-items:center;gap:10px;width:100%;min-height:${mob?56:44}px;padding:8px 12px;border:0;border-top:1px solid ${W2.line2};background:#fff;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
       <span aria-hidden="true" style="width:9px;height:9px;border-radius:2px;background:${W_NR_COL[r]};flex-shrink:0"></span>
-      <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font:600 13px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${B.orgChip(m.org)}<span style="font-size:13px;font-weight:600;color:${r==='maint'?W2.brkD:W2.ink}">${E(lbl[r])}${r==='maint'&&wMaintDays(m,false)?` · down ${wMaintDays(m,false)} d`:''}</span></span>
+      <span style="flex:1;min-width:0"><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font:600 13px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${B.orgChip(m.org)}<span style="font-size:13px;font-weight:600;color:${r===mk?W2.brkD:W2.ink}">${E(lbl[r])}${dn?` · down ${dn} d`:''}</span></span>
         <span style="display:block;font-size:12.5px;color:${W2.ink2};margin-top:2px;${mob?'line-height:1.4':'white-space:nowrap;overflow:hidden;text-overflow:ellipsis'}">${m.opName||m.opNum?E(m.opName||m.opNum):'No operator'} · ${isCi?E(m.territory):(m.co?'CI '+E(m.co):'no CI')} · ${last?'last ran '+wpDate(last):'not run this season'} · ${acF(m.iotAll||0)} ac season</span></span>
       <span aria-hidden="true" style="color:${W2.ink3}">›</span></button>`; };
   const row = g => { const open=S.wnrOpen===g.key;
@@ -9371,17 +9390,38 @@ function wNrByHTML(A, mob){
       <button data-act="wnrexp" data-k="${E(g.key)}" aria-expanded="${open}" style="flex:1;min-width:0;display:grid;grid-template-columns:${mob?'minmax(0,1fr) auto':'minmax(0,1.4fr) minmax(120px,1fr) minmax(0,1.6fr) auto'};align-items:center;gap:${mob?'6px 12px':'14px'};min-height:${mob?60:52}px;padding:8px 0;border:0;background:none;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
         <span style="min-width:0"><span style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600"><span style="${g.none?`color:${W2.ink2};font-style:italic;`:''}overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(g.name)}</span></span>
           <span style="display:block;font-size:12.5px;color:${W2.ink2};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isCi&&g.mob?`<span style="font-family:'IBM Plex Mono',monospace">${E(g.mob)}</span> · `:''}${E(subOf(g))}</span></span>
-        <span style="text-align:right;${mob?'':'order:0'}"><span style="${w2num(mob?18:17,600,W2.idleD)}">${fmt(g.n)}</span><span style="font-size:12.5px;color:${W2.ink2}"> of ${fmt(g.all)}</span>
-          <span style="display:block;font-size:12px;color:${W2.ink2}">${Math.round(g.pct)}% didn’t run</span></span>
+        <span style="text-align:right"><span style="${w2num(mob?18:17,600,W2.idleD)}">${fmt(g.n)}</span><span style="font-size:12.5px;color:${W2.ink2}"> of ${fmt(g.all)}</span>
+          <span style="display:block;font-size:12px;color:${W2.ink2}">${Math.round(g.pct)}% of its machines</span></span>
         <span style="${mob?'grid-column:1/-1;':''}display:flex;flex-direction:column;gap:5px;min-width:0">${mix(g.c)}<span style="display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:${W2.ink2}">${chips(g.c)}</span></span>
         ${mob?'':`<span style="display:flex;align-items:center">${B.chev(open)}</span>`}</button>
       ${isCi&&!g.none?B.tel({n:g.name,mob:g.mob},'CI'):''}</div>
       ${open?`<div style="margin:0 ${mob?8:18}px 10px;border:1px solid ${W2.line2};border-radius:12px;overflow:hidden">${g.idle.map(mcLine).join('')}</div>`:''}</div>`; };
   const more = Z.rows.length>WNR_ROWS ? `<div style="border-top:1px solid ${W2.line2};padding:8px ${mob?12:18}px"><button data-act="wnrall" style="min-height:44px;border:0;background:none;padding:0 4px;font:600 14px ${W2.font};color:${W2.ink};cursor:pointer">${S.wnrAll?'Show fewer':`Show all ${fmt(Z.rows.length)}`}</button></div>` : '';
-  return B.cardBox(`<div style="display:flex;${mob?'flex-direction:column;align-items:stretch':'align-items:center;justify-content:space-between'};gap:10px;padding:14px ${mob?16:22}px">
-      <div style="min-width:0"><div style="display:flex;align-items:baseline;gap:7px;font-size:16px;font-weight:600;color:${W2.ink}"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:${W2.idle};flex-shrink:0;transform:translateY(-1px)"></span>Didn’t run ${E(wDayWord())} · by ${isCi?'CI':'territory'}</div>
-        <div style="font-size:13px;color:${W2.ink2};margin-top:2px">${fmt(A.nr.idle.n)} machines with no IoT acres on ${day}, in ${fmt(Z.rows.filter(r=>!r.none).length)} ${isCi?'CIs':'territories'} · ${mob?'tap':'click'} a row to see its machines</div></div>
-      ${seg}</div>${shown.map(row).join('')}${more}`, `margin-top:${mob?12:16}px;overflow:hidden`);
+  const what = wmcShowLbl(Z.key), nGroups = Z.rows.filter(r=>!r.none).length;
+  const csv = B.csv('wnrbycsv', `Download this summary by ${isCi?'CI':'territory'} as CSV`);
+  const body = Z.rows.length ? shown.map(row).join('')+more
+    : `<div style="border-top:1px solid ${W2.line2};padding:28px 18px;text-align:center;color:${W2.ink2};font-size:14px">No machine matches ${E(what)}.</div>`;
+  return B.cardBox(`<div style="display:flex;${mob?'flex-direction:column;align-items:stretch':'align-items:center;justify-content:space-between'};gap:10px;padding:14px ${mob?16:22}px 12px">
+      <div style="min-width:0"><div style="display:flex;align-items:baseline;gap:7px;font-size:16px;font-weight:600;color:${W2.ink}"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:${W2.idle};flex-shrink:0;transform:translateY(-1px)"></span>Didn’t run · by ${isCi?'CI':'territory'}</div>
+        <div style="font-size:13px;color:${W2.ink2};margin-top:2px">${E(what)}: ${fmt(Z.n)} machine${Z.n===1?'':'s'} in ${fmt(nGroups)} ${isCi?(nGroups===1?'CI':'CIs'):(nGroups===1?'territory':'territories')} · ${mob?'tap':'click'} a row to see its machines</div></div>
+      <div style="display:flex;gap:8px;align-items:center;${mob?'width:100%':''}">${seg}${mob?'':csv}</div></div>${filters}${body}${mob&&Z.rows.length?`<div style="border-top:1px solid ${W2.line2};padding:12px 16px">${csv}</div>`:''}`, `margin-top:${mob?12:16}px;overflow:hidden`);
+}
+// The summary as a CSV: one line per territory / CI, under the card's filter. Columns are the reasons in that filter, plus
+// the maintenance age bands when maintenance is in it — not the individual machines (the Machines page downloads those).
+function wNrByCSV(){
+  const A=wterrAgg(), Z=wNrByAgg(A), isCi=Z.by==='ci', mk=Z.mk, D=WRET.yday;
+  const ages = Z.parts.some(([k])=>k===mk) ? W_AGE.filter(([a])=>Z.ages.length ? Z.ages.includes(a) : (a!=='unk'||Z.rows.some(r=>r.c['age:unk']))) : [];
+  const head = (isCi ? ['CI','CI mobile','AM','Territories','State'] : ['State','Territory'])
+    .concat(['Machines','Did not run','% of machines'], Z.parts.map(([,l])=>l), ages.map(([,l])=>`${(W_NR[Z.g0].find(([k])=>k===mk)||[])[1]} · down ${l}`), ['Filter','Day']);
+  const lines=[head.join(',')].concat(Z.rows.map(r=>(isCi ? [r.name, r.mob, [...r.ams].join(' / '), [...r.terrs].join(' / '), [...r.sts].map(s=>STATE_NAMES[s]||s).join(' / ')]
+      : [[...r.sts].map(s=>STATE_NAMES[s]||s).join(' / '), r.name])
+    .concat([r.all, r.n, Math.round(r.pct)], Z.parts.map(([k])=>r.c[k]||0), ages.map(([a])=>r.c['age:'+a]||0), [wmcShowLbl(Z.key), D]).map(csvCell).join(',')));
+  const tot=k=>Z.rows.reduce((a,r)=>a+(r.c[k]||0),0), all=Z.rows.reduce((a,r)=>a+r.all,0);
+  lines.push((isCi?['Total','','','','']:['Total','']).concat([all, Z.n, all?Math.round(100*Z.n/all):0], Z.parts.map(([k])=>tot(k)), ages.map(([a])=>tot('age:'+a)), [wmcShowLbl(Z.key), D]).map(csvCell).join(','));
+  const slug=Z.key.replace(/[:,]/g,'-');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
+  a.download=`Wheat-North_didnt-run-by-${isCi?'CI':'territory'}_${slug}_${A.st||'HR-PB'}_${D||new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
 }
 function wNoIotHTML(A, mob){
   if(!isAdmin()) return '';
@@ -13979,6 +14019,7 @@ app.addEventListener('click', e=>{
     case 'wteamcsv': wTeamCSV(); track('wteam_csv',{ view:state.view }); break;
     case 'wtmbrk': setState(s=>({wtmBrkOpen:!s.wtmBrkOpen})); break;
     case 'wtnoiot': setState(s=>({wtNoIotOpen:!s.wtNoIotOpen})); break;
+    case 'wnrbycsv': wNrByCSV(); track('wnrby_csv',{ by:state.wnrBy||'terr', f:wNrKey() }); break;
     case 'wtnoiotcsv': wNoIotCSV(); track('wnoiot_csv',{ st:state.wtSt||'all' }); break;
     case 'wpcsv': wplanCSV(); track('wplan_csv',{ st:state.wpSt||'all' }); break;
     case 'wtorg': setState({wtOrg:el.dataset.org, wtTerr:'', wtTm:'', wtAm:''}); break;

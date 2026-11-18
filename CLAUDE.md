@@ -1177,6 +1177,12 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   CI in one last row). Each row: n of N didn't run, % and the reason split; a CI row carries a Call button. A row opens its
   machines inline (`state.wnrOpen`): reason (maintenance with days down), operator, territory / CI, last ran, season IoT ac;
   a machine opens the shared panel. 10 rows then Show all (`wnrAll`). Checked 18 Nov: both groupings sum to 140 = the card.
+  · **Sub filters + CSV (same day)**: the Machines page's Didn't run chips on the card — Didn't run y'day / till now, then
+    multi-select reasons, then maintenance age — stored as a Machines-page Show key in `state.wnrF` and driven by the SAME
+    handlers (`wmcshow` / `wmcsub` / `wmcage` with `data-f="wnrF"`) and tests (`wmcTestK`), so counts match that page. Rows,
+    the reason split and the machines follow it. **CSV (`wNrByCSV`) = the SUMMARY, one line per territory / CI + a Total** —
+    machines, did not run, %, a column per reason in the filter, maintenance age columns when maintenance is in it, the
+    filter and day — not the machines (by request). Checked 18 Nov: Maintenance (3–7 d) + No ping = 99, CSV total 99.
 - **Didn't run: multi-select buckets + "No ping in 2+ days" (Dinesh 2026-11-12).** A fifth bucket, `ping` (`wPing2`: last ping 2+
   days before today, IST, or none — today's status whatever day is picked), sits between Operator not mapped and Other in BOTH
   breakups, so the strip cards and the Machines page still add up. The Machines page's bucket chips are multi-select
