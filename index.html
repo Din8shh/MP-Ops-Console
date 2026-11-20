@@ -1063,7 +1063,11 @@ function wpcBuild(grid){
      refresh) is shown AT ONCE while the fresh one loads, under an "Updating · showing data from …" label — never as live.
    Every load logs `[MP-Ops] wheat load timing → {…}`: how long each tab took, or why it failed. Read it first if a load is slow. */
 const WRET_GRACE_MS = 6000;                       // after the Main sheet lands, how long the page waits for the side tabs
-const WSHEET_MS = { main:45000, side:25000 };   // the fallbacks after a stalled export get half each     // per request; a stalled request is abandoned and the next route tried
+// Per request; a stalled request is abandoned and the next route tried, and the fallbacks after a stalled export get
+// half each. Raised 2026-11-20 from 45 s / 25 s: the workbook had grown slow enough that Google answered the Main sheet
+// in ~60 s when it answered at all, so every load abandoned a request that was about to succeed. The last copy on the
+// device is on screen meanwhile, so a longer wait costs a first-time reader only.
+const WSHEET_MS = { main:120000, side:90000 };
 const WRET_SIDE = ['maint','prod','bayer'];
 // "loaded in 4.4 s · Google 3.9 s" — the last load's time to fresh data, and how much of it was the Main sheet's answer.
 const wSecs = ms => (ms/1000).toFixed(ms<10000?1:0)+' s';
