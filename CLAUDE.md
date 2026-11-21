@@ -1225,6 +1225,16 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   · the loading card counts the seconds and, past 15 s, says Google can be slow after an edit.
   Checked locally: repeat open → data at 1.6 s from the copy, live at 4.4 s; no copy → live at 3.2 s; every request forced to stall
   → the copy stays on screen with its age. Every load logs `[MP-Ops] wheat load timing → {…}` (per tab: ms, or why it failed).
+  · **THE SNAPSHOT (2026-11-21) — the Wheat tabs are read from a COPY, not the workbook.** On 20–21 Nov the workbook got so
+    heavy that Google's export gave no answer in 150 s and an Apps Script could not even OPEN it in 20 min. So
+    `apps-script/wheat-snapshot.gs` (bound to the snapshot spreadsheet `1kOmy89PB…`, timer every 30 min, 05:00–23:00 IST)
+    copies Main sheet / maintenance data / product details / Snake chart raw as plain DISPLAYED values (blank machine rows and
+    future dates dropped), and `PROJECTS.wheat.snap` maps each source gid to its copy. `wSheetGet` reads the copy first; a
+    copy over `WSNAP_MAX_MIN` (90) old sends it to the live workbook, and if that fails the old copy shows as "Sheet not
+    answering · data as of …". The header's time is the COPY's (the `_snapshot` tab, per tab). The script never writes the
+    workbook and keeps a tab's previous copy when a read fails or shrinks below 60%. Bayer still reads live (its sheet is
+    fast). Checked 21 Nov: every copy exports in 1–4 s (workbook 92 s), Main sheet identical row for row; page live in 4.1 s.
+    **If Wheat data looks old, read the `_snapshot` tab first.**
   · **The load time is ON THE PAGE** (`wLoadTxt`: "loaded in 3.1 s · Google 2.8 s" — total to fresh data, and the Main sheet's
     answer) in the desktop header and sheet stamp, and at the foot of the phone's Breakdowns / Machines / Top 10 / Territory pages,
     so a slow load can be reported from a phone (asked by Dinesh 2026-11-11).

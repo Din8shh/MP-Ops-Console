@@ -362,6 +362,11 @@ const PROJECTS = {
             prod:{ sheetId:'1Tz3OAhykHa144JAufDRwK_G2_LuG0QXxwOsQqhR9mfc', gid:'1855112218', name:'UPL/SWAL product details' },
             // Daily acres per state, Apr 2024 → today (2026-11-11) — the "Snake chart raw" tab. Wheat admin's Cumulative page; see wsnBuild.
             snake:{ sheetId:'1Tz3OAhykHa144JAufDRwK_G2_LuG0QXxwOsQqhR9mfc', gid:'485044081', name:'Snake chart raw' },
+            // The values-only SNAPSHOT of the four tabs above (2026-11-21), refreshed every 30 min by
+            // apps-script/wheat-snapshot.gs. Read FIRST — it exports in ~2 s where the workbook took 90 s or never
+            // answered. `gids` maps each source gid to its copy; `meta` is the "_snapshot" tab (tab → copied_at_ist).
+            snap:{ sheetId:'1kOmy89PB-y_JQvSdLES4mT8JDqDRYDS2RdsP2RTgIro', meta:'1707279059',
+                   gids:{ '486286189':'260786822', '965231799':'1293819733', '1855112218':'1317494093', '485044081':'576846606' } },
             home:'wplan', views:['wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wcum'], bar:['wplan','w500','wterr','wam','wfo','wmap','wtop','w250','wbd','wmc','wcum'],
             only:['fo','retailer','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wcum'], kharifTabs:false,
             head:sc=>`Wheat Spray Operations · ${sc==='India'?'North':sc}`, sub:'Wheat Spray Programme · Haryana · Punjab',
@@ -1076,8 +1081,10 @@ const wLoadTxt = () => WRET.tLoad ? `loaded in ${wSecs(WRET.tLoad)}${WRET.tMain?
 async function wretCached(R){
   try{
     if(!R || !('caches' in window)) return null;
-    const c=await caches.open('ops-data-v1');
-    const hit=await c.match(`https://docs.google.com/spreadsheets/d/${R.sheetId}/export?format=csv&gid=${R.gid}`, { ignoreVary:true });
+    const c=await caches.open('ops-data-v1'), S=curProject().snap, sg=S && S.gids[String(R.gid)];
+    // The snapshot's copy first (what loads now), then the workbook's own (what an older load kept).
+    const hit=(sg && await c.match(`https://docs.google.com/spreadsheets/d/${S.sheetId}/export?format=csv&gid=${sg}`, { ignoreVary:true }))
+           || await c.match(`https://docs.google.com/spreadsheets/d/${R.sheetId}/export?format=csv&gid=${R.gid}`, { ignoreVary:true });
     if(!hit) return null;
     return { cachedAt:hit.headers.get('x-sw-cached-at'), grid:parseCSV(await hit.text()) };
   }catch(_){ return null; }
@@ -1107,7 +1114,7 @@ function wretAssemble(G){
 }
 async function loadWRet(){
   const P=curProject(); if(!P.ret || WRET.loading) return;
-  WRET.loading=true; WRET.error=false; WRET.t0=Date.now();
+  WRET.loading=true; WRET.error=false; WRET.t0=Date.now(); _wsnapMeta=null;   // re-read the copy times on every load
   const tick=setInterval(()=>{ if(!WRET.loaded) render(); }, 1000);   // the loading card counts the seconds
   const t0=performance.now(), timing={}, side={ maint:P.maint||null, prod:P.prod&&isAdmin()?P.prod:null, bayer:P.bayer&&isAdmin()?P.bayer:null };
   // G[k]: undefined = still loading · null = failed or not wanted · {cachedAt,grid} = in hand.
@@ -1133,7 +1140,7 @@ async function loadWRet(){
     // 2. The side tabs get a short grace; whatever is still loading after it slots in when it lands.
     await Promise.race([Promise.all(Object.values(sideP)), new Promise(r=>setTimeout(r,WRET_GRACE_MS))]);
     wretAssemble(G);
-    dataMode=got.cachedAt?'offline':'live'; lastUpdated=got.cachedAt?istTime(+got.cachedAt):nowIST(); WRET.at=lastUpdated;
+    dataMode=got.cachedAt?'offline':'live'; lastUpdated=got.cachedAt?istTime(+got.cachedAt):got.snapAt?istTime(got.snapAt):nowIST(); WRET.at=lastUpdated;
     WRET.tLoad=Date.now()-WRET.t0;   // shown on the page (wLoadTxt) so a slow load can be reported from a phone
     const late=WRET_SIDE.filter(k=>G[k]===undefined);
     if(late.length){ timing.late=late.join(', ');
@@ -1146,8 +1153,58 @@ async function loadWRet(){
   }
   finally{ clearInterval(tick); WRET.loading=false; console.info('[MP-Ops] wheat load timing →', timing); render(); }
 }
+/* THE SNAPSHOT (2026-11-21). On 20–21 Nov the Wheat workbook grew too heavy for Google to export: no answer in 150 s,
+   and an Apps Script could not even OPEN it in 20 minutes. apps-script/wheat-snapshot.gs copies the four tabs as plain
+   values into a light spreadsheet every 30 min (05:00–23:00 IST); each copy exports in ~2 s. Rules:
+   · the copy is read FIRST, and used outright while it is under WSNAP_MAX_MIN old (by the "_snapshot" tab's time);
+   · older than that (the timer stopped, or the workbook stalled for hours) the live workbook is tried, and if THAT fails
+     the old copy is shown anyway, labelled with its time as "Sheet not answering · data as of …" — never as live;
+   · a fresh copy reads as live, but the header names the COPY's time, not the fetch time, since that is the data's.
+   The script keeps the previous copy of any tab whose read fails, so each tab carries its own time. */
+const WSNAP_MAX_MIN = 90;
+let _wsnapMeta = null;
+const wSnapAt = s => { const t=Date.parse(String(s||'').trim().replace(' ','T')+':00+05:30'); return isFinite(t)?t:NaN; };
+// The "_snapshot" tab, once per load: { 'Main sheet': epochMs, … }.
+function wSnapMeta(fresh){
+  const S=curProject().snap; if(!S) return Promise.resolve(null);
+  if(!_wsnapMeta || fresh){
+    const ac=new AbortController(), tm=setTimeout(()=>ac.abort(), 15000);
+    _wsnapMeta=fetch(`https://docs.google.com/spreadsheets/d/${S.sheetId}/export?format=csv&gid=${S.meta}&t=${Date.now()}`, { signal:ac.signal })
+      .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+      .then(t=>{ const by={}; parseCSV(t).slice(1).forEach(r=>{ const at=wSnapAt(r[2]); if(r[0] && isFinite(at)) by[String(r[0]).trim()]=at; }); return by; })
+      .catch(e=>{ console.warn('wheat snapshot: its _snapshot tab did not load —', e.message); return null; })
+      .finally(()=>clearTimeout(tm));
+  }
+  return _wsnapMeta;
+}
+// The copy of tab R: {grid, cachedAt, snapAt, fresh} — or null when there is no copy to read.
+async function wSnapGet(R){
+  const S=curProject().snap, g=S && S.gids[String(R.gid)]; if(!g) return null;
+  try{
+    const [meta, res]=await Promise.all([ wSnapMeta(), (async()=>{ const ac=new AbortController(), tm=setTimeout(()=>ac.abort(), 20000);
+      try{ return await fetch(`https://docs.google.com/spreadsheets/d/${S.sheetId}/export?format=csv&gid=${g}&t=${Date.now()}`, { signal:ac.signal }); } finally{ clearTimeout(tm); } })() ]);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const grid=parseCSV(await res.text()); if(grid.length<2) throw new Error('copy is empty');
+    const snapAt=meta && meta[R.name], swAt=res.headers.get('x-sw-cached-at');
+    return { grid, snapAt, swAt, fresh: !swAt && isFinite(snapAt) && Date.now()-snapAt < WSNAP_MAX_MIN*60000 };
+  }catch(e){ console.warn(`wheat snapshot: ${R.name} copy did not load —`, e.message); return null; }
+}
+// Snapshot first; live workbook when the copy is old or missing; the old copy when the workbook does not answer either.
+async function wSheetGet(R, live){
+  const sn=await wSnapGet(R);
+  if(sn && sn.fresh){ if(R===curProject().ret) WRET.src='snapshot'; return { grid:sn.grid, cachedAt:null, snapAt:sn.snapAt }; }
+  try{ return await live(); }
+  catch(e){
+    if(!sn) throw e;
+    const at=+sn.swAt || sn.snapAt;
+    console.warn(`wheat sheet ${R.name}: the workbook did not answer — showing the snapshot copy from ${isFinite(at)?istTime(at):'an unknown time'} —`, e.message);
+    if(R===curProject().ret) WRET.src='snapshot (old)';
+    return { grid:sn.grid, cachedAt:isFinite(at)?String(at):'0' };
+  }
+}
 // One machine-day tab: `ret` = {sheetId, gid}. Returns {cachedAt, grid}.
-async function wretFetch(R, ms){
+function wretFetch(R, ms){ return wSheetGet(R, ()=>wretFetchLive(R, ms)); }
+async function wretFetchLive(R, ms){
   // The grid has run to 1 Jan with every future day pre-filled (7.6 MB where the days up to today were 0.74 MB), and
   // has since carried tens of thousands of empty formula rows instead — both are filtered out at the source. The date column is found BY NAME from a header-only query, then only rows dated up to
   // today are asked for. Any failure on that path falls back to the whole tab — which is also what the offline cache
@@ -10103,10 +10160,12 @@ async function loadWsn(){
   const R=curProject().snake; if(!R || WSN.loading) return;
   WSN.loading=true; WSN.error=''; render();
   try{
-    const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(), WSHEET_MS.side);
-    const res=await fetch(`https://docs.google.com/spreadsheets/d/${R.sheetId}/export?format=csv&gid=${R.gid}&t=${Date.now()}`, { signal:ctl.signal });
-    clearTimeout(t); if(!res.ok) throw new Error('HTTP '+res.status);
-    const B=wsnBuild(parseCSV(await res.text()));
+    const got=await wSheetGet(R, async()=>{
+      const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(), WSHEET_MS.side);
+      try{ const res=await fetch(`https://docs.google.com/spreadsheets/d/${R.sheetId}/export?format=csv&gid=${R.gid}&t=${Date.now()}`, { signal:ctl.signal });
+        if(!res.ok) throw new Error('HTTP '+res.status); return { grid:parseCSV(await res.text()) }; }
+      finally{ clearTimeout(t); } });
+    const B=wsnBuild(got.grid);
     Object.assign(WSN, B, { loaded:true, at:new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) });
     console.log('[MP-Ops] wheat snake tab →', { rows:B.rows, last:B.last, HR:Object.keys(B.D.HR).length, PB:Object.keys(B.D.PB).length });
   }catch(e){ WSN.error=e.name==='AbortError'?'the sheet did not answer':e.message; console.warn('wheat snake tab failed —', WSN.error); }
