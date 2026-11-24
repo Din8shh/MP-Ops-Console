@@ -785,11 +785,14 @@ function wretBuild(grid, opt){
     if(opt.from && dt<opt.from) continue;
     log.rows++;
     const key=mc+'|'+dt; if(seen.has(key)){ log.dupDays++; continue; } seen.add(key); dates.add(dt);
+    // A machine's own fields (retailer, people, handover, position, ping …) come from its LATEST dated row, never the
+    // first one read (2026-11-24). The sheet copies today's value onto every date, so any row used to do — but a past
+    // row kept as plain values (a frozen or appended day) would carry the OLD value.
     let m=M[mc];
-    if(!m){
+    if(!m || dt>m._d){
       const party0=txt(g('party')).replace(/\s+/g,' ');
       const lat=coord(g('lat'),26,33), lon=coord(g('lon'),72,79);
-      m=M[mc]={ mc, wret:true, party0, rkey:blank(party0).toLowerCase(), party:titleCase(blank(party0))||'No retailer named', _t0:canonTerr(blank(g('terr'))), terrRaw:txt(g('terr')), _st:blank(g('st')),
+      const F={ party0, rkey:blank(party0).toLowerCase(), party:titleCase(blank(party0))||'No retailer named', _t0:canonTerr(blank(g('terr'))), terrRaw:txt(g('terr')), _st:blank(g('st')),
         org:(o=>o==='swal'?'SWAL':o==='upl'?'UPL':o==='bayer'?'Bayer':'Open')(txt(g('org')).toLowerCase()),
         planAc:num(g('plan')), planned:Math.round(num(g('planned'))), village:titleCase(blank(g('village'))),
         foName:person(g('fo')), foMob:ph(g('foMob')), tmName:person(g('tm')), tmMob:ph(g('tmMob')),
@@ -799,8 +802,10 @@ function wretBuild(grid, opt){
         // FO onboarded: the sheet's own status for the machine's FO (one value per FO on every row, checked 2026-10-29).
         foOn: /^onboarded$/i.test(txt(g('foOn')).trim()),
         // Column K, one value per machine and no history. See wStageOf.
-        handRaw:txt(g('hand')).replace(/\s+/g,' '), stage:null,
+        handRaw:txt(g('hand')).replace(/\s+/g,' '), stage:null, _d:dt };
+      if(!m) m=M[mc]={ mc, wret:true, ...F,
         acAll:0, acY:0, ac7:0, scAll:0, scY:0, iotAll:0, iotY:0, itAll:0, itY:0, bkAll:0, bkY:0, brk:false, days:{}, sdays:{}, bdays:{}, brkDays:{} };
+      else Object.assign(m, F);
       m.stage=wStageOf(m.handRaw, m.org);
       // The ADMIN's "deployed" (Dinesh 2026-11-12): the sheet's own word, Done (old: Yes), for UPL and SWAL alike — not the
       // team logins' SWAL step-behind reading in wStageOf. Bayer's sheet carries no status ("0"), so every Bayer machine counts.
@@ -1010,7 +1015,11 @@ function wtkBuild(grid){
     const id=txt(g('id')).trim(), mc=txt(g('mc')).trim(); if(!id||id==='0'||!mc) continue;
     log.ticketRows++;
     const open=day(g('open')), close=day(g('close')), st=txt(g('status')).trim();
-    if(T[id]){ const t=T[id]; if(t.mc!==mc||t.open!==open||t.close!==close) log.conflict.push(id); continue; }
+    // A CLOSE DATE wins over a row without one (2026-11-24): a ticket's older days, if ever kept as plain values, were
+    // written while it was still open, so only its later rows carry the close.
+    if(T[id]){ const t=T[id];
+      if(close && !t.close && t.mc===mc && t.open===open){ t.close=close<=today?close:''; const tk=wtkTech(g('tech')); if(tk.name){ t.tech=tk.name; t.tag=tk.tag; t.techMob=ph(g('mob')); } continue; }
+      if(t.mc!==mc||t.open!==open||(close&&t.close!==close)) log.conflict.push(id); continue; }
     if(!open){ log.noOpenDate.push(id); continue; }
     if(open>today){ log.future++; continue; }
     // A ticket the sheet calls closed but gives no closing date is kept OPEN (it cannot be placed on a day) and listed.
@@ -1162,6 +1171,7 @@ async function loadWRet(){
    · a fresh copy reads as live, but the header names the COPY's time, not the fetch time, since that is the data's.
    The script keeps the previous copy of any tab whose read fails, so each tab carries its own time. */
 const WSNAP_MAX_MIN = 90;
+const WSNAP_LIVE_MS = 25000;   // how long the live workbook gets when the copy is older than WSNAP_MAX_MIN (healthy: 2–8 s)
 let _wsnapMeta = null;
 const wSnapAt = s => { const t=Date.parse(String(s||'').trim().replace(' ','T')+':00+05:30'); return isFinite(t)?t:NaN; };
 // The "_snapshot" tab, once per load: { 'Main sheet': epochMs, … }.
@@ -1193,7 +1203,9 @@ async function wSnapGet(R){
 async function wSheetGet(R, live){
   const sn=await wSnapGet(R);
   if(sn && sn.fresh){ if(R===curProject().ret) WRET.src='snapshot'; return { grid:sn.grid, cachedAt:null, snapAt:sn.snapAt }; }
-  try{ return await live(); }
+  // An OLD copy means the snapshot script could not read the workbook either, so the workbook is very likely stuck too:
+  // give it WSNAP_LIVE_MS, not the full 2 min + fallback (24 Nov: every visitor waited ~3½ min to see last night's copy).
+  try{ return sn ? await Promise.race([ live(), new Promise((_,no)=>setTimeout(()=>no(new Error(`no answer in ${WSNAP_LIVE_MS/1000} s`)), WSNAP_LIVE_MS)) ]) : await live(); }
   catch(e){
     if(!sn) throw e;
     const at=+sn.swAt || sn.snapAt;

@@ -1235,6 +1235,18 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     workbook and keeps a tab's previous copy when a read fails or shrinks below 60%. Bayer still reads live (its sheet is
     fast). Checked 21 Nov: every copy exports in 1–4 s (workbook 92 s), Main sheet identical row for row; page live in 4.1 s.
     **If Wheat data looks old, read the `_snapshot` tab first.**
+    A copy older than 90 min means the script could not read the workbook either, so the live workbook gets only
+    `WSNAP_LIVE_MS` (25 s) before the old copy is shown (24 Nov: the full 2 min + fallback made every visitor wait ~3½ min).
+  · **24 Nov 2026: the workbook stopped opening at all** (export, gviz, the published link and the snapshot script's
+    `openById` all timed out), stranding the 23 Nov copy with 0 acres for that day. Cause: the chain is Athena cron →
+    a SOURCE sheet → IMPORTRANGE into the Wheat workbook (+ its own formula / hand-kept columns), and the cron rewrites
+    every day from 22 Oct, so each run re-imports and recalculates the lot. A nightly "freeze past days to values" script
+    was written and DROPPED the same day — the daily full rewrite would undo it. Planned instead: the snapshot script
+    reads the source sheet direct + the Wheat-only columns from a small sheet, joined on machine number.
+    **The parsers were hardened the same day** (they no longer assume every row carries today's value):
+    `wretBuild` takes a machine's own fields (retailer, people, handover, position, ping) from its LATEST dated row, not
+    the first read, and `wtkBuild` takes a ticket's close date from any row that carries one. Checked on the 23 Nov copy:
+    the Retailer page reads identically before and after (same text, 67,658 ac / 343 machines).
   · **The load time is ON THE PAGE** (`wLoadTxt`: "loaded in 3.1 s · Google 2.8 s" — total to fresh data, and the Main sheet's
     answer) in the desktop header and sheet stamp, and at the foot of the phone's Breakdowns / Machines / Top 10 / Territory pages,
     so a slow load can be reported from a phone (asked by Dinesh 2026-11-11).
