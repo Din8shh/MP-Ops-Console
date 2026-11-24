@@ -216,7 +216,7 @@ function w2tone(l){
   return l==='Breakdown'||/^(New breakdowns|Open at)/.test(l) ? T('#FDECEA','#F4D8D4',W2.brkD,W2.brk) : /^Carried/.test(l) ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle) : /^Closed/.test(l) ? T('#EEF8F2','#CFE9DA',W2.actD,W2.act) : l==='Idle'||/^(Close|Not crossed)/.test(l) ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle) : /^Crossed/.test(l) ? T('#EEF8F2','#CFE9DA',W2.actD,W2.act)
     : /^Acres/.test(l) ? T('#E8F2FC','#D2E3F4','#1D4F80','#3B82C4') : /^(MTD|Scan|Spruce|Feego)/.test(l) ? T('#F0ECFC','#DED7F4','#4A3A8C','#7A63D1')
     : /^(Deployed|Machines)/.test(l) ? T('#FFF0E2','#F5DEC7','#8A430A',C.orange) : /^(Operators|Retailers|Territories|FOs)/.test(l) ? T('#E6F6F1','#CBEAE0','#0E6B57','#1A9E80')
-    : /^(IoT|Pinged)/.test(l) ? T('#ECEFFD','#D8DEF6','#2F3F8F','#5468D4') : /^Ran/.test(l) ? T('#EEF8F2','#CFE9DA',W2.actD,W2.act) : T('#F4F6F8',W2.card,W2.ink,W2.ink3);
+    : /^Trips/.test(l) ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle) : /^(Dry run|Km per)/.test(l) ? T('#E8F2FC','#D2E3F4','#1D4F80','#3B82C4') : /^(IoT|Pinged)/.test(l) ? T('#ECEFFD','#D8DEF6','#2F3F8F','#5468D4') : /^Ran/.test(l) ? T('#EEF8F2','#CFE9DA',W2.actD,W2.act) : T('#F4F6F8',W2.card,W2.ink,W2.ink3);
 }
 // A segmented control and a select in the v2 shape. `mob` = a finger: 44px targets, 16px in a field.
 const w2seg = (on,mob) => `border:0;cursor:pointer;font:500 ${mob?14:13.5}px ${W2.font};${mob?'min-height:44px;flex:1;':''}padding:${mob?'0 12px':'6px 14px'};border-radius:${mob?9:7}px;background:${on?'#fff':'transparent'};color:${on?W2.ink:W2.ink2};box-shadow:${on?'0 1px 2px rgba(20,24,28,0.12)':'none'}`;
@@ -239,7 +239,7 @@ const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
-  wDay:'', wsnSt:'ALL', wsnRun:'cum', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wDep:'dep', wSh:'', wmcQ:'', wmcShow:'all', wmcRunD:[], w250RunD:[], w500Tab:'fix', w500All:false, w500CiSort:'on', w500CiAll:false, wmcSort:'mc', wmcLimit:60, w250Tgt:+w250Load0('mpoc_w250_tgt',250)||250, w250Dl:w250Load0('mpoc_w250_dl',''), w250Bands:[], w250Why:[], w250Run:'all', w250Terrs:[], w250Ams:[], w250GSort:'over', w250Sort:'ac', w250By:'terr', w250Limit:60, w250GAll:false, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
+  wDay:'', wsnSt:'ALL', wsnRun:'cum', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wDep:'dep', wSh:'', wmcQ:'', wmcShow:'all', wmcRunD:[], w250RunD:[], w500Tab:'fix', w500All:false, wdrPer:'season', wdrBy:'terr', wdrSort:'kmac', wdrOpen:'', wdrAll:false, wdrTripAll:false, w500CiSort:'on', w500CiAll:false, wmcSort:'mc', wmcLimit:60, w250Tgt:+w250Load0('mpoc_w250_tgt',250)||250, w250Dl:w250Load0('mpoc_w250_dl',''), w250Bands:[], w250Why:[], w250Run:'all', w250Terrs:[], w250Ams:[], w250GSort:'over', w250Sort:'ac', w250By:'terr', w250Limit:60, w250GAll:false, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
   wfoSort:'bk', wfoOpen:{}, wfoOn:'',   // Wheat TM → FO page: its own sort, open rows and onboarded filter; the rest is the wt* scope
   wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
   iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60, iotTs:'',   // IoT pages — page-local, shared by the three of them
@@ -367,8 +367,11 @@ const PROJECTS = {
             // answered. `gids` maps each source gid to its copy; `meta` is the "_snapshot" tab (tab → copied_at_ist).
             snap:{ sheetId:'1kOmy89PB-y_JQvSdLES4mT8JDqDRYDS2RdsP2RTgIro', meta:'1707279059',
                    gids:{ '486286189':'260786822', '965231799':'1293819733', '1855112218':'1317494093', '485044081':'576846606' } },
-            home:'wplan', views:['wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wcum'], bar:['wplan','w500','wterr','wam','wfo','wmap','wtop','w250','wbd','wmc','wcum'],
-            only:['fo','retailer','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wcum'], kharifTabs:false,
+            // Dry run km per machine per day (2026-11-24) — a TEMPORARY sheet's "dry run kms" tab; the programme shares the real one later,
+            // and only this line changes (columns are read by name). Wheat admin's Dry run page; see wdrBuild.
+            dry:{ sheetId:'1DSy4Umd5WK8nZDcIrRkv14M6_gdFGNNUOkqTLrBXab4', gid:'639834129', name:'dry run kms' },
+            home:'wplan', views:['wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum'], bar:['wplan','w500','wterr','wam','wfo','wmap','wtop','w250','wbd','wmc','wdr','wcum'],
+            only:['fo','retailer','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum'], kharifTabs:false,
             head:sc=>`Wheat Spray Operations · ${sc==='India'?'North':sc}`, sub:'Wheat Spray Programme · Haryana · Punjab',
             mHead:sc=>`Wheat Spray · ${sc==='India'?'North':sc}`, mSub:'Wheat North · AFS' },
   // IoT device monitoring (2026-10-15). Not a programme but a team: the three state IoT technicians and the IoT head
@@ -2651,7 +2654,7 @@ const wSees = () => isAdmin() || wTeam();
 // 'mpprod' is the exception to that constraint rather than a breach of it: its tab holds Madhya Pradesh and
 // nothing else, and it renders NO state picker, so it cannot widen anybody's scope. It is safe to grant to a
 // state-locked MP login, and is granted to exactly those two plus leadership.
-const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wcum'];   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
+const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum'];   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
 function roleHidesView(view){
   // The PROJECT is the outer gate and runs first, so it binds admin too: a Wheat login never sees a Kharif-tab
   // view, and the Wheat-only views never appear under Kharif.
@@ -2671,10 +2674,10 @@ function roleHidesView(view){
 }
 // Views that render their OWN controls and so drop the shared machine filter bar + KPI strip (desktop) and the
 // weather banner + KPI cards (mobile): the standalone rollup/insight pages.
-const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wcum','iottamper','iotrisk','iotteam']);
+const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iottamper','iotrisk','iotteam']);
 // Pages with no machine rows behind them (Wheat plan, the IoT pages): the machine search and the phone's filter
 // button go, because neither can reach anything on them.
-const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wcum','iottamper','iotrisk','iotteam']);
+const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iottamper','iotrisk','iotteam']);
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
@@ -3236,6 +3239,7 @@ const I = {
   weather:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 17a4 4 0 0 1 .5-8 5.5 5.5 0 0 1 10.6 1.5A3.5 3.5 0 0 1 17.5 17Z"/><path d="M8 20.5 7 22M12 20.5 11 22M16 20.5 15 22"/></svg>',
   am:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="3"/><path d="M6.5 21a5.5 5.5 0 0 1 11 0"/><path d="M4 13.5 2.5 15M20 13.5 21.5 15"/></svg>',
   bm:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></svg>',
+  route:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/></svg>',
   leader:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0Z"/><path d="M17 5h2.5a1.5 1.5 0 0 1 0 5H17M7 5H4.5a1.5 1.5 0 0 0 0 5H7"/></svg>',
   pending:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
   snake:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20V4M3 20h18"/><path d="M6 15l4-5 4 3 5-8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -3651,7 +3655,7 @@ const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" 
 // keys and mean nothing to a reader hunting for the cumulative chart.
 const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', norun:'Didn’t run',
   am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Daily recap', leader:'Leaders',
-  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wfo:'TM · FO summary', wmap:'Machine map', wtop:'Top 10 machines', w500:'500 acres by 5 Dec', w250:'Acre target', wbd:'Breakdowns', wmc:'Machine summary', wcum:'Cumulative acres',
+  product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wfo:'TM · FO summary', wmap:'Machine map', wtop:'Top 10 machines', w500:'500 acres by 5 Dec', w250:'Acre target', wbd:'Breakdowns', wmc:'Machine summary', wdr:'Dry run', wcum:'Cumulative acres',
   iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotteam:'IoT team overview' };
 // The word under each rail icon: short enough for a 64px button at 9.5px. One word where the title is long.
 // ONE NAME TABLE (plan I4). NAV_TITLE is the full name — page heading, browser title, the phone's All pages sheet.
@@ -3659,13 +3663,13 @@ const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machin
 // the same short form in all three. M_VIEWS takes its labels from here.
 const RAIL_LBL = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', am:'AMs', bm:'BMs', norun:'Didn’t run',
   pending:'Pending', recap:'Recap', leader:'Leaders', product:'Products', mpprod:'MP products', snake:'Cumulative', fo:'FOs',
-  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', w500:'500 Drive', w250:'Acre target', wbd:'Breakdowns', wmc:'Machines', wcum:'Cumulative', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
+  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', w500:'500 Drive', w250:'Acre target', wbd:'Breakdowns', wmc:'Machines', wdr:'Dry run', wcum:'Cumulative', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
 // Rail order, in labelled groups (a hairline between them): the project's own pages, then what happened TODAY,
 // then the PEOPLE tables, then the SEASON reading. Insights used to lead the rail; it now leads the Season group.
 // Group names, index for index with RAIL_GROUPS (the first group is the project's own pages and has none).
 const RAIL_GROUP_NAMES = ['', 'Today', 'People', 'Season'];
 const RAIL_GROUPS = [
-  [['wplan',I.retailer],['w500',I.leader],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['wtop',I.leader],['w250',I.insights],['wbd',I.risk],['wmc',I.machines],['wcum',I.snake],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am]],
+  [['wplan',I.retailer],['w500',I.leader],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['wtop',I.leader],['w250',I.insights],['wbd',I.risk],['wmc',I.machines],['wdr',I.route],['wcum',I.snake],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am]],
   [['norun',I.risk],['map',I.map],['machines',I.machines],['weather',I.weather],['recap',I.recap]],
   [['tables',I.tables],['am',I.am],['bm',I.bm],['fo',I.fo],['retailer',I.retailer],['pending',I.pending]],
   [['insights',I.insights],['snake',I.snake],['product',I.product],['mpprod',I.mpprod],['leader',I.leader]],
@@ -3710,14 +3714,14 @@ function topbarHTML(v){
   // The Wheat Retailer summary reads its own sheet: the header names the PAGE's own state scope, the machine search goes,
   // and the stamp counts retailers on the plan rather than machines.
   const wp = state.view==='wplan' && WRET.loaded && wSees() ? wplanAgg() : null;
-  const wt = (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500') && WRET.loaded && wSees() ? wterrAgg() : null;
+  const wt = (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500'||state.view==='wdr') && WRET.loaded && wSees() ? wterrAgg() : null;
   const iot = curProject().iot ? iotScope() : null;
   const scope = state.view==='wplan' ? (wp ? (wp.st||wp.lockSt||'India') : (state.wpSt||'India'))
-    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
+    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500'||state.view==='wdr') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
     : state.view==='wcum' ? (state.wsnSt==='HR'||state.wsnSt==='PB' ? state.wsnSt : 'India')
     : iot ? (iot.st||iot.lockSt||'India') : v.scopeLabel;
   const fresh = state.view==='wplan' ? (wp ? `${fmt(wp.all.length)} retailers · ${fmt(wp.allMc)} machines` : 'Retailer summary')
-    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
+    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500'||state.view==='wdr') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
     : state.view==='wcum' ? 'Cumulative acres · 3 seasons'
     : iot ? (IOT.loaded ? `${fmt(IOT.tamper.filter(r=>gateAllowsState(r.st)).length)} potential tamper · ${fmt(IOT.risk.filter(r=>gateAllowsState(r.st)).length)} at risk` : 'IoT sheet')
     : v.freshCount;
@@ -9133,7 +9137,7 @@ function wtFilterFields(A, mob){
 }
 function wtSheetHTML(){
   const A=wterrAgg();
-  const foot=`<div style="display:flex;gap:10px">${A.nF||wDayOn()||wDepAll()?`<button data-act="wtclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">${state.view==='wam'||state.view==='wfo'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500'?`Show ${fmt(A.n)} machine${A.n===1?'':'s'}`:`Show ${fmt(A.rows.length)} territor${A.rows.length===1?'y':'ies'}`}</button></div>`;
+  const foot=`<div style="display:flex;gap:10px">${A.nF||wDayOn()||wDepAll()?`<button data-act="wtclear" style="min-height:48px;padding:0 16px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#46433d;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">Reset</button>`:''}<button data-act="sheetclose" style="flex:1;min-height:48px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer">${state.view==='wam'||state.view==='wfo'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500'||state.view==='wdr'?`Show ${fmt(A.n)} machine${A.n===1?'':'s'}`:`Show ${fmt(A.rows.length)} territor${A.rows.length===1?'y':'ies'}`}</button></div>`;
   return mSheetHTML('Filters', `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px">${wtFilterFields(A,true)}</div>`, 'sheetclose', foot);
 }
 // A row's mini trend: the last WT_SPARK days, one bar each, yesterday dark. Scaled to the row's own best day, so it
@@ -10870,6 +10874,249 @@ function w500CSV(){
     m.opName, m.opNum, m.co, m.coMob, m.am, m.amNum, wShName(m), r.tk?r.tk.tech:'', r.tk?r.tk.techMob:'', r.tk?r.tk.id:'', r.down==null?'':r.down].map(csvCell).join(','); }));
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
   a.download=`Wheat-North_500-drive_${W.A.st||'HR-PB'}_${D||new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
+}
+/* ===================== Wheat North — Dry run (view key `wdr`, `#/dry-run`, Dinesh 2026-11-24) =====================
+   The kilometres each machine drives in a day, off the "dry run kms" tab (PROJECTS.wheat.dry — a TEMPORARY sheet; the
+   programme will share the real one later, and only that line changes). One row per machine per day: machine_number,
+   date__, dry_run (km), FY. Built around THIS season only (agreed): rows dated before 1 Oct of the season are not read,
+   whatever their FY label says, and the tab's other machines (it lists every programme machine) are left out — only the
+   machines on the Wheat Main sheet, in the page's wt* scope, are counted.
+   Measured on the tab 2026-11-24 (22 Oct – 22 Nov, Wheat machines): every machine-day with IoT acres also has a dry-run row
+   (4,068 of 4,068); a day with no IoT acres has a median of 0.19 km (GPS drift); and 36 days carry 150–610 km, almost all
+   on 20–23 Oct, which is the machine being MOVED to its territory, not field running. So each machine-day is one of:
+   · RUNNING  — IoT acres > 0: the km driven between fields that day (median 16 km);
+   · TRIP     — no IoT acres but moved WDR_MOVE (1 km) or more: driven and sprayed nothing (472 days, 9,851 km);
+   · TRANSPORT — over WDR_TRANSPORT (150 km): a move, kept apart and left out of every figure (named, with its km);
+   · STILL    — no IoT acres and under 1 km: drift, counted in km but not as a trip.
+   Figures: Dry run km = every km except transport. Km per acre = dry run km ÷ IoT acres (the trips count against it).
+   Km per running day = km on running days ÷ running days. A machine that sprays more acres a day drives more km a day but
+   FEWER km an acre (0–5 ac days: 3.0 km/ac; 30–50 ac days: 0.7), so both are shown and neither is a verdict alone.
+   The season starts on the Main sheet's first date (22 Oct), so km and acres cover the same days. The Day filter's day
+   is capped at the tab's last date — the tab runs a day behind the Main sheet — and the page says so. Wheat admin only. */
+const WDR = { loaded:false, loading:false, error:'', by:{}, first:'', last:'', log:null, at:'' };
+const WDR_MOVE = 1, WDR_TRANSPORT = 150;
+const WDR_SORTS = [['kmac','Km per acre'],['kmrun','Km per running day'],['trip','Km on trips, no spraying'],['km','Dry run km'],['name','Name']];
+const WDR_BY = [['terr','Territory'],['ci','CI'],['am','AM']];
+const WDR_ROWS = 12, WDR_TRIPS = 10;
+const WDR_COL = { run:'#4C7399', trip:'#E0A008' };
+const kmF = v => { v=+v||0; return Math.abs(v)<100 ? (Math.round(v*10)/10).toLocaleString('en-IN') : fmt(v); };
+const kmAcF = v => v==null ? '—' : (Math.round(v*100)/100).toFixed(2);
+function wdrDate(s){ s=String(s||'').trim();
+  if(/^\d{4}-\d\d-\d\d/.test(s)) return s.slice(0,10);
+  const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}` : ''; }
+function wdrBuild(grid){
+  const h=(grid[0]||[]).map(x=>String(x||'').trim().toLowerCase());
+  const iM=h.findIndex(x=>x.includes('machine')), iD=h.findIndex(x=>x.includes('date')), iK=h.findIndex(x=>x.includes('dry')||x.includes('km'));
+  if(iM<0||iD<0||iK<0) throw new Error('dry run tab: columns not found ('+h.join(', ')+')');
+  const from=wsnCurYear()+'-10-01', today=istDay(Date.now()), by={}, log={ rows:0, older:0, bad:0, dup:0, from };
+  let first='', last='';
+  for(const r of grid.slice(1)){ if(!r||!r.join('').trim()) continue; log.rows++;
+    const mc=txt(r[iM]), d=wdrDate(r[iD]), raw=String(r[iK]==null?'':r[iK]).trim(), km=num(raw);
+    if(!mc||!d||raw===''||km<0){ log.bad++; continue; }
+    if(d<from||d>today){ log.older++; continue; }
+    const o=by[mc]||(by[mc]={}); if(o[d]!=null){ log.dup++; o[d]=Math.max(o[d],km); } else o[d]=km;   // a repeated machine-day is read once
+    if(!first||d<first) first=d; if(d>last) last=d; }
+  log.machines=Object.keys(by).length; log.first=first; log.last=last;
+  return { by, first, last, log };
+}
+async function loadWdr(){
+  const R=curProject().dry; if(!R || WDR.loading) return;
+  WDR.loading=true; WDR.error=''; render();
+  try{
+    const got=await wSheetGet(R, async()=>{
+      const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(), WSHEET_MS.side);
+      try{ const res=await fetch(`https://docs.google.com/spreadsheets/d/${R.sheetId}/export?format=csv&gid=${R.gid}&t=${Date.now()}`, { signal:ctl.signal });
+        if(!res.ok) throw new Error('HTTP '+res.status); return { grid:parseCSV(await res.text()), cachedAt:res.headers.get('x-sw-cached-at') }; }
+      finally{ clearTimeout(t); } });
+    const B=wdrBuild(got.grid);
+    const wm=new Set(WRET.machines.map(m=>m.mc));
+    B.log.onWheat=Object.keys(B.by).filter(k=>wm.has(k)).length; B.log.otherMachines=B.log.machines-B.log.onWheat;
+    B.log.wheatNotOnTab=WRET.machines.filter(m=>!B.by[m.mc]).length;
+    Object.assign(WDR, B, { loaded:true, at:got.cachedAt?istTime(+got.cachedAt):nowIST() });
+    console.info('[MP-Ops] wheat dry run tab →', B.log);
+  }catch(e){ WDR.error=e.name==='AbortError'?'the sheet did not answer':e.message; console.warn('wheat dry run tab failed —', WDR.error); }
+  WDR.loading=false; render();
+}
+// One machine over a list of days: every figure the page shows, from its own rows.
+function wdrStats(m, days){
+  const rows=WDR.by[m.mc], o={ km:0, rKm:0, rDays:0, ac:0, wDays:0, wKm:0, tDays:0, tKm:0, moved:0, runNoRow:0, has:!!rows };
+  days.forEach(d=>{ const km=rows&&rows[d], ac=(m.sdays[d]&&m.sdays[d][4])||0;
+    if(km==null){ if(ac>0){ o.runNoRow++; o.ac+=ac; } return; }
+    if(km>WDR_TRANSPORT){ o.tDays++; o.tKm+=km; return; }
+    o.km+=km; if(km>=WDR_MOVE) o.moved++;
+    if(ac>0){ o.rKm+=km; o.rDays++; o.ac+=ac; }
+    else if(km>=WDR_MOVE){ o.wDays++; o.wKm+=km; } });
+  return o;
+}
+const WDR_K = ['km','rKm','rDays','ac','wDays','wKm','tDays','tKm','moved','runNoRow'];
+function wdrSum(list){ const o={}; WDR_K.forEach(k=>o[k]=0); list.forEach(s=>WDR_K.forEach(k=>o[k]+=s[k])); return wdrDerive(o); }
+const wdrDerive = o => Object.assign(o, { kmAc: o.ac>0 ? o.km/o.ac : null, kmRun: o.rDays ? o.rKm/o.rDays : null, acRun: o.rDays ? o.ac/o.rDays : null });
+function wdrAgg(){
+  const S=state, A=wterrAgg(), D0=WRET.yday, D = WDR.last && D0>WDR.last ? WDR.last : D0;
+  const season=wtDays().filter(d=>d<=D), per=['season','7d','day'].includes(S.wdrPer)?S.wdrPer:'season';
+  const days = per==='day' ? [D] : per==='7d' ? season.slice(-7) : season;
+  const prev = season.slice(-14,-7), last7 = season.slice(-7);
+  const onTab = A.mcs.filter(m=>WDR.by[m.mc]), notOnTab = A.mcs.length-onTab.length;
+  const rows = onTab.map(m=>{ const s=wdrDerive(wdrStats(m, days)); return { m, ...s }; });
+  const all = wdrSum(rows), wk = wdrSum(onTab.map(m=>wdrStats(m,last7))), wkP = wdrSum(onTab.map(m=>wdrStats(m,prev)));
+  const min = per==='day' ? 2 : 5;
+  const by = WDR_BY.some(([k])=>k===S.wdrBy) ? S.wdrBy : 'terr', sort = WDR_SORTS.some(([k])=>k===S.wdrSort) ? S.wdrSort : 'kmac';
+  const mob10 = v => String(v||'').replace(/\D/g,'').slice(-10);
+  const G={};
+  rows.forEach(r=>{ const m=r.m; let k, name, mob='', none=false;
+    if(by==='terr'){ none=m.territory===WRET_NO_TERR; k=none?'~none':m.st+'|'+m.territory; name=m.territory; }
+    else { const num=mob10(by==='ci'?m.coMob:m.amNum), nm=String((by==='ci'?m.co:m.am)||'').trim();
+      if(!num&&!nm){ k='~none'; none=true; name=by==='ci'?'No CI — operator not mapped':'No AM — operator not mapped'; }
+      else { k=num||'n:'+nm.toLowerCase(); name=nm||num; mob=(by==='ci'?m.coMob:m.amNum)||''; } }
+    const g=G[k]||(G[k]={ key:by+':'+k, name, mob, none, sts:new Set(), terrs:new Set(), cis:new Set(), ams:new Set(), list:[] });
+    g.list.push(r); g.sts.add(m.st); if(m.territory!==WRET_NO_TERR) g.terrs.add(m.territory); if(m.co) g.cis.add(m.co); if(m.am) g.ams.add(m.am); });
+  const val = (o,k) => o[{ kmac:'kmAc', kmrun:'kmRun', trip:'wKm', km:'km' }[k]];
+  const cmp = (a,b) => sort==='name' ? a.name.localeCompare(b.name)
+    : (a.few-b.few) || ((val(b,sort)==null?-1:val(b,sort))-(val(a,sort)==null?-1:val(a,sort))) || b.km-a.km || a.name.localeCompare(b.name);
+  const groups = Object.values(G).map(g=>{ const s=wdrSum(g.list);
+    g.list.forEach(r=>{ r.name=r.m.mc; r.few=r.rDays<min?1:0; });
+    g.list.sort((a,b)=>cmp(a,b) || a.m.mc.localeCompare(b.m.mc,undefined,{numeric:true}));
+    return { ...g, ...s, n:g.list.length, few:s.rDays<min?1:0 }; })
+    .sort((a,b)=>(a.none-b.none) || cmp(a,b));
+  const trips = rows.filter(r=>r.wDays>0).sort((a,b)=>b.wKm-a.wKm || b.wDays-a.wDays);
+  const transport = rows.filter(r=>r.tDays>0).sort((a,b)=>b.tKm-a.tKm);
+  // Day by day for the whole season to D: km on running days, km on trips, and km per running day.
+  const series = season.map(d=>{ let r=0, t=0, rd=0, ac=0, mv=0; onTab.forEach(m=>{ const km=WDR.by[m.mc][d]; if(km==null||km>WDR_TRANSPORT) return;
+      const a=(m.sdays[d]&&m.sdays[d][4])||0; if(km>=WDR_MOVE) mv++; if(a>0){ r+=km; rd++; ac+=a; } else if(km>=WDR_MOVE) t+=km; });
+    return { d, run:r, trip:t, rd, ac, mv, kmRun: rd?r/rd:null }; });
+  return { A, D, D0, capped: D<D0, per, days, season, prev, last7, rows, all, wk, wkP, min, by, sort, groups, trips, transport, series, notOnTab,
+    sig:[A.sig,D,per,by,sort].join('|') };
+}
+// A day-by-day bar chart: `stacks` = [{vals, col, label}] drawn bottom-up; days outside `inP` are drawn faint, so the
+// period the figures above read is marked on the chart without hiding the run-up to it.
+function wdrBarsHTML(Z, B, mob, title, sub, stacks, fmtV){
+  const days=Z.season, n=days.length; if(!n) return '';
+  const tot=days.map((_,i)=>stacks.reduce((a,s)=>a+(s.vals[i]||0),0)), mx=Math.max(...tot,0)||1, inP=new Set(Z.days);
+  const every=n<=10?1:Math.ceil(n/(mob?6:12)), gap=n>30?2:mob?3:6;
+  const aria=title+': '+days.map((d,i)=>`${wpDate(d)} ${fmtV(tot[i])}`).join(', ');
+  const legend = stacks.length>1 ? `<div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:12.5px;color:${W2.ink2}">${stacks.map(s=>`<span style="display:inline-flex;align-items:center;gap:6px"><span aria-hidden="true" style="width:10px;height:10px;border-radius:2px;background:${s.col}"></span>${s.label}</span>`).join('')}${Z.per!=='season'?`<span>faded bars: outside the period above</span>`:''}</div>` : (Z.per!=='season'?`<div style="margin-top:8px;font-size:12.5px;color:${W2.ink2}">faded bars: outside the period above</div>`:'');
+  return B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?15:16}px;font-weight:600">${title}</span><span style="font-size:13px;color:${W2.ink2}">${sub}</span></div>
+      <div role="img" aria-label="${E(aria)}" style="display:flex;align-items:flex-end;gap:${gap}px;height:${mob?120:140}px;margin-top:12px">
+        ${days.map((d,i)=>`<div style="flex:1;min-width:0;height:100%;display:flex;flex-direction:column-reverse;align-items:center;opacity:${inP.has(d)?1:0.4}">${stacks.map(s=>{ const v=s.vals[i]||0; return v>0?`<span style="display:block;width:100%;max-width:40px;height:${Math.max(1.5,100*v/mx)}%;background:${s.col}"></span>`:''; }).join('')}</div>`).join('')}
+      </div>
+      <div style="display:flex;gap:${gap}px;border-top:1px solid ${W2.line};padding-top:6px">${days.map((d,i)=>`<span style="flex:1;min-width:0;text-align:center;font-size:12px;color:${i===n-1?W2.ink:W2.ink2};font-weight:${i===n-1?600:400};white-space:nowrap;overflow:visible">${(i%every===0&&(n-1-i)>=every/2)||i===n-1?wpDate(d):''}</span>`).join('')}</div>
+      ${legend}</div>`, `margin-top:${mob?12:16}px`);
+}
+// A machine's last 14 days of km, one bar a day: blue = a running day, amber = a trip with no spraying, grey = still.
+function wdrSpark(m, D){
+  const rows=WDR.by[m.mc]||{}, days=[]; for(let i=13;i>=0;i--) days.push(new Date(Date.parse(D+'T00:00:00Z')-i*864e5).toISOString().slice(0,10));
+  const v=days.map(d=>{ const k=rows[d]; return k==null||k>WDR_TRANSPORT?0:k; }), mx=Math.max(...v,1);
+  const lab=`Km by day, ${wpDate(days[0])} to ${wpDate(D)}: `+days.map((d,i)=>`${wpDate(d)} ${kmF(v[i])}`).join(', ');
+  return `<span role="img" aria-label="${E(lab)}" style="display:flex;align-items:flex-end;gap:2px;height:22px;width:112px;flex-shrink:0">${days.map((d,i)=>{ const ac=(m.sdays[d]&&m.sdays[d][4])||0, c=v[i]<WDR_MOVE?'#E1E5EA':ac>0?WDR_COL.run:WDR_COL.trip;
+    return `<span style="flex:1;min-width:3px;height:${v[i]>=WDR_MOVE?Math.max(3,Math.round(22*v[i]/mx)):1}px;border-radius:1.5px;background:${c}"></span>`; }).join('')}</span>`;
+}
+function wdrBodyHTML(mob){
+  if(!isAdmin()) return wplanBodyHTML(mob);
+  if(!WRET.loaded) return wplanBodyHTML(mob);
+  const S=state, B=wpBits(mob);
+  if(!WDR.loaded){
+    if(!WDR.loading && !WDR.error) setTimeout(loadWdr,0);
+    return B.msg(WDR.error ? `⚠ Could not load the dry run tab (${E(WDR.error)}).<div style="margin-top:14px"><button data-act="wdrretry" style="min-height:${mob?48:38}px;padding:0 18px;border:0;border-radius:10px;background:${W2.dark};color:#fff;font:600 14px ${W2.font};cursor:pointer">Try again</button></div>` : 'Loading the dry run kms…', '60px 20px');
+  }
+  const Z=wdrAgg(), A=Z.A, D=Z.D, T=Z.all;
+  if(S._wdrSig!==Z.sig){ S._wdrSig=Z.sig; S.wdrAll=false; S.wdrTripAll=false; }
+  const controls = wtControlsHTML(A, mob, true, { csv:'wdrcsv', csvTitle:`Download the ${fmt(Z.rows.length)} machines with their dry run as CSV`,
+    sort:['wdrSortSel','Sort by',WDR_SORTS,Z.sort] });
+  const pad = mob?'16px':'18px 22px', gap = `margin-top:${mob?12:16}px`;
+  const dW = wpDate(D), perTxt = Z.per==='day' ? `on ${dW}` : Z.per==='7d' ? `${wpDate(Z.days[0])} – ${dW}` : `${wpDate(Z.days[0]||D)} – ${dW}`;
+  const perSeg = `<div role="group" aria-label="Period" style="${w2segBox(mob)}${mob?';width:100%':''}">${[['season','Season'],['7d','Last 7 days'],['day',Z.capped||!wIsYday()?dW:'Yesterday']].map(([k,t])=>`<button data-act="wdrper" data-k="${k}" aria-pressed="${Z.per===k}" style="${w2seg(Z.per===k,mob)}">${t}</button>`).join('')}</div>`;
+  const head = `<div style="margin-top:${mob?14:20}px;display:flex;${mob?'flex-direction:column;gap:10px':'align-items:flex-end;justify-content:space-between;gap:16px'}">
+      <div style="min-width:0"><div style="font-size:${mob?18:20}px;font-weight:600">Dry run · km machines drive</div>
+      <div style="font-size:14px;color:${W2.ink2};margin-top:2px;line-height:1.45">${perTxt} · ${fmt(Z.rows.length)} machine${Z.rows.length===1?'':'s'}${A.narrowed?' · what the filters show':''}</div></div>${perSeg}</div>
+    ${Z.capped?`<div style="${gap};padding:10px 14px;border-radius:12px;background:#FDF4DF;border:1px solid #F1E2BC;font-size:13.5px;color:${W2.idleD};line-height:1.45">The dry run tab runs to <b style="font-weight:600">${dW}</b>, a day behind the Main sheet, so these figures stop there.</div>`:''}`;
+  if(!Z.rows.length) return controls + head + B.msg(`No machine in view is on the dry run tab.${A.narrowed?`<div style="margin-top:12px">${B.ghost('wtclear','Clear filters')}</div>`:''}`);
+  // ---- the strip
+  const pctOf = (a,b) => b>0 ? 100*a/b : null;
+  const tiles = [
+    B.tile('Dry run km', kmF(T.km), 'km', `${fmt(T.moved)} machine-days moved · ${kmF(Z.rows.length?T.km/Z.rows.length:0)} km a machine`),
+    B.tile('Km per acre sprayed', kmAcF(T.kmAc), '', `${acF(Math.round(T.ac))} IoT acres · trips count against it`),
+    B.tile('Km per running day', T.kmRun==null?'—':kmF(T.kmRun), 'km', `${fmt(T.rDays)} running days · ${T.acRun==null?'—':acF(Math.round(T.acRun*10)/10)} ac a running day`),
+    B.tile('Trips without spraying', fmt(T.wDays), T.wDays===1?'day':'days', `${kmF(T.wKm)} km · ${pctF(pctOf(T.wKm,T.km))} of dry run km`),
+    B.tile('Transport moves', fmt(T.tDays), T.tDays===1?'day':'days', T.tDays?`${kmF(T.tKm)} km over ${WDR_TRANSPORT} km a day · left out`:`none over ${WDR_TRANSPORT} km a day`),
+  ];
+  const strip = mob
+    ? B.cardBox(`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr))">${tiles.join('')}</div>`, `${gap};overflow:hidden`)
+    : `<div style="${gap};display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">${tiles.join('')}</div>`;
+  // ---- this week against the week before (always the last 7 days to D, whatever the period)
+  const chg = (a,b,f,lowerBetter=true) => a==null||b==null ? '' : Math.abs(a-b) < (f===kmAcF?0.005:0.05) ? `<span style="color:${W2.ink2}">same as</span>`
+    : (a<b)===lowerBetter ? `<span style="color:${W2.actD};font-weight:600">▼ down from</span>` : `<span style="color:${W2.brkD};font-weight:600">▲ up from</span>`;
+  const wk=Z.wk, wkP=Z.wkP;
+  const week = Z.prev.length===7 && wkP.rDays ? `<div style="${gap};padding:${mob?'12px 14px':'12px 18px'};border-radius:12px;background:${W2.head};border:1px solid ${W2.line2};font-size:14px;line-height:1.55">
+      <b style="font-weight:600">Last 7 days (${wpDate(Z.last7[0])} – ${dW}):</b> ${kmAcF(wk.kmAc)} km an acre, ${chg(wk.kmAc,wkP.kmAc,kmAcF)} ${kmAcF(wkP.kmAc)} the 7 days before · ${kmF(wk.kmRun)} km a running day, ${chg(wk.kmRun,wkP.kmRun,kmF)} ${kmF(wkP.kmRun)} · ${fmt(wk.wDays)} trips without spraying, ${chg(wk.wDays,wkP.wDays,kmF)} ${fmt(wkP.wDays)}.</div>` : '';
+  // ---- day by day
+  const chart1 = wdrBarsHTML(Z, B, mob, 'Dry run km by day', `${wpDate(Z.season[0])} – ${dW} · transport moves left out`,
+    [{ vals:Z.series.map(x=>x.run), col:WDR_COL.run, label:'on running days' }, { vals:Z.series.map(x=>x.trip), col:WDR_COL.trip, label:'on trips without spraying' }], v=>kmF(v)+' km');
+  const chart2 = wdrBarsHTML(Z, B, mob, 'Km per running day', `km on running days ÷ machines that ran, each day`,
+    [{ vals:Z.series.map(x=>x.kmRun||0), col:'#7C8DA0', label:'' }], v=>kmF(v)+' km');
+  // ---- by territory / CI / AM
+  const byLbl = (WDR_BY.find(([k])=>k===Z.by)||[])[1];
+  const bySeg = `<div role="group" aria-label="Group by" style="${w2segBox(mob)}${mob?';width:100%':''}">${WDR_BY.map(([k,l])=>`<button data-act="wdrby" data-k="${k}" aria-pressed="${Z.by===k}" style="${w2seg(Z.by===k,mob)}">By ${l}</button>`).join('')}</div>`;
+  const mxAc = Math.max(...Z.groups.filter(g=>!g.few).map(g=>g.kmAc||0), 0.01);
+  const vsAll = g => g.kmAc==null||T.kmAc==null||g.few ? '' : (d=>Math.abs(d)<0.005?`<span style="color:${W2.ink2}">same as all</span>`:d>0?`<span style="color:${W2.brkD};font-weight:600">▲ ${kmAcF(d)} more than all</span>`:`<span style="color:${W2.actD};font-weight:600">▼ ${kmAcF(-d)} less than all</span>`)(g.kmAc-T.kmAc);
+  const subOf = g => g.none ? (Z.by==='terr'?'territory not on the sheet':'machines with no operator have no CI or AM')
+    : Z.by==='terr' ? `${STATE_NAMES[[...g.sts][0]]||[...g.sts][0]||''}${g.cis.size?` · ${fmt(g.cis.size)} CI${g.cis.size===1?'':'s'}`:''}`
+    : Z.by==='ci' ? `${[...g.terrs].join(', ')}${g.ams.size?' · AM '+[...g.ams].join(', '):''}`
+    : `${fmt(g.cis.size)} CI${g.cis.size===1?'':'s'} · ${[...g.terrs].slice(0,3).join(', ')}${g.terrs.size>3?` +${g.terrs.size-3}`:''}`;
+  const few = `<span style="font-size:12px;color:${W2.ink2};font-style:italic">few running days</span>`;
+  const fig = (v,t,sub) => `<span style="text-align:${mob?'left':'right'};min-width:0"><span style="${w2num(mob?16:15,600)}">${v}</span>${t?`<span style="font-size:12px;color:${W2.ink2}"> ${t}</span>`:''}${sub?`<span style="display:block;font-size:12px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</span>`:''}</span>`;
+  const mcRow = r => { const m=r.m;
+    return `<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:${mob?'flex':'grid'};${mob?'flex-direction:column;align-items:stretch;gap:6px':'grid-template-columns:minmax(0,1.5fr) 80px 90px 90px 110px 120px;gap:12px;align-items:center'};width:100%;min-height:${mob?56:46}px;padding:8px 12px;border:0;border-top:1px solid ${W2.line2};background:#fff;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
+      <span style="min-width:0"><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font:600 13px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${B.orgChip(m.org)}${r.tDays?`<span style="font-size:12px;color:${W2.ink2}">+ ${fmt(r.tDays)} transport day${r.tDays===1?'':'s'}</span>`:''}</span>
+        <span style="display:block;font-size:12.5px;color:${W2.ink2};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.opName||m.opNum?E(m.opName||m.opNum):'No operator'} · ${Z.by==='terr'?(m.co?'CI '+E(m.co):'no CI'):E(m.territory)}</span></span>
+      ${mob?`<span style="display:flex;align-items:center;gap:10px;font-size:13px;font-variant-numeric:tabular-nums;flex-wrap:wrap"><span><b style="font-weight:600">${kmF(r.km)}</b> km</span><span><b style="font-weight:600">${r.few?'—':kmAcF(r.kmAc)}</b> km/ac</span><span><b style="font-weight:600">${r.kmRun==null?'—':kmF(r.kmRun)}</b> km/run day</span>${r.wDays?`<span style="color:${W2.idleD};font-weight:600">${fmt(r.wDays)} trip${r.wDays===1?'':'s'} · ${kmF(r.wKm)} km</span>`:''}</span>${wdrSpark(m,D)}`
+        :`${fig(kmF(r.km),'km')}${fig(r.few?'—':kmAcF(r.kmAc),'',r.few?`${fmt(r.rDays)} running day${r.rDays===1?'':'s'}`:'')}${fig(r.kmRun==null?'—':kmF(r.kmRun),'km',`${fmt(r.rDays)} day${r.rDays===1?'':'s'}`)}${fig(r.wDays?fmt(r.wDays):'—',r.wDays?(r.wDays===1?'trip':'trips'):'',r.wDays?kmF(r.wKm)+' km':'')}<span style="display:flex;justify-content:flex-end">${wdrSpark(m,D)}</span>`}</button>`; };
+  const cols='minmax(0,1.6fr) 70px 90px minmax(150px,1.2fr) 100px 110px 20px';
+  const gRow = g => { const open=S.wdrOpen===g.key;
+    const call = (Z.by!=='terr') && !g.none ? B.tel({n:g.name,mob:g.mob}, Z.by==='ci'?'CI':'AM') : '';
+    const acCell = g.few ? few : `<span style="display:flex;flex-direction:column;gap:4px;min-width:0"><span><span style="${w2num(mob?16:15,600)}">${kmAcF(g.kmAc)}</span><span style="font-size:12px;color:${W2.ink2}"> km/ac</span></span>${B.meter(100*(g.kmAc||0)/mxAc,'100%',WDR_COL.run)}<span style="font-size:12px;white-space:nowrap">${vsAll(g)}</span></span>`;
+    const inner = mob
+      ? `<span style="min-width:0;display:flex;flex-direction:column;gap:8px;flex:1">
+          <span><span style="display:block;font-size:14.5px;font-weight:600;${g.none?`color:${W2.ink2};font-style:italic;`:''}white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(g.name)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmt(g.n)} machine${g.n===1?'':'s'} · ${E(subOf(g))}</span></span>
+          ${acCell}
+          <span style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${fig(kmF(g.km),'km','dry run')}${fig(g.kmRun==null?'—':kmF(g.kmRun),'km','a running day')}${fig(fmt(g.wDays),'',`trips · ${kmF(g.wKm)} km`)}</span></span>`
+      : `<span style="min-width:0"><span style="display:block;font-size:14px;font-weight:600;${g.none?`color:${W2.ink2};font-style:italic;`:''}white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(g.name)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.mob?`<span style="font-family:'IBM Plex Mono',monospace">${E(g.mob)}</span> · `:''}${E(subOf(g))}</span></span>
+        ${fig(fmt(g.n),'')}${fig(kmF(g.km),'km')}${acCell}${fig(g.kmRun==null?'—':kmF(g.kmRun),'km',`${fmt(g.rDays)} days`)}${fig(fmt(g.wDays),g.wDays===1?'trip':'trips',kmF(g.wKm)+' km')}<span style="display:flex;align-items:center">${B.chev(open)}</span>`;
+    return `<div style="border-top:1px solid ${W2.line2}"><div style="display:flex;align-items:${mob?'flex-start':'center'};gap:8px;padding:0 ${mob?12:22}px">
+      <button data-act="wdrexp" data-k="${E(g.key)}" aria-expanded="${open}" style="flex:1;min-width:0;${mob?'display:flex;gap:8px':`display:grid;grid-template-columns:${cols};gap:12px;align-items:center`};min-height:${mob?60:56}px;padding:${mob?'12px 0':'8px 0'};border:0;background:none;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">${inner}</button>${call?`<span style="padding-top:${mob?10:0}px">${call}</span>`:''}</div>
+      ${open?`<div style="margin:0 ${mob?8:22}px 12px;border:1px solid ${W2.line2};border-radius:12px;overflow:hidden">${mob?'':`<div style="display:grid;grid-template-columns:minmax(0,1.5fr) 80px 90px 90px 110px 120px;gap:12px;padding:8px 12px;background:${W2.head};font-size:12px;font-weight:600;color:${W2.ink2}"><span>Machine · operator</span><span style="text-align:right">Dry run</span><span style="text-align:right">Km/acre</span><span style="text-align:right">Km/run day</span><span style="text-align:right">Trips, no spray</span><span style="text-align:right">Last 14 days</span></div>`}${g.list.map(mcRow).join('')}</div>`:''}</div>`; };
+  const gShown = S.wdrAll ? Z.groups : Z.groups.slice(0, WDR_ROWS);
+  const gMore = Z.groups.length>WDR_ROWS ? `<div style="border-top:1px solid ${W2.line2};padding:8px ${mob?12:22}px"><button data-act="wdrall" style="min-height:44px;border:0;background:none;padding:0 4px;font:600 14px ${W2.font};color:${W2.ink};cursor:pointer">${S.wdrAll?'Show fewer':`Show all ${fmt(Z.groups.length)}`}</button></div>` : '';
+  const th = B.th('wdrsort', Z.sort);
+  const gHead = mob ? '' : `<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 22px;margin-right:${Z.by==='terr'?0:52}px;background:${W2.head};border-top:1px solid ${W2.line2};font-size:12.5px;font-weight:600;color:${W2.ink2}">${th('name',byLbl)}<span style="text-align:right">Machines</span>${th('km','Dry run',true)}${th('kmac','Km per acre')}${th('kmrun','Km / running day',true)}${th('trip','Trips, no spray',true)}<span></span></div>`;
+  const groupCard = B.cardBox(`<div style="display:flex;${mob?'flex-direction:column;align-items:stretch':'align-items:center;justify-content:space-between'};gap:10px;padding:${mob?'16px 16px 12px':'16px 22px 14px'}">
+      <div style="min-width:0"><div style="font-size:16px;font-weight:600">Dry run by ${byLbl.toLowerCase()}</div>
+      <div style="font-size:13px;color:${W2.ink2};margin-top:2px;line-height:1.4">${perTxt} · sorted by ${E(((WDR_SORTS.find(([k])=>k===Z.sort)||[])[1]||'').toLowerCase())} · fewer than ${Z.min} running days go last · ${mob?'tap':'click'} a row for its machines</div></div>${bySeg}</div>
+    ${gHead}${gShown.map(gRow).join('')}${gMore}`, `${gap};overflow:hidden`);
+  // ---- the machines that drove and sprayed nothing
+  const tShown = S.wdrTripAll ? Z.trips : Z.trips.slice(0, WDR_TRIPS);
+  const tItem = r => { const m=r.m;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:${mob?'10px 12px':'8px 22px'};border-top:1px solid ${W2.line2}">
+      <button data-act="wpmc" data-mc="${E(m.mc)}" style="flex:1;min-width:0;display:flex;${mob?'flex-direction:column;gap:3px':'align-items:center;gap:14px'};min-height:44px;border:0;background:none;padding:0;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
+        <span style="display:flex;align-items:center;gap:6px;${mob?'':'width:190px;flex-shrink:0'}"><span style="font:600 13px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${B.orgChip(m.org)}</span>
+        <span style="font-size:13.5px;font-variant-numeric:tabular-nums;${mob?'':'width:190px;flex-shrink:0'}"><b style="font-weight:600;color:${W2.idleD}">${fmt(r.wDays)} trip${r.wDays===1?'':'s'} · ${kmF(r.wKm)} km</b></span>
+        <span style="font-size:12.5px;color:${W2.ink2};min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.opName||m.opNum?E(m.opName||m.opNum):'No operator'} · ${E(m.territory)} · CI ${E(m.co||'not named')}</span></button>
+      ${B.tel({n:m.opName||'operator',mob:m.opNum},'Operator')}</div>`; };
+  const tripCard = Z.trips.length ? B.cardBox(`<div style="padding:${pad}"><div style="display:flex;align-items:baseline;gap:7px;font-size:16px;font-weight:600"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:${WDR_COL.trip};flex-shrink:0;transform:translateY(-1px)"></span>Drove and sprayed nothing</div>
+      <div style="font-size:13px;color:${W2.ink2};margin-top:2px;line-height:1.4">${perTxt} · ${fmt(Z.trips.length)} machine${Z.trips.length===1?'':'s'} drove ${WDR_MOVE} km or more on a day with no IoT acres · most km first</div></div>
+      ${tShown.map(tItem).join('')}${Z.trips.length>WDR_TRIPS?`<div style="border-top:1px solid ${W2.line2};padding:8px ${mob?12:22}px"><button data-act="wdrtripall" style="min-height:44px;border:0;background:none;padding:0 4px;font:600 14px ${W2.font};color:${W2.ink};cursor:pointer">${S.wdrTripAll?'Show fewer':`Show all ${fmt(Z.trips.length)}`}</button></div>`:''}`, `${gap};overflow:hidden`) : '';
+  const note = `<div style="font-size:12.5px;color:${W2.ink2};margin-top:12px;line-height:1.55"><b style="color:${W2.ink};font-weight:600">How it is worked out:</b> the dry run tab gives each machine’s km a day. A <b style="font-weight:600;color:${W2.ink}">running day</b> has IoT acres; a <b style="font-weight:600;color:${W2.ink}">trip without spraying</b> has no IoT acres and ${WDR_MOVE} km or more; a day over ${WDR_TRANSPORT} km is a <b style="font-weight:600;color:${W2.ink}">transport move</b> (the machine being taken to its territory) and is left out of every figure. Km per acre = dry run km ÷ IoT acres. A machine that sprays more acres a day drives more km a day but fewer km an acre, so read the two together. The season starts ${wpDate(Z.season[0]||D)}, the Main sheet’s first date.${Z.notOnTab?` ${fmt(Z.notOnTab)} machine${Z.notOnTab===1?' is':'s are'} in view but not on the dry run tab.`:''}${T.runNoRow?` ${fmt(T.runNoRow)} running day${T.runNoRow===1?' has':'s have'} no dry run row.`:''} Dry run tab checked ${E(WDR.at||'—')} · it is a temporary sheet until the programme shares the real one.</div>`;
+  return controls + head + strip + week + chart1 + groupCard + tripCard + chart2 + note + (mob?`<div style="margin-top:10px">${B.stamp('wpretry')}</div>`:'');
+}
+function wdrCSV(){
+  const Z=wdrAgg(), r1=v=>v==null?'':Math.round(v*10)/10, r2=v=>v==null?'':Math.round(v*100)/100, perL={ season:'Season', '7d':'Last 7 days', day:'Day' }[Z.per];
+  const head=['Machine','Company','State','Territory','CI','CI mobile','AM','AM mobile','State head','Operator','Operator mobile','Period','From','To',
+    'Dry run km (transport left out)','IoT acres','Km per acre','Running days','Km on running days','Km per running day','Trips without spraying (days)','Km on trips without spraying','Transport days (over '+WDR_TRANSPORT+' km)','Transport km'];
+  const lines=[head.join(',')].concat(Z.groups.flatMap(g=>g.list).map(r=>{ const m=r.m; return [m.mc, m.org, STATE_NAMES[m.st]||m.st, m.territory, m.co, m.coMob, m.am, m.amNum, wShName(m), m.opName, m.opNum,
+    perL, Z.days[0]||'', Z.D, r1(r.km), r1(r.ac), r2(r.kmAc), r.rDays, r1(r.rKm), r1(r.kmRun), r.wDays, r1(r.wKm), r.tDays, r1(r.tKm)].map(csvCell).join(','); }));
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
+  a.download=`Wheat-North_dry-run_${Z.per}_${Z.A.st||'HR-PB'}_${Z.D||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
 }
 /* ===================== Wheat North — Breakdowns (view key `wbd`, `#/breakdowns`, Dinesh 2026-11-11) =====================
@@ -13230,6 +13477,7 @@ function contentHTML(v){
     case 'wmc': return `<section style="padding:24px 32px">${wmcBodyHTML(false)}</section>`;
     case 'w250': return `<section style="padding:24px 32px">${w250BodyHTML(false)}</section>`;
     case 'w500': return `<section style="padding:24px 32px">${w500BodyHTML(false)}</section>`;
+    case 'wdr': return `<section style="padding:24px 32px">${wdrBodyHTML(false)}</section>`;
     case 'wcum': return `<section style="padding:24px 32px">${wcumBodyHTML(false)}</section>`;
     case 'iottamper': case 'iotrisk': case 'iotteam': return `<section style="padding:18px 22px">${iotBodyHTML(state.view,false)}</section>`;
     case 'recap': return recapViewHTML(v);
@@ -13280,6 +13528,7 @@ const M_VIEWS = [
   { k:'w250',     label:RAIL_LBL.w250,  icon:()=>I.insights },   // Wheat 250-acre machines
   { k:'wbd',      label:RAIL_LBL.wbd,   icon:()=>I.risk },       // Wheat Breakdowns (tickets)
   { k:'wmc',      label:RAIL_LBL.wmc,   icon:()=>I.machines },   // Wheat Machine summary (search any machine)
+  { k:'wdr',      label:RAIL_LBL.wdr,   icon:()=>I.route },      // Wheat Dry run (km a machine drives)
   { k:'wcum',     label:RAIL_LBL.wcum,  icon:()=>I.snake },      // Wheat Cumulative acres (snake chart)
   { k:'iottamper',label:RAIL_LBL.iottamper, icon:()=>I.tamper },   // IoT project only
   { k:'iotrisk',  label:RAIL_LBL.iotrisk,   icon:()=>I.risk },
@@ -13417,7 +13666,7 @@ function norunBodyHTML(v, mob){
 const M_NEXT = { norun:['machines','bm'], map:['tables','machines'], tables:['machines','am'], machines:['tables','weather'],
   weather:['machines','map'], am:['bm','machines'], bm:['machines','tables'], pending:['am'], recap:['insights','machines'],
   insights:['snake','recap'], snake:['insights','product'], product:['mpprod','snake'], mpprod:['product'], leader:['recap'],
-  wplan:['w500','wterr'], w500:['wterr','wplan'], wterr:['wam','wfo'], wam:['wfo'], wfo:['wmap','wplan'], wmap:['wtop','wplan'], wtop:['w250','wplan'], w250:['wbd','wplan'], wbd:['wmc','wplan'], wmc:['wcum','wplan'], wcum:['wplan'] };   // Wheat: the first one the login has
+  wplan:['w500','wterr'], w500:['wterr','wplan'], wterr:['wam','wfo'], wam:['wfo'], wfo:['wmap','wplan'], wmap:['wtop','wplan'], wtop:['w250','wplan'], w250:['wbd','wplan'], wbd:['wmc','wplan'], wmc:['wdr','wplan'], wdr:['wcum','wplan'], wcum:['wplan'] };   // Wheat: the first one the login has
 function mNextHTML(view){
   const ks=(M_NEXT[view]||[]).filter(k=>!roleHidesView(k)).slice(0, isWheat()?1:9);
   const brk = view==='machines' && !state.health.includes('Breakdown')
@@ -13614,6 +13863,8 @@ function mobileHTML(v){
     body = w500BodyHTML(true);
   } else if(S.view==='w250'){
     body = w250BodyHTML(true);
+  } else if(S.view==='wdr'){
+    body = wdrBodyHTML(true);
   } else if(S.view==='wcum'){
     body = wcumBodyHTML(true);
   } else if(S.view==='iottamper'||S.view==='iotrisk'||S.view==='iotteam'){
@@ -13784,7 +14035,7 @@ function mobileHTML(v){
       ${S.sheet==='more'    ? mSheetHTML('All pages', mMoreHTML(), 'sheetclose') : ''}
       ${S.sheet==='iotfilters' && curProject().iot ? iotSheetHTML() : ''}
       ${S.sheet==='wpfilters' && S.view==='wplan' && WRET.loaded && wSees() ? wpSheetHTML() : ''}
-      ${S.sheet==='wtfilters' && (S.view==='wterr'||S.view==='wam'||S.view==='wfo'||S.view==='wmap'||S.view==='wtop'||S.view==='wbd'||S.view==='wmc'||S.view==='w250'||S.view==='w500') && WRET.loaded && wSees() ? wtSheetHTML() : ''}
+      ${S.sheet==='wtfilters' && (S.view==='wterr'||S.view==='wam'||S.view==='wfo'||S.view==='wmap'||S.view==='wtop'||S.view==='wbd'||S.view==='wmc'||S.view==='w250'||S.view==='w500'||S.view==='wdr') && WRET.loaded && wSees() ? wtSheetHTML() : ''}
     </div>
   </div>`;
 }
@@ -13809,7 +14060,7 @@ function mPageScope(view){
     case 'snake':    return state.snState&&state.snState!=='ALL' ? nm(state.snState) : 'All India';
     case 'mpprod':   return state.mpTerr || 'Madhya Pradesh';
     case 'wplan':    return (lock||state.wpSt) ? nm(lock||state.wpSt) : 'HR + PB';
-    case 'wterr': case 'wam': case 'wfo': case 'wmap': case 'wtop': case 'wbd': case 'wmc': case 'w250': case 'w500': return (lock||state.wtSt) ? nm(lock||state.wtSt) : 'HR + PB';
+    case 'wterr': case 'wam': case 'wfo': case 'wmap': case 'wtop': case 'wbd': case 'wmc': case 'w250': case 'w500': case 'wdr': return (lock||state.wtSt) ? nm(lock||state.wtSt) : 'HR + PB';
     case 'wcum': return state.wsnSt==='HR'||state.wsnSt==='PB' ? nm(state.wsnSt) : 'HR + PB';
     case 'iottamper': case 'iotrisk': case 'iotteam': { const sc=iotScope(); return sc.st ? iotStName(sc.st) : (isAdmin()?'All states':'My states'); }
     default:         return nm(lock||pick('st'));   // the fleet pages: the filter bar's state
@@ -13859,7 +14110,7 @@ function render(){
    handling (histSync) owns the history ENTRIES; this only rewrites the address of the current one. A typed or
    pasted address is honoured at boot and on hashchange, and `render()`'s role guard still bounces a view the
    login may not see. */
-const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wam:'area-managers', wfo:'field-officers', wmap:'machine-map', wtop:'top-machines', w250:'250-acres', w500:'500-drive', wbd:'breakdowns', wmc:'machines', wcum:'wheat-cumulative',
+const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wam:'area-managers', wfo:'field-officers', wmap:'machine-map', wtop:'top-machines', w250:'250-acres', w500:'500-drive', wdr:'dry-run', wbd:'breakdowns', wmc:'machines', wcum:'wheat-cumulative',
   iottamper:'tamper', iotrisk:'at-risk', iotteam:'team', am:'area-managers', bm:'business-managers',
   leader:'leaders', product:'products', fo:'field-officers', recap:'daily-recap', norun:'didnt-run' };
 const slugOf = v => VIEW_SLUG[v]||v;
@@ -14000,6 +14251,7 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='wtSortSel') setState({wtSort:e.target.value});
   else if(e.target.id==='wbdSortSel') setState({wbdSort:e.target.value});
   else if(e.target.id==='wmcSortSel') setState({wmcSort:e.target.value});
+  else if(e.target.id==='wdrSortSel') setState({wdrSort:e.target.value});
   else if(e.target.id==='w250SortSel') setState({w250Sort:e.target.value});
   else if(e.target.id==='wsnFromSel'||e.target.id==='wsnToSel'){ const md=String(e.target.value).slice(5), o=WSN_IDX[md==='02-29'?'02-28':md];
     if(o!=null){ const cur=state.wsnTo==null?null:state.wsnTo; if(e.target.id==='wsnFromSel') setState({wsnFrom:o, wsnTo:cur!=null&&cur<o?o:cur}); else setState({wsnTo:o, wsnFrom:Math.min(o, state.wsnFrom==null?WSN_FROM0:state.wsnFrom)}); } }
@@ -14130,6 +14382,14 @@ app.addEventListener('click', e=>{
     case 'w500cisort': setState({w500CiSort:el.dataset.k}); break;
     case 'w500ciall': setState(s=>({w500CiAll:!s.w500CiAll})); break;
     case 'w500csv': w500CSV(); track('w500_csv',{ st:state.wtSt||'all' }); break;
+    case 'wdrper': setState({wdrPer:el.dataset.k, wdrOpen:''}); track('wdr_period',{ k:el.dataset.k }); break;
+    case 'wdrby': setState({wdrBy:el.dataset.k, wdrOpen:'', wdrAll:false}); break;
+    case 'wdrsort': setState({wdrSort:el.dataset.k}); break;
+    case 'wdrexp': setState(s=>({wdrOpen:s.wdrOpen===el.dataset.k?'':el.dataset.k})); break;
+    case 'wdrall': setState(s=>({wdrAll:!s.wdrAll})); break;
+    case 'wdrtripall': setState(s=>({wdrTripAll:!s.wdrTripAll})); break;
+    case 'wdrretry': loadWdr(); break;
+    case 'wdrcsv': wdrCSV(); track('wdr_csv',{ st:state.wtSt||'all', per:state.wdrPer }); break;
     case 'w250band': { const k=el.dataset.k, U=['near','mid','low','none']; setState(s=>({w250Bands: !k ? [] : k==='under' ? (s.w250Bands.length===4&&U.every(x=>s.w250Bands.includes(x)) ? [] : U) : s.w250Bands.includes(k) ? s.w250Bands.filter(x=>x!==k) : [...s.w250Bands,k]})); break; }
     case 'w250why': { const k=el.dataset.k; setState(s=>({w250Why: s.w250Why.includes(k) ? s.w250Why.filter(x=>x!==k) : [...s.w250Why,k]})); break; }
     case 'w250whyclr': setState({w250Why:[]}); break;

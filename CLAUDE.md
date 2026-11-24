@@ -1076,6 +1076,30 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     number; will make it n of N, change, ran, on the lists; sort Most on track / Most improved).
   Checked 17 Nov (data to 16 Nov): 62 of 350 will make it (8 + 54), 26 close, 262 behind; lists 31 / 24 / 105; matches the Acre
   target page set to 500 by 5 Dec. Desktop 1280, phone 375 / 320 with no sideways scroll.
+- **Page 6d, Dry run** (`wdr`, `#/dry-run`, rail "Dry run", between Machines and Cumulative; `wdrBuild` / `loadWdr` / `wdrAgg` /
+  `wdrBodyHTML` / `wdrCSV`, Dinesh 2026-11-24). Wheat admin only. The km each machine drives a day, off a **TEMPORARY** sheet's
+  "dry run kms" tab (`PROJECTS.wheat.dry`, sheet `1DSy4Umd…`, gid `639834129`; the programme shares the real sheet later — change that
+  line only, columns are read by name: machine / date / dry|km). Four columns: `machine_number, date__, dry_run, FY`, one row per
+  machine-day, every programme machine (935). **Built around THIS season only (Dinesh)**: rows dated before 1 Oct of the season are
+  dropped whatever the FY label says (last year held only 20–31 Oct 2025), and only Main-sheet machines in the wt* scope count.
+  Lazy-loaded on first open like the snake tab; logs `[MP-Ops] wheat dry run tab → {…}` (rows, older, onWheat, wheatNotOnTab).
+  · **Each machine-day is one kind** (measured 24 Nov): RUNNING = IoT acres > 0 (every one has a dry-run row, 4,068 of 4,068;
+    median 16 km) · TRIP = no IoT acres and ≥ `WDR_MOVE` 1 km (drove, sprayed nothing: 472 days / 9,851 km) · TRANSPORT = over
+    `WDR_TRANSPORT` 150 km (the move to the territory, 36 days / 11,479 km, nearly all 20–23 Oct) — left out of EVERY figure, named
+    with its km · STILL = no acres, under 1 km (GPS drift, median 0.19 km).
+  · **Figures**: dry run km (all but transport) · km per acre = dry run km ÷ IoT acres (trips count against it) · km per running day
+    · trips without spraying (days, km). km per acre falls as acres a day rise (0–5 ac days 3.0 km/ac, 30–50 ac 0.7), so the page
+    shows km per running day beside it and says to read the two together.
+  · Season starts on the Main sheet's first date (22 Oct). **The tab runs a day behind the Main sheet**, so the Day filter's day is
+    capped at the tab's last date with an amber line saying so. Period control: Season · Last 7 days · the day (`state.wdrPer`).
+  · Page: strip (5 tiles) → last 7 days vs the 7 before (always) → km by day (running vs trips, stacked; days outside the period
+    faded) → **by Territory / CI / AM** (`wdrBy`; CI and AM keyed on the NUMBER; sort by header or Sort select: km per acre default ·
+    km per running day · trip km · km · name; groups under 5 running days, 2 on a day, sort last; each row shows its km/ac vs all in
+    view) → a row opens its machines with a 14-day km spark (blue running, amber trip) → "Drove and sprayed nothing" (machines by
+    trip km, operator Call) → km per running day by day. CSV = one line per machine for the period.
+  · Checked 24 Nov (deployed, season 22 Oct – 22 Nov): 339 machines, 81,358 km, 1.15 km/ac, 17.7 km a running day, 472 trips /
+    9,851 km, 36 transport days; Khanna stands out (2.02 km/ac, 49 trips / 1,643 km — CI Jasveer Singh's machines at 4–5 km/ac).
+    Desktop 1280, phone 375 / 320 (no sideways scroll). 4 deployed machines in view are not on the tab (stated in the note).
 - **Days ran filter + sort on Acre target and Machines (Dinesh 2026-11-16).** Days ran = days with IoT acres, season to the Day
   filter's day (`wmcIotDays` / `w250Info().ran`, the same count). A multi-select row of bands `W_RUND` (0 · 1–5 · 6–10 · 11–15 ·
   16+ days, `wRunDBand`) with counts over what the page's other filters leave; separate picks per page (`state.wmcRunD` /
