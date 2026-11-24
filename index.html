@@ -149,19 +149,19 @@
   @media (max-width:1240px){ .wfoKpi{grid-template-columns:repeat(3,minmax(0,1fr))} }
   @media (max-width:1240px){ .wtGrid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))} }
   @media (max-width:1180px){ .wtAcres{grid-template-columns:minmax(0,1fr)} }
-  html[data-proj="wheat"] body{font-family:'IBM Plex Sans',system-ui,sans-serif;color:#15181C;background:#F3F6FB;font-variant-numeric:tabular-nums}
-  html[data-proj="wheat"] #app [style*="Noto Sans"]{font-family:'IBM Plex Sans',system-ui,sans-serif !important}
-  html[data-proj="wheat"] #app [style*="#E9E6DF"]{border-color:#E4E7EA !important}
-  html[data-proj="wheat"] #app [style*="color:#1B1A17"]{color:#15181C !important}
-  html[data-proj="wheat"] #app [style*="color:#6E6A62"],html[data-proj="wheat"] #app [style*="color:#46433d"]{color:#5B636D !important}
-  html[data-proj="wheat"] #app [style*="background:#F2F0EB"]{background:#EEF0F2 !important}
-  html[data-proj="wheat"] #app [style*="background:#FBFAF8"],html[data-proj="wheat"] #app [style*="background:#F6F5F2"]{background:#F8F9FA !important}
-  html[data-proj="wheat"] #app [style*="background:#1B1A17"]{background:linear-gradient(135deg,#243447,#16352D) !important}
-  html[data-proj="wheat"] #app [style*="#EFEDE7"],html[data-proj="wheat"] #app [style*="#F4F2EE"],html[data-proj="wheat"] #app [style*="#F2F0EB"]{border-color:#EEF0F2 !important}
-  html[data-proj="wheat"] #app [style*="color:#9C988F"]{color:#5B636D !important}
-  html[data-proj="wheat"] .mLbl{font-size:12px;font-weight:600;letter-spacing:.02em;color:#5B636D;text-transform:none}
-  html[data-proj="wheat"] .mCap{font-size:12.5px;color:#5B636D}
-  html[data-proj="wheat"] :focus-visible{outline-color:#15181C}
+  html:is([data-proj="wheat"],[data-proj="iot"]) body{font-family:'IBM Plex Sans',system-ui,sans-serif;color:#15181C;background:#F3F6FB;font-variant-numeric:tabular-nums}
+  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="Noto Sans"]{font-family:'IBM Plex Sans',system-ui,sans-serif !important}
+  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="#E9E6DF"]{border-color:#E4E7EA !important}
+  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="color:#1B1A17"]{color:#15181C !important}
+  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="color:#6E6A62"],html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="color:#46433d"]{color:#5B636D !important}
+  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="background:#F2F0EB"]{background:#EEF0F2 !important}
+  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="background:#FBFAF8"],html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="background:#F6F5F2"]{background:#F8F9FA !important}
+  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="background:#1B1A17"]{background:linear-gradient(135deg,#243447,#16352D) !important}
+  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="#EFEDE7"],html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="#F4F2EE"],html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="#F2F0EB"]{border-color:#EEF0F2 !important}
+  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="color:#9C988F"]{color:#5B636D !important}
+  html:is([data-proj="wheat"],[data-proj="iot"]) .mLbl{font-size:12px;font-weight:600;letter-spacing:.02em;color:#5B636D;text-transform:none}
+  html:is([data-proj="wheat"],[data-proj="iot"]) .mCap{font-size:12.5px;color:#5B636D}
+  html:is([data-proj="wheat"],[data-proj="iot"]) :focus-visible{outline-color:#15181C}
   /* The labelled rail (232px): a group title, then icon + full name per page. */
   .w2Nav{display:flex;align-items:center;gap:10px;width:100%;height:36px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:rgba(255,255,255,.78);font:500 14px 'IBM Plex Sans',system-ui,sans-serif;cursor:pointer;text-align:left;flex-shrink:0}
   .w2Nav svg{width:18px;height:18px;color:rgba(255,255,255,.5);flex-shrink:0}
@@ -213,6 +213,9 @@ const W2 = { ink:'#15181C', ink2:'#5B636D', ink3:'#8C939B', line:'#E4E7EA', line
 // The tinted tile for a KPI label — the design's tone(): each kind of figure keeps one hue wherever it appears.
 function w2tone(l){
   const T=(a,b,c,d)=>({ bg:`linear-gradient(150deg,${a} 0%,#FFFFFF 75%)`, bd:b, vc:c, dot:d });
+  if(/actioned$|^Done/.test(l)) return T('#EEF8F2','#CFE9DA',W2.actD,W2.act);
+  if(/^(Potential tamper|Tamper|Check first|Device stopped)/.test(l)) return T('#FDECEA','#F4D8D4',W2.brkD,W2.brk);
+  if(/^(At risk|Battery|Also check)/.test(l)) return T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle);
   return l==='Breakdown'||/^(New breakdowns|Open at)/.test(l) ? T('#FDECEA','#F4D8D4',W2.brkD,W2.brk) : /^Carried/.test(l) ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle) : /^Closed/.test(l) ? T('#EEF8F2','#CFE9DA',W2.actD,W2.act) : l==='Idle'||/^(Close|Not crossed)/.test(l) ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle) : /^Crossed/.test(l) ? T('#EEF8F2','#CFE9DA',W2.actD,W2.act)
     : /^Acres/.test(l) ? T('#E8F2FC','#D2E3F4','#1D4F80','#3B82C4') : /^(MTD|Scan|Spruce|Feego)/.test(l) ? T('#F0ECFC','#DED7F4','#4A3A8C','#7A63D1')
     : /^(Deployed|Machines)/.test(l) ? T('#FFF0E2','#F5DEC7','#8A430A',C.orange) : /^(Operators|Retailers|Territories|FOs)/.test(l) ? T('#E6F6F1','#CBEAE0','#0E6B57','#1A9E80')
@@ -227,6 +230,8 @@ const w2lbl = t => `<span style="font-size:12.5px;font-weight:500;color:${W2.ink
 const w2num = (sz,w=600,col) => `font-size:${sz}px;font-weight:${w};font-variant-numeric:tabular-nums;letter-spacing:${sz>=26?'-0.01em':'0'};line-height:1.1${col?';color:'+col:''}`;
 const w2unit = (t='ac',sz=13) => `<span style="font-size:${sz}px;color:${W2.ink2};font-weight:500"> ${t}</span>`;
 const isWheat = () => curProject().id==='wheat';
+// The v2 skin (rail, header, phone bar, page colours): Wheat since 2026-10-28, IoT since 2026-11-24. Data logic keeps isWheat().
+const isW2 = () => isWheat() || curProject().id==='iot';
 // A real phone gets the mobile view automatically and renders it full-bleed (no preview bezel).
 // The same breakpoint drives both, so `device` and the chrome never disagree.
 // A phone held sideways is 932×430 — wider than 820px, so the width test alone dropped it onto the DESKTOP
@@ -236,7 +241,7 @@ const isWheat = () => curProject().id==='wheat';
 // file — keep the two in step.
 const PHONE_MQ = '(max-width:820px), (max-height:500px) and (pointer:coarse)';
 const isPhone = () => window.matchMedia(PHONE_MQ).matches;
-const state = { view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
+const state = { ciMe:w250Load0('mpoc_iotci_me',''), ciLang:w250Load0('mpoc_iotci_lang',''), ciPick:false, ciQ:'', ciDay:'', ciAcDay:'', view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
   wDay:'', wsnSt:'ALL', wsnRun:'cum', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wDep:'dep', wSh:'', wmcQ:'', wmcShow:'all', wmcRunD:[], w250RunD:[], w500Tab:'fix', w500All:false, wdrPer:'season', wdrBy:'terr', wdrSort:'kmac', wdrOpen:'', wdrAll:false, wdrTripAll:false, w500CiSort:'on', w500CiAll:false, wmcSort:'mc', wmcLimit:60, w250Tgt:+w250Load0('mpoc_w250_tgt',250)||250, w250Dl:w250Load0('mpoc_w250_dl',''), w250Bands:[], w250Why:[], w250Run:'all', w250Terrs:[], w250Ams:[], w250GSort:'over', w250Sort:'ac', w250By:'terr', w250Limit:60, w250GAll:false, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
@@ -381,7 +386,7 @@ const PROJECTS = {
   iot:    { id:'iot', title:'IoT Device Monitoring', short:'IoT', allLabel:'All states',
             gid:'', demo:[], states:null, fullDeploy:[],
             iot:{ sheetId:'19CSbLqTIB-TivT1rVrilFeQEERcts_LHAGwjpgE__Oo', tamperGid:'0', riskGid:'504457328', mapGid:'954063262', actionsTab:'IoT actions' },
-            home:'iottamper', views:['iottamper','iotrisk','iotteam'], only:['iottamper','iotrisk','iotteam'], kharifTabs:false,
+            home:'iottamper', views:['iotci','iotcia','iottamper','iotrisk','iotteam'], only:['iotci','iotcia','iottamper','iotrisk','iotteam'], kharifTabs:false,
             head:sc=>`IoT Device Monitoring · ${sc==='India'?'All states':sc}`, sub:'Potential tamper cases · At risk machines · Farm Mechanisation Services',
             mHead:sc=>`IoT Monitoring · ${sc==='India'?'All':sc}`, mSub:'IoT team · AFS' },
 };
@@ -702,7 +707,7 @@ async function loadData(){
   // Wheat (rebuild): its own machine-day sheet, no machine rows, no weather. Fetched for the Wheat ADMIN only — the
   // other Wheat logins see a "being rebuilt" page until their views are decided, and carry none of the data meanwhile.
   if(P.ret){ applyRows([]); if(wSees()) await loadWRet(); else { dataMode='live'; lastUpdated=nowIST(); render(); } return; }
-  if(P.iot){ applyRows([]); await loadIoT(); return; }   // IoT team: its own workbook, no machine rows, no weather
+  if(P.iot){ applyRows([]); if(!roleHidesView('iotci')) loadIotWheat(IOTW.loaded); await loadIoT(); return; }   // IoT team: its own workbook, no machine rows, no weather
   // The project's state list is the outer scope: a row outside it never reaches a view, whatever the tab holds.
   const scoped = rows => P.states ? rows.filter(m=>P.states.includes(m.st)) : rows;
   const demo = () => scoped(hygiene(P.demo.map(m=>({...m}))));
@@ -2654,7 +2659,7 @@ const wSees = () => isAdmin() || wTeam();
 // 'mpprod' is the exception to that constraint rather than a breach of it: its tab holds Madhya Pradesh and
 // nothing else, and it renders NO state picker, so it cannot widen anybody's scope. It is safe to grant to a
 // state-locked MP login, and is granted to exactly those two plus leadership.
-const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum'];   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
+const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia'];   // iotci / iotcia: the North CI page (role iotci + IoT head)   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
 function roleHidesView(view){
   // The PROJECT is the outer gate and runs first, so it binds admin too: a Wheat login never sees a Kharif-tab
   // view, and the Wheat-only views never appear under Kharif.
@@ -2662,6 +2667,7 @@ function roleHidesView(view){
   // "Didn't run" is the field logins' home (plan M3): their own machines that did not run, with whom to ring.
   // Kharif only; admin reads the same set through Machines + the Health filter.
   if(view==='norun') return curProject().id!=='kharif' || !['upl','swal'].includes(GATE.cur&&GATE.cur.role);
+  if(GATE.cur && GATE.cur.role==='iotci' && (view==='iottamper'||view==='iotrisk')) return true;   // the North CI login: its own two pages only
   if(!GATED_VIEWS.includes(view)) return false;
   // The MP product summary reads a Madhya-Pradesh-only tab, so it is offered only while the ACTIVE STATE SCOPE
   // is MP — not at All India, and not under another state. This is a scope test, not a role test, and it runs
@@ -2674,10 +2680,10 @@ function roleHidesView(view){
 }
 // Views that render their OWN controls and so drop the shared machine filter bar + KPI strip (desktop) and the
 // weather banner + KPI cards (mobile): the standalone rollup/insight pages.
-const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iottamper','iotrisk','iotteam']);
+const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia','iottamper','iotrisk','iotteam']);
 // Pages with no machine rows behind them (Wheat plan, the IoT pages): the machine search and the phone's filter
 // button go, because neither can reach anything on them.
-const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iottamper','iotrisk','iotteam']);
+const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia','iottamper','iotrisk','iotteam']);
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
@@ -3656,20 +3662,20 @@ const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" 
 const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', norun:'Didn’t run',
   am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Daily recap', leader:'Leaders',
   product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wfo:'TM · FO summary', wmap:'Machine map', wtop:'Top 10 machines', w500:'500 acres by 5 Dec', w250:'Acre target', wbd:'Breakdowns', wmc:'Machine summary', wdr:'Dry run', wcum:'Cumulative acres',
-  iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotteam:'IoT team overview' };
+  iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotteam:'IoT team overview', iotci:'Needs attention', iotcia:'Acres sprayed' };
 // The word under each rail icon: short enough for a 64px button at 9.5px. One word where the title is long.
 // ONE NAME TABLE (plan I4). NAV_TITLE is the full name — page heading, browser title, the phone's All pages sheet.
 // RAIL_LBL is the SHORT form, used only where room is tight (desktop rail, phone tab bar, phone header), and it is
 // the same short form in all three. M_VIEWS takes its labels from here.
 const RAIL_LBL = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', am:'AMs', bm:'BMs', norun:'Didn’t run',
   pending:'Pending', recap:'Recap', leader:'Leaders', product:'Products', mpprod:'MP products', snake:'Cumulative', fo:'FOs',
-  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', w500:'500 Drive', w250:'Acre target', wbd:'Breakdowns', wmc:'Machines', wdr:'Dry run', wcum:'Cumulative', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team' };
+  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', w500:'500 Drive', w250:'Acre target', wbd:'Breakdowns', wmc:'Machines', wdr:'Dry run', wcum:'Cumulative', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team', iotci:'Needs attention', iotcia:'Acres' };
 // Rail order, in labelled groups (a hairline between them): the project's own pages, then what happened TODAY,
 // then the PEOPLE tables, then the SEASON reading. Insights used to lead the rail; it now leads the Season group.
 // Group names, index for index with RAIL_GROUPS (the first group is the project's own pages and has none).
 const RAIL_GROUP_NAMES = ['', 'Today', 'People', 'Season'];
 const RAIL_GROUPS = [
-  [['wplan',I.retailer],['w500',I.leader],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['wtop',I.leader],['w250',I.insights],['wbd',I.risk],['wmc',I.machines],['wdr',I.route],['wcum',I.snake],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am]],
+  [['wplan',I.retailer],['w500',I.leader],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['wtop',I.leader],['w250',I.insights],['wbd',I.risk],['wmc',I.machines],['wdr',I.route],['wcum',I.snake],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am],['iotci',I.tamper],['iotcia',I.snake]],
   [['norun',I.risk],['map',I.map],['machines',I.machines],['weather',I.weather],['recap',I.recap]],
   [['tables',I.tables],['am',I.am],['bm',I.bm],['fo',I.fo],['retailer',I.retailer],['pending',I.pending]],
   [['insights',I.insights],['snake',I.snake],['product',I.product],['mpprod',I.mpprod],['leader',I.leader]],
@@ -3677,10 +3683,12 @@ const RAIL_GROUPS = [
 
 // The Wheat rail (v2): 232px, labelled, one group per programme. Short names (RAIL_LBL), as the design has them;
 // the full name is the button's title and the page header.
+// A page's short name in the rail / phone bar / phone header. The CI pages speak the CI's language.
+const navLbl = k => k==='iotci' ? ciT('need') : k==='iotcia' ? ciT('acres') : (RAIL_LBL[k]||NAV_TITLE[k]||k);
 function w2RailHTML(){
   const P=curProject(), v=state.view;
   const items=RAIL_GROUPS.flat().filter(([k])=>!roleHidesView(k));
-  const btn=(k,ic)=>`<button data-act="view" data-view="${k}" title="${E(NAV_TITLE[k]||k)}"${v===k?' aria-current="page"':''} class="w2Nav${v===k?' on':''}">${ic}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(RAIL_LBL[k]||NAV_TITLE[k]||k)}</span></button>`;
+  const btn=(k,ic)=>`<button data-act="view" data-view="${k}" title="${E(NAV_TITLE[k]||k)}"${v===k?' aria-current="page"':''} class="w2Nav${v===k?' on':''}">${ic}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(navLbl(k))}</span></button>`;
   const foot=(act,ic,t)=>`<button data-act="${act}" class="w2Nav" style="color:rgba(255,255,255,.7)">${ic}<span>${t}</span></button>`;
   return `<aside style="width:232px;flex-shrink:0;background:linear-gradient(185deg,#1F2B3A 0%,#182C33 60%,#14302A 100%);color:#fff;display:flex;flex-direction:column;padding:20px 14px 16px;overflow:hidden">
     <div style="display:flex;align-items:center;gap:10px;padding:0 6px 20px;flex-shrink:0">
@@ -3698,7 +3706,7 @@ function w2RailHTML(){
   </aside>`;
 }
 function railHTML(){
-  if(isWheat()) return w2RailHTML();
+  if(isW2()) return w2RailHTML();
   const v=state.view;
   return `<aside style="width:74px;flex-shrink:0;background:#1B1A17;display:flex;flex-direction:column;align-items:center;padding:16px 0;overflow:hidden">
     <div class="railLogo">UPL</div>
@@ -3719,13 +3727,15 @@ function topbarHTML(v){
   const scope = state.view==='wplan' ? (wp ? (wp.st||wp.lockSt||'India') : (state.wpSt||'India'))
     : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500'||state.view==='wdr') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
     : state.view==='wcum' ? (state.wsnSt==='HR'||state.wsnSt==='PB' ? state.wsnSt : 'India')
+    : (state.view==='iotci'||state.view==='iotcia') ? 'North'
     : iot ? (iot.st||iot.lockSt||'India') : v.scopeLabel;
   const fresh = state.view==='wplan' ? (wp ? `${fmt(wp.all.length)} retailers · ${fmt(wp.allMc)} machines` : 'Retailer summary')
     : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500'||state.view==='wdr') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
     : state.view==='wcum' ? 'Cumulative acres · 3 seasons'
+    : (state.view==='iotci'||state.view==='iotcia') ? (ciMe() ? ciMe().name+' · Cluster Incharge' : 'Cluster Incharge · Haryana + Punjab')
     : iot ? (IOT.loaded ? `${fmt(IOT.tamper.filter(r=>gateAllowsState(r.st)).length)} potential tamper · ${fmt(IOT.risk.filter(r=>gateAllowsState(r.st)).length)} at risk` : 'IoT sheet')
     : v.freshCount;
-  if(isWheat()) return `<header style="height:68px;flex-shrink:0;background-color:#fff;background-image:linear-gradient(90deg,#F5821F,#1FAE43);background-size:100% 3px;background-repeat:no-repeat;border-bottom:1px solid ${W2.line};display:flex;align-items:center;gap:20px;padding:0 32px">
+  if(isW2()) return `<header style="height:68px;flex-shrink:0;background-color:#fff;background-image:linear-gradient(90deg,#F5821F,#1FAE43);background-size:100% 3px;background-repeat:no-repeat;border-bottom:1px solid ${W2.line};display:flex;align-items:center;gap:20px;padding:0 32px">
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
       <div style="font-size:17px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(curProject().head(scope))}</div>
       <div style="font-size:13px;color:${W2.ink2}">${E(curProject().sub)}</div>
@@ -11875,7 +11885,7 @@ const IOT_ST_NAMES = { ...STATE_NAMES, AP:'Andhra Pradesh' };
 const iotStName = c => IOT_ST_NAMES[c] || c;
 const IOT = { loading:false, loaded:false, error:false, at:'', tamper:[], risk:[], techs:[], tsKeys:[], head:null, actions:{}, actionsOk:false, local:[], log:null };
 const IOT_PAGE = 60;
-const IOT_MINW = 1080;   // desktop tables are fixed grids: below this they scroll sideways rather than clip the Action column
+const IOT_MINW = 960;   // desktop tables are fixed grids: below this they scroll sideways (960 fits beside the 232px v2 rail at 1280)
 // The write endpoint: the /exec URL of apps-script/iot-actions.gs deployed FROM the IoT workbook. Blank ⇒ every
 // "Record action" button is absent (a form that cannot submit is worse than none) and the pages are read-only.
 const IOT_W = { url:'https://script.google.com/macros/s/AKfycbxsULRyYcw60mqX3VX7mqoqcUy_suhLEzG0O20W3AlRR1Nc4kHgU0SCMPq8vtwI8v4cUg/exec', token:'mpops-iot-4q8zr2', MAX:600 };
@@ -12097,7 +12107,7 @@ function iotTsHTML(O, mob){
   const b=(k,t,n)=>{ const on=O.cur===k;
     return `<button data-act="iotts" data-ts="${E(k)}" aria-pressed="${on}" style="flex:${mob?'1 1 0':'0 0 auto'};min-width:0;min-height:${mob?44:34}px;padding:0 ${mob?8:14}px;border:none;border-radius:9px;background:${on?'#fff':'transparent'};box-shadow:${on?'0 1px 2px rgba(0,0,0,.1)':'none'};color:${on?'#1B1A17':'#6E6A62'};font-family:inherit;font-size:${mob?12.5:13}px;font-weight:${on?700:600};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;line-height:1.15;text-align:center">${E(t)}<span style="font-family:'IBM Plex Mono';font-size:11.5px;${on&&k==='SUSPICIOUS_MOVEMENT'?'color:#B42318':''}">${fmt(n)}</span></button>`; };
   return `<div style="display:flex;align-items:center;gap:10px;margin-top:${mob?10:12}px;flex-wrap:wrap">${mob?'':'<span style="font-size:10px;font-weight:600;letter-spacing:.08em;color:#9C988F;text-transform:uppercase">Status</span>'}
-    <div role="group" aria-label="Potential tamper status" style="display:flex;background:#ECEAE4;border-radius:12px;padding:3px;gap:3px;${mob?'width:100%;box-sizing:border-box':''}">${b('','All',O.all)}${O.opts.map(o=>b(o.k,o.t,o.n)).join('')}</div></div>`;
+    <div role="group" aria-label="Potential tamper status" style="display:flex;background:${W2.track};border-radius:12px;padding:3px;gap:3px;${mob?'width:100%;box-sizing:border-box':''}">${b('','All',O.all)}${O.opts.map(o=>b(o.k,o.t,o.n)).join('')}</div></div>`;
 }
 // The IoT head's view: one row per technician (from the mapping tab), with a line per state under him. States
 // carrying cases that no technician is mapped to are listed under "No technician mapped" rather than vanishing.
@@ -12159,13 +12169,12 @@ function iotControls(view, A, mob){
     : `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">${stCtrl}${dateCtrl}<div style="flex:1"></div>${stamp}</div>`;
 }
 function iotStats(tiles, mob){
-  const tileCss = mob ? 'min-width:0;background:#FBFAF8;padding:13px 16px' : 'flex:1 0 auto;min-width:140px;padding:13px 16px;border-right:1px solid #EFEDE7';
-  return `<div style="${mob?'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:#E9E6DF;overflow:hidden':'background:#FBFAF8;display:flex;overflow-x:auto'};border:1px solid #E9E6DF;border-radius:14px;margin-top:14px">
-    ${tiles.map(([val,lab,sub,ink],i)=>`<div style="${tileCss}${mob&&tiles.length%2&&i===tiles.length-1?';grid-column:1/-1':''}"><div style="font-family:'IBM Plex Mono';font-size:20px;font-weight:700;color:${ink||C.ink}">${val}</div>
-      <div style="font-size:10px;font-weight:600;letter-spacing:.05em;color:#6E6A62;text-transform:uppercase;margin-top:5px">${lab}</div>${sub?`<div style="font-size:11px;color:#6E6A62;margin-top:2px">${sub}</div>`:''}</div>`).join('')}</div>`;
+  const { tile }=wpBits(mob);   // the Wheat v2 tinted tile, toned by its label (w2tone)
+  return mob ? `<div style="${w2card(16)};overflow:hidden;margin-top:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))">${tiles.map(([v,l,s])=>tile(l,v,'',s)).join('')}</div>`
+    : `<div style="display:grid;grid-template-columns:repeat(${tiles.length},minmax(0,1fr));gap:12px;margin-top:16px">${tiles.map(([v,l,s])=>tile(l,v,'',s)).join('')}</div>`;
 }
 const iotFrac = (n,d) => `${fmt(n)}<span style="font-size:12px;color:#B6B1A8;font-weight:500"> / ${fmt(d)}</span>`;
-const iotEmpty = t => `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:40px 18px;text-align:center;color:#6E6A62;font-size:12.5px;margin-top:14px">${t}</div>`;
+const iotEmpty = t => `<div style="${w2card(16)};padding:40px 18px;text-align:center;color:#6E6A62;font-size:12.5px;margin-top:14px">${t}</div>`;
 const iotWriteNote = () => IOT_W.url ? '' : `<div style="margin-top:10px;font-size:11.5px;color:#8A6A12;background:#FBF1DA;padding:8px 12px;border-radius:9px">Read-only for now. Recording an action switches on once the write endpoint is deployed from the IoT workbook.</div>`;
 
 
@@ -12206,7 +12215,7 @@ function iotTeamHTML(mob){
       <span style="text-align:right">${pct(c.kAct,c.k)}${meter(c.kAct,c.k)}</span></div>`;
     const body=A.techs.map(g=>line(g.tot,`<span style="font-size:13px;font-weight:700">${E(g.name)}</span> ${iotTel(g.mob,false)}`,true,false)
       + (g.states.length>1 ? g.states.map(s=>line(s,`<span style="font-size:12.5px">${E(iotStName(s.st))}</span>`,false,true)).join('') : '')).join('');
-    list=`<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;overflow:hidden;margin-top:14px">
+    list=`<div style="${w2card(16)};overflow:hidden;margin-top:14px">
       <div style="padding:13px 16px;border-bottom:1px solid #EFEDE7"><div style="font-size:13px;font-weight:700">Technicians and their states</div><div style="font-size:11px;color:#6E6A62;margin-top:2px">Each case counted under the technician its row names · both over ${rangeTxt}${A.TS.cur?` · tamper: ${E(iotTsTxt(A.TS.cur))} only`:''} · actioned = any action recorded</div></div>
       <div style="overflow-x:auto"><div style="min-width:${IOT_MINW}px">${th}${body}</div></div></div>`;
   }
@@ -12301,9 +12310,9 @@ function iotCardHTML(m, A){
   const cap='font-size:12.5px;color:#46433d;line-height:1.45';
   const back=T ? m.top.back : '', backDay=back.slice(0,10);
   const fig = T
-    ? `<div style="display:flex;align-items:baseline;gap:7px;margin-top:10px"><span style="font-family:'IBM Plex Mono';font-size:24px;font-weight:700;line-height:1">${m.n}</span><span style="font-size:13px;font-weight:600">ping gap${m.n===1?'':'s'}</span>${m.n>1?`<span style="${cap}">· ${fmt(m.dark)} h dark in all</span>`:''}</div>
+    ? `<div style="display:flex;align-items:baseline;gap:7px;margin-top:10px"><span style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1">${m.n}</span><span style="font-size:13px;font-weight:600">ping gap${m.n===1?'':'s'}</span>${m.n>1?`<span style="${cap}">· ${fmt(m.dark)} h dark in all</span>`:''}</div>
        <div style="${cap};margin-top:4px">Latest ${iotShortDay(m.top.day)}, ${iotTime(m.top.at)} → ${backDay&&backDay!==m.top.day?iotShortDay(backDay)+' ':''}${iotTime(back)} · ${m.top.gap==null?'—':m.top.gap+' h'}${m.top.km?` · moved ${iotKm(m.top.km)} km`:''}</div>`
-    : `<div style="display:flex;align-items:baseline;gap:7px;margin-top:10px"><span style="font-family:'IBM Plex Mono';font-size:24px;font-weight:700;line-height:1">${iotKm(m.km)}</span><span style="font-size:13px;font-weight:600">km on zero voltage</span></div>
+    : `<div style="display:flex;align-items:baseline;gap:7px;margin-top:10px"><span style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1">${iotKm(m.km)}</span><span style="font-size:13px;font-weight:600">km on zero voltage</span></div>
        <div style="${cap};margin-top:4px">${m.top.at?`Started ${iotShortDay(m.top.day)}, ${iotTime(m.top.at)} · `:''}${iotMins(m.dark)} without power · ${fmt(m.pings||0)} pings${m.n>1?` · ${m.n} outages`:''}</div>`;
   const unit = n => T ? (n===1?'ping gap':'ping gaps') : (n===1?'outage':'outages');
   const backLine = m.back
@@ -12311,6 +12320,8 @@ function iotCardHTML(m, A){
     : m.partly
     ? `<div style="margin-top:10px;padding:8px 10px;border-radius:10px;background:#FBF1DA;color:#6B4E0B;font-size:12.5px;line-height:1.4"><b>Partly done</b> — ${m.nNew} ${unit(m.nNew)} here ${m.nNew===1?'has':'have'} no action yet.</div>` : '';
   const last = m.last ? backLine + `<div style="margin-top:10px;padding:8px 10px;border-radius:10px;background:#FBFAF8;border:1px solid #EFEDE7;font-size:12px;color:#46433d;line-height:1.4">${m.back||m.partly?'<span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#6E6A62">Last action · </span>':''}<b style="color:#1B1A17">${E(m.last.action)}</b> · ${E(m.last.status)}${m.last.remark?` — ${E(m.last.remark)}`:''}<div style="font-size:11px;color:#6E6A62;margin-top:2px">${iotActOn(m.last)?'Done '+iotShortDay(iotActOn(m.last))+' · ':''}${E(String(m.last.by||'').replace(/^IoT · /,''))}</div></div>` : '';
+  const ciA = m.cases.flatMap(c=>IOT.actions['CI|'+c.id]||[]).sort((a,b)=>(iotActOn(a)+a.ts).localeCompare(iotActOn(b)+b.ts)).pop();
+  const ciNote = ciA ? `<div style="margin-top:8px;padding:8px 10px;border-radius:10px;background:#E8F2FC;border:1px solid #D2E3F4;font-size:12.5px;color:#1D4F80;line-height:1.4"><b>CI:</b> ${E(ciA.action)}${ciA.remark?` — ${E(ciA.remark)}`:''}<div style="font-size:11.5px;margin-top:2px">${iotActOn(ciA)?'Done '+iotShortDay(iotActOn(ciA))+' · ':''}${E(String(ciA.by||'').replace(/^CI · /,''))}</div></div>` : '';
   const nav = m.loc ? `<a href="${iotMapHref(m.loc)}" target="_blank" rel="noopener" style="flex:1;min-height:46px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;background:#1B1A17;color:#fff;font-size:14px;font-weight:700;text-decoration:none">${IOT_PIN}Navigate</a>`
     : `<span style="flex:1;min-height:46px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#F2F0EB;color:#6E6A62;font-size:13px">No location on sheet</span>`;
   const rec = IOT_W.url ? `<button data-act="iotact" data-case="${E(m.kind+'|'+m.mc)}" style="flex:1;min-height:46px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;border:1.5px solid #1B1A17;background:#fff;color:#1B1A17;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">${IOT_CHECK}${m.last?'Update':'Record action'}</button>` : '';
@@ -12322,14 +12333,14 @@ function iotCardHTML(m, A){
           ? `<b>${iotShortDay(c.day)}</b> ${iotTime(c.at)} → ${iotTime(c.back)} <span style="color:#6E6A62">· ${c.gap==null?'—':c.gap+' h'}${c.km?` · ${iotKm(c.km)} km`:''}</span>${c.sts?`<div style="font-size:11.5px;color:${c.sts==='SUSPICIOUS_MOVEMENT'?'#B42318':'#6E6A62'}">${E(iotTsTxt(c.sts))}</div>`:''}`
           : `${c.at?`<b>${iotShortDay(c.day)}</b> ${iotTime(c.at)} · `:''}<b>${iotKm(c.km)} km</b> <span style="color:#6E6A62">· ${iotMins(c.mins)} · ${fmt(c.pings||0)} pings</span>`}</div>
         ${(T?c.loc:c.end)?`<a href="${iotMapHref(T?c.loc:c.end)}" target="_blank" rel="noopener" aria-label="Open this ${T?'gap':'outage'} in Maps" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#1B6FD1">${IOT_PIN}</a>`:''}</div>`; }).join('')}</div>`:''}` : '';
-  return `<article style="background:#fff;border:1px solid #E9E6DF;border-radius:16px;padding:14px 14px 10px;box-shadow:0 1px 2px rgba(27,26,23,.04)">
+  return `<article style="${w2card(16)};padding:14px 14px 10px;box-shadow:0 1px 2px rgba(27,26,23,.04)">
     <div style="display:flex;align-items:center;gap:8px">
       <span style="font-family:'IBM Plex Mono';font-size:16px;font-weight:700">${E(m.mc)}</span>
       ${A.st?'':`<span style="font-size:11.5px;color:#6E6A62">${E(iotStName(m.st))}</span>`}
       <span style="flex:1"></span>${iotPill(m.status)}</div>
     ${T?(Object.keys(m.tsN).length?`<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${Object.keys(m.tsN).sort((a,b)=>(a==='SUSPICIOUS_MOVEMENT'?0:1)-(b==='SUSPICIOUS_MOVEMENT'?0:1)).map(k=>iotTsTag(k,m.n>1?m.tsN[k]:1)).join('')}</div>`:'')
        :`<div style="margin-top:6px"><span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#FBEAE7;color:#B42318">${E(m.top.status||'At risk')}</span></div>`}
-    ${fig}${last}
+    ${fig}${last}${ciNote}
     <div style="margin-top:8px;border-top:1px solid #F0EEE9">${m.op||m.opMob||m.ci||m.ciMob ? iotPersonRow('Operator',m.op,m.opMob)+iotPersonRow('CI',m.ci,m.ciMob)
       : `<div style="min-height:40px;display:flex;align-items:center;font-size:13px;color:#6E6A62;font-style:italic">No operator or CI on the sheet for this machine</div>`}</div>
     <div style="display:flex;gap:8px;margin-top:8px">${nav}${rec}</div>
@@ -12337,16 +12348,16 @@ function iotCardHTML(m, A){
 }
 function iotTechHTML(view, mob){
   const A=iotPageAgg(view), T=A.kind==='T', P=mob?16:22;
-  const search=`<div style="position:relative;flex:1;min-width:0;${mob?'':'max-width:320px'}">${I.search}<input id="iotSearch" type="search" placeholder="Machine, operator or CI" value="${E(state.iotQ||'')}" style="width:100%;box-sizing:border-box;height:${mob?46:36}px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;padding:0 12px 0 32px;font-family:'Noto Sans';font-size:${mob?16:13}px;color:#1B1A17"></div>`;
+  const search=`<div style="position:relative;flex:1;min-width:${mob?0:220}px;${mob?'':'max-width:320px'}">${I.search}<input id="iotSearch" type="search" placeholder="Machine, operator or CI" value="${E(state.iotQ||'')}" style="width:100%;box-sizing:border-box;height:${mob?46:36}px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;padding:0 12px 0 32px;font-family:'Noto Sans';font-size:${mob?16:13}px;color:#1B1A17"></div>`;
   const filtBtn=`<button data-act="iotsheet" aria-label="Filters${A.nFilt?`, ${A.nFilt} active`:''}" style="min-width:46px;height:46px;padding:0 12px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid ${A.nFilt?'#1B1A17':'#E9E6DF'};border-radius:12px;background:${A.nFilt?'#1B1A17':'#fff'};color:${A.nFilt?'#fff':'#46433d'};font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0">${I.filter}${A.nFilt?`<span style="font-family:'IBM Plex Mono'">${A.nFilt}</span>`:''}</button>`;
   const deskFilters = mob ? '' : iotFilterFields(A,false);
   const top=`<div style="display:flex;align-items:center;gap:10px;${mob?'padding-top:14px':'flex-wrap:wrap'}">${search}${mob?filtBtn:deskFilters}</div>`;
-  const qBar=`<div role="tablist" aria-label="Queue" style="display:flex;background:#ECEAE4;border-radius:12px;padding:3px;gap:3px">${IOT_Q.map(([k,t])=>{ const on=A.queue===k;
+  const qBar=`<div role="tablist" aria-label="Queue" style="display:flex;background:${W2.track};border-radius:12px;padding:3px;gap:3px">${IOT_Q.map(([k,t])=>{ const on=A.queue===k;
     return `<button role="tab" aria-selected="${on}" data-act="iotq" data-q="${k}" style="flex:1;min-height:${mob?44:38}px;border:none;border-radius:9px;background:${on?'#fff':'transparent'};box-shadow:${on?'0 1px 2px rgba(0,0,0,.1)':'none'};color:${on?'#1B1A17':'#6E6A62'};font-family:inherit;font-size:13px;font-weight:${on?700:600};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px">${t}<span style="font-family:'IBM Plex Mono';font-size:12px;${on&&k==='new'&&A.cnt.new?'color:#B42318':''}">${fmt(A.cnt[k])}</span></button>`; }).join('')}</div>`;
   const strip = A.dated ? `<div style="display:flex;gap:7px;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:8px -${P}px 0;padding:0 ${P}px 2px;scrollbar-width:none">${A.chips.map(c=>{ const on=c.f===A.from&&c.to===A.to;
       return `<button data-act="iotrange" data-from="${c.f}" data-to="${c.to}" aria-pressed="${on}" style="flex-shrink:0;min-height:${mob?40:34}px;padding:0 13px;border-radius:999px;border:1px solid ${on?'#1B1A17':'#E2DFD8'};background:${on?'#1B1A17':'#fff'};color:${on?'#fff':'#1B1A17'};font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap">${E(c.t)} <span style="font-family:'IBM Plex Mono';font-size:11.5px;opacity:.75">${fmt(c.n)}</span></button>`; }).join('')}
       ${A.custom?`<span style="flex-shrink:0;min-height:${mob?40:34}px;display:flex;align-items:center;padding:0 13px;border-radius:999px;background:#1B1A17;color:#fff;font-size:12.5px;font-weight:600;white-space:nowrap">${iotShortDay(A.from)} – ${iotShortDay(A.to)}</span>`:''}</div>` : '';
-  const sticky=`<div style="position:sticky;top:0;z-index:6;background:#F6F5F2;margin:12px -${P}px 0;padding:8px ${P}px 10px;border-bottom:1px solid #E9E6DF">${qBar}${strip}</div>`;
+  const sticky=`<div style="position:sticky;top:0;z-index:6;background:#F3F6FB;margin:12px -${P}px 0;padding:8px ${P}px 10px;border-bottom:1px solid #E9E6DF">${qBar}${strip}</div>`;
   const scopeTxt = (A.st ? iotStName(A.st) : (isAdmin()?'all states':'your states')) + (T&&A.TS.cur ? ' · '+iotTsTxt(A.TS.cur) : '');
   const sum = T
     ? `${fmt(A.machines.length)} machine${A.machines.length===1?'':'s'} · ${fmt(A.machines.reduce((a,m)=>a+m.n,0))} gaps · ${A.from===A.to?iotShortDay(A.from):iotShortDay(A.from)+' – '+iotShortDay(A.to)} · ${scopeTxt}`
@@ -12357,7 +12368,7 @@ function iotTechHTML(view, mob){
   const lim=state.iotLimit||IOT_PAGE, shown=A.machines.slice(0,lim);
   const emptyTxt = T && A.TS.cur && !A.TS.opts.find(o=>o.k===A.TS.cur).n ? `No ${E(iotTsTxt(A.TS.cur).toLowerCase())} gaps in this range.` : A.queue==='new' && A.cnt.all ? `Nothing left to do here. Every machine in ${A.dated?'this range':'this list'} has an action recorded.`
     : A.q ? `No machine matches "${E(A.q)}".` : A.queue==='all' ? (T?'No ping gaps in this range.':A.dated?'No zero-voltage outages started in this range.':'No machines at risk right now.') : `No ${A.queue==='open'?'open':'closed'} machines here.`;
-  const list = !shown.length ? `<div style="margin-top:14px;background:#fff;border:1px solid #E9E6DF;border-radius:16px;padding:36px 20px;text-align:center;font-size:13.5px;color:#46433d;line-height:1.5">${emptyTxt}</div>`
+  const list = !shown.length ? `<div style="margin-top:14px;${w2card(16)};padding:36px 20px;text-align:center;font-size:13.5px;color:#46433d;line-height:1.5">${emptyTxt}</div>`
     : `<div style="margin-top:12px;display:grid;gap:12px;grid-template-columns:${mob?'minmax(0,1fr)':'repeat(auto-fill,minmax(340px,1fr))'};align-items:start">${shown.map(m=>iotCardHTML(m,A)).join('')}</div>`
       + (shown.length<A.machines.length ? `<div style="text-align:center;margin-top:14px"><button data-act="iotmore" style="min-height:46px;padding:0 20px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#1B1A17;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Show more · ${fmt(shown.length)} of ${fmt(A.machines.length)}</button></div>` : '');
   return top + (T?iotTsHTML(A.TS,mob):'') + sticky + head + list;
@@ -12402,45 +12413,45 @@ let _iotTarget=null;
 function iotActMount(){
   if(document.getElementById('iotActOv')) return;
   const st=document.createElement('style');
-  st.textContent=`#iotActOv textarea:focus{border-color:#1B1A17;outline:none}#iotActOv button[disabled]{opacity:.4;cursor:not-allowed}
-    #iotActOv .iotOpt{display:flex;align-items:center;gap:12px;width:100%;min-height:50px;padding:0 14px;border:1.5px solid #E9E6DF;border-radius:12px;background:#fff;font-family:inherit;font-size:14.5px;font-weight:600;color:#1B1A17;text-align:left;cursor:pointer}
-    #iotActOv .iotOpt[aria-checked="true"]{border-color:#1B1A17;background:#F6F5F2}
-    #iotActOv .iotRad{width:20px;height:20px;border-radius:50%;border:2px solid #B6B1A8;flex-shrink:0;box-sizing:border-box}
-    #iotActOv .iotOpt[aria-checked="true"] .iotRad{border:6px solid #1B1A17}
+  st.textContent=`#iotActOv textarea:focus{border-color:#15181C;outline:none}#iotActOv button[disabled]{opacity:.4;cursor:not-allowed}
+    #iotActOv .iotOpt{display:flex;align-items:center;gap:12px;width:100%;min-height:50px;padding:0 14px;border:1.5px solid #E4E7EA;border-radius:12px;background:#fff;font-family:inherit;font-size:14.5px;font-weight:600;color:#15181C;text-align:left;cursor:pointer}
+    #iotActOv .iotOpt[aria-checked="true"]{border-color:#15181C;background:#F3F6FB}
+    #iotActOv .iotRad{width:20px;height:20px;border-radius:50%;border:2px solid #A9B0B8;flex-shrink:0;box-sizing:border-box}
+    #iotActOv .iotOpt[aria-checked="true"] .iotRad{border:6px solid #15181C}
     @keyframes iotIn{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
     @media (prefers-reduced-motion:no-preference){#iotActCard{animation:iotIn .2s cubic-bezier(.2,.7,.3,1)}}`;
   document.head.appendChild(st);
   const ov=document.createElement('div'); ov.id='iotActOv';
-  ov.style.cssText="position:fixed;inset:0;z-index:90;display:none;align-items:flex-end;justify-content:center;background:rgba(20,19,15,.42);font-family:'Noto Sans',system-ui,sans-serif";
+  ov.style.cssText="position:fixed;inset:0;z-index:90;display:none;align-items:flex-end;justify-content:center;background:rgba(15,22,30,.45);font-family:'IBM Plex Sans',system-ui,sans-serif";
   ov.innerHTML=`<div id="iotActCard" role="dialog" aria-modal="true" aria-labelledby="iotActTitle" style="width:460px;max-width:100%;max-height:94vh;display:flex;flex-direction:column;background:#fff;border-radius:22px 22px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,.2)">
-    <div style="padding:12px 18px 12px;border-bottom:1px solid #EFEDE7;flex-shrink:0">
-      <div style="width:38px;height:4px;border-radius:3px;background:#D5D0C6;margin:0 auto 12px"></div>
+    <div style="padding:12px 18px 12px;border-bottom:1px solid #EEF0F2;flex-shrink:0">
+      <div style="width:38px;height:4px;border-radius:3px;background:#C9CED4;margin:0 auto 12px"></div>
       <div style="display:flex;align-items:flex-start;gap:10px"><div style="flex:1;min-width:0">
-        <div id="iotActTitle" style="font-family:'IBM Plex Mono';font-size:17px;font-weight:700;color:#1B1A17"></div>
-        <div id="iotActSub" style="font-size:12.5px;color:#46433d;margin-top:3px;line-height:1.4"></div></div>
-        <button id="iotActX" type="button" aria-label="Close" style="flex-shrink:0;width:44px;height:44px;margin:-6px -8px 0 0;border:1px solid #E9E6DF;border-radius:11px;background:#fff;color:#6E6A62;font-size:20px;line-height:1;cursor:pointer">×</button></div>
+        <div id="iotActTitle" style="font-family:'IBM Plex Mono';font-size:17px;font-weight:700;color:#15181C"></div>
+        <div id="iotActSub" style="font-size:12.5px;color:#5B636D;margin-top:3px;line-height:1.4"></div></div>
+        <button id="iotActX" type="button" aria-label="Close" style="flex-shrink:0;width:44px;height:44px;margin:-6px -8px 0 0;border:1px solid #E4E7EA;border-radius:11px;background:#fff;color:#5B636D;font-size:20px;line-height:1;cursor:pointer">×</button></div>
     </div>
     <div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:14px 18px 6px">
       <div id="iotActHist"></div>
-      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#46433d;text-transform:uppercase;margin:4px 0 8px">What did you do?</div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#5B636D;text-transform:uppercase;margin:4px 0 8px" data-l="what">What did you do?</div>
       <div id="iotActOpts" role="radiogroup" aria-label="What did you do?" style="display:flex;flex-direction:column;gap:8px"></div>
-      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#46433d;text-transform:uppercase;margin:18px 0 8px"><label for="iotActDate">When did you do it?</label></div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#5B636D;text-transform:uppercase;margin:18px 0 8px"><label for="iotActDate" data-l="when">When did you do it?</label></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:8px">
-        <button type="button" class="iotOpt iotDay" data-day="0" role="radio" style="justify-content:center;font-size:13.5px">Today</button>
-        <button type="button" class="iotOpt iotDay" data-day="1" role="radio" style="justify-content:center;font-size:13.5px">Yesterday</button>
-        <input id="iotActDate" type="date" style="min-height:50px;width:100%;box-sizing:border-box;padding:0 8px;border:1.5px solid #E9E6DF;border-radius:12px;font-family:inherit;font-size:16px;color:#1B1A17;background:#fff">
+        <button type="button" class="iotOpt iotDay" data-day="0" role="radio" style="justify-content:center;font-size:13.5px" data-l="today">Today</button>
+        <button type="button" class="iotOpt iotDay" data-day="1" role="radio" style="justify-content:center;font-size:13.5px" data-l="yest">Yesterday</button>
+        <input id="iotActDate" type="date" style="min-height:50px;width:100%;box-sizing:border-box;padding:0 8px;border:1.5px solid #E4E7EA;border-radius:12px;font-family:inherit;font-size:16px;color:#15181C;background:#fff">
       </div>
       <div id="iotActDateNote" style="display:none;font-size:12px;color:#B42318;margin-top:6px"></div>
-      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#46433d;text-transform:uppercase;margin:18px 0 8px">Is it sorted?</div>
+      <div style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#5B636D;text-transform:uppercase;margin:18px 0 8px" data-l="sorted">Is it sorted?</div>
       <div role="radiogroup" aria-label="Case status" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <button type="button" class="iotOpt iotSt" data-st="Open" role="radio" style="justify-content:center;font-size:13.5px">Still open</button>
-        <button type="button" class="iotOpt iotSt" data-st="Closed" role="radio" style="justify-content:center;font-size:13.5px">Sorted · close it</button></div>
-      <div style="display:flex;align-items:baseline;justify-content:space-between;margin:18px 0 8px"><label for="iotActText" style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#46433d;text-transform:uppercase">Remark <span id="iotActReq" style="text-transform:none;letter-spacing:0;font-weight:600;color:#6E6A62">· optional</span></label><span id="iotActCount" style="font-family:'IBM Plex Mono';font-size:11px;color:#6E6A62"></span></div>
-      <textarea id="iotActText" rows="3" maxlength="${IOT_W.MAX}" placeholder="What did you find?" style="width:100%;box-sizing:border-box;padding:11px 12px;border:1.5px solid #E9E6DF;border-radius:12px;font-family:inherit;font-size:16px;line-height:1.45;color:#1B1A17;resize:vertical"></textarea>
+        <button type="button" class="iotOpt iotSt" data-st="Open" role="radio" style="justify-content:center;font-size:13.5px" data-l="open">Still open</button>
+        <button type="button" class="iotOpt iotSt" data-st="Closed" role="radio" style="justify-content:center;font-size:13.5px" data-l="closed">Sorted · close it</button></div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin:18px 0 8px"><label for="iotActText" style="font-size:12px;font-weight:700;letter-spacing:.05em;color:#5B636D;text-transform:uppercase"><span data-l="rem">Remark</span> <span id="iotActReq" style="text-transform:none;letter-spacing:0;font-weight:600;color:#5B636D">· optional</span></label><span id="iotActCount" style="font-family:'IBM Plex Mono';font-size:11px;color:#5B636D"></span></div>
+      <textarea id="iotActText" rows="3" maxlength="${IOT_W.MAX}" placeholder="What did you find?" style="width:100%;box-sizing:border-box;padding:11px 12px;border:1.5px solid #E4E7EA;border-radius:12px;font-family:inherit;font-size:16px;line-height:1.45;color:#15181C;resize:vertical"></textarea>
       <div id="iotActMsg" role="status" style="display:none;margin-top:10px;font-size:13px;font-weight:600;padding:10px 12px;border-radius:10px"></div>
     </div>
-    <div style="flex-shrink:0;border-top:1px solid #EFEDE7;padding:12px 18px calc(env(safe-area-inset-bottom) + 12px)">
-      <button id="iotActSend" type="button" style="width:100%;min-height:50px;border:none;border-radius:12px;background:#1B1A17;color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer">Save</button></div>
+    <div style="flex-shrink:0;border-top:1px solid #EEF0F2;padding:12px 18px calc(env(safe-area-inset-bottom) + 12px)">
+      <button id="iotActSend" type="button" style="width:100%;min-height:50px;border:none;border-radius:12px;background:linear-gradient(135deg,#243447,#16352D);color:#fff;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer">Save</button></div>
   </div>`;
   document.body.appendChild(ov);
   ov.addEventListener('click', e=>{ if(e.target===ov) iotActClose(); });
@@ -12454,8 +12465,16 @@ function iotActMount(){
   ov.querySelector('#iotActText').addEventListener('input', iotActRefine);
   ov.querySelector('#iotActSend').addEventListener('click', iotActSend);
 }
+// The form speaks the CI's language in CI mode (a key "CI|<machine>"), English for the IoT team.
+const IOT_FORM_EN = { what:'What did you do?', when:'When did you do it?', today:'Today', yest:'Yesterday', sorted:'Is it sorted?', open:'Still open', closed:'Sorted · close it', rem:'Remark', req:'· required', opt:'· optional', earlier:'Earlier actions' };
+const iotFT = k => _iotTarget && _iotTarget.ci ? ciT(k) : (IOT_FORM_EN[k] || '');
+const iotNeedRem = act => _iotTarget && _iotTarget.ci ? !!act && !CI_REMARK_OPTIONAL.has(act) : iotNeedsRemark(act);
+const iotRemOk = (act, txt) => !iotNeedRem(act) || String(txt||'').replace(/\s/g,'').length >= 3;
 function iotActOpen(key){
   const ov=document.getElementById('iotActOv'); if(!ov||!IOT_W.url) return;
+  if(String(key||'').startsWith('CI|')) return ciActOpen(ov, key);
+  if(_iotTarget && _iotTarget.ci) _iotTarget=null;
+  ov.querySelectorAll('[data-l]').forEach(el=>{ el.textContent=IOT_FORM_EN[el.dataset.l]||el.textContent; }); ov.lang='en';
   const [kind,mc]=String(key||'').split('|'), A=iotPageAgg(kind==='R'?'iotrisk':'iottamper'), m=A.all.find(x=>x.mc===mc); if(!m) return;
   const targets=m.cases.filter(c=>iotState(c.id)!=='closed'), cover=targets.length?targets:[m.cases[0]];
   const fresh=!_iotTarget || _iotTarget.key!==key;
@@ -12475,10 +12494,33 @@ function iotActOpen(key){
   // Work cannot be dated in the future, nor before the earliest case it covers began (a gap's date, an outage's
   // start; an undated outage leaves the floor open).
   const dIn=q('#iotActDate'); dIn.max=iotToday(); dIn.min = cover.map(c=>c.day).filter(Boolean).sort()[0] || '';
-  const b=q('#iotActSend'); b.disabled=false; b.textContent='Save';
+  const b=q('#iotActSend'); b.disabled=false; b.dataset.busy=''; b.textContent='Save';
   iotActRefine(); ov.style.display='flex';
   setTimeout(()=>q('#iotActX').focus(),30);
   track('iot_action_open',{ kind, st:m.st, cases:cover.length });
+}
+// CI mode: covers the machine's cases on the day on screen that the CI has not yet marked sorted (else all of them).
+function ciActOpen(ov, key){
+  const mc=key.slice(3), x=ciAgg().list.find(y=>y.mc===mc); if(!x) return;
+  const targets=x.cases.filter(c=>{ const a=ciLast(c.id); return !a || a.status!=='Closed'; }), cover=targets.length?targets:x.cases;
+  const fresh=!_iotTarget || _iotTarget.key!==key;
+  _iotTarget={ key, ci:true, kind:cover[0].kind, mc, st:x.st, cases:cover };
+  const q=s=>ov.querySelector(s);
+  ov.querySelectorAll('[data-l]').forEach(el=>{ el.textContent=ciT(el.dataset.l); }); ov.lang=ciLang();
+  q('#iotActTitle').textContent=mc;
+  q('#iotActSub').textContent=`${ciDayTxt(cover[0].day)} · ${ciT('op')}: ${x.op||ciT('noOp')}`;
+  const seen=new Set(), hist=x.cases.flatMap(c=>IOT.actions['CI|'+c.id]||[]).filter(a=>{ const k=a.ts+'|'+a.action+'|'+a.remark; if(seen.has(k)) return false; seen.add(k); return true; }).sort((a,b)=>(iotActOn(b)+b.ts).localeCompare(iotActOn(a)+a.ts));
+  q('#iotActHist').innerHTML = hist.length ? `<details style="margin-bottom:14px;border:1px solid #EEF0F2;border-radius:12px;background:#F8F9FA"><summary style="min-height:44px;display:flex;align-items:center;padding:0 12px;font-size:13.5px;font-weight:600;cursor:pointer">${E(ciT('earlier'))} · ${hist.length}</summary>${hist.map(a=>`<div style="padding:9px 12px;border-top:1px solid #EEF0F2;font-size:13px"><b>${E(ciActLbl(a.action))}</b>${a.remark?`<div style="color:#5B636D;margin-top:2px">${E(a.remark)}</div>`:''}<div style="color:#5B636D;font-size:12px;margin-top:2px">${E(ciDayTxt(iotActOn(a)))} · ${E(String(a.by||'').replace(/^CI · /,''))}</div></div>`).join('')}</details>` : '';
+  if(fresh){
+    q('#iotActOpts').innerHTML=CI_ACTIONS.map(r=>`<button type="button" class="iotOpt" role="radio" data-a="${E(r[0])}"><span class="iotRad"></span>${E(ciActLbl(r[0]))}</button>`).join('');
+    q('#iotActText').value=''; ov.dataset.a=''; ov.dataset.st=x.lastAct?x.lastAct.status:'Closed'; q('#iotActMsg').style.display='none';
+    q('#iotActDate').value=iotToday();
+  }
+  const dIn=q('#iotActDate'); dIn.max=iotToday(); dIn.min=cover.map(c=>c.day).filter(Boolean).sort()[0]||'';
+  const b=q('#iotActSend'); b.disabled=false; b.dataset.busy=''; b.textContent=ciT('save');
+  iotActRefine(); ov.style.display='flex';
+  setTimeout(()=>q('#iotActX').focus(),30);
+  track('iot_ci_remark_open',{ st:x.st, cases:cover.length });
 }
 function iotActClose(){ const ov=document.getElementById('iotActOv'); if(ov) ov.style.display='none'; }
 function iotActRefine(){
@@ -12489,24 +12531,53 @@ function iotActRefine(){
   const dIn=q('#iotActDate'), day=dIn.value, today=iotToday(), yest=(d=>{ d.setUTCDate(d.getUTCDate()-1); return d.toISOString().slice(0,10); })(new Date(today+'T00:00:00Z'));
   ov.querySelectorAll('.iotDay').forEach(b=>b.setAttribute('aria-checked', String(day===(b.dataset.day==='0'?today:yest))));
   dIn.style.borderColor = day && day!==today && day!==yest ? '#1B1A17' : '#E9E6DF';
-  const dateErr = !day ? 'Pick the date you did it.' : day>dIn.max ? 'That date is in the future.' : (dIn.min && day<dIn.min) ? `This case began on ${iotShortDay(dIn.min)} — pick that day or later.` : '';
+  const ci=!!(_iotTarget&&_iotTarget.ci);
+  const dateErr = !day ? (ci?ciT('checkDate'):'Pick the date you did it.') : day>dIn.max ? (ci?ciT('checkDate'):'That date is in the future.') : (dIn.min && day<dIn.min) ? (ci?ciT('checkDate'):`This case began on ${iotShortDay(dIn.min)} — pick that day or later.`) : '';
   const dn=q('#iotActDateNote'); dn.style.display=dateErr?'block':'none'; dn.textContent=dateErr;
-  const need=iotNeedsRemark(act), remarkOk=iotRemarkOk(act,txt);
-  q('#iotActReq').textContent = !act ? '' : need ? '· required' : '· optional';
+  const need=iotNeedRem(act), remarkOk=iotRemOk(act,txt);
+  q('#iotActReq').textContent = !act ? '' : need ? iotFT('req') : iotFT('opt');
   q('#iotActReq').style.color = need && !remarkOk ? '#B42318' : '#6E6A62';
-  q('#iotActText').placeholder = !act || need ? 'What did you find, and what was done?' : 'Anything to add? (optional)';
+  q('#iotActText').placeholder = ci ? ciT('ph') : !act || need ? 'What did you find, and what was done?' : 'Anything to add? (optional)';
   q('#iotActCount').textContent=`${txt.length}/${IOT_W.MAX}`;
   const btn=q('#iotActSend');
-  if(btn.textContent!=='Saving…'){ btn.disabled = !act || !remarkOk || !!dateErr;
-    btn.textContent = !act ? 'Pick what you did' : dateErr ? 'Check the date' : !remarkOk ? 'Add a remark' : `Save · ${ov.dataset.st==='Closed'?'close':'keep open'}${_iotTarget&&_iotTarget.cases.length>1?' · '+_iotTarget.cases.length+' cases':''}`; }
+  if(!btn.dataset.busy){ btn.disabled = !act || !remarkOk || !!dateErr;
+    btn.textContent = ci ? (!act ? ciT('pick') : dateErr ? ciT('checkDate') : !remarkOk ? ciT('add') : ciT('save')) : !act ? 'Pick what you did' : dateErr ? 'Check the date' : !remarkOk ? 'Add a remark' : `Save · ${ov.dataset.st==='Closed'?'close':'keep open'}${_iotTarget&&_iotTarget.cases.length>1?' · '+_iotTarget.cases.length+' cases':''}`; }
+}
+// A CI's remark: one POST per case KIND (the script takes one kind a call), every case ID prefixed "CI|" so the
+// technician's own queue never moves on it.
+async function ciActSend(ov, t, action, remark, status, on){
+  const q=s=>ov.querySelector(s), btn=q('#iotActSend'), msg=q('#iotActMsg');
+  const note=(ok,txt)=>{ msg.style.display='block'; msg.style.background=ok?'#EEF8F2':'#FDECEA'; msg.style.color=ok?'#0F7A3D':'#B42D20'; msg.textContent=txt; };
+  btn.disabled=true; btn.dataset.busy='1'; btn.textContent=ciT('saving');
+  const me=ciMe(), by = GATE.cur&&GATE.cur.role==='iotci' ? 'CI · '+(me?me.name+' ('+me.mob+')':'') : ((GATE.cur&&GATE.cur.label)||'')+(me?' for CI '+me.name:'');
+  try{
+    for(const k of [...new Set(t.cases.map(c=>c.kind))]){
+      const cs=t.cases.filter(c=>c.kind===k);
+      const payload={ token:IOT_W.token, kind:IOT_KIND[k], machine:t.mc, state:iotStName(t.st), action, status, remark, by, role:'iotci',
+        actionDate:on, cases:cs.map(c=>({ id:'CI|'+c.id, date:c.at||'' })), caseId:'CI|'+cs[0].id };
+      const res=await fetch(IOT_W.url, { method:'POST', body:JSON.stringify(payload) });   // bare string body ⇒ no preflight
+      const j=await res.json().catch(()=>({ok:false,error:'bad_response'}));
+      if(!j.ok) throw new Error(j.error||'failed');
+      const ts=j.ts||new Date().toLocaleString('sv-SE',{timeZone:'Asia/Kolkata'});
+      cs.forEach(c=>{ const id='CI|'+c.id, row={ ts, action, status, remark, by, on }; (IOT.actions[id]||(IOT.actions[id]=[])).push(row); IOT.local.push({ id, at:Date.now(), row }); });
+    }
+    note(true, ciT('okMsg')); btn.textContent=ciT('saved'); btn.dataset.busy='';
+    q('#iotActText').value=''; _iotTarget=null;
+    track('iot_ci_remark_submit',{ st:t.st, status, cases:t.cases.length });
+    render();
+    setTimeout(()=>{ iotActClose(); msg.style.display='none'; }, 1200);
+  }catch(err){
+    note(false, ciT('err')); btn.disabled=false; btn.dataset.busy=''; iotActRefine(); console.warn('[MP-Ops] iot CI remark failed →', err);
+  }
 }
 async function iotActSend(){
   const ov=document.getElementById('iotActOv'), t=_iotTarget; if(!ov||!t) return;
   const q=s=>ov.querySelector(s), action=ov.dataset.a||'', remark=q('#iotActText').value.trim(), status=ov.dataset.st==='Closed'?'Closed':'Open';
   const dIn=q('#iotActDate'), on=dIn.value;
-  if(!action || !iotRemarkOk(action,remark) || !on || on>dIn.max || (dIn.min&&on<dIn.min)) return;
+  if(!action || !iotRemOk(action,remark) || !on || on>dIn.max || (dIn.min&&on<dIn.min)) return;
+  if(t.ci) return ciActSend(ov, t, action, remark, status, on);
   const note=(kind,txt)=>{ const el=q('#iotActMsg'), tone=kind==='ok'?['#E6F5EA','#15803D']:kind==='err'?['#FBEAE7','#B42318']:['#FBF1DA','#8A6A12']; el.style.display='block'; el.style.background=tone[0]; el.style.color=tone[1]; el.textContent=txt; };
-  const btn=q('#iotActSend'); btn.disabled=true; btn.textContent='Saving…'; note('warn','Saving…');
+  const btn=q('#iotActSend'); btn.disabled=true; btn.dataset.busy='1'; btn.textContent='Saving…'; note('warn','Saving…');
   const by=(GATE.cur&&GATE.cur.label)||'';
   const payload={ token:IOT_W.token, kind:IOT_KIND[t.kind], machine:t.mc, state:iotStName(t.st), action, status, remark, by, role:(GATE.cur&&GATE.cur.role)||'',
     actionDate:on, cases:t.cases.map(c=>({ id:c.id, date:t.kind==='T'?c.at:'' })), caseId:t.cases[0].id };
@@ -12520,24 +12591,290 @@ async function iotActSend(){
     const dated = (j.v||0) >= 2;
     t.cases.forEach(c=>{ const row={ ts, action, status, remark, by, on:dated?on:'' }; (IOT.actions[c.id]||(IOT.actions[c.id]=[])).push(row); IOT.local.push({ id:c.id, at:Date.now(), row }); });
     if(!dated) console.warn('[MP-Ops] iot action saved WITHOUT its date — redeploy apps-script/iot-actions.gs (New version).');
-    note(dated?'ok':'warn', (status==='Closed' ? `Saved and closed — ${t.mc} moves to Closed.` : `Saved — ${t.mc} moves to Open.`) + (dated?'':' The date was not stored: the sheet script needs updating.')); btn.textContent='Saved ✓';
+    note(dated?'ok':'warn', (status==='Closed' ? `Saved and closed — ${t.mc} moves to Closed.` : `Saved — ${t.mc} moves to Open.`) + (dated?'':' The date was not stored: the sheet script needs updating.')); btn.textContent='Saved ✓'; btn.dataset.busy='';
     q('#iotActText').value=''; _iotTarget=null;
     track('iot_action_submit',{ kind:t.kind, st:t.st, status, cases:t.cases.length });
     render();
     setTimeout(()=>{ iotActClose(); q('#iotActMsg').style.display='none'; }, 1200);
   }catch(err){
     note('err','Could not save — check your signal and try again. What you typed is still here.');
-    btn.disabled=false; btn.textContent='Save'; iotActRefine(); console.warn('[MP-Ops] iot action failed →', err);
+    btn.disabled=false; btn.dataset.busy=''; btn.textContent='Save'; iotActRefine(); console.warn('[MP-Ops] iot action failed →', err);
   }
+}
+/* ===================== The North CI page (views iotci + iotcia, role iotci, Dinesh 2026-11-24) =====================
+   For the Cluster Incharges of Haryana + Punjab: ONE shared PIN (2751), and each CI picks his own name once (kept on
+   the phone under mpoc_iotci_me, keyed on his NUMBER). Two pages, written in Hindi / Punjabi / English (CI_T):
+   · Needs attention (iotci) — the device problems that came up on his machines on ONE day: the LATEST day the IoT
+     sheet carries (Dinesh: "latest data"), with ‹ › to step back, and an amber line when that day is older than
+     yesterday. Both kinds: a ping gap ("the device was off") and a zero-voltage outage while moving. A machine is
+     "Check first" when a gap ran 6+ hours, it moved 1+ km while silent, the sheet marks it suspicious, or it moved
+     5+ km on a zero battery; the rest are "Also check" (never "minor", by request).
+   · Acres (iotcia) — his machines' acres sprayed on a day (default yesterday) and the season to that day, with the
+     machines that had a device problem that day tagged.
+   WHOSE MACHINE: the CI on the Wheat Main sheet first (its current mapping; read from the snapshot copy, see
+   loadIotWheat), the IoT row's own CI where the machine is not on it (41% of North IoT rows name no CI at all).
+   Acres are the Main sheet's IOT_acres, shown as "acres sprayed" — the word IoT is not used for the acres.
+   REMARKS go through the IoT team's own form and endpoint (iotActOpen in CI mode). They are written under the case
+   ID prefixed "CI|", so a CI's remark never moves a case in a TECHNICIAN's queue; the technician card shows it. */
+const IOTW = { loading:false, loaded:false, error:false, byMc:{}, machines:[], lastDate:'', firstDate:'', at:'' };
+async function loadIotWheat(again){
+  if(IOTW.loading || (IOTW.loaded && !again)) return;
+  IOTW.loading=true;
+  try{
+    const W=PROJECTS.wheat, S=W.snap, g=S.gids[String(W.ret.gid)];
+    const ac=new AbortController(), tm=setTimeout(()=>ac.abort(), 45000);
+    let res; try{ res=await fetch(`https://docs.google.com/spreadsheets/d/${S.sheetId}/export?format=csv&gid=${g}&t=${Date.now()}`, { signal:ac.signal }); } finally{ clearTimeout(tm); }
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const b=wretBuild(parseCSV(await res.text()), { label:'(for the IoT CI page) machine' });
+    IOTW.machines=b.machines; IOTW.byMc={}; b.machines.forEach(m=>{ IOTW.byMc[m.mc.toUpperCase()]=m; });
+    IOTW.lastDate=b.lastDate; IOTW.firstDate=b.log.firstDate; IOTW.loaded=true; IOTW.error=false; IOTW.at=nowIST();
+  }catch(e){ IOTW.error=!IOTW.loaded; console.warn('[MP-Ops] iot CI page: the Wheat machine sheet did not load — CIs come from the IoT sheet only →', e.message); }
+  finally{ IOTW.loading=false; render(); }
+}
+const CI_LANGS = [['hi','हिंदी'],['pa','ਪੰਜਾਬੀ'],['en','English']];
+const CI_T = {
+  en:{ need:'Needs attention', acres:'Acres sprayed', hello:'Hello, {name}', change:'Change name',
+    sub:'Device problems on your machines on {day}', none:'{day}: no device problems on your machines.',
+    latest:'latest', stale:'This is the latest day on the IoT sheet. It is {n} days old.', staleAc:'This is the latest day on the machine sheet.',
+    prev:'Previous day', next:'Next day', first:'Check first', also:'Also check', todo:'To do', done:'Done', started:'Remark added',
+    tToCheck:'Machines to check', tFirst:'Check first', tDone:'Done',
+    off:'The device was off for {h} hours ({t0} to {t1}).', offS:'The device was off for less than an hour ({t0} to {t1}).',
+    moved:'The machine moved {km} km while the device was off.', cut:'The device battery read zero while the machine moved {km} km ({dur}).',
+    hm:'{h} h {m} min', mOnly:'{m} min',
+    sprayed:'Sprayed that day: {ac} acres', notSprayed:'Nothing sprayed that day', noAc:'Acres not on the sheet',
+    askT:'Call the operator. Ask why the device was off, and make sure it stays on.', askR:'Call the operator. Get the device battery and its wire checked.',
+    week1:'Also had a problem on 1 other day this week', weekN:'Also had a problem on {n} other days this week',
+    call:'Call operator', nav:'Navigate', remark:'Add remark', remarkU:'Change remark', op:'Operator', noOp:'Operator not on the sheet', yours:'Your remark',
+    pickT:'Who are you?', pickS:'Pick your name once. This phone will remember it.', pickQ:'Search your name or number', mcs:'{n} machines', pickNone:'No name matches.',
+    acDay:'Acres sprayed on {day}', ran:'Machines ran', ranOf:'{a} of {b}', season:'Season acres', toDay:'to {day}', notRan:'Did not run',
+    issue:'Device problem that day', acNone:'No machines are under your name on the machine sheet.', acres1:'acres', seasonW:'season',
+    loading:'Loading…', mcLoad:'Loading machine details…',
+    what:'What did you do?', when:'When did you do it?', sorted:'Is it sorted?', open:'Still checking', closed:'Sorted', rem:'Remark', req:'· required', opt:'· optional',
+    today:'Today', yest:'Yesterday', save:'Save', pick:'Pick what you did', add:'Add a remark', checkDate:'Check the date', saved:'Saved ✓', saving:'Saving…',
+    err:'Could not save — check your signal and try again. What you typed is still here.', ph:'What did the operator say?', earlier:'Earlier remarks', okMsg:'Saved.' },
+  hi:{ need:'ध्यान दें', acres:'एकड़ स्प्रे', hello:'नमस्ते, {name}', change:'नाम बदलें',
+    sub:'{day} को आपकी मशीनों में डिवाइस की समस्या', none:'{day} को आपकी किसी मशीन में डिवाइस की समस्या नहीं थी।',
+    latest:'सबसे नया', stale:'IoT शीट में यही सबसे नया दिन है। यह {n} दिन पुराना है।', staleAc:'मशीन शीट में यही सबसे नया दिन है।',
+    prev:'पिछला दिन', next:'अगला दिन', first:'पहले देखें', also:'ये भी देखें', todo:'करना है', done:'हो गया', started:'टिप्पणी लिखी',
+    tToCheck:'जाँचने वाली मशीनें', tFirst:'पहले देखें', tDone:'हो गया',
+    off:'डिवाइस {h} घंटे बंद रहा ({t0} से {t1} तक)।', offS:'डिवाइस एक घंटे से कम बंद रहा ({t0} से {t1} तक)।',
+    moved:'डिवाइस बंद रहते हुए मशीन {km} किमी चली।', cut:'मशीन {km} किमी चली, पर डिवाइस की बैटरी शून्य थी ({dur})।',
+    hm:'{h} घंटे {m} मिनट', mOnly:'{m} मिनट',
+    sprayed:'उस दिन स्प्रे: {ac} एकड़', notSprayed:'उस दिन कोई स्प्रे नहीं', noAc:'एकड़ शीट पर नहीं',
+    askT:'ऑपरेटर को फ़ोन करें। पूछें कि डिवाइस क्यों बंद था, और ध्यान रखें कि डिवाइस चालू रहे।', askR:'ऑपरेटर को फ़ोन करें। डिवाइस की बैटरी और तार चेक करवाएँ।',
+    week1:'इस हफ़्ते 1 और दिन भी समस्या थी', weekN:'इस हफ़्ते {n} और दिन भी समस्या थी',
+    call:'ऑपरेटर को फ़ोन', nav:'रास्ता देखें', remark:'टिप्पणी लिखें', remarkU:'टिप्पणी बदलें', op:'ऑपरेटर', noOp:'ऑपरेटर शीट पर नहीं', yours:'आपकी टिप्पणी',
+    pickT:'आप कौन हैं?', pickS:'अपना नाम एक बार चुनें। यह फ़ोन इसे याद रखेगा।', pickQ:'अपना नाम या नंबर खोजें', mcs:'{n} मशीनें', pickNone:'कोई नाम नहीं मिला।',
+    acDay:'{day} को एकड़ स्प्रे', ran:'मशीनें चलीं', ranOf:'{b} में से {a}', season:'सीज़न एकड़', toDay:'{day} तक', notRan:'नहीं चली',
+    issue:'उस दिन डिवाइस की समस्या', acNone:'मशीन शीट पर आपके नाम कोई मशीन नहीं है।', acres1:'एकड़', seasonW:'सीज़न',
+    loading:'लोड हो रहा है…', mcLoad:'मशीनों की जानकारी लोड हो रही है…',
+    what:'आपने क्या किया?', when:'कब किया?', sorted:'क्या मामला सुलझ गया?', open:'अभी देख रहे हैं', closed:'सुलझ गया', rem:'टिप्पणी', req:'· ज़रूरी', opt:'· वैकल्पिक',
+    today:'आज', yest:'कल', save:'सेव करें', pick:'पहले चुनें कि क्या किया', add:'टिप्पणी लिखें', checkDate:'तारीख़ देखें', saved:'सेव हो गया ✓', saving:'सेव हो रहा है…',
+    err:'सेव नहीं हुआ — नेटवर्क देखकर फिर कोशिश करें। आपका लिखा यहीं है।', ph:'ऑपरेटर ने क्या बताया?', earlier:'पिछली टिप्पणियाँ', okMsg:'सेव हो गया।' },
+  pa:{ need:'ਧਿਆਨ ਦਿਓ', acres:'ਏਕੜ ਸਪਰੇਅ', hello:'ਸਤ ਸ੍ਰੀ ਅਕਾਲ, {name}', change:'ਨਾਮ ਬਦਲੋ',
+    sub:'{day} ਨੂੰ ਤੁਹਾਡੀਆਂ ਮਸ਼ੀਨਾਂ ਵਿੱਚ ਡਿਵਾਈਸ ਦੀ ਸਮੱਸਿਆ', none:'{day} ਨੂੰ ਤੁਹਾਡੀ ਕਿਸੇ ਮਸ਼ੀਨ ਵਿੱਚ ਡਿਵਾਈਸ ਦੀ ਸਮੱਸਿਆ ਨਹੀਂ ਸੀ।',
+    latest:'ਸਭ ਤੋਂ ਨਵਾਂ', stale:'IoT ਸ਼ੀਟ ਵਿੱਚ ਇਹੀ ਸਭ ਤੋਂ ਨਵਾਂ ਦਿਨ ਹੈ। ਇਹ {n} ਦਿਨ ਪੁਰਾਣਾ ਹੈ।', staleAc:'ਮਸ਼ੀਨ ਸ਼ੀਟ ਵਿੱਚ ਇਹੀ ਸਭ ਤੋਂ ਨਵਾਂ ਦਿਨ ਹੈ।',
+    prev:'ਪਿਛਲਾ ਦਿਨ', next:'ਅਗਲਾ ਦਿਨ', first:'ਪਹਿਲਾਂ ਦੇਖੋ', also:'ਇਹ ਵੀ ਦੇਖੋ', todo:'ਕਰਨਾ ਹੈ', done:'ਹੋ ਗਿਆ', started:'ਟਿੱਪਣੀ ਲਿਖੀ',
+    tToCheck:'ਜਾਂਚਣ ਵਾਲੀਆਂ ਮਸ਼ੀਨਾਂ', tFirst:'ਪਹਿਲਾਂ ਦੇਖੋ', tDone:'ਹੋ ਗਿਆ',
+    off:'ਡਿਵਾਈਸ {h} ਘੰਟੇ ਬੰਦ ਰਿਹਾ ({t0} ਤੋਂ {t1} ਤੱਕ)।', offS:'ਡਿਵਾਈਸ ਇੱਕ ਘੰਟੇ ਤੋਂ ਘੱਟ ਬੰਦ ਰਿਹਾ ({t0} ਤੋਂ {t1} ਤੱਕ)।',
+    moved:'ਡਿਵਾਈਸ ਬੰਦ ਹੁੰਦਿਆਂ ਮਸ਼ੀਨ {km} ਕਿਲੋਮੀਟਰ ਚੱਲੀ।', cut:'ਮਸ਼ੀਨ {km} ਕਿਲੋਮੀਟਰ ਚੱਲੀ, ਪਰ ਡਿਵਾਈਸ ਦੀ ਬੈਟਰੀ ਜ਼ੀਰੋ ਸੀ ({dur})।',
+    hm:'{h} ਘੰਟੇ {m} ਮਿੰਟ', mOnly:'{m} ਮਿੰਟ',
+    sprayed:'ਉਸ ਦਿਨ ਸਪਰੇਅ: {ac} ਏਕੜ', notSprayed:'ਉਸ ਦਿਨ ਕੋਈ ਸਪਰੇਅ ਨਹੀਂ', noAc:'ਏਕੜ ਸ਼ੀਟ ਤੇ ਨਹੀਂ',
+    askT:'ਆਪਰੇਟਰ ਨੂੰ ਫ਼ੋਨ ਕਰੋ। ਪੁੱਛੋ ਕਿ ਡਿਵਾਈਸ ਕਿਉਂ ਬੰਦ ਸੀ, ਅਤੇ ਧਿਆਨ ਰੱਖੋ ਕਿ ਡਿਵਾਈਸ ਚਾਲੂ ਰਹੇ।', askR:'ਆਪਰੇਟਰ ਨੂੰ ਫ਼ੋਨ ਕਰੋ। ਡਿਵਾਈਸ ਦੀ ਬੈਟਰੀ ਅਤੇ ਤਾਰ ਚੈੱਕ ਕਰਵਾਓ।',
+    week1:'ਇਸ ਹਫ਼ਤੇ 1 ਹੋਰ ਦਿਨ ਵੀ ਸਮੱਸਿਆ ਸੀ', weekN:'ਇਸ ਹਫ਼ਤੇ {n} ਹੋਰ ਦਿਨ ਵੀ ਸਮੱਸਿਆ ਸੀ',
+    call:'ਆਪਰੇਟਰ ਨੂੰ ਫ਼ੋਨ', nav:'ਰਸਤਾ ਦੇਖੋ', remark:'ਟਿੱਪਣੀ ਲਿਖੋ', remarkU:'ਟਿੱਪਣੀ ਬਦਲੋ', op:'ਆਪਰੇਟਰ', noOp:'ਆਪਰੇਟਰ ਸ਼ੀਟ ਤੇ ਨਹੀਂ', yours:'ਤੁਹਾਡੀ ਟਿੱਪਣੀ',
+    pickT:'ਤੁਸੀਂ ਕੌਣ ਹੋ?', pickS:'ਆਪਣਾ ਨਾਮ ਇੱਕ ਵਾਰ ਚੁਣੋ। ਇਹ ਫ਼ੋਨ ਇਸਨੂੰ ਯਾਦ ਰੱਖੇਗਾ।', pickQ:'ਆਪਣਾ ਨਾਮ ਜਾਂ ਨੰਬਰ ਲੱਭੋ', mcs:'{n} ਮਸ਼ੀਨਾਂ', pickNone:'ਕੋਈ ਨਾਮ ਨਹੀਂ ਮਿਲਿਆ।',
+    acDay:'{day} ਨੂੰ ਏਕੜ ਸਪਰੇਅ', ran:'ਮਸ਼ੀਨਾਂ ਚੱਲੀਆਂ', ranOf:'{b} ਵਿੱਚੋਂ {a}', season:'ਸੀਜ਼ਨ ਏਕੜ', toDay:'{day} ਤੱਕ', notRan:'ਨਹੀਂ ਚੱਲੀ',
+    issue:'ਉਸ ਦਿਨ ਡਿਵਾਈਸ ਦੀ ਸਮੱਸਿਆ', acNone:'ਮਸ਼ੀਨ ਸ਼ੀਟ ਤੇ ਤੁਹਾਡੇ ਨਾਮ ਕੋਈ ਮਸ਼ੀਨ ਨਹੀਂ ਹੈ।', acres1:'ਏਕੜ', seasonW:'ਸੀਜ਼ਨ',
+    loading:'ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ…', mcLoad:'ਮਸ਼ੀਨਾਂ ਦੀ ਜਾਣਕਾਰੀ ਲੋਡ ਹੋ ਰਹੀ ਹੈ…',
+    what:'ਤੁਸੀਂ ਕੀ ਕੀਤਾ?', when:'ਕਦੋਂ ਕੀਤਾ?', sorted:'ਕੀ ਮਾਮਲਾ ਸੁਲਝ ਗਿਆ?', open:'ਹਾਲੇ ਦੇਖ ਰਹੇ ਹਾਂ', closed:'ਸੁਲਝ ਗਿਆ', rem:'ਟਿੱਪਣੀ', req:'· ਜ਼ਰੂਰੀ', opt:'· ਮਰਜ਼ੀ ਨਾਲ',
+    today:'ਅੱਜ', yest:'ਕੱਲ੍ਹ', save:'ਸੇਵ ਕਰੋ', pick:'ਪਹਿਲਾਂ ਚੁਣੋ ਕਿ ਕੀ ਕੀਤਾ', add:'ਟਿੱਪਣੀ ਲਿਖੋ', checkDate:'ਤਾਰੀਖ਼ ਦੇਖੋ', saved:'ਸੇਵ ਹੋ ਗਿਆ ✓', saving:'ਸੇਵ ਹੋ ਰਿਹਾ ਹੈ…',
+    err:'ਸੇਵ ਨਹੀਂ ਹੋਇਆ — ਨੈੱਟਵਰਕ ਦੇਖ ਕੇ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ। ਤੁਹਾਡਾ ਲਿਖਿਆ ਇੱਥੇ ਹੀ ਹੈ।', ph:'ਆਪਰੇਟਰ ਨੇ ਕੀ ਦੱਸਿਆ?', earlier:'ਪਿਛਲੀਆਂ ਟਿੱਪਣੀਆਂ', okMsg:'ਸੇਵ ਹੋ ਗਿਆ।' },
+};
+// What a CI can record. STORED in English (the sheet is read by the IoT team), SHOWN in the CI's language. A remark is
+// required except on the two that are complete statements on their own — the IoT team's rule, applied to this list.
+const CI_ACTIONS = [
+  ['Called the operator',                 'ऑपरेटर को फ़ोन किया',                 'ਆਪਰੇਟਰ ਨੂੰ ਫ਼ੋਨ ਕੀਤਾ'],
+  ['Visited the machine',                 'मशीन पर जाकर देखा',                  'ਮਸ਼ੀਨ ਤੇ ਜਾ ਕੇ ਦੇਖਿਆ'],
+  ['Network problem in the area',         'इलाके में नेटवर्क की समस्या',            'ਇਲਾਕੇ ਵਿੱਚ ਨੈੱਟਵਰਕ ਦੀ ਸਮੱਸਿਆ'],
+  ['Machine was parked, not working',     'मशीन खड़ी थी, काम नहीं हुआ',            'ਮਸ਼ੀਨ ਖੜ੍ਹੀ ਸੀ, ਕੰਮ ਨਹੀਂ ਹੋਇਆ'],
+  ['Device fault — told the IoT technician','डिवाइस ख़राब — IoT टेक्नीशियन को बताया','ਡਿਵਾਈਸ ਖ਼ਰਾਬ — IoT ਟੈਕਨੀਸ਼ੀਅਨ ਨੂੰ ਦੱਸਿਆ'],
+  ['Other',                               'अन्य',                               'ਹੋਰ'] ];
+const CI_REMARK_OPTIONAL = new Set(['Network problem in the area','Machine was parked, not working']);
+const ciActLbl = a => { const r=CI_ACTIONS.find(x=>x[0]===a); return !r ? a : ciLang()==='hi' ? r[1] : ciLang()==='pa' ? r[2] : r[0]; };
+const ciLoad = (k,d) => { try{ const v=localStorage.getItem(k); return v==null?d:v; }catch(_){ return d; } };
+const ciSave = (k,v) => { try{ v==null ? localStorage.removeItem(k) : localStorage.setItem(k,v); }catch(_){ } };
+const iotNorth = r => r.st==='HR' || r.st==='PB';
+// Whose machine a case is: the Wheat Main sheet's CI first (current mapping), else the IoT row's own.
+const ciMobOf  = r => { const m=IOTW.byMc[r.mc]; return (m && m.coMob) || r.ciMob || ''; };
+function ciRoster(){
+  const by={};
+  const add=(mob,name,st,mc)=>{ if(!realTel(mob)) return; const o=by[mob]||(by[mob]={ mob, name:'', st:{}, mcs:new Set() }); if(!o.name && name) o.name=name; if(st) o.st[st]=(o.st[st]||0)+1; o.mcs.add(mc); };
+  IOTW.machines.forEach(m=>{ if(m.org!=='Bayer') add(m.coMob, m.co, m.st, m.mc); });
+  [...IOT.tamper, ...IOT.risk].forEach(r=>{ if(iotNorth(r) && !(IOTW.byMc[r.mc]&&IOTW.byMc[r.mc].coMob)) add(r.ciMob, r.ci, r.st, r.mc); });
+  return Object.values(by).map(o=>({ mob:o.mob, name:o.name||o.mob, st:Object.keys(o.st).sort((a,b)=>o.st[b]-o.st[a])[0]||'', n:o.mcs.size }))
+    .sort((a,b)=>(a.st||'Z').localeCompare(b.st||'Z')||a.name.localeCompare(b.name));
+}
+const ciMe = () => { const mob=state.ciMe; return mob ? ciRoster().find(o=>o.mob===mob)||null : null; };
+// The language: the CI's own pick, else Punjabi for a Punjab CI and Hindi for everyone else.
+const ciLang = () => { const l=state.ciLang; if(CI_T[l]) return l; const me=ciMe(); return me && me.st==='PB' ? 'pa' : 'hi'; };
+const ciT = (k, v) => { let s=(CI_T[ciLang()]||CI_T.en)[k]; if(s==null) s=CI_T.en[k]||k; return v ? s.replace(/\{(\w+)\}/g,(_,x)=>v[x]==null?'':v[x]) : s; };
+// Month and weekday names are spelled out here: browsers without Punjabi locale data print "M11 23" for pa-IN.
+const CI_MON = { en:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+  hi:['जनवरी','फ़रवरी','मार्च','अप्रैल','मई','जून','जुलाई','अगस्त','सितंबर','अक्टूबर','नवंबर','दिसंबर'],
+  pa:['ਜਨਵਰੀ','ਫ਼ਰਵਰੀ','ਮਾਰਚ','ਅਪ੍ਰੈਲ','ਮਈ','ਜੂਨ','ਜੁਲਾਈ','ਅਗਸਤ','ਸਤੰਬਰ','ਅਕਤੂਬਰ','ਨਵੰਬਰ','ਦਸੰਬਰ'] };
+const CI_WD = { en:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
+  hi:['रविवार','सोमवार','मंगलवार','बुधवार','गुरुवार','शुक्रवार','शनिवार'],
+  pa:['ਐਤਵਾਰ','ਸੋਮਵਾਰ','ਮੰਗਲਵਾਰ','ਬੁੱਧਵਾਰ','ਵੀਰਵਾਰ','ਸ਼ੁੱਕਰਵਾਰ','ਸ਼ਨੀਵਾਰ'] };
+const ciDayTxt = d => { const m=/^(\d{4})-(\d\d)-(\d\d)/.exec(String(d||'')); return m ? `${+m[3]} ${CI_MON[ciLang()][+m[2]-1]}` : String(d||''); };
+const ciWeekday = d => { const t=Date.parse(String(d||'')+'T00:00:00Z'); return isFinite(t) ? CI_WD[ciLang()][new Date(t).getUTCDay()] : ''; };
+const ciClock = s => { const m=/(\d{1,2}):(\d{2})/.exec(String(s||'').slice(11)); if(!m) return '—'; const h=+m[1]; return `${h%12||12}:${m[2]} ${h<12?'am':'pm'}`; };
+const ciDur = mins => { if(mins==null) return '—'; const h=Math.floor(mins/60), m=Math.round(mins%60); return h ? ciT('hm',{h,m}) : ciT('mOnly',{m}); };
+const ciScopeTxt = () => { const me=ciMe(); return me ? me.name : 'North · HR + PB'; };
+const ciLast = id => { const l=IOT.actions['CI|'+id]; return l&&l.length ? l[l.length-1] : null; };
+// Check first: a gap of 6+ hours, 1+ km moved while silent, the sheet's own "suspicious movement", or 5+ km on zero voltage.
+const ciFirstCase = r => r.kind==='T' ? ((r.gap||0)>=6 || (r.km||0)>=1 || r.sts==='SUSPICIOUS_MOVEMENT') : (r.km||0)>=5;
+
+function ciAgg(){
+  const me=state.ciMe, rows=[...IOT.tamper, ...IOT.risk].filter(r=>iotNorth(r) && r.day);
+  const days=[...new Set(rows.map(r=>r.day))].sort(), last=days[days.length-1]||'';
+  const D=days.includes(state.ciDay) ? state.ciDay : last, i=days.indexOf(D);
+  const mine=rows.filter(r=>ciMobOf(r)===me), on=mine.filter(r=>r.day===D);
+  const by={}; on.forEach(r=>{ (by[r.mc]||(by[r.mc]={ mc:r.mc, st:r.st, cases:[] })).cases.push(r); });
+  const w0=iotAddDays(D,-6);
+  const list=Object.values(by).map(g=>{
+    const m=IOTW.byMc[g.mc]||null, T=g.cases.filter(c=>c.kind==='T').sort((a,b)=>a.at.localeCompare(b.at)), R=g.cases.filter(c=>c.kind==='R');
+    const acts=g.cases.map(c=>ciLast(c.id)), done=acts.every(a=>a&&a.status==='Closed'), started=acts.some(Boolean);
+    const lastAct=g.cases.flatMap(c=>IOT.actions['CI|'+c.id]||[]).sort((a,b)=>(iotActOn(a)+a.ts).localeCompare(iotActOn(b)+b.ts)).pop()||null;
+    const who=g.cases.find(c=>c.op||c.opMob)||{}, op=(m&&m.opName)||who.op||'', opMob=(m&&m.opNum)||who.opMob||'';
+    const otherDays=new Set(mine.filter(r=>r.mc===g.mc && r.day>=w0 && r.day<D).map(r=>r.day)).size;
+    const ac = m ? ((m.sdays[D]&&m.sdays[D][4])||0) : null;
+    const loc=(T.find(c=>c.loc)||{}).loc || (R[0]&&(R[0].end||R[0].start)) || (m&&m.lat!=null?{lat:m.lat,lon:m.lon}:null);
+    const dark=T.reduce((a,c)=>a+(c.gap||0),0)*60+R.reduce((a,c)=>a+(c.mins||0),0);
+    return { mc:g.mc, st:g.st, terr:m?m.territory:'', T, R, cases:g.cases, first:g.cases.some(ciFirstCase), done, started, lastAct, op, opMob, otherDays, ac, loc, dark };
+  }).sort((a,b)=>(a.done?1:0)-(b.done?1:0) || b.dark-a.dark || a.mc.localeCompare(b.mc));
+  const yday=istDay(Date.now()-864e5), age=D ? Math.round((Date.parse(yday)-Date.parse(D))/864e5) : 0;
+  return { D, days, prev:i>0?days[i-1]:'', next:i>=0&&i<days.length-1?days[i+1]:'', latest:D===last, age, list,
+    first:list.filter(x=>x.first), also:list.filter(x=>!x.first), nDone:list.filter(x=>x.done).length };
+}
+function ciAcAgg(){
+  const me=state.ciMe, yday=istDay(Date.now()-864e5);
+  const cap=IOTW.lastDate && IOTW.lastDate<yday ? IOTW.lastDate : yday, first=IOTW.firstDate||cap;
+  const D=state.ciAcDay && state.ciAcDay>=first && state.ciAcDay<=cap ? state.ciAcDay : cap;
+  const issue=new Set([...IOT.tamper, ...IOT.risk].filter(r=>r.day===D).map(r=>r.mc));
+  const list=IOTW.machines.filter(m=>m.coMob===me).map(m=>{
+    let season=0; Object.keys(m.sdays).forEach(d=>{ if(d<=D) season+=m.sdays[d][4]||0; });
+    return { m, mc:m.mc, ac:(m.sdays[D]&&m.sdays[D][4])||0, season, issue:issue.has(m.mc.toUpperCase()) };
+  }).sort((a,b)=>b.ac-a.ac || b.season-a.season || a.mc.localeCompare(b.mc));
+  return { D, prev:D>first?iotAddDays(D,-1):'', next:D<cap?iotAddDays(D,1):'', latest:D===cap, list,
+    ac:list.reduce((a,x)=>a+x.ac,0), ran:list.filter(x=>x.ac>0).length, season:list.reduce((a,x)=>a+x.season,0) };
+}
+
+/* ---- rendering (mobile-first; desktop shows the same cards, two to a row) */
+function ciTopHTML(mob){
+  const me=ciMe(), L=ciLang();
+  const seg=`<div role="group" aria-label="Language" style="${w2segBox(mob)};flex-shrink:0">${CI_LANGS.map(([k,t])=>`<button data-act="cilang" data-l="${k}" aria-pressed="${L===k}" lang="${k}" style="${w2seg(L===k,mob)};${mob?'flex:0 0 auto;padding:0 10px':''}">${t}</button>`).join('')}</div>`;
+  return `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;${mob?'padding-top:14px':''}">
+    <div style="flex:1;min-width:${mob?'100%':'0'};display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap"><div style="font-size:${mob?18:20}px;font-weight:600;color:${W2.ink}">${E(ciT('hello',{name:me?me.name:''}))}</div>
+      <button data-act="cipick" style="border:0;background:none;padding:4px 0;min-height:${mob?36:28}px;color:#1D4F80;font:500 13.5px ${W2.font};cursor:pointer;text-decoration:underline">${E(ciT('change'))}</button></div>
+    ${seg}</div>`;
+}
+function ciDayBarHTML(d, prev, next, latest, act, mob){
+  const arrow=(to,lab,path)=>`<button ${to?`data-act="${act}" data-d="${to}"`:'disabled'} aria-label="${E(lab)}" style="width:${mob?48:40}px;height:${mob?48:40}px;flex-shrink:0;border:1px solid ${W2.line};border-radius:12px;background:#fff;color:${to?W2.ink:W2.ink3};display:flex;align-items:center;justify-content:center;cursor:${to?'pointer':'default'};opacity:${to?1:.45}"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${path}"/></svg></button>`;
+  return `<div style="display:flex;align-items:center;gap:8px;margin-top:14px;${mob?'':'max-width:460px'}">
+    ${arrow(prev,ciT('prev'),'M15 6l-6 6 6 6')}
+    <div style="flex:1;min-width:0;height:${mob?48:40}px;${w2card(12)};display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2">
+      <span style="font-size:${mob?16:15}px;font-weight:600">${E(ciDayTxt(d))}</span><span style="font-size:12px;color:${W2.ink2}">${E(ciWeekday(d))}${latest?' · '+E(ciT('latest')):''}</span></div>
+    ${arrow(next,ciT('next'),'M9 6l6 6-6 6')}</div>`;
+}
+function ciPickHTML(mob){
+  const q=String(state.ciQ||'').trim().toLowerCase(), all=ciRoster();
+  const hits=all.filter(o=>!q || o.name.toLowerCase().includes(q) || o.mob.includes(q.replace(/\D/g,'')||'~'));
+  const L=ciLang();
+  const seg=`<div role="group" aria-label="Language" style="${w2segBox(mob)};margin-top:12px;width:max-content">${CI_LANGS.map(([k,t])=>`<button data-act="cilang" data-l="${k}" aria-pressed="${L===k}" lang="${k}" style="${w2seg(L===k,mob)};${mob?'flex:0 0 auto;padding:0 12px':''}">${t}</button>`).join('')}</div>`;
+  const grp=st=>{ const l=hits.filter(o=>o.st===st); if(!l.length) return '';
+    return `<div style="font-size:12.5px;font-weight:600;color:${W2.ink2};margin:16px 2px 8px">${E(iotStName(st)||'—')}</div>
+      <div style="display:grid;gap:8px;grid-template-columns:${mob?'minmax(0,1fr)':'repeat(auto-fill,minmax(260px,1fr))'}">${l.map(o=>`<button data-act="cime" data-mob="${o.mob}" style="display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 14px;${w2card(14)};font:500 15px ${W2.font};color:${W2.ink};cursor:pointer;text-align:left">
+        <span style="flex:1;min-width:0"><span style="display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};font-family:'IBM Plex Mono',monospace">${o.mob}</span></span>
+        <span style="font-size:12.5px;color:${W2.ink2};white-space:nowrap">${E(ciT('mcs',{n:fmt(o.n)}))}</span></button>`).join('')}</div>`; };
+  return `<div style="${mob?'padding-top:16px':'max-width:880px'}">
+    <div style="font-size:${mob?22:24}px;font-weight:600">${E(ciT('pickT'))}</div>
+    <div style="font-size:14px;color:${W2.ink2};margin-top:4px;line-height:1.45">${E(ciT('pickS'))}</div>${seg}
+    <div style="position:relative;margin-top:14px">${I.search}<input id="ciSearch" type="search" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${E(ciT('pickQ'))}" value="${E(state.ciQ||'')}" aria-label="${E(ciT('pickQ'))}" style="width:100%;box-sizing:border-box;height:${mob?50:40}px;border:1px solid ${W2.line};border-radius:12px;background:#fff;padding:0 12px 0 34px;font:${mob?16:14}px ${W2.font};color:${W2.ink}"></div>
+    ${['HR','PB',''].map(grp).join('') || `<div style="margin-top:16px;color:${W2.ink2}">${E(ciT('pickNone'))}</div>`}</div>`;
+}
+function ciCardHTML(x, mob){
+  const line=(dot,t)=>`<div style="display:flex;gap:9px;align-items:flex-start;margin-top:8px"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:${dot};margin-top:7px;flex-shrink:0"></span><span style="font-size:15px;line-height:1.45;color:${W2.ink}">${t}</span></div>`;
+  const tlines=x.T.map(c=>{ const t1=c.back&&c.back.slice(0,10)!==c.day ? ciDayTxt(c.back.slice(0,10))+', '+ciClock(c.back) : ciClock(c.back);
+    let s=(c.gap||0)>=1 ? ciT('off',{h:fmt(c.gap),t0:ciClock(c.at),t1}) : ciT('offS',{t0:ciClock(c.at),t1});
+    if((c.km||0)>=0.1) s+=' '+ciT('moved',{km:iotKm(c.km)});
+    return line(ciFirstCase(c)?W2.brk:W2.idle, E(s)); }).join('');
+  const rlines=x.R.map(c=>line(ciFirstCase(c)?W2.brk:W2.idle, E(ciT('cut',{km:iotKm(c.km), dur:ciDur(c.mins)})))).join('');
+  const acTxt = x.ac==null ? ciT('noAc') : x.ac>0 ? ciT('sprayed',{ac:acF(x.ac)}) : ciT('notSprayed');
+  const acChip=`<span style="display:inline-block;margin-top:10px;padding:4px 10px;border-radius:8px;background:#E8F2FC;color:#1D4F80;font-size:13.5px;font-weight:500">${E(acTxt)}</span>`;
+  const week = x.otherDays ? `<div style="margin-top:8px;padding:7px 10px;border-radius:10px;background:#FDF4DF;color:${W2.idleD};font-size:13.5px;line-height:1.4">↻ ${E(x.otherDays===1?ciT('week1'):ciT('weekN',{n:x.otherDays}))}</div>` : '';
+  const ask=`<div style="margin-top:10px;font-size:14px;color:${W2.ink2};line-height:1.45">${E(x.T.length?ciT('askT'):ciT('askR'))}</div>`;
+  const pill = x.done ? `<span style="padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:600;background:#EEF8F2;color:${W2.actD}">✓ ${E(ciT('done'))}</span>`
+    : `<span style="padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:600;background:${x.started?'#FDF4DF':'#FDECEA'};color:${x.started?W2.idleD:W2.brkD}">${E(x.started?ciT('started'):ciT('todo'))}</span>`;
+  const mine = x.lastAct ? `<div style="margin-top:10px;padding:9px 11px;border-radius:10px;background:${x.done?'#EEF8F2':'#F8F9FA'};border:1px solid ${x.done?'#CFE9DA':W2.line2};font-size:13.5px;line-height:1.45">
+      <div style="font-size:12px;font-weight:600;color:${W2.ink2}">${E(ciT('yours'))} · ${E(ciDayTxt(iotActOn(x.lastAct)))}</div>
+      <div style="color:${W2.ink}"><b style="font-weight:600">${E(ciActLbl(x.lastAct.action))}</b>${x.lastAct.remark?` — ${E(x.lastAct.remark)}`:''}</div></div>` : '';
+  const btnH=mob?48:42;
+  const call = realTel(x.opMob) ? `<a href="tel:${x.opMob}" style="flex:1;min-width:0;min-height:${btnH}px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;border:1px solid #CFE9DA;background:#EEF8F2;color:${W2.actD};font:600 14.5px ${W2.font};text-decoration:none">${I.phone}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(ciT('call'))}</span></a>` : '';
+  const nav = x.loc ? `<a href="${navHref(x.loc)}" target="_blank" rel="noopener" aria-label="${E(ciT('nav'))}" title="${E(ciT('nav'))}" style="${call?`width:${btnH}px;flex-shrink:0`:'flex:1'};min-height:${btnH}px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;border:1px solid ${W2.line};background:#fff;color:${W2.ink};font:600 14.5px ${W2.font};text-decoration:none">${IOT_PIN}${call?'':E(ciT('nav'))}</a>` : '';
+  const rec = IOT_W.url ? `<button data-act="ciact" data-mc="${E(x.mc)}" style="width:100%;margin-top:8px;min-height:${btnH}px;border:0;border-radius:12px;background:${W2.dark};color:#fff;font:600 14.5px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">${IOT_CHECK}${E(x.lastAct?ciT('remarkU'):ciT('remark'))}</button>` : '';
+  return `<article style="${w2card(16)};padding:14px 14px 12px;${x.done?'opacity:.78':''}">
+    <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600">${E(x.mc)}</span>${x.terr?`<span style="font-size:13px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(x.terr)}</span>`:''}<span style="flex:1"></span>${pill}</div>
+    <div style="font-size:14px;color:${W2.ink2};margin-top:3px">${E(ciT('op'))} · <span style="color:${W2.ink};font-weight:500">${E(x.op||ciT('noOp'))}</span></div>
+    ${tlines}${rlines}${acChip}${week}${ask}${mine}
+    ${call||nav?`<div style="display:flex;gap:8px;margin-top:12px">${call}${nav}</div>`:''}${rec}</article>`;
+}
+// One tinted tile: `tone` picks the hue (w2tone's label), `l` is the label shown in the CI's language.
+const ciTile = (tone,l,v,unit,sub,mob) => { const t=w2tone(tone);
+  return mob ? `<div style="padding:12px;background:${t.bg};border-right:1px solid ${W2.line2};min-width:0"><div style="font-size:12.5px;color:${W2.ink2};line-height:1.25;min-height:2.5em">${E(l)}</div><div style="${w2num(21,600,t.vc)};margin-top:2px">${v}${unit?w2unit(unit,11.5):''}</div>${sub?`<div style="font-size:12px;color:${W2.ink2};margin-top:2px">${sub}</div>`:''}</div>`
+    : `<div style="background:${t.bg};border:1px solid ${t.bd};border-radius:16px;box-shadow:${W2.shadow};padding:16px 18px;min-width:0"><div style="font-size:13px;color:${W2.ink2}">${E(l)}</div><div style="${w2num(28,600,t.vc)};margin-top:6px">${v}${unit?w2unit(unit):''}</div>${sub?`<div style="font-size:13px;color:${W2.ink2};margin-top:4px">${sub}</div>`:''}</div>`; };
+const ciTiles = (inner,mob) => mob ? `<div style="${w2card(16)};overflow:hidden;margin-top:14px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))">${inner}</div>`
+  : `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px">${inner}</div>`;
+function ciNeedHTML(mob){
+  const A=ciAgg();
+  const stale = A.latest && A.age>0 ? `<div style="margin-top:10px;padding:9px 12px;border-radius:10px;background:#FDF4DF;color:${W2.idleD};font-size:13.5px;line-height:1.4">${E(ciT('stale',{n:A.age+1}))}</div>` : '';
+  const tiles = A.list.length ? ciTiles([['Machines',ciT('tToCheck'),A.list.length],['Check first',ciT('tFirst'),A.first.length],['Done',ciT('tDone'),A.nDone]].map(([tone,l,v])=>ciTile(tone,l,fmt(v),'','',mob)).join(''), mob) : '';
+  const sec=(title,list,col)=>!list.length?'':`<div style="display:flex;align-items:center;gap:8px;margin:20px 2px 10px"><span style="width:10px;height:10px;border-radius:50%;background:${col}"></span><span style="font-size:16px;font-weight:600">${E(title)}</span><span style="font-size:14px;color:${W2.ink2}">${fmt(list.length)}</span></div>
+    <div style="display:grid;gap:12px;grid-template-columns:${mob?'minmax(0,1fr)':'repeat(auto-fill,minmax(380px,1fr))'};align-items:start">${list.map(x=>ciCardHTML(x,mob)).join('')}</div>`;
+  const body = !A.D ? `<div style="${w2card(16)};padding:30px 18px;margin-top:14px;text-align:center;color:${W2.ink2}">—</div>`
+    : !A.list.length ? `<div style="${w2card(16)};padding:34px 18px;margin-top:14px;text-align:center;font-size:16px;line-height:1.5;color:${W2.ink}"><div style="font-size:30px;margin-bottom:6px">👍</div>${E(ciT('none',{day:ciDayTxt(A.D)}))}</div>`
+    : `<div style="font-size:15px;color:${W2.ink2};margin-top:14px">${E(ciT('sub',{day:ciDayTxt(A.D)}))}</div>${tiles}${sec(ciT('first'),A.first,W2.brk)}${sec(ciT('also'),A.also,W2.idle)}`;
+  return ciTopHTML(mob) + ciDayBarHTML(A.D, A.prev, A.next, A.latest, 'ciday', mob) + stale + body;
+}
+function ciAcresHTML(mob){
+  const A=ciAcAgg();
+  const stale = A.latest && A.D<istDay(Date.now()-864e5) ? `<div style="margin-top:10px;padding:9px 12px;border-radius:10px;background:#FDF4DF;color:${W2.idleD};font-size:13.5px">${E(ciT('staleAc'))}</div>` : '';
+  if(!A.list.length) return ciTopHTML(mob) + `<div style="${w2card(16)};padding:34px 18px;margin-top:16px;text-align:center;font-size:15px;color:${W2.ink2}">${E(ciT('acNone'))}</div>`;
+  const tiles=ciTiles(ciTile('Acres',ciT('acDay',{day:ciDayTxt(A.D)}),acF(A.ac),ciT('acres1'),'',mob) + ciTile('Ran',ciT('ran'),fmt(A.ran),'/ '+fmt(A.list.length),'',mob) + ciTile('MTD',ciT('season'),acF(A.season),ciT('acres1'),E(ciT('toDay',{day:ciDayTxt(A.D)})),mob), mob);
+  const row=x=>{ const m=x.m;
+    return `<div class="w2Row" style="display:flex;align-items:center;gap:12px;padding:12px ${mob?14:18}px;border-top:1px solid ${W2.line2}">
+      <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600">${E(m.mc)}</span>${x.issue?`<span style="padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;background:#FDECEA;color:${W2.brkD}">${E(ciT('issue'))}</span>`:''}</div>
+        <div style="font-size:13.5px;color:${W2.ink2};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(m.opName||ciT('noOp'))}${m.territory?' · '+E(m.territory):''}</div></div>
+      <div style="text-align:right;flex-shrink:0">${x.ac>0?`<div style="${w2num(20,600,'#1D4F80')}">${acF(x.ac)}<span style="font-size:12.5px;color:${W2.ink2};font-weight:500"> ${E(ciT('acres1'))}</span></div>`:`<div style="font-size:14px;font-weight:600;color:${W2.idleD}">${E(ciT('notRan'))}</div>`}
+        <div style="font-size:12.5px;color:${W2.ink2};margin-top:2px">${E(ciT('seasonW'))} ${acF(x.season)}</div></div>
+      ${realTel(m.opNum)?`<a href="tel:${m.opNum}" aria-label="${E(ciT('call'))} ${E(m.opName||'')}" style="width:44px;height:44px;flex-shrink:0;border-radius:12px;border:1px solid #CFE9DA;background:#EEF8F2;color:${W2.actD};display:flex;align-items:center;justify-content:center">${I.phone}</a>`:''}</div>`; };
+  return ciTopHTML(mob) + ciDayBarHTML(A.D, A.prev, A.next, A.latest, 'ciacday', mob) + stale + tiles
+    + `<div style="${w2card(16)};overflow:hidden;margin-top:16px">${A.list.map(row).join('')}</div>`;
+}
+function iotCiHTML(view, mob){
+  if(!IOTW.loaded && !IOTW.error){ if(!IOTW.loading) setTimeout(loadIotWheat,0);
+    return `<div style="${w2card(16)};padding:60px 20px;text-align:center;color:${W2.ink2};font-size:15px;margin-top:${mob?14:0}px">${E(ciT('mcLoad'))}</div>`; }
+  const html = !ciMe() || state.ciPick ? ciPickHTML(mob) : view==='iotcia' ? ciAcresHTML(mob) : ciNeedHTML(mob);
+  return mob ? html : `<div style="max-width:920px">${html}</div>`;   // one reading column on a wide screen
 }
 function iotBodyHTML(view, mob){
   if(!IOT.loaded){
     if(!IOT.loading && !IOT.error) setTimeout(loadIoT,0);
     const msg = IOT.error ? 'Could not load the IoT sheet.' : 'Loading the IoT sheet…';
-    return `<div style="background:#fff;border:1px solid #E9E6DF;border-radius:14px;padding:60px 20px;text-align:center;color:#6E6A62;font-size:13px">
+    return `<div style="${w2card(16)};padding:60px 20px;text-align:center;color:#6E6A62;font-size:13px">
       ${IOT.error?'⚠ ':''}${msg}${IOT.error?`<div style="margin-top:14px"><button data-act="iotretry" style="min-height:${mob?44:32}px;padding:0 16px;border:1px solid #E9E6DF;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Retry</button></div>`:''}</div>`;
   }
-  return view==='iotteam' ? iotTeamHTML(mob) : iotTechHTML(view, mob);
+  return view==='iotci'||view==='iotcia' ? iotCiHTML(view, mob) : view==='iotteam' ? iotTeamHTML(mob) : iotTechHTML(view, mob);
 }
 
 /* ---- the WRITE: "Record action" on a case → one appended row on the actions tab, via apps-script/iot-actions.gs.
@@ -13479,7 +13816,7 @@ function contentHTML(v){
     case 'w500': return `<section style="padding:24px 32px">${w500BodyHTML(false)}</section>`;
     case 'wdr': return `<section style="padding:24px 32px">${wdrBodyHTML(false)}</section>`;
     case 'wcum': return `<section style="padding:24px 32px">${wcumBodyHTML(false)}</section>`;
-    case 'iottamper': case 'iotrisk': case 'iotteam': return `<section style="padding:18px 22px">${iotBodyHTML(state.view,false)}</section>`;
+    case 'iottamper': case 'iotrisk': case 'iotteam': case 'iotci': case 'iotcia': return `<section style="padding:18px 22px">${iotBodyHTML(state.view,false)}</section>`;
     case 'recap': return recapViewHTML(v);
     case 'norun': return `<section style="padding:18px 22px">${norunBodyHTML(v,false)}</section>`;
     default: return mapViewHTML(v);
@@ -13489,14 +13826,14 @@ function contentHTML(v){
    main, so it is there on every view including the chromeless ones), the foot of the phone's
    scroller, and the PIN gate card. Single source of truth — change the wording here only. */
 const FOOTNOTE = 'Built with tokens, Powered by Claude. By din8sh.';
-const footnoteHTML = mob => isWheat()
+const footnoteHTML = mob => isW2()
   ? `<div style="flex-shrink:0;text-align:center;color:${W2.ink2};font-size:12px;padding:${mob?'18px 0 2px':'10px 22px'}">${FOOTNOTE}</div>`
   : `<div style="flex-shrink:0;text-align:center;color:#9C988F;${mob
   ? "padding:18px 0 2px;font-size:10px"
   : "padding:7px 22px;font-size:10.5px;background:#F6F5F2;border-top:1px solid #E9E6DF"}">${FOOTNOTE}</div>`;
 
 function desktopHTML(v){
-  return `<div style="height:100vh;display:flex;background:${isWheat()?W2.page:'#F6F5F2'};color:${isWheat()?W2.ink:'#1B1A17'};overflow:hidden">
+  return `<div style="height:100vh;display:flex;background:${isW2()?W2.page:'#F6F5F2'};color:${isW2()?W2.ink:'#1B1A17'};overflow:hidden">
     ${railHTML()}
     <div style="flex:1;display:flex;flex-direction:column;min-width:0">
       ${topbarHTML(v)}${CHROMELESS.has(state.view)?'':filterBarHTML(v)}${CHROMELESS.has(state.view)?'':kpiStripHTML(v)}${CHROMELESS.has(state.view)?'':glossHTML(false)}
@@ -13533,6 +13870,8 @@ const M_VIEWS = [
   { k:'iottamper',label:RAIL_LBL.iottamper, icon:()=>I.tamper },   // IoT project only
   { k:'iotrisk',  label:RAIL_LBL.iotrisk,   icon:()=>I.risk },
   { k:'iotteam',  label:RAIL_LBL.iotteam,      icon:()=>I.am },               // IoT head (admin) only
+  { k:'iotci',    label:RAIL_LBL.iotci,  icon:()=>I.tamper },     // IoT: the North CI page (needs attention)
+  { k:'iotcia',   label:RAIL_LBL.iotcia, icon:()=>I.snake },      // IoT: the CI's machines' acres
   { k:'norun',    label:RAIL_LBL.norun, icon:()=>I.risk },     // field logins' home: their machines that didn't run
   { k:'map',      label:RAIL_LBL.map,       icon:()=>I.map },
   { k:'tables',   label:RAIL_LBL.tables, icon:()=>I.tables },
@@ -13566,7 +13905,7 @@ const mViews = () => {
 };
 // The role's landing page. Field logins land on Didn't run (Decision A); everyone else keeps the project's home
 // (the Map for Kharif, chosen 2026-10-22 — leadership's bar OPENS with Cumulative, but they still land on the Map).
-const homeView = () => roleHidesView('norun') ? (curProject().home||'map') : 'norun';
+const homeView = () => GATE.cur && GATE.cur.home && !roleHidesView(GATE.cur.home) ? GATE.cur.home : roleHidesView('norun') ? (curProject().home||'map') : 'norun';
 const M_PRIMARY = 4;                       // bottom bar holds 4 + "More"; the rest live in the sheet
 
 // Generic bottom sheet. The body scrolls internally and clears the home indicator; an optional `footer` is a
@@ -13666,14 +14005,14 @@ function norunBodyHTML(v, mob){
 const M_NEXT = { norun:['machines','bm'], map:['tables','machines'], tables:['machines','am'], machines:['tables','weather'],
   weather:['machines','map'], am:['bm','machines'], bm:['machines','tables'], pending:['am'], recap:['insights','machines'],
   insights:['snake','recap'], snake:['insights','product'], product:['mpprod','snake'], mpprod:['product'], leader:['recap'],
-  wplan:['w500','wterr'], w500:['wterr','wplan'], wterr:['wam','wfo'], wam:['wfo'], wfo:['wmap','wplan'], wmap:['wtop','wplan'], wtop:['w250','wplan'], w250:['wbd','wplan'], wbd:['wmc','wplan'], wmc:['wdr','wplan'], wdr:['wcum','wplan'], wcum:['wplan'] };   // Wheat: the first one the login has
+  wplan:['w500','wterr'], w500:['wterr','wplan'], wterr:['wam','wfo'], wam:['wfo'], wfo:['wmap','wplan'], wmap:['wtop','wplan'], wtop:['w250','wplan'], w250:['wbd','wplan'], wbd:['wmc','wplan'], wmc:['wdr','wplan'], wdr:['wcum','wplan'], wcum:['wplan'], iotci:['iotcia'], iotcia:['iotci'] };   // Wheat: the first one the login has
 function mNextHTML(view){
-  const ks=(M_NEXT[view]||[]).filter(k=>!roleHidesView(k)).slice(0, isWheat()?1:9);
+  const ks=(M_NEXT[view]||[]).filter(k=>!roleHidesView(k)).slice(0, isW2()?1:9);
   const brk = view==='machines' && !state.health.includes('Breakdown')
     ? `<button data-act="health" data-h="Breakdown" style="min-height:44px;padding:0 13px;border:1px solid #E9E6DF;border-radius:11px;background:#fff;font-size:13px;color:#1B1A17;cursor:pointer">Breakdowns only</button>` : '';
   if(!ks.length && !brk) return '';
   // Wheat v2: one full-width row per next page — "Next · Territories ›".
-  if(isWheat()) return `<div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">${ks.map(k=>`<button data-act="view" data-view="${k}" style="display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 16px;${w2card(16)};font:500 15px ${W2.font};color:${W2.ink};cursor:pointer;text-align:left"><span><span style="color:${W2.ink2}">Next</span> · ${E(NAV_TITLE[k]||k)}</span><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${W2.ink2}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>`;
+  if(isW2()) return `<div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">${ks.map(k=>`<button data-act="view" data-view="${k}" style="display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 16px;${w2card(16)};font:500 15px ${W2.font};color:${W2.ink};cursor:pointer;text-align:left"><span><span style="color:${W2.ink2}">Next</span> · ${E(NAV_TITLE[k]||k)}</span><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${W2.ink2}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>`;
   return `<div style="margin-top:18px"><div class="mLbl" style="margin-bottom:8px">Next</div><div style="display:flex;gap:8px;flex-wrap:wrap">${brk}${ks.map(k=>`<button data-act="view" data-view="${k}" style="min-height:44px;padding:0 13px;border:1px solid #E9E6DF;border-radius:11px;background:#fff;font-size:13px;color:#1B1A17;cursor:pointer">${E(NAV_TITLE[k]||k)} →</button>`).join('')}</div></div>`;
 }
 // "All pages" (plan I1/I2): EVERY page the role has, in the desktop rail's groups and order under the same
@@ -13695,10 +14034,10 @@ function mBottomNavHTML(){
   const all=mViews(), nPrim=all.length<=M_PRIMARY+1?all.length:M_PRIMARY, prim=all.slice(0,nPrim), hasMore=all.length>nPrim;
   if(all.length<2) return '';   // one view (Wheat's planning stage): a bar with a single tab is furniture
   const restActive=all.slice(nPrim).some(x=>x.k===state.view);
-  if(isWheat()){   // v2: the active tab's icon sits in a tinted pill, and the label carries the weight
+  if(isW2()){   // v2: the active tab's icon sits in a tinted pill, and the label carries the weight
     const wItem=(active,icon,label,attrs)=>`<button class="mNavItem" ${attrs}${active?' aria-current="page"':''} style="flex:1;min-height:56px;border:0;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:6px 0 4px;cursor:pointer;color:${active?'#7A3B06':W2.ink2};font:${active?600:500} 12px ${W2.font}"><span style="display:flex;align-items:center;justify-content:center;width:52px;height:28px;border-radius:14px;background:${active?'linear-gradient(120deg,#FFE7D2,#DDF3E4)':'transparent'}">${icon}</span>${label}</button>`;
     return `<nav aria-label="Views" style="flex-shrink:0;background:rgba(255,255,255,.96);border-top:1px solid ${W2.line};display:flex;padding:4px 6px env(safe-area-inset-bottom);z-index:9">
-      ${prim.map(x=>wItem(state.view===x.k, x.icon(), x.label, `data-act="view" data-view="${x.k}"`)).join('')}
+      ${prim.map(x=>wItem(state.view===x.k, x.icon(), E(navLbl(x.k)), `data-act="view" data-view="${x.k}"`)).join('')}
       ${hasMore?wItem(restActive, I.more, 'All pages', `data-act="sheet" data-sheet="more"`):''}
     </nav>`;
   }
@@ -13867,7 +14206,7 @@ function mobileHTML(v){
     body = wdrBodyHTML(true);
   } else if(S.view==='wcum'){
     body = wcumBodyHTML(true);
-  } else if(S.view==='iottamper'||S.view==='iotrisk'||S.view==='iotteam'){
+  } else if(S.view==='iottamper'||S.view==='iotrisk'||S.view==='iotteam'||S.view==='iotci'||S.view==='iotcia'){
     body = iotBodyHTML(S.view,true);
   } else {
     // NOTE: this final else is WEATHER, not an error branch — a view registered in M_VIEWS but missing a case
@@ -13942,7 +14281,7 @@ function mobileHTML(v){
         <div style="border:1px solid #E9E6DF;border-radius:12px;overflow:hidden">${escalationHTML(d, I.phoneS, true)}</div>
       </div>
     </div>` : '';
-  const pageBg = isWheat() ? W2.page : '#F6F5F2';
+  const pageBg = isW2() ? W2.page : '#F6F5F2';
   const outer = ph
     ? `height:100dvh;width:100%;background:${pageBg}`
     : `height:100vh;width:100%;background:#E7E4DE;display:flex;align-items:center;justify-content:center;padding:18px`;
@@ -13965,12 +14304,12 @@ function mobileHTML(v){
   // YOU ARE HERE (plan M2): every page's header names the PAGE, and the line under it names its scope and the
   // programme — "Machines" over "All India · 1+1=11 Kharif · AFS". The fleet pages used to show the programme's
   // name, cut to "India O…" at 320px, so the only cue to which page you were on was the highlighted tab.
-  const headTitle = nav ? nav.label : curProject().mHead(v.scopeLabel);
+  const headTitle = nav ? navLbl(nav.k) : curProject().mHead(v.scopeLabel);
   const headSub = nav ? `${mPageScope(S.view)} · ${curProject().mSub}` : curProject().mSub;
   return `<div style="${outer}">
     <div class="mShell" style="${shell}">
       ${notch}
-      ${isWheat() ? `<div style="padding:${ph?'calc(env(safe-area-inset-top) + 8px) 12px 10px 16px':'30px 12px 10px 16px'};background:#fff;border-bottom:1px solid ${W2.line};flex-shrink:0">
+      ${isW2() ? `<div style="padding:${ph?'calc(env(safe-area-inset-top) + 8px) 12px 10px 16px':'30px 12px 10px 16px'};background:#fff;border-bottom:1px solid ${W2.line};flex-shrink:0">
         <div style="display:flex;align-items:center;gap:10px">
           <div aria-hidden="true" style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px;flex-shrink:0">UPL</div>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column">
@@ -14062,6 +14401,7 @@ function mPageScope(view){
     case 'wplan':    return (lock||state.wpSt) ? nm(lock||state.wpSt) : 'HR + PB';
     case 'wterr': case 'wam': case 'wfo': case 'wmap': case 'wtop': case 'wbd': case 'wmc': case 'w250': case 'w500': case 'wdr': return (lock||state.wtSt) ? nm(lock||state.wtSt) : 'HR + PB';
     case 'wcum': return state.wsnSt==='HR'||state.wsnSt==='PB' ? nm(state.wsnSt) : 'HR + PB';
+    case 'iotci': case 'iotcia': return ciScopeTxt();
     case 'iottamper': case 'iotrisk': case 'iotteam': { const sc=iotScope(); return sc.st ? iotStName(sc.st) : (isAdmin()?'All states':'My states'); }
     default:         return nm(lock||pick('st'));   // the fleet pages: the filter bar's state
   }
@@ -14111,7 +14451,7 @@ function render(){
    pasted address is honoured at boot and on hashchange, and `render()`'s role guard still bounces a view the
    login may not see. */
 const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wam:'area-managers', wfo:'field-officers', wmap:'machine-map', wtop:'top-machines', w250:'250-acres', w500:'500-drive', wdr:'dry-run', wbd:'breakdowns', wmc:'machines', wcum:'wheat-cumulative',
-  iottamper:'tamper', iotrisk:'at-risk', iotteam:'team', am:'area-managers', bm:'business-managers',
+  iottamper:'tamper', iotrisk:'at-risk', iotteam:'team', iotci:'needs-attention', iotcia:'ci-acres', am:'area-managers', bm:'business-managers',
   leader:'leaders', product:'products', fo:'field-officers', recap:'daily-recap', norun:'didnt-run' };
 const slugOf = v => VIEW_SLUG[v]||v;
 const viewOfHash = h => { const sl=String(h||'').replace(/^#\/?/,''); if(!sl) return null;
@@ -14213,7 +14553,7 @@ function setState(patch){
   render();
 }
 
-app.addEventListener('input', e=>{ if(e.target.id==='searchInput') setState({search:e.target.value}); else if(e.target.id==='wpSearch') setState({wpQ:e.target.value}); else if(e.target.id==='wtSearch') setState({wtQ:e.target.value}); else if(e.target.id==='wmcSearch'){ const v=e.target.value, m=wmcExact(v); setState(m?{wmcQ:v, selected:m}:{wmcQ:v}); if(m) track('machine_open',{ machine:m.mc, project:'wheat', via:'search' }); } else if(e.target.id==='iotSearch') setState({iotQ:e.target.value, iotLimit:IOT_PAGE}); });
+app.addEventListener('input', e=>{ if(e.target.id==='searchInput') setState({search:e.target.value}); else if(e.target.id==='wpSearch') setState({wpQ:e.target.value}); else if(e.target.id==='wtSearch') setState({wtQ:e.target.value}); else if(e.target.id==='wmcSearch'){ const v=e.target.value, m=wmcExact(v); setState(m?{wmcQ:v, selected:m}:{wmcQ:v}); if(m) track('machine_open',{ machine:m.mc, project:'wheat', via:'search' }); } else if(e.target.id==='iotSearch') setState({iotQ:e.target.value, iotLimit:IOT_PAGE}); else if(e.target.id==='ciSearch') setState({ciQ:e.target.value}); });
 app.addEventListener('change', e=>{
   if(e.target.id==='stSelect'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({st:w, terr:'', cluster:'', am:'', co:'', expanded:{}}); }
   else if(e.target.id==='terrSelect') setState({terr:e.target.value, cluster:''});
@@ -14335,6 +14675,12 @@ app.addEventListener('click', e=>{
     case 'wpmore': setState(s=>({wpLimit:(s.wpLimit||WP_PAGE)+WP_PAGE})); break;
     case 'wpsheet': if(wSees()) setState({sheet:'wpfilters'}); break;
     case 'iotretry': loadIoT(); break;
+    case 'cilang': ciSave('mpoc_iotci_lang', el.dataset.l); setState({ciLang:el.dataset.l}); track('iot_ci_lang',{ lang:el.dataset.l }); break;
+    case 'cipick': setState({ciPick:true, ciQ:''}); break;
+    case 'cime': ciSave('mpoc_iotci_me', el.dataset.mob); setState({ciMe:el.dataset.mob, ciPick:false, ciQ:'', ciDay:'', ciAcDay:''}); track('iot_ci_pick',{}); break;
+    case 'ciday': setState({ciDay:el.dataset.d}); break;
+    case 'ciacday': setState({ciAcDay:el.dataset.d}); break;
+    case 'ciact': iotActOpen('CI|'+el.dataset.mc); break;
     case 'iotact': iotActOpen(el.dataset.case); break;
     case 'iotq': setState({iotQueue:el.dataset.q, iotLimit:IOT_PAGE}); break;
     case 'iotts': setState({iotTs:el.dataset.ts||'', iotLimit:IOT_PAGE}); track('iot_status_filter',{ ts:el.dataset.ts||'all' }); break;
@@ -14580,6 +14926,9 @@ const GATE = {
     'b6f6b6715fae0829382e6f3bef5fffcf0e7e87bb2136e511774768204b1d120b': { id:'iot-admin',  project:'iot', role:'admin',   org:'Both', allow:['Both'], states:['*'], switchStates:true, label:'IoT · Amit Kumar (IoT head)' }, // 7314 (was 2601 until 2026-10-16)
     'cc41d80b1697c04d19330fba23a82cfc68fb086e3445691578bfae3a3d6f3e57': { id:'iot-rohit',  project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['PB'], switchStates:false, label:'IoT · Rohit Shivhare', tech:'Rohit Shivhare' }, // 2611
     '511425f1125b98b09c7b636c27a56b0be1fff185717d5233144fd02ddf0cddab': { id:'iot-manish', project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['HR'], switchStates:false, label:'IoT · Manish Kumar', tech:'Manish Kumar' }, // 2621
+    // The NORTH CI login (2026-11-24): one PIN for every Cluster Incharge in Haryana + Punjab; each picks his own name once
+    // (kept on the phone). Two pages only — Needs attention and Acres — in Hindi / Punjabi / English. See iotCiHTML.
+    '2611b07ac9addfb7d2e4259eb234bc7e240931c54564e05eb7e25f5d69780efc': { id:'iot-ci', project:'iot', role:'iotci', org:'Both', allow:['Both'], states:['HR','PB'], switchStates:true, views:['iotci','iotcia'], home:'iotci', label:'IoT · CI North' }, // 2751
     '72a1917673994c23e72b3f49c2134549aa2219dffd8c029a071efe9c437f7888': { id:'iot-vishal', project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['MP','GJ','TG','MH','AP'], switchStates:true, label:'IoT · Vishal Makwana', tech:'Vishal Makwana' }, // 2631
     'd95936051b112558c270fd675137155155c74b8f0721fde9007b53d40cedba2b': { id:'wh-hr-sales', project:'wheat', role:'wsales', org:'Both', allow:['Both','UPL','SWAL'], states:['HR'], switchStates:false, views:['tables','am','fo','retailer'], label:'Wheat North · Haryana sales' }, // 4822
     // ── External partners. A partner PIN is a HANDOFF, not a role: it never sets GATE.cur and never boots the console —

@@ -749,6 +749,7 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | **Wheat** `wteam` leaders: UPL 4050 · SWAL 4060 | one, forced | HR + PB, switchable | same three pages, team form |
 | **IoT** `admin` (`iot-admin`, 7314 — Amit Kumar, IoT head; 2601 retired 2026-10-16) | n/a | all, switchable | Potential tamper, At risk, **Team overview** |
 | **IoT** `iottech` × Rohit (2611) / Manish (2621) / Vishal (2631) | n/a | **the cases whose row names him** (states follow; PIN row = fallback) | Potential tamper, At risk |
+| **IoT** `iotci` — every North CI (2751) | n/a | HR + PB; each CI picks his NAME once (kept on the phone) | **only** Needs attention + Acres (the CI page) |
 | **Partner** `bayer` (3906) | n/a | n/a | **none in the console** — a handoff to `bayer/` (see Partner pages) |
 
 The Wheat rows carry `project:'wheat'`; see **Projects** below. The Kharif admin (0088) does NOT see Wheat, and
@@ -1442,6 +1443,37 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
   `Case ID` header — before the script's first write the tab does not exist, and that must read as "no actions",
   not as 2,388 garbage ones.
 - Every load logs `[MP-Ops] iot → {tamper, risk, techs, actions, pinDrift}`. Read it first if a count looks wrong.
+- **The v2 look (Dinesh 2026-11-24).** IoT now wears the Wheat v2 skin: `isW2()` (= Wheat or IoT) drives the shell branches
+  (rail, header, footnote, phone header / bar / Next row, page colours) — data logic still keys off `isWheat()` — and the
+  stylesheet's backstop selectors read `html:is([data-proj="wheat"],[data-proj="iot"])`. The IoT KPI tiles are W2 tinted
+  tiles (`iotStats` → `wpBits().tile`; `w2tone` knows "Potential tamper" red, "At risk" amber, "…actioned" / "Done" green);
+  cards are `w2card`; the Record-action overlay (outside `#app`, so the backstop does not reach it) is written in W2 values.
+  `IOT_MINW` went 1080 → 960 so the team table fits beside the 232px rail at 1280.
+- **The North CI page (views `iotci` "Needs attention" + `iotcia` "Acres", Dinesh 2026-11-24; `iotCiHTML`, `ciAgg`, `ciAcAgg`).**
+  For Haryana + Punjab Cluster Incharges. One shared PIN (2751, role `iotci`, `home:'iotci'` — `homeView` now honours a role's
+  `home`); the role test hides Potential tamper / At risk from it. The IoT head (admin) also sees both pages, after his own.
+  · **Who:** the CI picks his name once (`ciRoster`, keyed on his NUMBER; `mpoc_iotci_me` in localStorage). A case is his when
+    the **Wheat Main sheet's** CI for that machine is him (current mapping, read from the snapshot copy by `loadIotWheat` →
+    `wretBuild`), else the IoT row's own CI (`ciMobOf`). 41% of North IoT rows name no CI; the Main sheet fills most of them, and
+    where both name one they disagree 23% of the time (checked 24 Nov) — the Main sheet wins.
+  · **Needs attention:** the device problems on his machines on ONE day — the **latest day the IoT sheet carries** (both tabs,
+    North rows), ‹ › to step back, an amber line when that day is older than yesterday (on 24 Nov the tabs stop at 16 Nov).
+    One card per machine: plain sentences ("The device was off for 3 hours (2:38 pm to 5:40 pm)", "The battery read zero while
+    the machine moved 6.2 km"), that day's acres, "also had a problem on N other days this week", what to ask the operator,
+    Call operator · Navigate · Add remark. **Check first** = a gap of 6+ h, 1+ km moved while silent, the sheet's SUSPICIOUS_MOVEMENT,
+    or 5+ km on zero voltage (`ciFirstCase`); the rest are **Also check** — never "minor" (by request).
+  · **Acres:** his machines' acres sprayed (`IOT_acres`, labelled "acres sprayed") on a day (default yesterday, capped at the
+    sheet's last day), machines ran n / N, the season to that day; machines with a device problem that day are tagged.
+  · **Languages:** Hindi, Punjabi, English (`CI_T`, `CI_ACTIONS`); default Punjabi for a Punjab CI, Hindi otherwise; the pick is
+    kept on the phone (`mpoc_iotci_lang`). Month / weekday names are spelled out (`CI_MON` / `CI_WD`) because browsers without
+    Punjabi locale data print "M11 23". Machine numbers and operator names stay as the sheet has them.
+  · **Remarks** reuse the IoT team's form and endpoint (`iotActOpen('CI|<mc>')` → `ciActOpen` / `ciActSend`), in the CI's language,
+    stored in ENGLISH. Case IDs are written as `CI|<case id>`, so a CI's remark never moves a case in a technician's queue (no
+    script redeploy needed); the technician card shows the CI's latest remark. Required except "Network problem in the area" and
+    "Machine was parked, not working". `by` = "CI · Name (number)", role `iotci`. One POST per case kind.
+  · Checked 24 Nov against the sheets: Dharmender (9541042129) 16 Nov = 7 machines / 3 check first; acres 23 Nov = 132.2 ac,
+    11 of 21 ran, 2,798 season — all equal to a direct count. 1280 / 375 / 320 px, no sideways scroll; the save path was tested
+    against a faked server only (nothing written).
 
 ## PWA
 The console installs to the home screen and opens with no signal. It is one app for every project; the PIN
