@@ -10155,7 +10155,7 @@ const WM_TONE = { y:C.act, s:'#2563EB', n:'#E0A008' };
 // silently applies to another season: the "Acres per mcn" tab's 9 Nov count (HR 260 / PB 274) + 60 and + 40 = 320 / 314 = 634.
 // THIS season's fleet = every machine on the Wheat Main sheet (UPL + SWAL; Bayer left out) in that state, as the Territory page counts.
 const WSN_MCN = { 2025:{ HR:320, PB:314 } };
-const WSN = { loaded:false, loading:false, error:'', at:'', D:{ HR:{}, PB:{} }, last:'' };
+const WSN = { loaded:false, loading:false, error:'', at:'', D:{ HR:{}, PB:{} }, M:{ HR:{}, PB:{} }, hasM:false, last:'' };
 const WSN_ST = { HARYANA:'HR', PUNJAB:'PB' };
 const WSN_MD = (()=>{ const o=[]; for(let t=Date.UTC(2025,9,1); t<=Date.UTC(2026,2,31); t+=864e5) o.push(new Date(t).toISOString().slice(5,10)); return o; })();
 const WSN_N = WSN_MD.length;   // 182
@@ -10175,12 +10175,16 @@ function wsnBuild(grid){
   const h=(grid[0]||[]).map(x=>String(x).trim().toLowerCase());
   const iD=h.findIndex(x=>x.includes('date')), iS=h.findIndex(x=>x.includes('region')||x.includes('state')), iA=h.findIndex(x=>x.includes('acre'));
   if(iD<0||iS<0||iA<0) throw new Error('snake chart tab: columns not found ('+h.join(', ')+')');
-  const D={ HR:{}, PB:{} }; let rows=0, last='';
+  // Machines that ran that day (`number_of_mcns`, added to the tab 2026-11-24). Optional: a tab without it simply has no
+  // per-running-machine card.
+  const iM=h.findIndex(x=>x.includes('mcn')||x.includes('machine'));
+  const D={ HR:{}, PB:{} }, M={ HR:{}, PB:{} }; let rows=0, last='';
   grid.slice(1).forEach(r=>{ const st=WSN_ST[String(r[iS]||'').trim().toUpperCase()]; if(!st) return;
     const d=String(r[iD]||'').trim().slice(0,10), v=parseFloat(String(r[iA]||'').replace(/,/g,''));
     if(!/^\d{4}-\d\d-\d\d$/.test(d) || !isFinite(v)) return;
-    D[st][d]=(D[st][d]||0)+v; rows++; if(d>last) last=d; });
-  return { D, rows, last };
+    D[st][d]=(D[st][d]||0)+v; rows++; if(d>last) last=d;
+    if(iM>=0){ const n=parseFloat(String(r[iM]||'').replace(/,/g,'')); if(isFinite(n)) M[st][d]=(M[st][d]||0)+n; } });
+  return { D, M, hasM:iM>=0, rows, last };
 }
 async function loadWsn(){
   const R=curProject().snake; if(!R || WSN.loading) return;
@@ -10193,14 +10197,14 @@ async function loadWsn(){
       finally{ clearTimeout(t); } });
     const B=wsnBuild(got.grid);
     Object.assign(WSN, B, { loaded:true, at:new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}) });
-    console.log('[MP-Ops] wheat snake tab →', { rows:B.rows, last:B.last, HR:Object.keys(B.D.HR).length, PB:Object.keys(B.D.PB).length });
+    console.log('[MP-Ops] wheat snake tab →', { rows:B.rows, last:B.last, machinesCol:B.hasM, HR:Object.keys(B.D.HR).length, PB:Object.keys(B.D.PB).length });
   }catch(e){ WSN.error=e.name==='AbortError'?'the sheet did not answer':e.message; console.warn('wheat snake tab failed —', WSN.error); }
   WSN.loading=false; render();
 }
 // One season's daily acres on the season axis, for the picked state(s). The current season is null after its last day.
-function wsnDaily(st, y, lastOff){
-  const sts = st==='ALL' ? ['HR','PB'] : [st], out=new Array(WSN_N).fill(0);
-  for(let o=0;o<WSN_N;o++){ const d=wsnDate(y,o); sts.forEach(s=>{ out[o]+=WSN.D[s][d]||0; if(WSN_MD[o]==='02-28') out[o]+=WSN.D[s][d.slice(0,5)+'02-29']||0; }); }
+function wsnDaily(st, y, lastOff, src){
+  const sts = st==='ALL' ? ['HR','PB'] : [st], out=new Array(WSN_N).fill(0), S=src||WSN.D;
+  for(let o=0;o<WSN_N;o++){ const d=wsnDate(y,o); sts.forEach(s=>{ out[o]+=S[s][d]||0; if(WSN_MD[o]==='02-28') out[o]+=S[s][d.slice(0,5)+'02-29']||0; }); }
   if(lastOff!=null) for(let o=lastOff+1;o<WSN_N;o++) out[o]=null;
   return out;
 }
@@ -10226,7 +10230,7 @@ function wsnSVG(id, series, from, to, mob, H){
     ln+=`<path d="${d.trim()}" fill="none" stroke="${s.color}" stroke-width="${s.cur?2.8:1.8}" stroke-linejoin="round" stroke-linecap="round"/>`;
     ln+=`<circle cx="${X(last).toFixed(1)}" cy="${Y(s.vals[last]).toFixed(1)}" r="${s.cur?4.2:3}" fill="${s.color}"/>`; });
   WSN_GEO[id]={ W, x0, x1, y0, y1, from, to, span, series:series.map(s=>({ label:s.label, color:s.color, vals:s.vals, fmt:s.fmt, hide:s.hide })) };
-  return `<svg data-wsn="${id}" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${E(id==='cum'?'Cumulative acres by season':id==='run'?'Acres per running machine':'Acres sprayed each day by season')}" style="display:block;touch-action:pan-y">${g}${xt}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D5DAE0"/>${ln}<line data-wsnguide="1" x1="0" y1="${y0}" x2="0" y2="${y1}" stroke="${W2.ink}" stroke-dasharray="3 3" opacity="0"/></svg>`;
+  return `<svg data-wsn="${id}" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${E(id==='cum'?'Cumulative acres by season':id==='run'?'Acres per running machine':id==='rpm'?'Acres per running machine each day, by season':'Acres sprayed each day by season')}" style="display:block;touch-action:pan-y">${g}${xt}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D5DAE0"/>${ln}<line data-wsnguide="1" x1="0" y1="${y0}" x2="0" y2="${y1}" stroke="${W2.ink}" stroke-dasharray="3 3" opacity="0"/></svg>`;
 }
 // Hover (mouse) or tap (touch) → the nearest day, every season's figure on it.
 function wsnPoint(e){
@@ -10297,13 +10301,49 @@ function wcumBodyHTML(mob){
       <div style="display:flex;${mob?'flex-direction:column':''};gap:${mob?10:14}px;margin-top:12px">
         ${apmTile(seasons[cur], perCur, at(cur), mcCur, wDepAll()?'machines on the Main sheet':'deployed machines on the Main sheet')}
         ${apmTile(prevS, perPrev, at(cur-1), mcPrev, mcPrev==null?'no machine count for this season':st==='ALL'?'Haryana 320 + Punjab 314':'')}</div></div>`, `margin-top:${mob?12:16}px`);
+  const rpmCard = curHas ? wsnRpmCardHTML(mob, B, st, stName, seasons, daily, from, to, edge, lastOff, tipBox) : '';
   const runCard = curHas ? wsnRunCardHTML(mob, B, sts, stName, seasons[cur], from, to, edge, tipBox) : '';
   const dayCard = B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
       <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?16:17}px;font-weight:600">Acres sprayed each day</span><span style="font-size:13px;color:${W2.ink2}">the same dates in each season · ${mob?'tap':'point at'} a day for its figures</span></div>
       <div style="display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:10px;font-size:13px">${seasons.slice().reverse().map((s,ri)=>{ const i=seasons.length-1-ri; return `<span style="display:inline-flex;align-items:center;gap:7px"><span aria-hidden="true" style="width:14px;height:3px;border-radius:2px;background:${s.color}"></span>${s.label}<b style="font-weight:600;font-variant-numeric:tabular-nums">${acF(dayTot[i])} ac</b></span>`; }).join('')}<span style="color:${W2.ink2}">${wsnLbl(from)} – ${wsnLbl(Math.min(to,edge))}</span></div>
       <div style="position:relative;margin-top:12px">${wsnSVG('day', ser(daily), from, to, mob, mob?240:300)}${tipBox}</div></div>`, `margin-top:${mob?12:16}px`);
   const head = `<div style="margin-bottom:${mob?12:16}px"><div style="font-size:${mob?18:20}px;font-weight:600">Cumulative acres</div><div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">This rabi season’s acres against the two before it, on the same dates. Pick a state and a date range.</div></div>`;
-  return head + controls + cumCard + apmCard + runCard + dayCard;
+  return head + controls + cumCard + apmCard + rpmCard + runCard + dayCard;
+}
+/* Acres per running machine EACH DAY, this season vs the two before (Dinesh 2026-11-24). Off the snake chart tab alone: its
+   `number_of_mcns` column is the machines that ran that day, filled for every season, so one tab gives both sides of the ratio
+   and the seasons compare like for like. Day = that day's acres ÷ that day's machines (HR + PB summed first: a ratio of sums).
+   Average over the range = Σ acres ÷ Σ machine-days, never a mean of the daily ratios. EVERY day is drawn, however few machines
+   ran (agreed); a day with no machines has no figure. Read on the same dates as the cumulative card (From → the badge's day). */
+function wsnRpmCardHTML(mob, B, st, stName, seasons, daily, from, to, edge, lastOff, tipBox){
+  if(!WSN.hasM) return '';
+  const pad=mob?'16px':'18px 22px', cur=seasons.length-1;
+  const mcn=seasons.map(s=>wsnDaily(st, s.y, s.cur?lastOff:null, WSN.M));
+  const rat=seasons.map((s,i)=>mcn[i].map((n,o)=>n>0 && daily[i][o]!=null ? daily[i][o]/n : null));
+  const sum=seasons.map((s,i)=>{ let a=0, n=0; for(let o=from;o<=edge;o++){ a+=daily[i][o]||0; n+=mcn[i][o]||0; } return { a, n, avg:n?a/n:null }; });
+  const badge=i=>{ const a=sum[cur].avg, b=sum[i].avg; if(a==null||b==null) return '';
+    const d=a-b, up=d>=0, p=b>0?Math.round(100*d/b):null;
+    return `<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:${up?'#E8F6EE':'#FDECEA'};color:${up?W2.actD:W2.brkD};font-size:13px;font-weight:600;white-space:${mob?'normal':'nowrap'}">${up?'▲':'▼'} ${acF(Math.abs(d))} ac per machine a day${p!=null?` (${Math.abs(p)}%)`:''} ${up?'more than':'less than'} ${seasons[i].label}</span>`; };
+  const tile=(s,i)=>{ const R=sum[i], dv=rat[i][edge], dn=mcn[i][edge];
+    // Phone: one compact row per season (label · figure, then the working on one line), so the chart starts high.
+    if(mob) return `<div style="border:1px solid ${W2.line2};border-radius:12px;padding:10px 14px;background:${s.cur?'#F4FAF6':W2.head}">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600"><span aria-hidden="true" style="width:14px;height:${s.cur?4:3}px;border-radius:2px;background:${s.color}"></span>${s.label}<span style="flex:1"></span><span style="${w2num(20,600)}">${R.avg==null?'—':acF(R.avg)}${w2unit('ac',12)}</span></div>
+      <div style="font-size:12.5px;color:${W2.ink2};margin-top:2px;line-height:1.45">${R.n?`${acF(R.a)} ac ÷ ${fmt(R.n)} machine-days`:'no machine ran'} · ${wsnLbl(edge)}: ${dv==null?'none ran':`${acF(dv)} ac, ${fmt(dn)} ran`}</div></div>`;
+    return `<div style="flex:1;min-width:${mob?0:200}px;border:1px solid ${W2.line2};border-radius:14px;padding:12px 16px;background:${s.cur?'#F4FAF6':W2.head}">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600"><span aria-hidden="true" style="width:16px;height:${s.cur?4:3}px;border-radius:2px;background:${s.color}"></span>${s.label}${s.cur?' · this season':''}</div>
+      <div style="${w2num(mob?24:26,600)};margin-top:6px">${R.avg==null?'—':acF(R.avg)}${w2unit('ac per machine a day',12)}</div>
+      <div style="font-size:12.5px;color:${W2.ink2};margin-top:3px;line-height:1.45">${R.n?`${acF(R.a)} ac ÷ ${fmt(R.n)} machine-days`:'no machine ran in this range'}</div>
+      <div style="font-size:12.5px;color:${W2.ink2};margin-top:2px;line-height:1.45">On ${wsnLbl(edge)}: ${dv==null?'no machine ran':`<b style="font-weight:600;color:${W2.ink};font-variant-numeric:tabular-nums">${acF(dv)} ac</b> · ${fmt(dn)} machine${dn===1?'':'s'}`}</div></div>`; };
+  const acU=v=>acF(v)+' ac', mcU=v=>fmt(v)+' ran';
+  const series=[...seasons.map((s,i)=>({ label:`${s.label} · machines`, hide:true, vals:mcn[i].map((n,o)=>daily[i][o]==null?null:n), fmt:mcU })),
+                ...seasons.map((s,i)=>({ label:s.label, color:s.color, cur:s.cur, vals:rat[i], fmt:acU }))];
+  return B.cardBox(`<div style="padding:${pad}">
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?16:17}px;font-weight:600">Acres per running machine, each day · ${E(stName)}</span><span style="font-size:13px;color:${W2.ink2}">${wsnLbl(from)} – ${wsnLbl(edge)} in every season · ${mob?'tap':'point at'} a day for its figures</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${badge(cur-1)}${badge(cur-2)}</div>
+      ${mob?`<div style="font-size:12.5px;color:${W2.ink2};margin-top:12px">Average acres per machine a day, ${wsnLbl(from)} – ${wsnLbl(edge)}</div>`:''}
+      <div style="display:flex;${mob?'flex-direction:column':''};gap:${mob?8:14}px;margin-top:${mob?6:12}px">${seasons.slice().reverse().map((s,ri)=>tile(s,seasons.length-1-ri)).join('')}</div>
+      <div style="position:relative;margin-top:12px">${wsnSVG('rpm', series, from, to, mob, mob?240:300)}${tipBox}</div>
+      <div style="font-size:12.5px;color:${W2.ink2};margin-top:8px;line-height:1.5">Each day’s acres ÷ the machines that ran that day, both from the snake chart tab (every programme machine in the state). The average is all the acres ÷ all the machine-days in the range. Days when only a few machines ran swing widely; the pop-up gives each day’s machine count.</div></div>`, `margin-top:${mob?12:16}px`);
 }
 /* Acres per RUNNING machine (Dinesh 2026-11-16). THIS SEASON ONLY: no tab carries a rabi-only count of machines that ran for a
    past season (the Kharif "Acres per mcn" tab counts from 1 April, Kharif machines included), so there is nothing honest to
@@ -10312,8 +10352,9 @@ function wcumBodyHTML(mob){
    from one sheet. UPL + SWAL, Bayer out, Deployed / All machines followed, the page's State and From–To followed; nothing
    before the Main sheet's first date (22 Oct).
    · "Machines run till now": IoT acres from From to the day ÷ machines that ran at least once from From to the day.
-   · "Each day": that day's IoT acres ÷ machines that ran that day; the headline average over the range is
-     Σ acres ÷ Σ machine-days (a ratio of sums, never a mean of the daily ratios). */
+   · "Per day · machines run till now": that day's IoT acres ÷ machines that had run at least once by then.
+   The old third tab ("machines ran that day") was dropped 2026-11-24: wsnRpmCardHTML now draws it off the snake tab for
+   every season, and two different figures for one measure on one page would not reconcile. */
 function wsnRunData(sts, y, from, edge){
   const mcs = WRET.loaded ? WRET.machines.filter(m=>m.org!=='Bayer' && sts.includes(m.st) && wDepOk(m)) : [];
   const per=new Array(WSN_N).fill(null), day=new Array(WSN_N).fill(null), nRun=new Array(WSN_N).fill(null), nDay=new Array(WSN_N).fill(null), acDay=new Array(WSN_N).fill(null), dayAll=new Array(WSN_N).fill(null);
@@ -10326,8 +10367,8 @@ function wsnRunData(sts, y, from, edge){
 }
 function wsnRunCardHTML(mob, B, sts, stName, sCur, from, to, edge, tipBox){
   if(!WRET.loaded) return B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'};font-size:13.5px;color:${W2.ink2}">Loading the Main sheet for acres per running machine…</div>`, `margin-top:${mob?12:16}px`);
-  const R=wsnRunData(sts, sCur.y, from, edge), tab=['day','all'].includes(state.wsnRun)?state.wsnRun:'cum', pad=mob?'16px':'18px 22px';
-  const tabs=`<div style="${w2segBox(mob)}${mob?';width:100%;flex-direction:column;box-sizing:border-box':''}">${[['cum','Till now'],['all','Per day · machines run till now'],['day','Per day · machines ran that day']].map(([k,t])=>`<button data-act="wsnrun" data-k="${k}" aria-pressed="${tab===k}" style="${w2seg(tab===k,mob)};white-space:nowrap${mob?';width:100%':''}">${t}</button>`).join('')}</div>`;
+  const R=wsnRunData(sts, sCur.y, from, edge), tab=state.wsnRun==='all'?'all':'cum', pad=mob?'16px':'18px 22px';
+  const tabs=`<div style="${w2segBox(mob)}${mob?';width:100%;flex-direction:column;box-sizing:border-box':''}">${[['cum','Till now'],['all','Per day · machines run till now']].map(([k,t])=>`<button data-act="wsnrun" data-k="${k}" aria-pressed="${tab===k}" style="${w2seg(tab===k,mob)};white-space:nowrap${mob?';width:100%':''}">${t}</button>`).join('')}</div>`;
   const head=`<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?16:17}px;font-weight:600">Acres per running machine · ${E(stName)}</span><span style="font-size:13px;color:${W2.ink2}">${sCur.label} only · ${R.start==null?'':`${wsnLbl(R.start)} – ${wsnLbl(edge)}`}</span></div>`;
   if(R.start==null || !R.n) return B.cardBox(`<div style="padding:${pad}">${head}<div style="margin-top:12px">${tabs}</div><div style="margin-top:14px;font-size:13.5px;color:${W2.ink2}">No machine ran in this range.</div></div>`, `margin-top:${mob?12:16}px`);
   const mcF=v=>fmt(v)+' machines', acU=v=>acF(v)+' ac';
@@ -10338,24 +10379,18 @@ function wsnRunCardHTML(mob, B, sts, stName, sCur, from, to, edge, tipBox){
       +tile('Machines run till now', fmt(R.n), `of ${fmt(R.fleet)}`, `ran at least once from ${wsnLbl(R.start)} to ${wsnLbl(edge)}`);
     series=[{ label:'Ac per machine', color:sCur.color, cur:true, vals:R.per },{ label:'Machines run', hide:true, vals:R.nRun, fmt:fmt },{ label:'Acres so far', hide:true, vals:R.per.map((v,o)=>v==null?null:v*R.nRun[o]), fmt:acF }];
     note='Acres from the From date to each day ÷ the machines that have run at least once by that day. A dip means machines joined faster than acres came in.';
-  }else if(tab==='all'){
+  }else{
     const ed=R.dayAll[edge], avg=R.n&&R.nDays?R.cumAc/R.n/R.nDays:null;
     tiles=tile(`On ${wsnLbl(edge)}`, ed==null?'—':acF(ed), 'ac per machine', `${acF(R.acDay[edge]||0)} ac ÷ ${fmt(R.nRun[edge]||0)} machines run till then`)
       +tile(`Average, ${wsnLbl(R.start)} – ${wsnLbl(edge)}`, avg==null?'—':acF(avg), 'ac per machine per day', `${acF(R.cumAc)} ac ÷ ${fmt(R.n)} machines run till now ÷ ${fmt(R.nDays)} days`);
     series=[{ label:'Ac per machine', color:sCur.color, cur:true, vals:R.dayAll },{ label:'Machines run till then', hide:true, vals:R.nRun, fmt:fmt },{ label:'Acres that day', hide:true, vals:R.acDay, fmt:acF }];
     note='Each day’s acres ÷ every machine that had run at least once by that day, whether or not it ran that day. The average is all acres ÷ machines run till now ÷ days.';
-  }else{
-    const ed=R.day[edge], avg=R.mdays?R.acRange/R.mdays:null;
-    tiles=tile(`On ${wsnLbl(edge)}`, ed==null?'—':acF(ed), 'ac per machine', `${acF(R.acDay[edge]||0)} ac ÷ ${fmt(R.nDay[edge]||0)} machines that ran`)
-      +tile(`Average, ${wsnLbl(R.start)} – ${wsnLbl(edge)}`, avg==null?'—':acF(avg), 'ac per machine per day', `${acF(R.acRange)} ac ÷ ${fmt(R.mdays)} machine-days run`);
-    series=[{ label:'Ac per machine', color:sCur.color, cur:true, vals:R.day },{ label:'Machines ran', hide:true, vals:R.nDay, fmt:fmt },{ label:'Acres that day', hide:true, vals:R.acDay, fmt:acF }];
-    note='Each day’s acres ÷ the machines that ran that day (a machine that did not run is not counted).';
   }
   return B.cardBox(`<div style="padding:${pad}">${head}
       <div style="margin-top:12px">${tabs}</div>
       <div style="display:flex;${mob?'flex-direction:column':''};gap:${mob?10:14}px;margin-top:12px">${tiles}</div>
       <div style="position:relative;margin-top:12px">${wsnSVG('run', series, from, to, mob, mob?240:300)}${tipBox}</div>
-      <div style="font-size:12.5px;color:${W2.ink2};margin-top:8px;line-height:1.5">${note} IoT acres from the Main sheet, UPL + SWAL${wDepAll()?'':', deployed machines'}; a machine ran on a day its IoT acres are above 0. Past seasons have no count of machines that ran, so only this season is shown.</div></div>`, `margin-top:${mob?12:16}px`);
+      <div style="font-size:12.5px;color:${W2.ink2};margin-top:8px;line-height:1.5">${note} IoT acres from the Main sheet, UPL + SWAL${wDepAll()?'':', deployed machines'}; a machine ran on a day its IoT acres are above 0. This season only (the Main sheet starts on 22 Oct); the card above compares each day with past seasons.</div></div>`, `margin-top:${mob?12:16}px`);
 }
 /* ===================== Wheat North — Top 10 machines (view key `wtop`, Dinesh 2026-11-04) =====================
    The ten machines with the most acres since the season's first sheet date, THROUGH the Day filter's day. Wheat admin only.

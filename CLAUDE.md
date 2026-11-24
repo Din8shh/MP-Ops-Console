@@ -1161,7 +1161,14 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   card draws each day's acres for the same dates. A day with no row = 0 ac. **No note about the gap to the Main sheet's acres, by
   request** — this tab counts all programme acres in the two states. Checked 11 Nov: 15 Oct – 10 Nov = 32,981 / 77,472 / 53,151 ac
   (2026-27 / 2025-26 / 2024-25), the same as a direct sum of the tab. Charts are drawn at the screen's width (`vw`), so text stays 12px.
-  · **Acres per running machine** card (Dinesh 2026-11-16, `wsnRunData` / `wsnRunCardHTML`), three tabs (`state.wsnRun`):
+  · **Acres per running machine, each day — vs past seasons** (`wsnRpmCardHTML`, Dinesh 2026-11-24), between Acres per machine
+    and the card below. The snake tab now carries **`number_of_mcns`** = machines that ran that day (filled for every season), parsed
+    into `WSN.M`; day = that day's acres ÷ its machines (HR + PB summed first), all three seasons, EVERY day drawn however few machines
+    ran (agreed; the pop-up carries each season's machine count). Tiles: per season, Σ acres ÷ Σ machine-days From → the badge's day,
+    plus that day's figure; badges vs the two past seasons. Phone tiles are compact rows. Checked 24 Nov, 15 Oct – 23 Nov HR + PB:
+    16.8 (79,871 ÷ 4,755) vs 21.4 vs 19.0 — equal to a direct sum of the tab. **Because of it, the card below lost its third tab**
+    ("Per day · machines ran that day", Main sheet IoT acres, this season only): two figures for one measure would not reconcile.
+  · **Acres per running machine** card (Dinesh 2026-11-16, `wsnRunData` / `wsnRunCardHTML`), now TWO tabs (`state.wsnRun`):
     **Till now** (`cum`) = IoT acres From → the day ÷ machines that ran at least once in that span; **Per day · machines run till
     now** (`all`) = the day's IoT acres ÷ machines that had run at least once by that day (ran that day or not), headline average =
     all acres ÷ machines run till now ÷ days in range (15 Nov: 3,299 ÷ 323 = 10.2; 50,470 ÷ 323 ÷ 25 = 6.3); **Per day · machines
