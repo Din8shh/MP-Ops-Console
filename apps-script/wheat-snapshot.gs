@@ -122,8 +122,9 @@ function buildMain_(src, sh, today) {
   var P = readTab_(tabByGid_(src, PRODUCT_GID), today), hp = P[0].map(function (x) { return String(x).trim().toLowerCase(); });
   var pMc = hp.indexOf('machine_number'), pDt = hp.indexOf('selected_date'), pBr = hp.indexOf('brand'), pAc = hp.indexOf('scanned_acres');
   if (pMc < 0 || pDt < 0 || pBr < 0 || pAc < 0) throw new Error('Product tab: missing machine_number / selected_date / brand / scanned_acres');
-  var split = {};
+  var split = {}, seen = {};
   for (var i = 1; i < P.length; i++) {
+    var line = P[i].join('\u0001'); if (seen[line]) continue; seen[line] = true;   // a row listed twice is read once (UPL_2632, 19 Nov)
     var b = String(P[i][pBr]).trim().toLowerCase().replace(/\s+/g, '_'), ac = Number(String(P[i][pAc]).replace(/,/g, '')) || 0;
     if (!ac || (b !== 'spruce' && b !== 'feego' && b !== 'feego_edge')) continue;
     var k = String(P[i][pMc]).trim() + '|' + String(P[i][pDt]).slice(0, 10);
