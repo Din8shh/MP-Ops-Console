@@ -1241,8 +1241,14 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     `openById` all timed out), stranding the 23 Nov copy with 0 acres for that day. Cause: the chain is Athena cron →
     a SOURCE sheet → IMPORTRANGE into the Wheat workbook (+ its own formula / hand-kept columns), and the cron rewrites
     every day from 22 Oct, so each run re-imports and recalculates the lot. A nightly "freeze past days to values" script
-    was written and DROPPED the same day — the daily full rewrite would undo it. Planned instead: the snapshot script
-    reads the source sheet direct + the Wheat-only columns from a small sheet, joined on machine number.
+    was written and DROPPED the same day — the daily full rewrite would undo it. **Instead the snapshot script now reads
+    the SOURCE sheet** (`1l7mMhlFUj-URefRDWUlDicaponlyLCGAZw3hNyQTPsg`, exports in 1–4 s): tab `a` → Main sheet (Bayer's
+    75 machines dropped), `Maintenance data` → maintenance data, `Product upl/swal` → product details, `day wise acres n
+    mcn count` → Snake chart raw. The four Main sheet columns only the workbook made are rebuilt in `buildMain_`:
+    Spruce / Feego / FEEGO_EDGE = the machine-day's scanned acres by brand from `Product upl/swal`; FO onboarded = the
+    FO's number is on `FO details` (345 of 351 agree; the 6 others were added to that tab since). Checked in a node
+    harness on 24 Nov: same header, 351 machines a day, every other column equal through 21 Nov. The source's
+    longitude carries full precision (the workbook's was rounded to 2 decimals).
     **The parsers were hardened the same day** (they no longer assume every row carries today's value):
     `wretBuild` takes a machine's own fields (retailer, people, handover, position, ping) from its LATEST dated row, not
     the first read, and `wtkBuild` takes a ticket's close date from any row that carries one. Checked on the 23 Nov copy:

@@ -1,41 +1,42 @@
 /**
  * MP Ops Console — Wheat snapshot.
  *
- * WHY: the Wheat workbook became so heavy that Google often cannot export it at all (no answer in 150 s, 2026-11-20/21),
- * and every dashboard load asks for a fresh export. This script copies the four tabs the dashboard reads into a
- * separate, values-only SNAPSHOT spreadsheet every 30 minutes. The dashboard reads the snapshot, which exports in
- * seconds, and falls back to the live workbook only if the snapshot is missing.
+ * WHY: the Wheat workbook became so heavy that Google often cannot open it at all (2026-11-20/21, and on 24 Nov not
+ * even this script could). It is fed by IMPORTRANGE from a SOURCE sheet that the daily Athena cron writes. So since
+ * 2026-11-24 this script reads the SOURCE sheet directly — plain values, exports in 1–4 s — and never touches the
+ * Wheat workbook. The dashboard reads this snapshot, which exports in seconds.
  *
- * It NEVER writes to the Wheat workbook — it only reads it. If a read fails or looks wrong (too few rows, missing
- * columns), that tab is left as it was, so the dashboard keeps the last good copy and its time.
+ * The source carries everything the dashboard needs except four Main sheet columns the Wheat workbook made itself.
+ * They are rebuilt here, checked against the workbook's own copy on 2026-11-24:
+ *   · Spruce / Feego / FEEGO_EDGE = that machine-day's scanned acres by brand, from the "Product upl/swal" tab
+ *     (equal on every machine-day except the last few, where the workbook's copy was the stale one);
+ *   · FO onboarded = "Onboarded" if the FO's number is on the "FO details" tab, else "Yet to Onboard"
+ *     (345 of 351 machines agree; the other 6 are FOs added to that tab since).
+ * The source's Main tab ("a") also holds Bayer's 75 machines; they are dropped, as the Wheat "Main sheet" did
+ * (the dashboard reads Bayer from Bayer's own workbook).
  *
- * SET UP (once, about 5 minutes, from an account that can open the Wheat workbook):
- *   1. Create a blank Google Sheet, e.g. "Wheat dashboard snapshot".
- *   2. Share → General access → "Anyone with the link" → Viewer.
- *   3. In that sheet: Extensions → Apps Script. Delete what is in Code.gs, paste this whole file, click Save.
- *   4. Pick "snapshotNow" in the function box at the top, click Run. Google asks for permission → Review
- *      permissions → choose your account → Advanced → "Go to … (unsafe)" (it is your own script) → Allow.
- *      The first run takes a minute or two; the tabs appear in the sheet, plus a "_snapshot" tab with the time.
- *   5. Pick "installTimer", click Run. From now on it refreshes itself every 30 minutes (05:00–23:00 IST).
- *   6. Send the sheet's link to wire the dashboard to it.
+ * It NEVER writes to the source. If a read fails or looks wrong (too few rows), that tab is left as it was, so the
+ * dashboard keeps the last good copy and its time.
  *
+ * SET UP / UPDATE: in the snapshot sheet → Extensions → Apps Script, replace Code.gs with this whole file, Save,
+ * run "snapshotNow" once (allow the new permission: it reads a different spreadsheet now), then run "installTimer".
  * To stop it: run "removeTimer". To see what each run did: the "_snapshot" tab, or Executions (left sidebar).
  *
- * QUOTA: a free Gmail account gets 90 minutes of timer run time a day. A normal run takes ~1 minute, so 36 runs a day
- * fit easily. If the Wheat workbook is stuck, a run can wait up to 6 minutes before Google stops it — the quiet hours
- * and the 30-minute interval leave room for that. Do not set the interval below 30.
+ * QUOTA: a free Gmail account gets 90 minutes of timer run time a day; a run from the source takes well under a minute.
  */
 
-var SOURCE_ID = '1Tz3OAhykHa144JAufDRwK_G2_LuG0QXxwOsQqhR9mfc';   // the Wheat workbook (read only)
+var SOURCE_ID = '1l7mMhlFUj-URefRDWUlDicaponlyLCGAZw3hNyQTPsg';   // the sheet the Athena cron writes (read only)
 
-// The tabs the dashboard reads, by gid (survives a rename). `min` = fewest data rows a sane copy can have;
-// anything smaller is treated as a broken read and the previous copy is kept.
+// Source tab (by gid) → the snapshot tab the dashboard reads (by NAME — the snapshot tabs keep their gids).
+// `min` = fewest data rows a sane copy can have; anything smaller is treated as a broken read.
 var TABS = [
-  { gid: 486286189,  name: 'Main sheet',               min: 1000 },
-  { gid: 965231799,  name: 'maintenance data',         min: 1000 },
-  { gid: 1855112218, name: 'UPL/SWAL product details', min: 500  },
-  { gid: 485044081,  name: 'Snake chart raw',          min: 100  }
+  { gid: 1847044238, name: 'Main sheet',               min: 1000, build: buildMain_ },
+  { gid: 878336756,  name: 'maintenance data',         min: 1000 },
+  { gid: 1446139662, name: 'UPL/SWAL product details', min: 500  },
+  { gid: 765134246,  name: 'Snake chart raw',          min: 100  }
 ];
+var PRODUCT_GID = 1446139662;   // "Product upl/swal" — the Spruce / Feego / FEEGO_EDGE split
+var FO_GID      = 760435424;    // "FO details" — who is onboarded
 
 var EVERY_MIN   = 30;          // timer interval (30 or 60 — see QUOTA above)
 var QUIET_FROM  = 23;          // no runs from 23:00 …
@@ -61,7 +62,7 @@ function snapshotNow() {
       try {
         var sh = src.getSheets().filter(function (s) { return s.getSheetId() === t.gid; })[0];
         if (!sh) throw new Error('tab not found (gid ' + t.gid + ')');
-        var rows = readTab_(sh, today);
+        var rows = t.build ? t.build(src, sh, today) : readTab_(sh, today);
         var n = rows.length - 1;
         var last = Number(props.getProperty('rows_' + t.gid) || 0);
         if (n < t.min) throw new Error('only ' + n + ' rows (expected at least ' + t.min + ')');
@@ -103,6 +104,51 @@ function readTab_(sh, today) {
   }
   return out;
 }
+
+function tabByGid_(ss, gid) {
+  var sh = ss.getSheets().filter(function (s) { return s.getSheetId() === gid; })[0];
+  if (!sh) throw new Error('tab not found (gid ' + gid + ')');
+  return sh;
+}
+
+// The Main sheet: the source's "a" tab without Bayer, plus the four columns the Wheat workbook used to make.
+function buildMain_(src, sh, today) {
+  var rows = readTab_(sh, today);
+  var h = rows[0].map(function (x) { return String(x).trim().toLowerCase(); });
+  var iMc = h.indexOf('machine_number'), iDt = h.indexOf('selected_date'), iOrg = h.indexOf('organisation'), iFo = h.indexOf('fo_number');
+  if (iMc < 0 || iDt < 0 || iOrg < 0 || iFo < 0) throw new Error('Main tab: missing machine_number / selected_date / organisation / fo_number');
+
+  // Scanned acres by brand per machine-day.
+  var P = readTab_(tabByGid_(src, PRODUCT_GID), today), hp = P[0].map(function (x) { return String(x).trim().toLowerCase(); });
+  var pMc = hp.indexOf('machine_number'), pDt = hp.indexOf('selected_date'), pBr = hp.indexOf('brand'), pAc = hp.indexOf('scanned_acres');
+  if (pMc < 0 || pDt < 0 || pBr < 0 || pAc < 0) throw new Error('Product tab: missing machine_number / selected_date / brand / scanned_acres');
+  var split = {};
+  for (var i = 1; i < P.length; i++) {
+    var b = String(P[i][pBr]).trim().toLowerCase().replace(/\s+/g, '_'), ac = Number(String(P[i][pAc]).replace(/,/g, '')) || 0;
+    if (!ac || (b !== 'spruce' && b !== 'feego' && b !== 'feego_edge')) continue;
+    var k = String(P[i][pMc]).trim() + '|' + String(P[i][pDt]).slice(0, 10);
+    var o = split[k] || (split[k] = { spruce: 0, feego: 0, feego_edge: 0 });
+    o[b] += ac;
+  }
+
+  // FOs on the booking app's list.
+  var F = readTab_(tabByGid_(src, FO_GID), today), hf = F[0].map(function (x) { return String(x).trim().toLowerCase(); });
+  var fMob = hf.indexOf('primary_mobile_number'); if (fMob < 0) throw new Error('FO details: missing primary_mobile_number');
+  var fo = {};
+  for (var j = 1; j < F.length; j++) { var m = mob_(F[j][fMob]); if (m) fo[m] = true; }
+
+  var out = [rows[0].concat(['Spruce', 'Feego', 'FEEGO_EDGE', 'FO onboarded'])];
+  for (var r = 1; r < rows.length; r++) {
+    var row = rows[r], mc = String(row[iMc]).trim();
+    if (String(row[iOrg]).trim().toLowerCase() === 'bayer') continue;   // the placeholder machine "0" stays, as on the workbook's copy
+    var s = split[mc + '|' + String(row[iDt]).slice(0, 10)] || { spruce: 0, feego: 0, feego_edge: 0 };
+    var fm = mob_(row[iFo]);
+    out.push(row.concat([num_(s.spruce), num_(s.feego), num_(s.feego_edge), fm ? (fo[fm] ? 'Onboarded' : 'Yet to Onboard') : '']));
+  }
+  return out;
+}
+function mob_(v) { var d = String(v || '').replace(/\D/g, '').slice(-10); return d.length === 10 ? d : ''; }
+function num_(x) { return String(Math.round(x * 100) / 100); }
 
 // Writes the copy in place (same tab, same gid every time, so the dashboard's link never changes). Cells are set to
 // plain text first so Sheets does not re-read "2026-11-20" or "0" as something else. Trailing rows and columns are
