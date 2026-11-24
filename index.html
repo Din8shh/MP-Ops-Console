@@ -10230,7 +10230,7 @@ function wsnSVG(id, series, from, to, mob, H){
     ln+=`<path d="${d.trim()}" fill="none" stroke="${s.color}" stroke-width="${s.cur?2.8:1.8}" stroke-linejoin="round" stroke-linecap="round"/>`;
     ln+=`<circle cx="${X(last).toFixed(1)}" cy="${Y(s.vals[last]).toFixed(1)}" r="${s.cur?4.2:3}" fill="${s.color}"/>`; });
   WSN_GEO[id]={ W, x0, x1, y0, y1, from, to, span, series:series.map(s=>({ label:s.label, color:s.color, vals:s.vals, fmt:s.fmt, hide:s.hide })) };
-  return `<svg data-wsn="${id}" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${E(id==='cum'?'Cumulative acres by season':id==='run'?'Acres per running machine':id==='rpm'?'Acres per running machine each day, by season':'Acres sprayed each day by season')}" style="display:block;touch-action:pan-y">${g}${xt}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D5DAE0"/>${ln}<line data-wsnguide="1" x1="0" y1="${y0}" x2="0" y2="${y1}" stroke="${W2.ink}" stroke-dasharray="3 3" opacity="0"/></svg>`;
+  return `<svg data-wsn="${id}" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${E(id==='cum'?'Cumulative acres by season':id==='run'?'Acres per running machine':id==='rpm'?'Acres per running machine each day, by season':id==='mcn'?'Machines that ran each day, by season':'Acres sprayed each day by season')}" style="display:block;touch-action:pan-y">${g}${xt}<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#D5DAE0"/>${ln}<line data-wsnguide="1" x1="0" y1="${y0}" x2="0" y2="${y1}" stroke="${W2.ink}" stroke-dasharray="3 3" opacity="0"/></svg>`;
 }
 // Hover (mouse) or tap (touch) → the nearest day, every season's figure on it.
 function wsnPoint(e){
@@ -10302,13 +10302,14 @@ function wcumBodyHTML(mob){
         ${apmTile(seasons[cur], perCur, at(cur), mcCur, wDepAll()?'machines on the Main sheet':'deployed machines on the Main sheet')}
         ${apmTile(prevS, perPrev, at(cur-1), mcPrev, mcPrev==null?'no machine count for this season':st==='ALL'?'Haryana 320 + Punjab 314':'')}</div></div>`, `margin-top:${mob?12:16}px`);
   const rpmCard = curHas ? wsnRpmCardHTML(mob, B, st, stName, seasons, daily, from, to, edge, lastOff, tipBox) : '';
+  const mcnCard = curHas ? wsnMcnCardHTML(mob, B, st, stName, seasons, daily, from, to, edge, lastOff, tipBox) : '';
   const runCard = curHas ? wsnRunCardHTML(mob, B, sts, stName, seasons[cur], from, to, edge, tipBox) : '';
   const dayCard = B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
       <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?16:17}px;font-weight:600">Acres sprayed each day</span><span style="font-size:13px;color:${W2.ink2}">the same dates in each season · ${mob?'tap':'point at'} a day for its figures</span></div>
       <div style="display:flex;gap:8px 18px;flex-wrap:wrap;margin-top:10px;font-size:13px">${seasons.slice().reverse().map((s,ri)=>{ const i=seasons.length-1-ri; return `<span style="display:inline-flex;align-items:center;gap:7px"><span aria-hidden="true" style="width:14px;height:3px;border-radius:2px;background:${s.color}"></span>${s.label}<b style="font-weight:600;font-variant-numeric:tabular-nums">${acF(dayTot[i])} ac</b></span>`; }).join('')}<span style="color:${W2.ink2}">${wsnLbl(from)} – ${wsnLbl(Math.min(to,edge))}</span></div>
       <div style="position:relative;margin-top:12px">${wsnSVG('day', ser(daily), from, to, mob, mob?240:300)}${tipBox}</div></div>`, `margin-top:${mob?12:16}px`);
   const head = `<div style="margin-bottom:${mob?12:16}px"><div style="font-size:${mob?18:20}px;font-weight:600">Cumulative acres</div><div style="font-size:13.5px;color:${W2.ink2};margin-top:2px">This rabi season’s acres against the two before it, on the same dates. Pick a state and a date range.</div></div>`;
-  return head + controls + cumCard + apmCard + rpmCard + runCard + dayCard;
+  return head + controls + cumCard + apmCard + rpmCard + mcnCard + runCard + dayCard;
 }
 /* Acres per running machine EACH DAY, this season vs the two before (Dinesh 2026-11-24). Off the snake chart tab alone: its
    `number_of_mcns` column is the machines that ran that day, filled for every season, so one tab gives both sides of the ratio
@@ -10344,6 +10345,39 @@ function wsnRpmCardHTML(mob, B, st, stName, seasons, daily, from, to, edge, last
       <div style="display:flex;${mob?'flex-direction:column':''};gap:${mob?8:14}px;margin-top:${mob?6:12}px">${seasons.slice().reverse().map((s,ri)=>tile(s,seasons.length-1-ri)).join('')}</div>
       <div style="position:relative;margin-top:12px">${wsnSVG('rpm', series, from, to, mob, mob?240:300)}${tipBox}</div>
       <div style="font-size:12.5px;color:${W2.ink2};margin-top:8px;line-height:1.5">Each day’s acres ÷ the machines that ran that day, both from the snake chart tab (every programme machine in the state). The average is all the acres ÷ all the machine-days in the range. Days when only a few machines ran swing widely; the pop-up gives each day’s machine count.</div></div>`, `margin-top:${mob?12:16}px`);
+}
+/* Machines that ran each day, this season vs the two before (Dinesh 2026-11-24), off the snake tab's `number_of_mcns`, the same
+   column the card above divides by. Every day drawn. Tiles: average a day over From → the badge's day (machine-days ÷ days in
+   that range, a day with none counting as 0), the busiest day, and the badge's day itself. */
+function wsnMcnCardHTML(mob, B, st, stName, seasons, daily, from, to, edge, lastOff, tipBox){
+  if(!WSN.hasM) return '';
+  const pad=mob?'16px':'18px 22px', cur=seasons.length-1, nDays=edge-from+1;
+  const mcn=seasons.map(s=>wsnDaily(st, s.y, s.cur?lastOff:null, WSN.M));
+  const sum=seasons.map((s,i)=>{ let n=0, pk=-1, pkO=null; for(let o=from;o<=edge;o++){ const v=mcn[i][o]||0; n+=v; if(v>pk){ pk=v; pkO=o; } }
+    return { n, avg:nDays?n/nDays:null, pk, pkO }; });
+  const badge=i=>{ const a=sum[cur].avg, b=sum[i].avg; if(a==null||b==null||!b) return '';
+    const d=a-b, up=d>=0, p=Math.round(100*d/b);
+    return `<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:${up?'#E8F6EE':'#FDECEA'};color:${up?W2.actD:W2.brkD};font-size:13px;font-weight:600;white-space:${mob?'normal':'nowrap'}">${up?'▲':'▼'} ${fmt(Math.round(Math.abs(d)))} machines a day (${Math.abs(p)}%) ${up?'more than':'fewer than'} ${seasons[i].label}</span>`; };
+  const avgF=v=>v==null?'—':fmt(Math.round(v));
+  const tile=(s,i)=>{ const R=sum[i], dn=mcn[i][edge], pk=R.pk>0?`busiest ${wsnLbl(R.pkO)}: ${fmt(R.pk)}`:'none ran';
+    if(mob) return `<div style="border:1px solid ${W2.line2};border-radius:12px;padding:10px 14px;background:${s.cur?'#F4FAF6':W2.head}">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600"><span aria-hidden="true" style="width:14px;height:${s.cur?4:3}px;border-radius:2px;background:${s.color}"></span>${s.label}<span style="flex:1"></span><span style="${w2num(20,600)}">${avgF(R.avg)}${w2unit('a day',12)}</span></div>
+      <div style="font-size:12.5px;color:${W2.ink2};margin-top:2px;line-height:1.45">${pk} · ${wsnLbl(edge)}: ${fmt(dn||0)}</div></div>`;
+    return `<div style="flex:1;min-width:200px;border:1px solid ${W2.line2};border-radius:14px;padding:12px 16px;background:${s.cur?'#F4FAF6':W2.head}">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600"><span aria-hidden="true" style="width:16px;height:${s.cur?4:3}px;border-radius:2px;background:${s.color}"></span>${s.label}${s.cur?' · this season':''}</div>
+      <div style="${w2num(26,600)};margin-top:6px">${avgF(R.avg)}${w2unit('machines a day',12)}</div>
+      <div style="font-size:12.5px;color:${W2.ink2};margin-top:3px;line-height:1.45">${fmt(R.n)} machine-days ÷ ${fmt(nDays)} days · ${pk}</div>
+      <div style="font-size:12.5px;color:${W2.ink2};margin-top:2px;line-height:1.45">On ${wsnLbl(edge)}: <b style="font-weight:600;color:${W2.ink};font-variant-numeric:tabular-nums">${fmt(dn||0)}</b> ran</div></div>`; };
+  const mcU=v=>fmt(v)+' ran', acU=v=>acF(v)+' ac';
+  const series=[...seasons.map((s,i)=>({ label:`${s.label} · acres`, hide:true, vals:daily[i], fmt:acU })),
+                ...seasons.map((s,i)=>({ label:s.label, color:s.color, cur:s.cur, vals:mcn[i].map((n,o)=>daily[i][o]==null?null:n), fmt:mcU }))];
+  return B.cardBox(`<div style="padding:${pad}">
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?16:17}px;font-weight:600">Machines that ran each day · ${E(stName)}</span><span style="font-size:13px;color:${W2.ink2}">${wsnLbl(from)} – ${wsnLbl(edge)} in every season · ${mob?'tap':'point at'} a day for its figures</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${badge(cur-1)}${badge(cur-2)}</div>
+      ${mob?`<div style="font-size:12.5px;color:${W2.ink2};margin-top:12px">Average machines that ran a day, ${wsnLbl(from)} – ${wsnLbl(edge)}</div>`:''}
+      <div style="display:flex;${mob?'flex-direction:column':''};gap:${mob?8:14}px;margin-top:${mob?6:12}px">${seasons.slice().reverse().map((s,ri)=>tile(s,seasons.length-1-ri)).join('')}</div>
+      <div style="position:relative;margin-top:12px">${wsnSVG('mcn', series, from, to, mob, mob?240:300)}${tipBox}</div>
+      <div style="font-size:12.5px;color:${W2.ink2};margin-top:8px;line-height:1.5">Machines that sprayed on the day, from the snake chart tab (every programme machine in the state). The average is all the machine-days in the range ÷ its days.</div></div>`, `margin-top:${mob?12:16}px`);
 }
 /* Acres per RUNNING machine (Dinesh 2026-11-16). THIS SEASON ONLY: no tab carries a rabi-only count of machines that ran for a
    past season (the Kharif "Acres per mcn" tab counts from 1 April, Kharif machines included), so there is nothing honest to

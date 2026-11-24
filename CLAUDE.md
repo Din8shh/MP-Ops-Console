@@ -1168,6 +1168,9 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     plus that day's figure; badges vs the two past seasons. Phone tiles are compact rows. Checked 24 Nov, 15 Oct – 23 Nov HR + PB:
     16.8 (79,871 ÷ 4,755) vs 21.4 vs 19.0 — equal to a direct sum of the tab. **Because of it, the card below lost its third tab**
     ("Per day · machines ran that day", Main sheet IoT acres, this season only): two figures for one measure would not reconcile.
+  · **Machines that ran each day — vs past seasons** (`wsnMcnCardHTML`, Dinesh 2026-11-24), right after it: the same
+    `number_of_mcns` column, three seasons, every day. Tiles: average a day = machine-days ÷ days From → the badge's day (a day with
+    none counts as 0), the busiest day, and the badge's day. Checked 24 Nov, 15 Oct – 23 Nov HR + PB: 119 vs 176 vs 157 a day.
   · **Acres per running machine** card (Dinesh 2026-11-16, `wsnRunData` / `wsnRunCardHTML`), now TWO tabs (`state.wsnRun`):
     **Till now** (`cum`) = IoT acres From → the day ÷ machines that ran at least once in that span; **Per day · machines run till
     now** (`all`) = the day's IoT acres ÷ machines that had run at least once by that day (ran that day or not), headline average =
