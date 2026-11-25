@@ -286,7 +286,7 @@ const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { ciMe:w250Load0('mpoc_iotci_me',''), ciLang:w250Load0('mpoc_iotci_lang',''), ciPick:false, ciQ:'', ciDay:'', ciAcDay:'', view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
-  wDay:'', wsnSt:'ALL', wsnRun:'cum', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wDep:'dep', wSh:'', wmcQ:'', wmcShow:'all', wmcRunD:[], w250RunD:[], w500Tab:'fix', w500All:false, wdrPer:'season', wdrBy:'terr', wdrSort:'kmac', wdrOpen:'', wdrAll:false, wdrTripAll:false, w500CiSort:'on', w500CiAll:false, wmcSort:'mc', wmcLimit:60, w250Tgt:+w250Load0('mpoc_w250_tgt',250)||250, w250Dl:w250Load0('mpoc_w250_dl',''), w250Bands:[], w250Why:[], w250Run:'all', w250Terrs:[], w250Ams:[], w250GSort:'over', w250Sort:'ac', w250By:'terr', w250Limit:60, w250GAll:false, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
+  wDay:'', wsnSt:'ALL', wsnRun:'cum', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wDep:'dep', wSh:'', wmcQ:'', wmcShow:'all', wmcRunD:[], w250RunD:[], w500Tab:'fix', w500All:false, wdrLy:'same', wdrSt:'', wdrOrg:'ALL', wdrQ:'', wdrSort:'kmac', wdrOpen:'', wdrAll:false, w500CiSort:'on', w500CiAll:false, wmcSort:'mc', wmcLimit:60, w250Tgt:+w250Load0('mpoc_w250_tgt',250)||250, w250Dl:w250Load0('mpoc_w250_dl',''), w250Bands:[], w250Why:[], w250Run:'all', w250Terrs:[], w250Ams:[], w250GSort:'over', w250Sort:'ac', w250By:'terr', w250Limit:60, w250GAll:false, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
   wfoSort:'bk', wfoOpen:{}, wfoOn:'',   // Wheat TM → FO page: its own sort, open rows and onboarded filter; the rest is the wt* scope
   wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
   iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60, iotTs:'',   // IoT pages — page-local, shared by the three of them
@@ -416,7 +416,7 @@ const PROJECTS = {
                    gids:{ '486286189':'260786822', '965231799':'1293819733', '1855112218':'1317494093', '485044081':'576846606' } },
             // Dry run km per machine per day (2026-11-24) — a TEMPORARY sheet's "dry run kms" tab; the programme shares the real one later,
             // and only this line changes (columns are read by name). Wheat admin's Dry run page; see wdrBuild.
-            dry:{ sheetId:'1DSy4Umd5WK8nZDcIrRkv14M6_gdFGNNUOkqTLrBXab4', gid:'639834129', name:'dry run kms' },
+            dry:{ sheetId:'1DSy4Umd5WK8nZDcIrRkv14M6_gdFGNNUOkqTLrBXab4', gid:'1048970885', name:'IOT acres FY 25-26' },
             home:'wplan', views:['wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum'], bar:['wplan','w500','wterr','wam','wfo','wmap','wtop','w250','wbd','wmc','wdr','wcum'],
             only:['fo','retailer','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum'], kharifTabs:false,
             head:sc=>`Wheat Spray Operations · ${sc==='India'?'North':sc}`, sub:'Wheat Spray Programme · Haryana · Punjab',
@@ -3769,15 +3769,17 @@ function topbarHTML(v){
   // The Wheat Retailer summary reads its own sheet: the header names the PAGE's own state scope, the machine search goes,
   // and the stamp counts retailers on the plan rather than machines.
   const wp = state.view==='wplan' && WRET.loaded && wSees() ? wplanAgg() : null;
-  const wt = (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500'||state.view==='wdr') && WRET.loaded && wSees() ? wterrAgg() : null;
+  const wt = (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500') && WRET.loaded && wSees() ? wterrAgg() : null;
   const iot = curProject().iot ? iotScope() : null;
   const scope = state.view==='wplan' ? (wp ? (wp.st||wp.lockSt||'India') : (state.wpSt||'India'))
-    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500'||state.view==='wdr') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
+    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
+    : state.view==='wdr' ? (state.wdrSt==='Haryana'?'HR':state.wdrSt==='Punjab'?'PB':'India')
     : state.view==='wcum' ? (state.wsnSt==='HR'||state.wsnSt==='PB' ? state.wsnSt : 'India')
     : (state.view==='iotci'||state.view==='iotcia') ? 'North'
     : iot ? (iot.st||iot.lockSt||'India') : v.scopeLabel;
   const fresh = state.view==='wplan' ? (wp ? `${fmt(wp.all.length)} retailers · ${fmt(wp.allMc)} machines` : 'Retailer summary')
-    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500'||state.view==='wdr') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
+    : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
+    : state.view==='wdr' ? (WDR.loaded ? `This season vs last · ${fmt(Object.values(WDR.mc).filter(o=>o.cur).length)} machines` : 'Dry run')
     : state.view==='wcum' ? 'Cumulative acres · 3 seasons'
     : (state.view==='iotci'||state.view==='iotcia') ? (ciMe() ? ciMe().name+' · Cluster Incharge' : 'Cluster Incharge · Haryana + Punjab')
     : iot ? (IOT.loaded ? `${fmt(IOT.tamper.filter(r=>gateAllowsState(r.st)).length)} potential tamper · ${fmt(IOT.risk.filter(r=>gateAllowsState(r.st)).length)} at risk` : 'IoT sheet')
@@ -11018,49 +11020,70 @@ function w500CSV(){
   a.download=`Wheat-North_500-drive_${W.A.st||'HR-PB'}_${D||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
 }
-/* ===================== Wheat North — Dry run (view key `wdr`, `#/dry-run`, Dinesh 2026-11-24) =====================
-   The kilometres each machine drives in a day, off the "dry run kms" tab (PROJECTS.wheat.dry — a TEMPORARY sheet; the
-   programme will share the real one later, and only that line changes). One row per machine per day: machine_number,
-   date__, dry_run (km), FY. Built around THIS season only (agreed): rows dated before 1 Oct of the season are not read,
-   whatever their FY label says, and the tab's other machines (it lists every programme machine) are left out — only the
-   machines on the Wheat Main sheet, in the page's wt* scope, are counted.
-   Measured on the tab 2026-11-24 (22 Oct – 22 Nov, Wheat machines): every machine-day with IoT acres also has a dry-run row
-   (4,068 of 4,068); a day with no IoT acres has a median of 0.19 km (GPS drift); and 36 days carry 150–610 km, almost all
-   on 20–23 Oct, which is the machine being MOVED to its territory, not field running. So each machine-day is one of:
-   · RUNNING  — IoT acres > 0: the km driven between fields that day (median 16 km);
-   · TRIP     — no IoT acres but moved WDR_MOVE (1 km) or more: driven and sprayed nothing (472 days, 9,851 km);
-   · TRANSPORT — over WDR_TRANSPORT (150 km): a move, kept apart and left out of every figure (named, with its km);
-   · STILL    — no IoT acres and under 1 km: drift, counted in km but not as a trip.
-   Figures: Dry run km = every km except transport. Km per acre = dry run km ÷ IoT acres (the trips count against it).
-   Km per running day = km on running days ÷ running days. A machine that sprays more acres a day drives more km a day but
-   FEWER km an acre (0–5 ac days: 3.0 km/ac; 30–50 ac days: 0.7), so both are shown and neither is a verdict alone.
-   The season starts on the Main sheet's first date (22 Oct), so km and acres cover the same days. The Day filter's day
-   is capped at the tab's last date — the tab runs a day behind the Main sheet — and the page says so. Wheat admin only. */
-const WDR = { loaded:false, loading:false, error:'', by:{}, first:'', last:'', log:null, at:'' };
-const WDR_MOVE = 1, WDR_TRANSPORT = 150;
-const WDR_SORTS = [['kmac','Km per acre'],['kmrun','Km per running day'],['trip','Km on trips, no spraying'],['km','Dry run km'],['name','Name']];
-const WDR_BY = [['terr','Territory'],['ci','CI'],['am','AM']];
-const WDR_ROWS = 12, WDR_TRIPS = 10;
-const WDR_COL = { run:'#4C7399', trip:'#E0A008' };
+/* ===================== Wheat North — Dry run (view key `wdr`, `#/dry-run`; rebuilt 2026-11-25, Dinesh) =====================
+   The km a machine drives on the days it sprays, THIS season against LAST season, off the "IOT acres FY 25-26" tab
+   (PROJECTS.wheat.dry — still the temporary sheet; columns are read by NAME, so the real sheet is a one-line change).
+   One row per machine per SPRAY DAY and per season: machine_number, dat_ (date), state (where it sprayed that day),
+   total_area_in_acres (IoT acres), FY ("FY 26-27"), Dry run on spray date (km), Territory (that season's), Last year state,
+   Last year organisation (on this season's rows = who the machine is assigned to now: UPL / SWAL / Bayer; on last season's
+   rows = the programme it ran under: UPL/Swal, PI, Bayer, Buffer …). Columns to the right (a hand-kept summary) are ignored.
+   · THREE figures only (Dinesh): dry run km · km per acre sprayed (km ÷ acres) · km per running day (km ÷ spray days).
+     The old trips-without-spraying and transport tiles went: this tab only holds days that sprayed.
+   · A day over WDR_TRANSPORT (150 km) is a MOVE, not field running — 32 of last season's days, 16,877 km, none this season —
+     and is left out of all three figures (km, acres and the day), and the note says how many.
+   · NONE of the global Wheat filters apply (Dinesh: "we need it from a comparison point of view"). The page has its own
+     State / Company / Last-year controls and search, all page-local (`wdr*` in state).
+   · Last year is read for the SAME MACHINES (this season's fleet on the tab), on the same dates by default (`wdrLy`
+     'same': last season's days up to this season's last date minus a year) or the whole of last season ('all').
+   · Each machine carries two tags: this year = territory + company; last year = territory + where it sprayed (the state
+     column of its last-season rows, which reaches MP / Rajasthan) + programme. The territory summary groups by THIS
+     season's territory and shows where its machines came from as tags.
+   Measured 2026-11-25: this season 438 machines, 28 Oct – 24 Nov, 93,977 ac, 96,151 km, 1.02 km/ac, 17.6 km a running day;
+   last season 638 machines (386 of them also this season), 28 Oct 2025 – 1 Jan 2026. Wheat admin only. */
+const WDR = { loaded:false, loading:false, error:'', mc:{}, cur:0, prev:0, curFirst:'', curLast:'', prevFirst:'', prevLast:'', log:null, at:'' };
+const WDR_TRANSPORT = 150, WDR_FEW = 5, WDR_ROWS = 15;
+const WDR_SORTS = [['kmac','Km per acre'],['kmrun','Km per running day'],['km','Dry run km'],['chg','Km per acre vs last year'],['mc','Machines'],['name','Name']];
+const WDR_TERR = { hissar:'Hisar', 'yamuna nager':'Yamunanagar', 'yamuna nagar':'Yamunanagar', sonepat:'Sonipat', tarntaran:'Tarn Taran', tarantarn:'Tarn Taran', hosiyarpur:'Hoshiarpur' };
+const WDR_NONE = new Set(['','0','-','#n/a','na','n/a']);
 const kmF = v => { v=+v||0; return Math.abs(v)<100 ? (Math.round(v*10)/10).toLocaleString('en-IN') : fmt(v); };
 const kmAcF = v => v==null ? '—' : (Math.round(v*100)/100).toFixed(2);
 function wdrDate(s){ s=String(s||'').trim();
   if(/^\d{4}-\d\d-\d\d/.test(s)) return s.slice(0,10);
   const m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}` : ''; }
+// "Khanna Territory" / "KAITHAL District" / "Yamuna Nager" → one spelling; "0" / blank → '' (shown as "Territory not on sheet").
+function wdrTerr(v){ const t=String(v==null?'':v).trim().replace(/\s+(territory|district)$/i,'').replace(/\s+/g,' ');
+  if(WDR_NONE.has(t.toLowerCase())) return ''; return WDR_TERR[t.toLowerCase()] || titleCase(t); }
+const wdrTxt = v => { const t=String(v==null?'':v).trim(); return WDR_NONE.has(t.toLowerCase()) ? '' : t; };
+const wdrStName = v => { const t=wdrTxt(v); return t ? titleCase(t) : ''; };
+const wdrFY = v => { const m=String(v||'').match(/(\d{2,4})\s*-\s*(\d{2})/); if(!m) return 0; const y=+m[1]; return y<100?2000+y:y; };
 function wdrBuild(grid){
   const h=(grid[0]||[]).map(x=>String(x||'').trim().toLowerCase());
-  const iM=h.findIndex(x=>x.includes('machine')), iD=h.findIndex(x=>x.includes('date')), iK=h.findIndex(x=>x.includes('dry')||x.includes('km'));
-  if(iM<0||iD<0||iK<0) throw new Error('dry run tab: columns not found ('+h.join(', ')+')');
-  const from=wsnCurYear()+'-10-01', today=istDay(Date.now()), by={}, log={ rows:0, older:0, bad:0, dup:0, from };
-  let first='', last='';
+  const col = f => h.findIndex(f);
+  const iM=col(x=>x.includes('machine')), iK=col(x=>x.includes('dry')), iD=col(x=>(x==='date'||x.startsWith('dat'))&&!x.includes('dry')),
+    iA=col(x=>x.includes('acre')||x.includes('area')), iF=col(x=>x==='fy'||x.startsWith('fy')||x.includes('financial')),
+    iT=col(x=>x.includes('territor')&&!x.includes('last')), iS=col(x=>x==='state'), iO=col(x=>x.includes('organi')||x.includes('company'));
+  if([iM,iK,iD,iA,iF].some(i=>i<0)) throw new Error('IoT acres tab: columns not found ('+h.filter(Boolean).join(', ')+')');
+  const today=istDay(Date.now()), mc={}, log={ rows:0, bad:0, future:0, dup:0, noFY:0, cols:{ iM,iD,iS,iA,iF,iK,iT,iO } };
+  const raw=[]; let cur=0;
   for(const r of grid.slice(1)){ if(!r||!r.join('').trim()) continue; log.rows++;
-    const mc=txt(r[iM]), d=wdrDate(r[iD]), raw=String(r[iK]==null?'':r[iK]).trim(), km=num(raw);
-    if(!mc||!d||raw===''||km<0){ log.bad++; continue; }
-    if(d<from||d>today){ log.older++; continue; }
-    const o=by[mc]||(by[mc]={}); if(o[d]!=null){ log.dup++; o[d]=Math.max(o[d],km); } else o[d]=km;   // a repeated machine-day is read once
-    if(!first||d<first) first=d; if(d>last) last=d; }
-  log.machines=Object.keys(by).length; log.first=first; log.last=last;
-  return { by, first, last, log };
+    const m=txt(r[iM]), d=wdrDate(r[iD]), fy=wdrFY(r[iF]);
+    if(!m||!d){ log.bad++; continue; } if(!fy){ log.noFY++; continue; } if(d>today){ log.future++; continue; }
+    raw.push([m,d,fy,num(r[iA]),num(r[iK]),iT>=0?r[iT]:'',iS>=0?r[iS]:'',iO>=0?r[iO]:'']); if(fy>cur) cur=fy; }
+  const prev=cur-1, span={};
+  raw.forEach(([m,d,fy,ac,km,t,st,org])=>{
+    const side = fy===cur ? 'cur' : fy===prev ? 'prev' : null; if(!side) return;
+    const o=mc[m]||(mc[m]={ mc:m }), s=o[side]||(o[side]={ days:{}, st:{}, last:'' });
+    if(s.days[d]){ log.dup++; return; }   // a repeated machine-day is read once
+    s.days[d]={ ac, km }; const stN=wdrStName(st); if(stN) s.st[stN]=(s.st[stN]||0)+1;
+    if(d>=s.last){ s.last=d; s.terr=wdrTerr(t); s.terrRaw=String(t||'').trim(); s.org=wdrTxt(org); s.stNow=stN; }
+    const z=span[side]||(span[side]={ a:d, b:d }); if(d<z.a) z.a=d; if(d>z.b) z.b=d; });
+  Object.values(mc).forEach(o=>['cur','prev'].forEach(k=>{ const s=o[k]; if(!s) return;
+    s.stMain = Object.entries(s.st).sort((a,b)=>b[1]-a[1])[0]?.[0] || '';
+    if(k==='cur'){ const u=String(s.org||'').toUpperCase(); s.org = u==='UPL'?'UPL':u==='SWAL'?'SWAL':u==='BAYER'?'Bayer':(s.org||''); } }));
+  const L=Object.values(mc);
+  Object.assign(log, { cur, prev, curMachines:L.filter(o=>o.cur).length, prevMachines:L.filter(o=>o.prev).length, both:L.filter(o=>o.cur&&o.prev).length,
+    curSpan:span.cur||null, prevSpan:span.prev||null });
+  return { mc, cur, prev, curFirst:span.cur?.a||'', curLast:span.cur?.b||'', prevFirst:span.prev?.a||'', prevLast:span.prev?.b||'', log };
 }
 async function loadWdr(){
   const R=curProject().dry; if(!R || WDR.loading) return;
@@ -11072,193 +11095,168 @@ async function loadWdr(){
         if(!res.ok) throw new Error('HTTP '+res.status); return { grid:parseCSV(await res.text()), cachedAt:res.headers.get('x-sw-cached-at') }; }
       finally{ clearTimeout(t); } });
     const B=wdrBuild(got.grid);
-    const wm=new Set(WRET.machines.map(m=>m.mc));
-    B.log.onWheat=Object.keys(B.by).filter(k=>wm.has(k)).length; B.log.otherMachines=B.log.machines-B.log.onWheat;
-    B.log.wheatNotOnTab=WRET.machines.filter(m=>!B.by[m.mc]).length;
     Object.assign(WDR, B, { loaded:true, at:got.cachedAt?istTime(+got.cachedAt):nowIST() });
-    console.info('[MP-Ops] wheat dry run tab →', B.log);
+    console.info('[MP-Ops] wheat dry run (IoT acres tab) →', B.log);
   }catch(e){ WDR.error=e.name==='AbortError'?'the sheet did not answer':e.message; console.warn('wheat dry run tab failed —', WDR.error); }
   WDR.loading=false; render();
 }
-// One machine over a list of days: every figure the page shows, from its own rows.
-function wdrStats(m, days){
-  const rows=WDR.by[m.mc], o={ km:0, rKm:0, rDays:0, ac:0, wDays:0, wKm:0, tDays:0, tKm:0, moved:0, runNoRow:0, has:!!rows };
-  days.forEach(d=>{ const km=rows&&rows[d], ac=(m.sdays[d]&&m.sdays[d][4])||0;
-    if(km==null){ if(ac>0){ o.runNoRow++; o.ac+=ac; } return; }
-    if(km>WDR_TRANSPORT){ o.tDays++; o.tKm+=km; return; }
-    o.km+=km; if(km>=WDR_MOVE) o.moved++;
-    if(ac>0){ o.rKm+=km; o.rDays++; o.ac+=ac; }
-    else if(km>=WDR_MOVE){ o.wDays++; o.wKm+=km; } });
-  return o;
+const wdrShift = d => `${+d.slice(0,4)+1}${d.slice(4)}`;   // a last-season date on this season's calendar
+// One machine's one season: the three figures, from its own spray days. `cut` = last-season days must shift to ≤ cut.
+function wdrStats(s, cut){
+  const o={ km:0, ac:0, rDays:0, tDays:0, tKm:0, has:!!s };
+  if(s) Object.entries(s.days).forEach(([d,v])=>{ if(cut && wdrShift(d)>cut) return;
+    if(v.km>WDR_TRANSPORT){ o.tDays++; o.tKm+=v.km; return; }
+    o.km+=v.km; o.ac+=v.ac; o.rDays++; });
+  return wdrDerive(o);
 }
-const WDR_K = ['km','rKm','rDays','ac','wDays','wKm','tDays','tKm','moved','runNoRow'];
-function wdrSum(list){ const o={}; WDR_K.forEach(k=>o[k]=0); list.forEach(s=>WDR_K.forEach(k=>o[k]+=s[k])); return wdrDerive(o); }
-const wdrDerive = o => Object.assign(o, { kmAc: o.ac>0 ? o.km/o.ac : null, kmRun: o.rDays ? o.rKm/o.rDays : null, acRun: o.rDays ? o.ac/o.rDays : null });
+const WDR_K = ['km','ac','rDays','tDays','tKm'];
+function wdrSum(list){ const o={}; WDR_K.forEach(k=>o[k]=0); list.forEach(s=>WDR_K.forEach(k=>o[k]+=s[k])); o.n=list.filter(s=>s.rDays).length; return wdrDerive(o); }
+const wdrDerive = o => Object.assign(o, { kmAc: o.ac>0 ? o.km/o.ac : null, kmRun: o.rDays ? o.km/o.rDays : null });
+// Count a label over a list and return [[label,n]…], biggest first.
+const wdrTally = (list, f) => { const c={}; list.forEach(x=>{ const k=f(x); if(k) c[k]=(c[k]||0)+1; }); return Object.entries(c).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])); };
 function wdrAgg(){
-  const S=state, A=wterrAgg(), D0=WRET.yday, D = WDR.last && D0>WDR.last ? WDR.last : D0;
-  const season=wtDays().filter(d=>d<=D), per=['season','7d','day'].includes(S.wdrPer)?S.wdrPer:'season';
-  const days = per==='day' ? [D] : per==='7d' ? season.slice(-7) : season;
-  const prev = season.slice(-14,-7), last7 = season.slice(-7);
-  const onTab = A.mcs.filter(m=>WDR.by[m.mc]), notOnTab = A.mcs.length-onTab.length;
-  const rows = onTab.map(m=>{ const s=wdrDerive(wdrStats(m, days)); return { m, ...s }; });
-  const all = wdrSum(rows), wk = wdrSum(onTab.map(m=>wdrStats(m,last7))), wkP = wdrSum(onTab.map(m=>wdrStats(m,prev)));
-  const min = per==='day' ? 2 : 5;
-  const by = WDR_BY.some(([k])=>k===S.wdrBy) ? S.wdrBy : 'terr', sort = WDR_SORTS.some(([k])=>k===S.wdrSort) ? S.wdrSort : 'kmac';
-  const mob10 = v => String(v||'').replace(/\D/g,'').slice(-10);
-  const G={};
-  rows.forEach(r=>{ const m=r.m; let k, name, mob='', none=false;
-    if(by==='terr'){ none=m.territory===WRET_NO_TERR; k=none?'~none':m.st+'|'+m.territory; name=m.territory; }
-    else { const num=mob10(by==='ci'?m.coMob:m.amNum), nm=String((by==='ci'?m.co:m.am)||'').trim();
-      if(!num&&!nm){ k='~none'; none=true; name=by==='ci'?'No CI — operator not mapped':'No AM — operator not mapped'; }
-      else { k=num||'n:'+nm.toLowerCase(); name=nm||num; mob=(by==='ci'?m.coMob:m.amNum)||''; } }
-    const g=G[k]||(G[k]={ key:by+':'+k, name, mob, none, sts:new Set(), terrs:new Set(), cis:new Set(), ams:new Set(), list:[] });
-    g.list.push(r); g.sts.add(m.st); if(m.territory!==WRET_NO_TERR) g.terrs.add(m.territory); if(m.co) g.cis.add(m.co); if(m.am) g.ams.add(m.am); });
-  const val = (o,k) => o[{ kmac:'kmAc', kmrun:'kmRun', trip:'wKm', km:'km' }[k]];
-  const cmp = (a,b) => sort==='name' ? a.name.localeCompare(b.name)
-    : (a.few-b.few) || ((val(b,sort)==null?-1:val(b,sort))-(val(a,sort)==null?-1:val(a,sort))) || b.km-a.km || a.name.localeCompare(b.name);
-  const groups = Object.values(G).map(g=>{ const s=wdrSum(g.list);
-    g.list.forEach(r=>{ r.name=r.m.mc; r.few=r.rDays<min?1:0; });
-    g.list.sort((a,b)=>cmp(a,b) || a.m.mc.localeCompare(b.m.mc,undefined,{numeric:true}));
-    return { ...g, ...s, n:g.list.length, few:s.rDays<min?1:0 }; })
-    .sort((a,b)=>(a.none-b.none) || cmp(a,b));
-  const trips = rows.filter(r=>r.wDays>0).sort((a,b)=>b.wKm-a.wKm || b.wDays-a.wDays);
-  const transport = rows.filter(r=>r.tDays>0).sort((a,b)=>b.tKm-a.tKm);
-  // Day by day for the whole season to D: km on running days, km on trips, and km per running day.
-  const series = season.map(d=>{ let r=0, t=0, rd=0, ac=0, mv=0; onTab.forEach(m=>{ const km=WDR.by[m.mc][d]; if(km==null||km>WDR_TRANSPORT) return;
-      const a=(m.sdays[d]&&m.sdays[d][4])||0; if(km>=WDR_MOVE) mv++; if(a>0){ r+=km; rd++; ac+=a; } else if(km>=WDR_MOVE) t+=km; });
-    return { d, run:r, trip:t, rd, ac, mv, kmRun: rd?r/rd:null }; });
-  return { A, D, D0, capped: D<D0, per, days, season, prev, last7, rows, all, wk, wkP, min, by, sort, groups, trips, transport, series, notOnTab,
-    sig:[A.sig,D,per,by,sort].join('|') };
-}
-// A day-by-day bar chart: `stacks` = [{vals, col, label}] drawn bottom-up; days outside `inP` are drawn faint, so the
-// period the figures above read is marked on the chart without hiding the run-up to it.
-function wdrBarsHTML(Z, B, mob, title, sub, stacks, fmtV){
-  const days=Z.season, n=days.length; if(!n) return '';
-  const tot=days.map((_,i)=>stacks.reduce((a,s)=>a+(s.vals[i]||0),0)), mx=Math.max(...tot,0)||1, inP=new Set(Z.days);
-  const every=n<=10?1:Math.ceil(n/(mob?6:12)), gap=n>30?2:mob?3:6;
-  const aria=title+': '+days.map((d,i)=>`${wpDate(d)} ${fmtV(tot[i])}`).join(', ');
-  const legend = stacks.length>1 ? `<div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:12.5px;color:${W2.ink2}">${stacks.map(s=>`<span style="display:inline-flex;align-items:center;gap:6px"><span aria-hidden="true" style="width:10px;height:10px;border-radius:2px;background:${s.col}"></span>${s.label}</span>`).join('')}${Z.per!=='season'?`<span>faded bars: outside the period above</span>`:''}</div>` : (Z.per!=='season'?`<div style="margin-top:8px;font-size:12.5px;color:${W2.ink2}">faded bars: outside the period above</div>`:'');
-  return B.cardBox(`<div style="padding:${mob?'16px':'18px 22px'}">
-      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?15:16}px;font-weight:600">${title}</span><span style="font-size:13px;color:${W2.ink2}">${sub}</span></div>
-      <div role="img" aria-label="${E(aria)}" style="display:flex;align-items:flex-end;gap:${gap}px;height:${mob?120:140}px;margin-top:12px">
-        ${days.map((d,i)=>`<div style="flex:1;min-width:0;height:100%;display:flex;flex-direction:column-reverse;align-items:center;opacity:${inP.has(d)?1:0.4}">${stacks.map(s=>{ const v=s.vals[i]||0; return v>0?`<span style="display:block;width:100%;max-width:40px;height:${Math.max(1.5,100*v/mx)}%;background:${s.col}"></span>`:''; }).join('')}</div>`).join('')}
-      </div>
-      <div style="display:flex;gap:${gap}px;border-top:1px solid ${W2.line};padding-top:6px">${days.map((d,i)=>`<span style="flex:1;min-width:0;text-align:center;font-size:12px;color:${i===n-1?W2.ink:W2.ink2};font-weight:${i===n-1?600:400};white-space:nowrap;overflow:visible">${(i%every===0&&(n-1-i)>=every/2)||i===n-1?wpDate(d):''}</span>`).join('')}</div>
-      ${legend}</div>`, `margin-top:${mob?12:16}px`);
-}
-// A machine's last 14 days of km, one bar a day: blue = a running day, amber = a trip with no spraying, grey = still.
-function wdrSpark(m, D){
-  const rows=WDR.by[m.mc]||{}, days=[]; for(let i=13;i>=0;i--) days.push(new Date(Date.parse(D+'T00:00:00Z')-i*864e5).toISOString().slice(0,10));
-  const v=days.map(d=>{ const k=rows[d]; return k==null||k>WDR_TRANSPORT?0:k; }), mx=Math.max(...v,1);
-  const lab=`Km by day, ${wpDate(days[0])} to ${wpDate(D)}: `+days.map((d,i)=>`${wpDate(d)} ${kmF(v[i])}`).join(', ');
-  return `<span role="img" aria-label="${E(lab)}" style="display:flex;align-items:flex-end;gap:2px;height:22px;width:112px;flex-shrink:0">${days.map((d,i)=>{ const ac=(m.sdays[d]&&m.sdays[d][4])||0, c=v[i]<WDR_MOVE?'#E1E5EA':ac>0?WDR_COL.run:WDR_COL.trip;
-    return `<span style="flex:1;min-width:3px;height:${v[i]>=WDR_MOVE?Math.max(3,Math.round(22*v[i]/mx)):1}px;border-radius:1.5px;background:${c}"></span>`; }).join('')}</span>`;
+  const S=state, ly = S.wdrLy==='all' ? 'all' : 'same', cut = ly==='same' ? WDR.curLast : '';
+  const all = Object.values(WDR.mc).filter(o=>o.cur), allP = Object.values(WDR.mc).filter(o=>o.prev);
+  const stOf = o => o.cur.stNow||o.cur.stMain;
+  const sts = wdrTally(all, stOf).map(([k])=>k), st = sts.includes(S.wdrSt) ? S.wdrSt : '';
+  const orgs = wdrTally(all, o=>o.cur.org||'Not assigned').map(([k])=>k), org = orgs.includes(S.wdrOrg) ? S.wdrOrg : 'ALL';
+  const q = String(S.wdrQ||'').trim().toLowerCase();
+  const hit = o => !q || [o.mc, o.mc.replace(/\D/g,''), o.cur.terr, o.cur.org, o.prev&&o.prev.terr, o.prev&&o.prev.org, o.prev&&o.prev.stMain].some(v=>String(v||'').toLowerCase().includes(q));
+  const list = all.filter(o=>(!st || stOf(o)===st) && (org==='ALL' || (o.cur.org||'Not assigned')===org) && hit(o));
+  const rows = list.map(o=>({ o, c:wdrStats(o.cur), p:o.prev?wdrStats(o.prev, cut):null }));
+  // Last year is read by TERRITORY (Dinesh 2026-11-25): every machine whose last-season rows name that territory, whoever it was.
+  const PT={}; allP.forEach(o=>{ const s=wdrStats(o.prev, cut); if(!s.rDays&&!s.tDays) return; (PT[o.prev.terr||'']||(PT[o.prev.terr||'']=[])).push({ o, p:s }); });
+  const G={}; const grp = k => G[k]||(G[k]={ key:k||'—', name:k||'Territory not on sheet', none:!k, list:[] });
+  rows.forEach(r=>grp(r.o.cur.terr||'').list.push(r));
+  // A territory that only ran last year is listed too — unless the view is narrowed by company or search, which only
+  // this season can answer. Its state is where most of its last-year machines sprayed.
+  if(org==='ALL' && !q) Object.keys(PT).forEach(k=>{ if(G[k]) return; const s0=wdrTally(PT[k], r=>r.o.prev.stMain)[0]; if(st && (!s0||s0[0]!==st)) return; grp(k); });
+  const groups = Object.values(G).map(g=>{ const c=wdrSum(g.list.map(r=>r.c)), pl=(PT[g.none?'':g.key]||[]), p=pl.length?wdrSum(pl.map(r=>r.p)):null;
+    return { ...g, c, p, nPrev:pl.filter(r=>r.p.rDays).length, lyOnly:!g.list.length, orgs:wdrTally(g.list, r=>r.o.cur.org||'Not assigned'),
+      lySt:wdrTally(pl, r=>r.o.prev.stMain), lyOrg:wdrTally(pl, r=>r.o.prev.org||'Not named'),
+      cameFrom:wdrTally(g.list.filter(r=>r.p&&r.p.rDays), r=>r.o.prev.terr||'Not on sheet'),
+      stayed:g.list.filter(r=>r.o.prev&&r.o.prev.terr&&r.o.prev.terr===r.o.cur.terr).length, few:c.rDays<WDR_FEW }; });
+  const chgOf = x => x.c.kmAc!=null && x.p && x.p.kmAc!=null ? x.c.kmAc-x.p.kmAc : null;
+  const sort = WDR_SORTS.some(([k])=>k===S.wdrSort) ? S.wdrSort : 'kmac';
+  const val = { kmac:x=>x.c.kmAc, kmrun:x=>x.c.kmRun, km:x=>x.c.km, chg:chgOf, mc:x=>x.list?x.list.length:null };
+  const nm = (a,b) => String(a.name||a.o?.mc||'').localeCompare(String(b.name||b.o?.mc||''), undefined, { numeric:true });
+  const rank = x => x.none ? 3 : x.lyOnly ? 2 : x.few ? 1 : 0;
+  const cmp = (a,b) => { const ra=rank(a), rb=rank(b); if(ra!==rb) return ra-rb;
+    if(sort==='name') return nm(a,b); const f=val[sort]||val.kmac, x=f(a), y=f(b);
+    if(x==null&&y==null) return nm(a,b); if(x==null) return 1; if(y==null) return -1; return (y-x)||nm(a,b); };
+  groups.sort((a,b)=> a.lyOnly&&b.lyOnly ? ((b.p?b.p.km:0)-(a.p?a.p.km:0))||nm(a,b) : cmp(a,b));
+  groups.forEach(g=>g.list.sort((a,b)=>cmp({ ...a, few:a.c.rDays<WDR_FEW }, { ...b, few:b.c.rDays<WDR_FEW })));
+  const C = wdrSum(rows.map(r=>r.c)), P = wdrSum(groups.filter(g=>g.p).map(g=>g.p));
+  P.n = groups.reduce((s,g)=>s+g.nPrev,0);
+  const sig = [st,org,q,ly].join('|');
+  return { ly, cut, sts, st, orgs, org, q, all, rows, C, P, groups, sort, sig, chgOf,
+    nLyOnly:groups.filter(g=>g.lyOnly).length, narrowed: !!(st||org!=='ALL'||q) };
 }
 function wdrBodyHTML(mob){
   if(!isAdmin()) return wplanBodyHTML(mob);
-  if(!WRET.loaded) return wplanBodyHTML(mob);
   const S=state, B=wpBits(mob);
   if(!WDR.loaded){
     if(!WDR.loading && !WDR.error) setTimeout(loadWdr,0);
-    return B.msg(WDR.error ? `⚠ Could not load the dry run tab (${E(WDR.error)}).<div style="margin-top:14px"><button data-act="wdrretry" style="min-height:${mob?48:38}px;padding:0 18px;border:0;border-radius:10px;background:${W2.dark};color:#fff;font:600 14px ${W2.font};cursor:pointer">Try again</button></div>` : skelHTML('Loading the dry run kms…'), '60px 20px');
+    return B.msg(WDR.error ? `⚠ Could not load the IoT acres tab (${E(WDR.error)}).<div style="margin-top:14px"><button data-act="wdrretry" style="min-height:${mob?48:38}px;padding:0 18px;border:0;border-radius:10px;background:${W2.dark};color:#fff;font:600 14px ${W2.font};cursor:pointer">Try again</button></div>` : skelHTML('Loading the dry run kms…'), '60px 20px');
   }
-  const Z=wdrAgg(), A=Z.A, D=Z.D, T=Z.all;
-  if(S._wdrSig!==Z.sig){ S._wdrSig=Z.sig; S.wdrAll=false; S.wdrTripAll=false; }
-  const controls = wtControlsHTML(A, mob, true, { csv:'wdrcsv', csvTitle:`Download the ${fmt(Z.rows.length)} machines with their dry run as CSV`,
-    sort:['wdrSortSel','Sort by',WDR_SORTS,Z.sort] });
+  const Z=wdrAgg(), C=Z.C, P=Z.P;
+  if(S._wdrSig!==Z.sig){ S._wdrSig=Z.sig; S.wdrAll=false; }
   const pad = mob?'16px':'18px 22px', gap = `margin-top:${mob?12:16}px`;
-  const dW = wpDate(D), perTxt = Z.per==='day' ? `on ${dW}` : Z.per==='7d' ? `${wpDate(Z.days[0])} – ${dW}` : `${wpDate(Z.days[0]||D)} – ${dW}`;
-  const perSeg = `<div role="group" aria-label="Period" style="${w2segBox(mob)}${mob?';width:100%':''}">${[['season','Season'],['7d','Last 7 days'],['day',Z.capped||!wIsYday()?dW:'Yesterday']].map(([k,t])=>`<button data-act="wdrper" data-k="${k}" aria-pressed="${Z.per===k}" style="${w2seg(Z.per===k,mob)}">${t}</button>`).join('')}</div>`;
+  const fy = y => `${String(y).slice(2)}-${String(y+1).slice(2)}`;
+  const curTxt = `${wpDate(WDR.curFirst)} – ${wpDate(WDR.curLast)}`;
+  const lyTxt = Z.ly==='same' ? `${wpDate(WDR.prevFirst)} – ${wpDate(`${+WDR.curLast.slice(0,4)-1}${WDR.curLast.slice(4)}`)} ${+WDR.curLast.slice(0,4)-1}` : `${wpDate(WDR.prevFirst)} – ${wpDate(WDR.prevLast)}`;
+  // ---- controls: page-local only (the global Wheat filters do not reach this page)
+  const sel = (id,label,opts,cur) => `<div style="position:relative;${mob?'flex:1;min-width:0':''}"><select id="${id}" aria-label="${label}" style="${w2sel(mob)}${mob?';width:100%':''}">${optionsHTML(opts.map(([v,t])=>({v,t})),cur)}</select>${I.caret}</div>`;
+  const stSel = Z.sts.length>1 ? sel('wdrStSel','State',[['','All states'],...Z.sts.map(s=>[s,s])],Z.st) : '';
+  const orgSel = sel('wdrOrgSel','Assigned to',[['ALL',mob?'Company':'All companies'],...Z.orgs.map(s=>[s,s])],Z.org);
+  const lySeg = `<div role="group" aria-label="Last year" style="${w2segBox(mob)}${mob?';width:100%':''}">${[['same','Last year · same dates'],['all','Last year · whole season']].map(([k,t])=>`<button data-act="wdrly" data-k="${k}" aria-pressed="${Z.ly===k}" style="${w2seg(Z.ly===k,mob)}">${mob?t.replace('Last year · ','LY '):t}</button>`).join('')}</div>`;
+  const sortSel = sel('wdrSortSel','Sort by',WDR_SORTS.map(([k,t])=>[k,'Sort: '+t]),Z.sort);
+  const clear = Z.narrowed ? B.ghost('wdrclear','Clear') : '';
+  const controls = mob
+    ? `<div style="display:flex;flex-direction:column;gap:10px">${B.search('wdrSearch','Machine or territory',S.wdrQ)}<div style="display:flex;gap:8px">${stSel}${orgSel}</div><div style="display:flex;gap:8px">${sortSel}${clear}${B.csv('wdrcsv','Download as CSV')}</div>${lySeg}</div>`
+    : `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${B.search('wdrSearch','Search machine, territory, programme',S.wdrQ)}${stSel}${orgSel}${sortSel}${clear}<span style="flex:1"></span>${B.csv('wdrcsv',`Download the ${fmt(Z.rows.length)} machines as CSV`)}</div>`;
   const head = `<div style="margin-top:${mob?14:20}px;display:flex;${mob?'flex-direction:column;gap:10px':'align-items:flex-end;justify-content:space-between;gap:16px'}">
-      <div style="min-width:0"><div style="font-size:${mob?18:20}px;font-weight:600">Dry run · km machines drive</div>
-      <div style="font-size:14px;color:${W2.ink2};margin-top:2px;line-height:1.45">${perTxt} · ${fmt(Z.rows.length)} machine${Z.rows.length===1?'':'s'}${A.narrowed?' · what the filters show':''}</div></div>${perSeg}</div>
-    ${Z.capped?`<div style="${gap};padding:10px 14px;border-radius:12px;background:#FDF4DF;border:1px solid #F1E2BC;font-size:13.5px;color:${W2.idleD};line-height:1.45">The dry run tab runs to <b style="font-weight:600">${dW}</b>, a day behind the Main sheet, so these figures stop there.</div>`:''}`;
-  if(!Z.rows.length) return controls + head + B.msg(`No machine in view is on the dry run tab.${A.narrowed?`<div style="margin-top:12px">${B.ghost('wtclear','Clear filters')}</div>`:''}`);
-  // ---- the strip
-  const pctOf = (a,b) => b>0 ? 100*a/b : null;
+      <div style="min-width:0"><div style="font-size:${mob?18:20}px;font-weight:600">Dry run · this season against last</div>
+      <div style="font-size:14px;color:${W2.ink2};margin-top:2px;line-height:1.45">FY ${fy(WDR.cur)}: ${curTxt} · ${fmt(Z.rows.length)} machine${Z.rows.length===1?'':'s'}${Z.narrowed?' · in this view':''} · last year: every machine in the same territories, ${Z.ly==='same'?'on the same dates':'over the whole season'} (${lyTxt}) · the page’s own filters only</div></div>${mob?'':lySeg}</div>`;
+  if(!Z.rows.length) return controls + head + B.msg(`No machine matches.${Z.narrowed?`<div style="margin-top:12px">${B.ghost('wdrclear','Clear')}</div>`:''}`);
+  // ---- change marks. Km per acre: lower is better (green ▼). The other two are a fact, not a grade: plain ink.
+  const chg = (a,b,f,grade) => { if(a==null||b==null) return `<span style="color:${W2.ink3}">no last year</span>`;
+    const d=a-b, eq=Math.abs(d)<(f===kmAcF?0.005:0.05); if(eq) return `<span style="color:${W2.ink2}">same as last year</span>`;
+    const col = !grade ? W2.ink2 : d<0 ? W2.actD : W2.brkD, pc = b ? ` (${d>0?'+':''}${Math.round(100*d/b)}%)` : '';
+    return `<span style="color:${col};font-weight:600;white-space:nowrap">${d>0?'▲':'▼'} ${f(Math.abs(d))}${pc}</span>`; };
+  const tile = (lab, v, unit, ly, ch, extra) => B.tile(lab, v, unit, `<span style="display:block">Last year <b style="font-weight:600;color:${W2.ink}">${ly}</b> · ${ch}</span><span style="display:block;margin-top:2px">${extra}</span>`);
   const tiles = [
-    B.tile('Dry run km', kmF(T.km), 'km', `${fmt(T.moved)} machine-days moved · ${kmF(Z.rows.length?T.km/Z.rows.length:0)} km a machine`),
-    B.tile('Km per acre sprayed', kmAcF(T.kmAc), '', `${acF(Math.round(T.ac))} IoT acres · trips count against it`),
-    B.tile('Km per running day', T.kmRun==null?'—':kmF(T.kmRun), 'km', `${fmt(T.rDays)} running days · ${T.acRun==null?'—':acF(Math.round(T.acRun*10)/10)} ac a running day`),
-    B.tile('Trips without spraying', fmt(T.wDays), T.wDays===1?'day':'days', `${kmF(T.wKm)} km · ${pctF(pctOf(T.wKm,T.km))} of dry run km`),
-    B.tile('Transport moves', fmt(T.tDays), T.tDays===1?'day':'days', T.tDays?`${kmF(T.tKm)} km over ${WDR_TRANSPORT} km a day · left out`:`none over ${WDR_TRANSPORT} km a day`),
+    tile('Dry run km', kmF(C.km), 'km', `${kmF(P.km)} km`, chg(C.km,P.rDays?P.km:null,kmF,false), `${kmF(Z.rows.length?C.km/Z.rows.length:0)} km a machine this year · ${kmF(P.n?P.km/P.n:0)} last`),
+    tile('Km per acre sprayed', kmAcF(C.kmAc), 'km', kmAcF(P.kmAc), chg(C.kmAc,P.kmAc,kmAcF,true), `${acF(Math.round(C.ac))} acres this year · ${acF(Math.round(P.ac))} last`),
+    tile('Km per running day', C.kmRun==null?'—':kmF(C.kmRun), 'km', P.kmRun==null?'—':`${kmF(P.kmRun)} km`, chg(C.kmRun,P.kmRun,kmF,false), `${fmt(C.rDays)} running days this year · ${fmt(P.rDays)} last`),
   ];
   const strip = mob
-    ? B.cardBox(`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr))">${tiles.join('')}</div>`, `${gap};overflow:hidden`)
-    : `<div style="${gap};display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">${tiles.join('')}</div>`;
-  // ---- this week against the week before (always the last 7 days to D, whatever the period)
-  const chg = (a,b,f,lowerBetter=true) => a==null||b==null ? '' : Math.abs(a-b) < (f===kmAcF?0.005:0.05) ? `<span style="color:${W2.ink2}">same as</span>`
-    : (a<b)===lowerBetter ? `<span style="color:${W2.actD};font-weight:600">▼ down from</span>` : `<span style="color:${W2.brkD};font-weight:600">▲ up from</span>`;
-  const wk=Z.wk, wkP=Z.wkP;
-  const week = Z.prev.length===7 && wkP.rDays ? `<div style="${gap};padding:${mob?'12px 14px':'12px 18px'};border-radius:12px;background:${W2.head};border:1px solid ${W2.line2};font-size:14px;line-height:1.55">
-      <b style="font-weight:600">Last 7 days (${wpDate(Z.last7[0])} – ${dW}):</b> ${kmAcF(wk.kmAc)} km an acre, ${chg(wk.kmAc,wkP.kmAc,kmAcF)} ${kmAcF(wkP.kmAc)} the 7 days before · ${kmF(wk.kmRun)} km a running day, ${chg(wk.kmRun,wkP.kmRun,kmF)} ${kmF(wkP.kmRun)} · ${fmt(wk.wDays)} trips without spraying, ${chg(wk.wDays,wkP.wDays,kmF)} ${fmt(wkP.wDays)}.</div>` : '';
-  // ---- day by day
-  const chart1 = wdrBarsHTML(Z, B, mob, 'Dry run km by day', `${wpDate(Z.season[0])} – ${dW} · transport moves left out`,
-    [{ vals:Z.series.map(x=>x.run), col:WDR_COL.run, label:'on running days' }, { vals:Z.series.map(x=>x.trip), col:WDR_COL.trip, label:'on trips without spraying' }], v=>kmF(v)+' km');
-  const chart2 = wdrBarsHTML(Z, B, mob, 'Km per running day', `km on running days ÷ machines that ran, each day`,
-    [{ vals:Z.series.map(x=>x.kmRun||0), col:'#7C8DA0', label:'' }], v=>kmF(v)+' km');
-  // ---- by territory / CI / AM
-  const byLbl = (WDR_BY.find(([k])=>k===Z.by)||[])[1];
-  const bySeg = `<div role="group" aria-label="Group by" style="${w2segBox(mob)}${mob?';width:100%':''}">${WDR_BY.map(([k,l])=>`<button data-act="wdrby" data-k="${k}" aria-pressed="${Z.by===k}" style="${w2seg(Z.by===k,mob)}">By ${l}</button>`).join('')}</div>`;
-  const mxAc = Math.max(...Z.groups.filter(g=>!g.few).map(g=>g.kmAc||0), 0.01);
-  const vsAll = g => g.kmAc==null||T.kmAc==null||g.few ? '' : (d=>Math.abs(d)<0.005?`<span style="color:${W2.ink2}">same as all</span>`:d>0?`<span style="color:${W2.brkD};font-weight:600">▲ ${kmAcF(d)} more than all</span>`:`<span style="color:${W2.actD};font-weight:600">▼ ${kmAcF(-d)} less than all</span>`)(g.kmAc-T.kmAc);
-  const subOf = g => g.none ? (Z.by==='terr'?'territory not on the sheet':'machines with no operator have no CI or AM')
-    : Z.by==='terr' ? `${STATE_NAMES[[...g.sts][0]]||[...g.sts][0]||''}${g.cis.size?` · ${fmt(g.cis.size)} CI${g.cis.size===1?'':'s'}`:''}`
-    : Z.by==='ci' ? `${[...g.terrs].join(', ')}${g.ams.size?' · AM '+[...g.ams].join(', '):''}`
-    : `${fmt(g.cis.size)} CI${g.cis.size===1?'':'s'} · ${[...g.terrs].slice(0,3).join(', ')}${g.terrs.size>3?` +${g.terrs.size-3}`:''}`;
-  const few = `<span style="font-size:12px;color:${W2.ink2};font-style:italic">few running days</span>`;
-  const fig = (v,t,sub) => `<span style="text-align:${mob?'left':'right'};min-width:0"><span style="${w2num(mob?16:15,600)}">${v}</span>${t?`<span style="font-size:12px;color:${W2.ink2}"> ${t}</span>`:''}${sub?`<span style="display:block;font-size:12px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</span>`:''}</span>`;
-  const mcRow = r => { const m=r.m;
-    return `<button data-act="wpmc" data-mc="${E(m.mc)}" style="display:${mob?'flex':'grid'};${mob?'flex-direction:column;align-items:stretch;gap:6px':'grid-template-columns:minmax(0,1.5fr) 80px 90px 90px 110px 120px;gap:12px;align-items:center'};width:100%;min-height:${mob?56:46}px;padding:8px 12px;border:0;border-top:1px solid ${W2.line2};background:#fff;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
-      <span style="min-width:0"><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font:600 13px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${B.orgChip(m.org)}${r.tDays?`<span style="font-size:12px;color:${W2.ink2}">+ ${fmt(r.tDays)} transport day${r.tDays===1?'':'s'}</span>`:''}</span>
-        <span style="display:block;font-size:12.5px;color:${W2.ink2};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.opName||m.opNum?E(m.opName||m.opNum):'No operator'} · ${Z.by==='terr'?(m.co?'CI '+E(m.co):'no CI'):E(m.territory)}</span></span>
-      ${mob?`<span style="display:flex;align-items:center;gap:10px;font-size:13px;font-variant-numeric:tabular-nums;flex-wrap:wrap"><span><b style="font-weight:600">${kmF(r.km)}</b> km</span><span><b style="font-weight:600">${r.few?'—':kmAcF(r.kmAc)}</b> km/ac</span><span><b style="font-weight:600">${r.kmRun==null?'—':kmF(r.kmRun)}</b> km/run day</span>${r.wDays?`<span style="color:${W2.idleD};font-weight:600">${fmt(r.wDays)} trip${r.wDays===1?'':'s'} · ${kmF(r.wKm)} km</span>`:''}</span>${wdrSpark(m,D)}`
-        :`${fig(kmF(r.km),'km')}${fig(r.few?'—':kmAcF(r.kmAc),'',r.few?`${fmt(r.rDays)} running day${r.rDays===1?'':'s'}`:'')}${fig(r.kmRun==null?'—':kmF(r.kmRun),'km',`${fmt(r.rDays)} day${r.rDays===1?'':'s'}`)}${fig(r.wDays?fmt(r.wDays):'—',r.wDays?(r.wDays===1?'trip':'trips'):'',r.wDays?kmF(r.wKm)+' km':'')}<span style="display:flex;justify-content:flex-end">${wdrSpark(m,D)}</span>`}</button>`; };
-  const cols='minmax(0,1.6fr) 70px 90px minmax(150px,1.2fr) 100px 110px 20px';
-  const gRow = g => { const open=S.wdrOpen===g.key;
-    const call = (Z.by!=='terr') && !g.none ? B.tel({n:g.name,mob:g.mob}, Z.by==='ci'?'CI':'AM') : '';
-    const acCell = g.few ? few : `<span style="display:flex;flex-direction:column;gap:4px;min-width:0"><span><span style="${w2num(mob?16:15,600)}">${kmAcF(g.kmAc)}</span><span style="font-size:12px;color:${W2.ink2}"> km/ac</span></span>${B.meter(100*(g.kmAc||0)/mxAc,'100%',WDR_COL.run)}<span style="font-size:12px;white-space:nowrap">${vsAll(g)}</span></span>`;
+    ? B.cardBox(`<div style="display:grid;grid-template-columns:minmax(0,1fr)">${tiles.join('')}</div>`, `${gap};overflow:hidden`)
+    : `<div style="${gap};display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">${tiles.join('')}</div>`;
+  const cover = `<div style="${gap};padding:${mob?'12px 14px':'12px 18px'};border-radius:12px;background:${W2.head};border:1px solid ${W2.line2};font-size:14px;line-height:1.55">
+      <b style="font-weight:600">Last year = the same territories:</b> ${fmt(P.n)} machine${P.n===1?'':'s'} sprayed in the ${fmt(Z.groups.filter(g=>g.p).length)} territor${Z.groups.filter(g=>g.p).length===1?'y':'ies'} below last season, against ${fmt(Z.rows.length)} this season${Z.nLyOnly?`, including ${fmt(Z.nLyOnly)} territor${Z.nLyOnly===1?'y':'ies'} that ran only last year (listed at the end)`:''}. Last year ${Z.ly==='same'?`stops at ${wpDate(`${+WDR.curLast.slice(0,4)-1}${WDR.curLast.slice(4)}`)} ${+WDR.curLast.slice(0,4)-1}, the same point as this season`:`is the whole season, to ${wpDate(WDR.prevLast)}`}.${Z.org!=='ALL'||Z.q?` The company filter and search narrow this season only; last year is still every machine in those territories.`:''}</div>`;
+  // ---- tags
+  const tag = (t, tone) => { const T = tone==='ly' ? ['#F1EEFB','#4A3A8C'] : tone==='st' ? ['#E6F6F1','#0E6B57'] : tone==='pg' ? ['#FDF4DF','#8A5A00'] : [W2.line2, W2.ink2];
+    return `<span style="display:inline-flex;align-items:center;padding:2px 7px;border-radius:6px;background:${T[0]};color:${T[1]};font-size:${mob?12:11.5}px;font-weight:600;white-space:nowrap;line-height:1.5">${E(t)}</span>`; };
+  const tagList = (pairs, tone, max=3) => { const sh=pairs.slice(0,max).map(([k,n])=>tag(`${k}${pairs.length>1||n>1?' '+n:''}`, tone)); if(pairs.length>max) sh.push(tag(`+${pairs.length-max} more`)); return sh.join(''); };
+  const orgTags = pairs => pairs.map(([k,n])=>`<span style="display:inline-flex;align-items:center;gap:4px">${B.orgChip(k)}<span style="font-size:12px;color:${W2.ink2}">${fmt(n)}</span></span>`).join('');
+  const stShort = s => /^madhya/i.test(s) ? 'MP' : s;
+  // ---- the territory summary
+  const mxAc = Math.max(...Z.groups.filter(g=>!g.few&&!g.none).map(g=>g.c.kmAc||0), C.kmAc||0, 0.01);
+  const figPair = (cur, ly, ch, unit, lyL='LY') => `<span style="display:flex;flex-direction:column;gap:2px;min-width:0;${mob?'':'text-align:right;align-items:flex-end'}"><span><span style="${w2num(mob?16:15,600)}">${cur}</span>${unit?`<span style="font-size:12px;color:${W2.ink2}"> ${unit}</span>`:''}</span><span style="font-size:12px;color:${W2.ink2};white-space:nowrap">${lyL} ${ly}</span><span style="font-size:12px">${ch}</span></span>`;
+  const cols = 'minmax(0,1.6fr) 90px minmax(110px,1fr) minmax(130px,1fr) minmax(130px,1fr) 18px';
+  const gFigs = g => [
+    figPair(g.lyOnly?'—':kmF(g.c.km), g.p?kmF(g.p.km):'—', '', g.lyOnly?'':'km'),
+    figPair(g.few?'—':kmAcF(g.c.kmAc), g.p?kmAcF(g.p.kmAc):'—', g.lyOnly?'':g.few?`<span style="color:${W2.ink3}">${fmt(g.c.rDays)} running day${g.c.rDays===1?'':'s'}</span>`:chg(g.c.kmAc,g.p&&g.p.kmAc,kmAcF,true), ''),
+    figPair(g.c.kmRun==null?'—':kmF(g.c.kmRun), g.p&&g.p.kmRun!=null?kmF(g.p.kmRun):'—', g.few?'':chg(g.c.kmRun,g.p&&g.p.kmRun,kmF,false), 'km'),
+  ];
+  const lab = t => `<span style="font-size:12px;color:${W2.ink2};font-weight:500">${t}</span>`;
+  const lyLine = g => [
+      g.p ? `${lab(`Last year here: ${fmt(g.nPrev)} machine${g.nPrev===1?'':'s'}, ran in`)}${tagList(g.lySt.map(([k,n])=>[stShort(k),n]),'st',3)}${tagList(g.lyOrg,'pg',3)}` : lab('No machine sprayed in this territory last season'),
+      g.list.length ? (g.cameFrom.length ? `${lab(`This year’s machines last year${g.stayed?` · ${fmt(g.stayed)} stayed`:''}:`)}${tagList(g.cameFrom,'ly',3)}` : lab('This year’s machines are all new')) : ''
+    ].filter(Boolean).map(x=>`<span style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">${x}</span>`).join('');
+  const mRow = r => { const o=r.o, c=r.c, p=r.p, few=c.rDays<WDR_FEW;
+    const ly = o.prev ? `${tag((o.prev.terr||'Territory not on sheet'),'ly')}${o.prev.stMain?tag(stShort(o.prev.stMain),'st'):''}${o.prev.org?tag(o.prev.org,'pg'):''}` : tag('New this year');
+    const figs = [
+      figPair(kmF(c.km), p&&p.rDays?kmF(p.km):'—', '', 'km', 'Its LY'),
+      figPair(few?'—':kmAcF(c.kmAc), p&&p.rDays?kmAcF(p.kmAc):'—', few?`<span style="color:${W2.ink3}">${fmt(c.rDays)} day${c.rDays===1?'':'s'}</span>`:chg(c.kmAc,p&&p.kmAc,kmAcF,true), '', 'Its LY'),
+      figPair(c.kmRun==null?'—':kmF(c.kmRun), p&&p.kmRun!=null?kmF(p.kmRun):'—', '', 'km', 'Its LY'),
+    ];
+    const id = `<span style="display:flex;flex-direction:column;gap:5px;min-width:0"><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font:600 ${mob?14:13.5}px 'IBM Plex Mono',monospace">${E(o.mc)}</span>${o.cur.org?B.orgChip(o.cur.org):tag('Not assigned')}<span style="font-size:12px;color:${W2.ink2}">${fmt(c.rDays)} running day${c.rDays===1?'':'s'} · ${acF(Math.round(c.ac))} ac</span></span><span style="display:flex;align-items:center;gap:5px;flex-wrap:wrap"><span style="font-size:12px;color:${W2.ink2}">Last year it was</span>${ly}</span></span>`;
+    return mob
+      ? `<div style="padding:12px 16px 12px 28px;border-top:1px solid ${W2.line2};display:flex;flex-direction:column;gap:8px">${id}<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${figs.join('')}</div></div>`
+      : `<div style="display:grid;grid-template-columns:${cols};gap:12px;align-items:center;padding:10px 22px 10px 40px;border-top:1px solid ${W2.line2};background:${W2.head}">${id}<span></span>${figs.join('')}<span></span></div>`; };
+  const gRow = g => { const open=S.wdrOpen===g.key && g.list.length;
+    const name = `<span style="display:flex;flex-direction:column;gap:5px;min-width:0"><span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:${mob?16:15}px;font-weight:600;${g.none||g.lyOnly?`color:${W2.ink2}`:''}">${E(g.name)}</span>${g.lyOnly?tag('Last year only'):orgTags(g.orgs)}</span>${!g.few&&!g.none?`<span style="max-width:200px">${B.meter(100*(g.c.kmAc||0)/mxAc,'100%','#4C7399')}</span>`:''}</span>`;
+    const mcs = `<span style="display:flex;flex-direction:column;${mob?'':'align-items:flex-end;text-align:right'}"><span style="${w2num(mob?16:15,600)}">${g.lyOnly?'—':fmt(g.list.length)}</span><span style="font-size:12px;color:${W2.ink2};white-space:nowrap">LY ${fmt(g.nPrev)}</span></span>`;
     const inner = mob
-      ? `<span style="min-width:0;display:flex;flex-direction:column;gap:8px;flex:1">
-          <span><span style="display:block;font-size:14.5px;font-weight:600;${g.none?`color:${W2.ink2};font-style:italic;`:''}white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(g.name)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${fmt(g.n)} machine${g.n===1?'':'s'} · ${E(subOf(g))}</span></span>
-          ${acCell}
-          <span style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${fig(kmF(g.km),'km','dry run')}${fig(g.kmRun==null?'—':kmF(g.kmRun),'km','a running day')}${fig(fmt(g.wDays),'',`trips · ${kmF(g.wKm)} km`)}</span></span>`
-      : `<span style="min-width:0"><span style="display:block;font-size:14px;font-weight:600;${g.none?`color:${W2.ink2};font-style:italic;`:''}white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(g.name)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.mob?`<span style="font-family:'IBM Plex Mono',monospace">${E(g.mob)}</span> · `:''}${E(subOf(g))}</span></span>
-        ${fig(fmt(g.n),'')}${fig(kmF(g.km),'km')}${acCell}${fig(g.kmRun==null?'—':kmF(g.kmRun),'km',`${fmt(g.rDays)} days`)}${fig(fmt(g.wDays),g.wDays===1?'trip':'trips',kmF(g.wKm)+' km')}<span style="display:flex;align-items:center">${B.chev(open)}</span>`;
-    return `<div style="border-top:1px solid ${W2.line2}"><div style="display:flex;align-items:${mob?'flex-start':'center'};gap:8px;padding:0 ${mob?12:22}px">
-      <button data-act="wdrexp" data-k="${E(g.key)}" aria-expanded="${open}" style="flex:1;min-width:0;${mob?'display:flex;gap:8px':`display:grid;grid-template-columns:${cols};gap:12px;align-items:center`};min-height:${mob?60:56}px;padding:${mob?'12px 0':'8px 0'};border:0;background:none;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">${inner}</button>${call?`<span style="padding-top:${mob?10:0}px">${call}</span>`:''}</div>
-      ${open?`<div style="margin:0 ${mob?8:22}px 12px;border:1px solid ${W2.line2};border-radius:12px;overflow:hidden">${mob?'':`<div style="display:grid;grid-template-columns:minmax(0,1.5fr) 80px 90px 90px 110px 120px;gap:12px;padding:8px 12px;background:${W2.head};font-size:12px;font-weight:600;color:${W2.ink2}"><span>Machine · operator</span><span style="text-align:right">Dry run</span><span style="text-align:right">Km/acre</span><span style="text-align:right">Km/run day</span><span style="text-align:right">Trips, no spray</span><span style="text-align:right">Last 14 days</span></div>`}${g.list.map(mcRow).join('')}</div>`:''}</div>`; };
-  const gShown = S.wdrAll ? Z.groups : Z.groups.slice(0, WDR_ROWS);
-  const gMore = Z.groups.length>WDR_ROWS ? `<div style="border-top:1px solid ${W2.line2};padding:8px ${mob?12:22}px"><button data-act="wdrall" style="min-height:44px;border:0;background:none;padding:0 4px;font:600 14px ${W2.font};color:${W2.ink};cursor:pointer">${S.wdrAll?'Show fewer':`Show all ${fmt(Z.groups.length)}`}</button></div>` : '';
+      ? `<span style="display:flex;flex-direction:column;gap:10px;flex:1;min-width:0"><span style="display:flex;justify-content:space-between;gap:10px"><span style="display:flex;gap:8px;min-width:0">${g.list.length?B.chev(open):'<span style="width:14px;flex-shrink:0"></span>'}${name}</span>${mcs}</span><span style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">${gFigs(g).join('')}</span><span style="display:flex;flex-direction:column;gap:5px">${lyLine(g)}</span></span>`
+      : `<span style="display:grid;grid-template-columns:${cols};gap:12px;align-items:center">${name}${mcs}${gFigs(g).join('')}${g.list.length?B.chev(open):'<span></span>'}</span><span style="display:flex;flex-direction:column;gap:5px;margin-top:8px">${lyLine(g)}</span>`;
+    return `<div style="border-top:1px solid ${W2.line2}"><button ${g.list.length?`data-act="wdrexp" data-k="${E(g.key)}" aria-expanded="${!!open}"`:'disabled'} style="display:${mob?'flex':'block'};width:100%;padding:${mob?'14px 16px':'12px 22px'};border:0;background:none;text-align:left;cursor:${g.list.length?'pointer':'default'};font-family:inherit;color:${W2.ink}">${inner}</button>${open?g.list.map(mRow).join(''):''}</div>`; };
+  const shown = S.wdrAll ? Z.groups : Z.groups.slice(0, WDR_ROWS);
+  const more = Z.groups.length>WDR_ROWS ? `<div style="border-top:1px solid ${W2.line2};padding:8px ${mob?12:22}px"><button data-act="wdrall" style="min-height:44px;border:0;background:none;padding:0 4px;font:600 14px ${W2.font};color:${W2.ink};cursor:pointer">${S.wdrAll?'Show fewer':`Show all ${fmt(Z.groups.length)}`}</button></div>` : '';
   const th = B.th('wdrsort', Z.sort);
-  const gHead = mob ? '' : `<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 22px;margin-right:${Z.by==='terr'?0:52}px;background:${W2.head};border-top:1px solid ${W2.line2};font-size:12.5px;font-weight:600;color:${W2.ink2}">${th('name',byLbl)}<span style="text-align:right">Machines</span>${th('km','Dry run',true)}${th('kmac','Km per acre')}${th('kmrun','Km / running day',true)}${th('trip','Trips, no spray',true)}<span></span></div>`;
-  const groupCard = B.cardBox(`<div style="display:flex;${mob?'flex-direction:column;align-items:stretch':'align-items:center;justify-content:space-between'};gap:10px;padding:${mob?'16px 16px 12px':'16px 22px 14px'}">
-      <div style="min-width:0"><div style="font-size:16px;font-weight:600">Dry run by ${byLbl.toLowerCase()}</div>
-      <div style="font-size:13px;color:${W2.ink2};margin-top:2px;line-height:1.4">${perTxt} · sorted by ${E(((WDR_SORTS.find(([k])=>k===Z.sort)||[])[1]||'').toLowerCase())} · fewer than ${Z.min} running days go last · ${mob?'tap':'click'} a row for its machines</div></div>${bySeg}</div>
-    ${gHead}${gShown.map(gRow).join('')}${gMore}`, `${gap};overflow:hidden`);
-  // ---- the machines that drove and sprayed nothing
-  const tShown = S.wdrTripAll ? Z.trips : Z.trips.slice(0, WDR_TRIPS);
-  const tItem = r => { const m=r.m;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:${mob?'10px 12px':'8px 22px'};border-top:1px solid ${W2.line2}">
-      <button data-act="wpmc" data-mc="${E(m.mc)}" style="flex:1;min-width:0;display:flex;${mob?'flex-direction:column;gap:3px':'align-items:center;gap:14px'};min-height:44px;border:0;background:none;padding:0;text-align:left;cursor:pointer;font-family:inherit;color:${W2.ink}">
-        <span style="display:flex;align-items:center;gap:6px;${mob?'':'width:190px;flex-shrink:0'}"><span style="font:600 13px 'IBM Plex Mono',monospace">${E(m.mc)}</span>${B.orgChip(m.org)}</span>
-        <span style="font-size:13.5px;font-variant-numeric:tabular-nums;${mob?'':'width:190px;flex-shrink:0'}"><b style="font-weight:600;color:${W2.idleD}">${fmt(r.wDays)} trip${r.wDays===1?'':'s'} · ${kmF(r.wKm)} km</b></span>
-        <span style="font-size:12.5px;color:${W2.ink2};min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.opName||m.opNum?E(m.opName||m.opNum):'No operator'} · ${E(m.territory)} · CI ${E(m.co||'not named')}</span></button>
-      ${B.tel({n:m.opName||'operator',mob:m.opNum},'Operator')}</div>`; };
-  const tripCard = Z.trips.length ? B.cardBox(`<div style="padding:${pad}"><div style="display:flex;align-items:baseline;gap:7px;font-size:16px;font-weight:600"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:${WDR_COL.trip};flex-shrink:0;transform:translateY(-1px)"></span>Drove and sprayed nothing</div>
-      <div style="font-size:13px;color:${W2.ink2};margin-top:2px;line-height:1.4">${perTxt} · ${fmt(Z.trips.length)} machine${Z.trips.length===1?'':'s'} drove ${WDR_MOVE} km or more on a day with no IoT acres · most km first</div></div>
-      ${tShown.map(tItem).join('')}${Z.trips.length>WDR_TRIPS?`<div style="border-top:1px solid ${W2.line2};padding:8px ${mob?12:22}px"><button data-act="wdrtripall" style="min-height:44px;border:0;background:none;padding:0 4px;font:600 14px ${W2.font};color:${W2.ink};cursor:pointer">${S.wdrTripAll?'Show fewer':`Show all ${fmt(Z.trips.length)}`}</button></div>`:''}`, `${gap};overflow:hidden`) : '';
-  const note = `<div style="font-size:12.5px;color:${W2.ink2};margin-top:12px;line-height:1.55"><b style="color:${W2.ink};font-weight:600">How it is worked out:</b> the dry run tab gives each machine’s km a day. A <b style="font-weight:600;color:${W2.ink}">running day</b> has IoT acres; a <b style="font-weight:600;color:${W2.ink}">trip without spraying</b> has no IoT acres and ${WDR_MOVE} km or more; a day over ${WDR_TRANSPORT} km is a <b style="font-weight:600;color:${W2.ink}">transport move</b> (the machine being taken to its territory) and is left out of every figure. Km per acre = dry run km ÷ IoT acres. A machine that sprays more acres a day drives more km a day but fewer km an acre, so read the two together. The season starts ${wpDate(Z.season[0]||D)}, the Main sheet’s first date.${Z.notOnTab?` ${fmt(Z.notOnTab)} machine${Z.notOnTab===1?' is':'s are'} in view but not on the dry run tab.`:''}${T.runNoRow?` ${fmt(T.runNoRow)} running day${T.runNoRow===1?' has':'s have'} no dry run row.`:''} Dry run tab checked ${E(WDR.at||'—')} · it is a temporary sheet until the programme shares the real one.</div>`;
-  return controls + head + strip + week + chart1 + groupCard + tripCard + chart2 + note + (mob?`<div style="margin-top:10px">${B.stamp('wpretry')}</div>`:'');
+  const hdr = mob ? '' : `<div style="display:grid;grid-template-columns:${cols};gap:12px;padding:10px 22px;border-top:1px solid ${W2.line2};background:${W2.head};font-size:12px;font-weight:600;color:${W2.ink2}">${th('name','Territory · assigned to')}${th('mc','Machines',true)}${th('km','Dry run km',true)}${th('kmac','Km per acre',true)}${th('kmrun','Km per running day',true)}<span></span></div>`;
+  const table = B.cardBox(`<div style="padding:${pad}"><div style="font-size:16px;font-weight:600">Territory summary</div>
+      <div style="font-size:13px;color:${W2.ink2};margin-top:2px;line-height:1.45">This season’s territory and who its machines are assigned to · LY = every machine that sprayed in that territory last season · tags show where those machines ran and their programme, and where this year’s machines were last year · sorted by ${E(((WDR_SORTS.find(([k])=>k===Z.sort)||[])[1]||'').toLowerCase())} · fewer than ${WDR_FEW} running days go last · ${mob?'tap':'click'} a territory for its machines</div></div>
+      ${hdr}${shown.map(gRow).join('')}${more}`, `${gap};overflow:hidden`);
+  const T=C.tDays+P.tDays, TK=C.tKm+P.tKm;
+  const note = `<div style="font-size:12.5px;color:${W2.ink2};margin-top:12px;line-height:1.55"><b style="color:${W2.ink};font-weight:600">How it is worked out:</b> the IoT acres tab gives each machine’s acres and dry run km on every day it sprayed, for this season (FY ${fy(WDR.cur)}) and last (FY ${fy(WDR.prev)}). Dry run km = the km on those days; km per acre = dry run km ÷ acres sprayed; km per running day = dry run km ÷ days it sprayed. Last year is read by <b style="font-weight:600;color:${W2.ink}">territory</b>: every machine whose last-season rows name that territory, whichever machine it was; inside a territory, each machine also shows its own last year (“Its LY”) and where it was. A day over ${WDR_TRANSPORT} km is a move, not field running, and is left out of all three${T?` (${fmt(T)} day${T===1?'':'s'}, ${kmF(TK)} km, in this view)`:''}. A territory with fewer than ${WDR_FEW} running days shows no km per acre. The global filters do not apply here. IoT acres tab checked ${E(WDR.at||'—')} · it is a temporary sheet until the programme shares the real one.</div>`;
+  return controls + head + strip + cover + table + note;
 }
 function wdrCSV(){
-  const Z=wdrAgg(), r1=v=>v==null?'':Math.round(v*10)/10, r2=v=>v==null?'':Math.round(v*100)/100, perL={ season:'Season', '7d':'Last 7 days', day:'Day' }[Z.per];
-  const head=['Machine','Company','State','Territory','CI','CI mobile','AM','AM mobile','State head','Operator','Operator mobile','Period','From','To',
-    'Dry run km (transport left out)','IoT acres','Km per acre','Running days','Km on running days','Km per running day','Trips without spraying (days)','Km on trips without spraying','Transport days (over '+WDR_TRANSPORT+' km)','Transport km'];
-  const lines=[head.join(',')].concat(Z.groups.flatMap(g=>g.list).map(r=>{ const m=r.m; return [m.mc, m.org, STATE_NAMES[m.st]||m.st, m.territory, m.co, m.coMob, m.am, m.amNum, wShName(m), m.opName, m.opNum,
-    perL, Z.days[0]||'', Z.D, r1(r.km), r1(r.ac), r2(r.kmAc), r.rDays, r1(r.rKm), r1(r.kmRun), r.wDays, r1(r.wKm), r.tDays, r1(r.tKm)].map(csvCell).join(','); }));
+  const Z=wdrAgg(), r1=v=>v==null?'':Math.round(v*10)/10, r2=v=>v==null?'':Math.round(v*100)/100;
+  const side = (s, pre) => s ? [r1(s.km), r1(s.ac), s.rDays, r2(s.kmAc), r1(s.kmRun), s.tDays] : ['','','','','',''];
+  const fig = p => [`${p} dry run km`,`${p} acres sprayed`,`${p} running days`,`${p} km per acre`,`${p} km per running day`,`${p} days over ${WDR_TRANSPORT} km (left out)`];
+  const terrLY = g => g.p ? [g.nPrev, r1(g.p.km), r2(g.p.kmAc), r1(g.p.kmRun)] : ['','','',''];
+  const lines=[['Machine','Assigned to (this year)','Territory (this year)','State (this year)','Its territory (last year)','State it sprayed in (last year)','Its programme (last year)',...fig('This year'),...fig('Its last year'),
+    'Territory last year: machines','Territory last year: dry run km','Territory last year: km per acre','Territory last year: km per running day','Last year read','This year to'].map(csvCell).join(',')];
+  Z.groups.forEach(g=>{ if(!g.list.length){ lines.push(['(no machine this year)','',g.name,'','','','',...side(null),...side(null),...terrLY(g),Z.ly==='same'?'Same dates':'Whole season',WDR.curLast].map(csvCell).join(',')); return; }
+    g.list.forEach(r=>{ const o=r.o;
+    lines.push([o.mc, o.cur.org||'', o.cur.terr||'Territory not on sheet', o.cur.stNow||o.cur.stMain||'', o.prev?(o.prev.terr||'Territory not on sheet'):'New this year', o.prev?o.prev.stMain:'', o.prev?o.prev.org:'',
+      ...side(r.c), ...side(r.p&&r.p.rDays?r.p:null), ...terrLY(g), Z.ly==='same'?'Same dates':'Whole season', WDR.curLast].map(csvCell).join(',')); }); });
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8'}));
-  a.download=`Wheat-North_dry-run_${Z.per}_${Z.A.st||'HR-PB'}_${Z.D||new Date().toISOString().slice(0,10)}.csv`;
+  a.download=`Wheat-North_dry-run_vs-last-year_${Z.ly}_${Z.st||'all'}_${WDR.curLast||new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0);
 }
 /* ===================== Wheat North — Breakdowns (view key `wbd`, `#/breakdowns`, Dinesh 2026-11-11) =====================
@@ -14509,7 +14507,7 @@ function mobileHTML(v){
       ${S.sheet==='more'    ? mSheetHTML('All pages', mMoreHTML(), 'sheetclose') : ''}
       ${S.sheet==='iotfilters' && curProject().iot ? iotSheetHTML() : ''}
       ${S.sheet==='wpfilters' && S.view==='wplan' && WRET.loaded && wSees() ? wpSheetHTML() : ''}
-      ${S.sheet==='wtfilters' && (S.view==='wterr'||S.view==='wam'||S.view==='wfo'||S.view==='wmap'||S.view==='wtop'||S.view==='wbd'||S.view==='wmc'||S.view==='w250'||S.view==='w500'||S.view==='wdr') && WRET.loaded && wSees() ? wtSheetHTML() : ''}
+      ${S.sheet==='wtfilters' && (S.view==='wterr'||S.view==='wam'||S.view==='wfo'||S.view==='wmap'||S.view==='wtop'||S.view==='wbd'||S.view==='wmc'||S.view==='w250'||S.view==='w500') && WRET.loaded && wSees() ? wtSheetHTML() : ''}
     </div>
   </div>`;
 }
@@ -14534,7 +14532,8 @@ function mPageScope(view){
     case 'snake':    return state.snState&&state.snState!=='ALL' ? nm(state.snState) : 'All India';
     case 'mpprod':   return state.mpTerr || 'Madhya Pradesh';
     case 'wplan':    return (lock||state.wpSt) ? nm(lock||state.wpSt) : 'HR + PB';
-    case 'wterr': case 'wam': case 'wfo': case 'wmap': case 'wtop': case 'wbd': case 'wmc': case 'w250': case 'w500': case 'wdr': return (lock||state.wtSt) ? nm(lock||state.wtSt) : 'HR + PB';
+    case 'wterr': case 'wam': case 'wfo': case 'wmap': case 'wtop': case 'wbd': case 'wmc': case 'w250': case 'w500': return (lock||state.wtSt) ? nm(lock||state.wtSt) : 'HR + PB';
+    case 'wdr': return state.wdrSt || 'HR + PB';
     case 'wcum': return state.wsnSt==='HR'||state.wsnSt==='PB' ? nm(state.wsnSt) : 'HR + PB';
     case 'iotci': case 'iotcia': return ciScopeTxt();
     case 'iottamper': case 'iotrisk': case 'iotteam': { const sc=iotScope(); return sc.st ? iotStName(sc.st) : (isAdmin()?'All states':'My states'); }
@@ -14778,7 +14777,7 @@ function setState(patch){
   render();
 }
 
-app.addEventListener('input', e=>{ if(e.target.id==='searchInput') setState({search:e.target.value}); else if(e.target.id==='wpSearch') setState({wpQ:e.target.value}); else if(e.target.id==='wtSearch') setState({wtQ:e.target.value}); else if(e.target.id==='wmcSearch'){ const v=e.target.value, m=wmcExact(v); setState(m?{wmcQ:v, selected:m}:{wmcQ:v}); if(m) track('machine_open',{ machine:m.mc, project:'wheat', via:'search' }); } else if(e.target.id==='iotSearch') setState({iotQ:e.target.value, iotLimit:IOT_PAGE}); else if(e.target.id==='ciSearch') setState({ciQ:e.target.value}); });
+app.addEventListener('input', e=>{ if(e.target.id==='searchInput') setState({search:e.target.value}); else if(e.target.id==='wpSearch') setState({wpQ:e.target.value}); else if(e.target.id==='wtSearch') setState({wtQ:e.target.value}); else if(e.target.id==='wdrSearch') setState({wdrQ:e.target.value}); else if(e.target.id==='wmcSearch'){ const v=e.target.value, m=wmcExact(v); setState(m?{wmcQ:v, selected:m}:{wmcQ:v}); if(m) track('machine_open',{ machine:m.mc, project:'wheat', via:'search' }); } else if(e.target.id==='iotSearch') setState({iotQ:e.target.value, iotLimit:IOT_PAGE}); else if(e.target.id==='ciSearch') setState({ciQ:e.target.value}); });
 app.addEventListener('change', e=>{
   if(e.target.id==='stSelect'){ const w=e.target.value; if(!w||gateAllowsState(w)) setState({st:w, terr:'', cluster:'', am:'', co:'', expanded:{}}); }
   else if(e.target.id==='terrSelect') setState({terr:e.target.value, cluster:''});
@@ -14817,6 +14816,8 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='wbdSortSel') setState({wbdSort:e.target.value});
   else if(e.target.id==='wmcSortSel') setState({wmcSort:e.target.value});
   else if(e.target.id==='wdrSortSel') setState({wdrSort:e.target.value});
+  else if(e.target.id==='wdrStSel') setState({wdrSt:e.target.value, wdrOpen:''});
+  else if(e.target.id==='wdrOrgSel') setState({wdrOrg:e.target.value, wdrOpen:''});
   else if(e.target.id==='w250SortSel') setState({w250Sort:e.target.value});
   else if(e.target.id==='wsnFromSel'||e.target.id==='wsnToSel'){ const md=String(e.target.value).slice(5), o=WSN_IDX[md==='02-29'?'02-28':md];
     if(o!=null){ const cur=state.wsnTo==null?null:state.wsnTo; if(e.target.id==='wsnFromSel') setState({wsnFrom:o, wsnTo:cur!=null&&cur<o?o:cur}); else setState({wsnTo:o, wsnFrom:Math.min(o, state.wsnFrom==null?WSN_FROM0:state.wsnFrom)}); } }
@@ -14954,14 +14955,13 @@ app.addEventListener('click', e=>{
     case 'w500cisort': setState({w500CiSort:el.dataset.k}); break;
     case 'w500ciall': setState(s=>({w500CiAll:!s.w500CiAll})); break;
     case 'w500csv': w500CSV(); track('w500_csv',{ st:state.wtSt||'all' }); break;
-    case 'wdrper': setState({wdrPer:el.dataset.k, wdrOpen:''}); track('wdr_period',{ k:el.dataset.k }); break;
-    case 'wdrby': setState({wdrBy:el.dataset.k, wdrOpen:'', wdrAll:false}); break;
+    case 'wdrly': setState({wdrLy:el.dataset.k}); track('wdr_lastyear',{ k:el.dataset.k }); break;
+    case 'wdrclear': setState({wdrSt:'', wdrOrg:'ALL', wdrQ:'', wdrOpen:''}); break;
     case 'wdrsort': setState({wdrSort:el.dataset.k}); break;
     case 'wdrexp': setState(s=>({wdrOpen:s.wdrOpen===el.dataset.k?'':el.dataset.k})); break;
     case 'wdrall': setState(s=>({wdrAll:!s.wdrAll})); break;
-    case 'wdrtripall': setState(s=>({wdrTripAll:!s.wdrTripAll})); break;
     case 'wdrretry': loadWdr(); break;
-    case 'wdrcsv': wdrCSV(); track('wdr_csv',{ st:state.wtSt||'all', per:state.wdrPer }); break;
+    case 'wdrcsv': wdrCSV(); track('wdr_csv',{ st:state.wdrSt||'all', ly:state.wdrLy }); break;
     case 'w250band': { const k=el.dataset.k, U=['near','mid','low','none']; setState(s=>({w250Bands: !k ? [] : k==='under' ? (s.w250Bands.length===4&&U.every(x=>s.w250Bands.includes(x)) ? [] : U) : s.w250Bands.includes(k) ? s.w250Bands.filter(x=>x!==k) : [...s.w250Bands,k]})); break; }
     case 'w250why': { const k=el.dataset.k; setState(s=>({w250Why: s.w250Why.includes(k) ? s.w250Why.filter(x=>x!==k) : [...s.w250Why,k]})); break; }
     case 'w250whyclr': setState({w250Why:[]}); break;
