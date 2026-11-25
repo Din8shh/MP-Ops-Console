@@ -2644,7 +2644,10 @@ function planTotals(){
 function isAdmin(){ return !!(GATE.cur && GATE.cur.role==='admin'); }
 // Wheat's UPL / SWAL team logins (role 'wteam'): they read the Wheat sheet like the admin, on three pages, in the
 // trimmed team form (wTeamPageHTML). wSees() is "may load and see the Wheat pages' data".
-const wTeam = () => !!(GATE.cur && GATE.cur.role==='wteam');
+// The STATE and SALES logins (roles 'wstate' / 'wsales': 4811 / 4711 / 4822 / 4722, Dinesh 2026-11-25) get the same team view,
+// for BOTH companies (org 'Both', so lockOrg is '' and the Company control appears), locked to their own state.
+const W_TEAM_ROLES = ['wteam','wstate','wsales'];
+const wTeam = () => !!(GATE.cur && W_TEAM_ROLES.includes(GATE.cur.role));
 // The SWAL team logins (4832 / 4732 / 4060). Dinesh 2026-11-11: their dashboard drops the pin map (its Show buttons move onto
 // the territory heat map), shows "Machines" with no deployed / in transit / pending split, and adds Territories sprayed + a
 // daily acres chart. UPL team logins are unchanged.
@@ -14975,10 +14978,10 @@ const GATE = {
     // The admin is role 'admin' so the Plan KPI, Pending and admin columns work INSIDE the project; states '*'
     // here means "every state the project's data holds", which loadData() has already cut to HR + PB.
     'b411746bdf09bde7f1fe70ddc8fa57241a0cb79d14d6e9c27e598635ca7dae4d': { id:'wh-admin', project:'wheat', role:'admin', org:'Both', allow:['Both','UPL','SWAL','Open'], states:['*'], switchStates:true, label:'Wheat North · Admin' }, // 4040
-    'de650d61f5bd166a91f8ccec3158297db18b9d50eaedca238cd29dc3a214a916': { id:'wh-pb', project:'wheat', role:'wstate', org:'Both', allow:['Both','UPL','SWAL'], states:['PB'], switchStates:false, views:['tables','am','fo','retailer'], label:'Wheat North · Punjab' }, // 4711
-    '459ef54b95078ec14162ab65a269e9179f14488554e29475504b3b25b2f17cb1': { id:'wh-hr', project:'wheat', role:'wstate', org:'Both', allow:['Both','UPL','SWAL'], states:['HR'], switchStates:false, views:['tables','am','fo','retailer'], label:'Wheat North · Haryana' }, // 4811
-    // External SALES teams, one per state. What they see is not decided yet: `views` is a PLACEHOLDER mirroring the
-    // state PIN, and narrowing it is this one list (the baseline Map / Machines / Weather / BMs always remain).
+    'de650d61f5bd166a91f8ccec3158297db18b9d50eaedca238cd29dc3a214a916': { id:'wh-pb', project:'wheat', role:'wstate', org:'Both', allow:['Both','UPL','SWAL'], states:['PB'], switchStates:false, views:['wplan','wterr','wfo','wmap'], label:'Wheat North · Punjab' }, // 4711
+    '459ef54b95078ec14162ab65a269e9179f14488554e29475504b3b25b2f17cb1': { id:'wh-hr', project:'wheat', role:'wstate', org:'Both', allow:['Both','UPL','SWAL'], states:['HR'], switchStates:false, views:['wplan','wterr','wfo','wmap'], label:'Wheat North · Haryana' }, // 4811
+    // External SALES teams, one per state. Since 2026-11-25 the state and sales PINs see the TEAM view (wTeam) for both
+    // companies, locked to their state: Retailers, Territories, FOs, Map.
     // Company TEAMS (asked 2026-10-29): one PIN per company per state, plus one per company for its leaders across HR + PB.
     // The company is forced (allow = their own only). They see the Retailer, Territory and FO pages in the team form:
     // machines, ran on the day, operator mapped, acres on the day, and 650 ac per machine as the TARGET (wTeamPageHTML).
@@ -14988,7 +14991,7 @@ const GATE = {
     'c1f713b07141998057941915d7beacaa0efe62e1e3e0e0ded7f03b981759ec95': { id:'wh-pb-swal', project:'wheat', role:'wteam', org:'SWAL', allow:['SWAL'], states:['PB'], switchStates:false, views:['wplan','wterr','wfo','wmap'], label:'Wheat North · Punjab SWAL' }, // 4732
     '7cd788de2f5fa0134bd705bf3fcb45ea9ff54c5f0e804526c128ed32ec37917d': { id:'wh-upl',     project:'wheat', role:'wteam', org:'UPL',  allow:['UPL'],  states:['HR','PB'], switchStates:true, views:['wplan','wterr','wfo','wmap'], label:'Wheat North · UPL leaders' }, // 4050
     'f9a75ecb0e5e127ed6917a563840dd2a33d661d385f9808f0547d188883a01d1': { id:'wh-swal',    project:'wheat', role:'wteam', org:'SWAL', allow:['SWAL'], states:['HR','PB'], switchStates:true, views:['wplan','wterr','wfo','wmap'], label:'Wheat North · SWAL leaders' }, // 4060
-    'e807be55a1a69fc2e397a015cb10ff4fea21a5ea450d122a5bb2e0228667d5c1': { id:'wh-pb-sales', project:'wheat', role:'wsales', org:'Both', allow:['Both','UPL','SWAL'], states:['PB'], switchStates:false, views:['tables','am','fo','retailer'], label:'Wheat North · Punjab sales' }, // 4722
+    'e807be55a1a69fc2e397a015cb10ff4fea21a5ea450d122a5bb2e0228667d5c1': { id:'wh-pb-sales', project:'wheat', role:'wsales', org:'Both', allow:['Both','UPL','SWAL'], states:['PB'], switchStates:false, views:['wplan','wterr','wfo','wmap'], label:'Wheat North · Punjab sales' }, // 4722
     // ── IoT device monitoring (project:'iot'). The IoT head is role 'admin' INSIDE the project (all states + the team
     // overview); each technician is locked to the states the workbook's "IOT vs state mapping" tab gives him. loadIoT
     // re-reads them from that tab on every load; the lists below are only the fallback when the tab cannot be read.
@@ -14999,7 +15002,7 @@ const GATE = {
     // (kept on the phone). Two pages only — Needs attention and Acres — in Hindi / Punjabi / English. See iotCiHTML.
     '2611b07ac9addfb7d2e4259eb234bc7e240931c54564e05eb7e25f5d69780efc': { id:'iot-ci', project:'iot', role:'iotci', org:'Both', allow:['Both'], states:['HR','PB'], switchStates:true, views:['iotci','iotcia'], home:'iotci', label:'IoT · CI North' }, // 2751
     '72a1917673994c23e72b3f49c2134549aa2219dffd8c029a071efe9c437f7888': { id:'iot-vishal', project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['MP','GJ','TG','MH','AP'], switchStates:true, label:'IoT · Vishal Makwana', tech:'Vishal Makwana' }, // 2631
-    'd95936051b112558c270fd675137155155c74b8f0721fde9007b53d40cedba2b': { id:'wh-hr-sales', project:'wheat', role:'wsales', org:'Both', allow:['Both','UPL','SWAL'], states:['HR'], switchStates:false, views:['tables','am','fo','retailer'], label:'Wheat North · Haryana sales' }, // 4822
+    'd95936051b112558c270fd675137155155c74b8f0721fde9007b53d40cedba2b': { id:'wh-hr-sales', project:'wheat', role:'wsales', org:'Both', allow:['Both','UPL','SWAL'], states:['HR'], switchStates:false, views:['wplan','wterr','wfo','wmap'], label:'Wheat North · Haryana sales' }, // 4822
     // ── External partners. A partner PIN is a HANDOFF, not a role: it never sets GATE.cur and never boots the console —
     // the gate sends it to the partner's own page (its own URL, its own copy of this one hash). See CLAUDE.md → Partner pages.
     '0f7afb8f94e54a80bfa3e9ba07d875ac4d23dccac94c90f84adcf22ad277825a': { id:'bayer', handoff:{ url:'bayer/', key:'bayer_gate' }, label:'Partner · Bayer' }, // 3906
