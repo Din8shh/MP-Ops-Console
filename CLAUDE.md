@@ -1107,7 +1107,8 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   does not match the rows). **One row per machine per SPRAY day, per season**; the newest FY is this season, the one before is last.
   On this season's rows `Last year organisation` is who the machine is assigned to now (UPL / SWAL / Bayer); on last season's rows it
   is the programme it ran under (UPL/Swal, PI, Bayer, Buffer …). `state` is where it sprayed that day (last season reaches MP / RJ).
-  · **Three figures only** (Dinesh): dry run km · km per acre sprayed (km ÷ acres) · km per running day (km ÷ spray days). Trips
+  · **Four figures** (Dinesh): dry run km · **km per running machine** (km ÷ machines that sprayed at least one day; added
+    2026-11-25 as the "running machine average") · km per acre sprayed (km ÷ acres) · km per running day (km ÷ spray days). Trips
     and transport tiles went (the tab only has spray days). A day over `WDR_TRANSPORT` (150 km) is a move, left out of all three
     (32 last-season days, 16,877 km; none this season) and counted in the note.
   · **No global filter applies** (comparison page). Own controls, page-local: State · Company (assigned to) · search · sort ·
@@ -1119,6 +1120,12 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     year and how many stayed. Inside a territory each machine shows its own last year ("Its LY") + tags (territory · state ·
     programme, or "New this year"). Territory names are folded (`wdrTerr`: " Territory" / " District" dropped, case,
     Yamuna Nager / Sonepat / Tarntaran / Hosiyarpur). Fewer than 5 running days: no km per acre, sorts last.
+  · **The territory table is a plain this-year / last-year grid** (rebuilt 2026-11-25, Dinesh: "easy to read"): Territory ·
+    Machines ran · Dry run km · Km per machine · Km per acre · Km per running day; every cell is this year on top, last year
+    (same territory) grey under it, and only km per acre carries an arrow (▼ green = fewer km per acre). Under the name, two
+    grey lines: who the machines are assigned to now, and "Last year: N machines · ran in <states> · <programmes>". No
+    coloured tags. On the phone each territory is a card with a mini table (measure · This year · Last year); a machine
+    row shows its own last year the same way ("Its last year").
   · Checked 2026-11-25 on the live tab: this season 438 machines, 28 Oct – 24 Nov, 93,977 ac / 96,151 km = 1.02 km/ac, 17.6 km a
     running day; last year same dates 569 machines in those territories, 0.91 km/ac, 20.5 km a day (whole season 638, 0.94, 18.5);
     43 territories, 9 last-year only. Logs `[MP-Ops] wheat dry run (IoT acres tab) → {…}`. Desktop 1280, phone 375 / 320.
