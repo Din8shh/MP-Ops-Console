@@ -1112,7 +1112,7 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     the same day) · km per acre sprayed (km ÷ acres) · km per running day (km ÷ spray days). Trips
     and transport tiles went (the tab only has spray days). A day over `WDR_TRANSPORT` (150 km) is a move, left out of all three
     (32 last-season days, 16,877 km; none this season) and counted in the note.
-  · **No global filter applies** (comparison page). Own controls, page-local: State · Company (assigned to) · search · sort ·
+  · **No global filter applies** (comparison page). Own controls, page-local: State · Company (assigned to; UPL and SWAL are ONE choice, "UPL/SWAL", beside Bayer — Dinesh 2026-11-25) · search · sort ·
     Last year = same dates (default: last season's days up to this season's last date − 1 year) or whole season (`wdrLy`).
   · **Last year is read by TERRITORY** (Dinesh chose it over same-machines, 2026-11-25): a territory's LY = every machine whose
     last-season rows name it. Territories that ran only last year are listed last ("Last year only", not shown under a company

@@ -11120,10 +11120,12 @@ function wdrAgg(){
   const all = Object.values(WDR.mc).filter(o=>o.cur), allP = Object.values(WDR.mc).filter(o=>o.prev);
   const stOf = o => o.cur.stNow||o.cur.stMain;
   const sts = wdrTally(all, stOf).map(([k])=>k), st = sts.includes(S.wdrSt) ? S.wdrSt : '';
-  const orgs = wdrTally(all, o=>o.cur.org||'Not assigned').map(([k])=>k), org = orgs.includes(S.wdrOrg) ? S.wdrOrg : 'ALL';
+  // The Company filter puts UPL and SWAL together as one choice (Dinesh 2026-11-25); the rows still name each company.
+  const orgKey = o => { const g=o.cur.org||'Not assigned'; return g==='UPL'||g==='SWAL' ? 'UPL/SWAL' : g; };
+  const orgs = wdrTally(all, orgKey).map(([k])=>k), org = orgs.includes(S.wdrOrg) ? S.wdrOrg : 'ALL';
   const q = String(S.wdrQ||'').trim().toLowerCase();
   const hit = o => !q || [o.mc, o.mc.replace(/\D/g,''), o.cur.terr, o.cur.org, o.prev&&o.prev.terr, o.prev&&o.prev.org, o.prev&&o.prev.stMain].some(v=>String(v||'').toLowerCase().includes(q));
-  const list = all.filter(o=>(!st || stOf(o)===st) && (org==='ALL' || (o.cur.org||'Not assigned')===org) && hit(o));
+  const list = all.filter(o=>(!st || stOf(o)===st) && (org==='ALL' || orgKey(o)===org) && hit(o));
   const rows = list.map(o=>({ o, c:wdrStats(o.cur), p:o.prev?wdrStats(o.prev, cut):null }));
   // Last year is read by TERRITORY (Dinesh 2026-11-25): every machine whose last-season rows name that territory, whoever it was.
   const PT={}; allP.forEach(o=>{ const s=wdrStats(o.prev, cut); if(!s.rDays&&!s.tDays) return; (PT[o.prev.terr||'']||(PT[o.prev.terr||'']=[])).push({ o, p:s }); });
