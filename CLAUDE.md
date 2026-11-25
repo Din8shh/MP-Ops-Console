@@ -161,6 +161,28 @@ the third call site). Reword it in `FOOTNOTE` only. The desktop `<main>` carries
 yields to the strip inside the fixed-`100vh` shell instead of pushing it off; the rail is a sibling of
 that whole column, so its height clamp is untouched.
 
+## Motion (2026-11-25, Dinesh: "a lively vibe, subtle")
+One block in `<style>` (MOTION) and one in the script (`motionAfterRender`, called last in `render()`). The rules a later
+edit would break:
+- **Never put an animation class straight into a builder.** `render()` swaps the whole tree on every state change, so it
+  would replay on every tap. Classes are added to the FRESH DOM by `motionAfterRender`, and only when the page ARRIVES:
+  its key (project · view · device · PIN entered · fleet rows present) changes, or the previous render was a loading
+  card (`[data-loading]`) and this one is not.
+- **A re-render within 800 ms of arriving CONTINUES the entrance** (`_mxT`, the `--mo` offset in every delay), because
+  the page nearly always renders again right after it arrives (a side tab lands, weather fails); without this the
+  entrance was cut off and snapped into place.
+- What arrives: the scroller's sections rise in, staggered (`mxStagger`, it descends through single-child wrappers);
+  figures at 19px+ in `tabular-nums` / Plex Mono count up (`mxCount`, keeps the original string's grouping and
+  decimals, ends on the exact original text); `.mxBar` fills grow (wpBits `meter`, the Retailer hero bar); chart lines
+  draw and narrow bars rise (`mxCharts`; maps in a `*Host` container, icons and dashed lines are left alone); the phone
+  bar's active pill pops. The Kharif KPI strip is outside the scroller and opts in with `data-motion`.
+- Opening a row (any `[aria-expanded]` toggle) lets what follows it drop in (`_mxExp`, recorded in the click handler).
+- Loading cards show a shimmer skeleton (`skelHTML`, which also sets `data-loading`); its phase comes from the clock
+  because the Wheat loading card re-renders every second.
+- Hover / press feedback is CSS only: buttons give under the finger (scale .97, .99 for full-width ones), clickable
+  rows and cards tint (hover devices only). Transform and opacity only, so nothing shifts layout. Everything sits
+  inside `prefers-reduced-motion:no-preference` and `mxReduce()` checks the same query.
+
 ## Dashboard plan (`docs/dashboard-plan.md`, 2026-10-22)
 A review against the DataCamp / Pencil & Paper dashboard rules: problems D1–D14, decisions, phases 1–7. Phases 1–5
 and 7 are built; phase 6 (season-phase mode, D7) was left out by decision. The rules it set, which a later edit
