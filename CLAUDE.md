@@ -743,8 +743,8 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | `lead` (leadership) | All / UPL / SWAL | all, switchable | Products, Cumulative, MP products |
 | `upl` / `swal` × 7 states | one, forced | one, locked | MP products (the two **MP** logins only) |
 | **Wheat** `admin` (`wh-admin`, 4040) | All / UPL / SWAL / Open | HR + PB, switchable | the Retailer summary (the only Wheat page while it is rebuilt) |
-| **Wheat** `wstate` × HR / PB (4811 / 4711) | All / UPL / SWAL | one, locked | **none yet** — a "being rebuilt" message until their pages are decided |
-| **Wheat** `wsales` × HR / PB (4822 / 4722) | All / UPL / SWAL | one, locked | **none yet** — same message |
+| **Wheat** `wstate` × HR / PB (4811 / 4711) | UPL + SWAL / UPL / SWAL | one, locked | the **team view** (Retailers, Territories, FOs, Map) for both companies — see Wheat team view |
+| **Wheat** `wsales` × HR / PB (4822 / 4722) | UPL + SWAL / UPL / SWAL | one, locked | same as `wstate` |
 | **Wheat** `wteam` (company teams): HR UPL 4831 · HR SWAL 4832 · PB UPL 4731 · PB SWAL 4732 | one, forced | one, locked | Retailers, Territories, FOs in the **team form** (see Wheat team view), + Map (territory acres map only, 2026-11-04) |
 | **Wheat** `wteam` leaders: UPL 4050 · SWAL 4060 | one, forced | HR + PB, switchable | same three pages, team form |
 | **IoT** `admin` (`iot-admin`, 7314 — Amit Kumar, IoT head; 2601 retired 2026-10-16) | n/a | all, switchable | Potential tamper, At risk, **Team overview** |
@@ -1291,6 +1291,12 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   · **The load time is ON THE PAGE** (`wLoadTxt`: "loaded in 3.1 s · Google 2.8 s" — total to fresh data, and the Main sheet's
     answer) in the desktop header and sheet stamp, and at the foot of the phone's Breakdowns / Machines / Top 10 / Territory pages,
     so a slow load can be reported from a phone (asked by Dinesh 2026-11-11).
+- **The state and sales logins share the team view (2026-11-25, Dinesh).** `wTeam()` is true for `W_TEAM_ROLES` = `wteam`,
+  `wstate`, `wsales`. The state / sales PINs carry org `Both`, so `lockOrg` is empty and the pages show the Company control
+  (UPL + SWAL · UPL · SWAL; Bayer never loads for them) while the state stays locked. `wSwal()` is false for them, so they read
+  the UPL form of the team view: the pin map and the deployed / in transit / pending split are shown, SWAL machines included
+  (SWAL's stage still goes through `wStageOf(v,'SWAL')`, so SWAL shows no Pending). Acres are `IOT_acres` for both companies,
+  as on every team login, and the word IoT is never shown.
 - **The Wheat team view (role `wteam`, asked by Dinesh 2026-10-29).** Six PINs for the UPL and SWAL teams: one per company per
   state (HR UPL 4831, HR SWAL 4832, PB UPL 4731, PB SWAL 4732) and one per company for its leaders across HR + PB (UPL 4050,
   SWAL 4060, State control shown). The company is forced (`allow` = their own), so the Company control is gone and every
