@@ -126,7 +126,7 @@
     .mNavItem{flex-direction:row !important;min-height:44px !important;gap:7px !important;padding:0 !important}
   }
   /* ── WHEAT: the v2 visual refresh (design "Ops Console Refresh v2", 2026-10-28) ──────────────────────────────
-     Wheat is first; Kharif and IoT are untouched. render() sets html[data-proj] from the PIN's project, and the Wheat
+     Wheat first (2026-10-28), IoT (2026-11-24), then Kharif (2026-11-25): every project now wears it. render() sets html[data-proj] from the PIN's project, and the Wheat
      pages and shell are written in the v2 tokens directly (W2 in the script). These rules only carry the refresh into
      the pieces Wheat SHARES with Kharif and that are written inline in the warm palette — the filter sheet, the
      machine panel's call rows, the map's zoom buttons — by remapping the warm neutrals onto the cool ones. One type
@@ -149,19 +149,19 @@
   @media (max-width:1240px){ .wfoKpi{grid-template-columns:repeat(3,minmax(0,1fr))} }
   @media (max-width:1240px){ .wtGrid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))} }
   @media (max-width:1180px){ .wtAcres{grid-template-columns:minmax(0,1fr)} }
-  html:is([data-proj="wheat"],[data-proj="iot"]) body{font-family:'IBM Plex Sans',system-ui,sans-serif;color:#15181C;background:#F3F6FB;font-variant-numeric:tabular-nums}
-  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="Noto Sans"]{font-family:'IBM Plex Sans',system-ui,sans-serif !important}
-  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="#E9E6DF"]{border-color:#E4E7EA !important}
-  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="color:#1B1A17"]{color:#15181C !important}
-  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="color:#6E6A62"],html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="color:#46433d"]{color:#5B636D !important}
-  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="background:#F2F0EB"]{background:#EEF0F2 !important}
-  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="background:#FBFAF8"],html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="background:#F6F5F2"]{background:#F8F9FA !important}
-  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="background:#1B1A17"]{background:linear-gradient(135deg,#243447,#16352D) !important}
-  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="#EFEDE7"],html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="#F4F2EE"],html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="#F2F0EB"]{border-color:#EEF0F2 !important}
-  html:is([data-proj="wheat"],[data-proj="iot"]) #app [style*="color:#9C988F"]{color:#5B636D !important}
-  html:is([data-proj="wheat"],[data-proj="iot"]) .mLbl{font-size:12px;font-weight:600;letter-spacing:.02em;color:#5B636D;text-transform:none}
-  html:is([data-proj="wheat"],[data-proj="iot"]) .mCap{font-size:12.5px;color:#5B636D}
-  html:is([data-proj="wheat"],[data-proj="iot"]) :focus-visible{outline-color:#15181C}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) body{font-family:'IBM Plex Sans',system-ui,sans-serif;color:#15181C;background:#F3F6FB;font-variant-numeric:tabular-nums}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="Noto Sans"]{font-family:'IBM Plex Sans',system-ui,sans-serif !important}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="#E9E6DF"]{border-color:#E4E7EA !important}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="color:#1B1A17"]{color:#15181C !important}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="color:#6E6A62"],html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="color:#46433d"]{color:#5B636D !important}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="background:#F2F0EB"]{background:#EEF0F2 !important}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="background:#FBFAF8"],html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="background:#F6F5F2"]{background:#F8F9FA !important}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="background:#1B1A17"]{background:linear-gradient(135deg,#243447,#16352D) !important}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="#EFEDE7"],html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="#F4F2EE"],html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="#F2F0EB"]{border-color:#EEF0F2 !important}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) #app [style*="color:#9C988F"]{color:#5B636D !important}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) .mLbl{font-size:12px;font-weight:600;letter-spacing:.02em;color:#5B636D;text-transform:none}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) .mCap{font-size:12.5px;color:#5B636D}
+  html:is([data-proj="wheat"],[data-proj="iot"],[data-proj="kharif"]) :focus-visible{outline-color:#15181C}
   /* The labelled rail (232px): a group title, then icon + full name per page. */
   .w2Nav{display:flex;align-items:center;gap:10px;width:100%;height:36px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:rgba(255,255,255,.78);font:500 14px 'IBM Plex Sans',system-ui,sans-serif;cursor:pointer;text-align:left;flex-shrink:0}
   .w2Nav svg{width:18px;height:18px;color:rgba(255,255,255,.5);flex-shrink:0}
@@ -171,6 +171,19 @@
   .w2Row{transition:background .12s ease}
   .w2Row:hover{background:#FAFBFB !important}
   @media (max-height:620px){ .w2Conf{display:none} }
+  /* Kharif's desktop tables are fixed-px grids sized for the old 74px rail (the AM and BM tables need ~1,300px), so
+     below 1536px of width its v2 rail folds to icons — the page keeps the width those tables were built for. The
+     names stay as each button's title / aria-label; a hairline replaces each group heading. Wheat and IoT keep the
+     labelled rail at every width (their pages were sized against it). */
+  @media (max-width:1535px){
+    html[data-proj="kharif"] .w2Rail{width:76px !important;padding:16px 10px 14px !important}
+    html[data-proj="kharif"] .w2Rail .w2NavT, html[data-proj="kharif"] .w2Rail .w2Conf{display:none !important}
+    html[data-proj="kharif"] .w2Rail .w2Grp{font-size:0 !important;height:1px;padding:0 !important;margin:8px 8px;background:rgba(255,255,255,.12)}
+    html[data-proj="kharif"] .w2Rail .w2Grp:first-child{display:none}
+    html[data-proj="kharif"] .w2Rail .w2Nav{justify-content:center;padding:0;height:40px}
+    html[data-proj="kharif"] .w2Rail .w2Nav svg{width:20px;height:20px}
+    html[data-proj="kharif"] .w2Rail .w2Logo{justify-content:center;padding:0 0 14px !important}
+  }
 </style>
 <!-- ── Google Analytics 4 (usage tracking) ─────────────────────────────────────
      1. Create a GA4 property → Admin → Data streams → Web → copy the Measurement ID
@@ -213,7 +226,8 @@ const W2 = { ink:'#15181C', ink2:'#5B636D', ink3:'#8C939B', line:'#E4E7EA', line
 // The tinted tile for a KPI label — the design's tone(): each kind of figure keeps one hue wherever it appears.
 function w2tone(l){
   const T=(a,b,c,d)=>({ bg:`linear-gradient(150deg,${a} 0%,#FFFFFF 75%)`, bd:b, vc:c, dot:d });
-  if(/actioned$|^Done/.test(l)) return T('#EEF8F2','#CFE9DA',W2.actD,W2.act);
+  if(/actioned$|^Done|^Worked/.test(l)) return T('#EEF8F2','#CFE9DA',W2.actD,W2.act);
+  if(/^Season/.test(l)) return T('#E8F2FC','#D2E3F4','#1D4F80','#3B82C4');
   if(/^(Potential tamper|Tamper|Check first|Device stopped)/.test(l)) return T('#FDECEA','#F4D8D4',W2.brkD,W2.brk);
   if(/^(At risk|Battery|Also check)/.test(l)) return T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle);
   return l==='Breakdown'||/^(New breakdowns|Open at)/.test(l) ? T('#FDECEA','#F4D8D4',W2.brkD,W2.brk) : /^Carried/.test(l) ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle) : /^Closed/.test(l) ? T('#EEF8F2','#CFE9DA',W2.actD,W2.act) : l==='Idle'||/^(Close|Not crossed)/.test(l) ? T('#FDF4DF','#F1E2BC',W2.idleD,W2.idle) : /^Crossed/.test(l) ? T('#EEF8F2','#CFE9DA',W2.actD,W2.act)
@@ -230,8 +244,11 @@ const w2lbl = t => `<span style="font-size:12.5px;font-weight:500;color:${W2.ink
 const w2num = (sz,w=600,col) => `font-size:${sz}px;font-weight:${w};font-variant-numeric:tabular-nums;letter-spacing:${sz>=26?'-0.01em':'0'};line-height:1.1${col?';color:'+col:''}`;
 const w2unit = (t='ac',sz=13) => `<span style="font-size:${sz}px;color:${W2.ink2};font-weight:500"> ${t}</span>`;
 const isWheat = () => curProject().id==='wheat';
-// The v2 skin (rail, header, phone bar, page colours): Wheat since 2026-10-28, IoT since 2026-11-24. Data logic keeps isWheat().
-const isW2 = () => isWheat() || curProject().id==='iot';
+// The v2 skin (rail, header, phone bar, page colours): Wheat since 2026-10-28, IoT since 2026-11-24, Kharif since 2026-11-25.
+// Data logic keeps isWheat(). Kharif's page builders are still written in the warm palette; the stylesheet's backstop remaps them.
+const isW2 = () => isWheat() || curProject().id==='iot' || curProject().id==='kharif';
+// Kharif's own pages (its fleet views: filter bar, machine search, several Next links) — the shell keeps those for it.
+const isKharif = () => curProject().id==='kharif';
 // A real phone gets the mobile view automatically and renders it full-bleed (no preview bezel).
 // The same breakpoint drives both, so `device` and the chrome never disagree.
 // A phone held sideways is 932×430 — wider than 820px, so the width test alone dropped it onto the DESKTOP
@@ -3226,7 +3243,7 @@ function drawDrawerMap(){
 // Rail buttons are styled by the .navbtn class, not inline — their size has to respond to viewport HEIGHT
 // (see the rail note in <style>), which an inline style cannot do.
 // `touch` = a finger, not a pointer: 44px tall (Apple HIG), so the 3px-padded track around it is ~50px.
-const seg = (active,touch) => ({ border:'none',borderRadius:'6px',padding:touch?'0 14px':'5px 11px',...(touch?{minHeight:'44px'}:{}),fontFamily:"'Noto Sans'",fontSize:touch?'13px':'12px',fontWeight:active?600:500,cursor:'pointer', background:active?'#fff':'transparent', color:active?'#1B1A17':'#807c73', boxShadow:active?'0 1px 2px rgba(0,0,0,.08)':'none' });
+const seg = (active,touch) => ({ border:'none',borderRadius:'6px',padding:touch?'0 14px':'5px 11px',...(touch?{minHeight:'44px'}:{}),fontFamily:isW2()?W2.font:"'Noto Sans'",fontSize:touch?'13px':'12px',fontWeight:active?600:500,cursor:'pointer', background:active?'#fff':'transparent', color:active?(isW2()?W2.ink:'#1B1A17'):(isW2()?W2.ink2:'#807c73'), boxShadow:active?'0 1px 2px rgba(20,24,28,.12)':'none' });
 // The little "refresh" text link every data page carries beside its as-of stamp. On a phone it is 15px tall —
 // unhittable — so there it becomes a 44px button with the refresh icon. `data-act` is unchanged either way.
 const refreshLink = (act,title,mob) => mob
@@ -3237,8 +3254,8 @@ const refreshLink = (act,title,mob) => mob
 // when it takes focus. One definition now; `mob` raises both. No `outline:none`: the global :focus-visible ring
 // is how a keyboard user sees where they are.
 const ctlSel = (mob,extra) => `height:${mob?44:32}px;border:1px solid #E9E6DF;border-radius:${mob?10:8}px;background:#fff;padding:0 ${mob?30:26}px 0 ${mob?12:11}px;font-family:'Noto Sans';font-size:${mob?16:12.5}px;color:#1B1A17;cursor:pointer${extra?';'+extra:''}`;
-const segM = (active,touch) => ({ flex:1, border:'none',borderRadius:'8px',padding:touch?'11px 0':'8px 0',fontFamily:"'Noto Sans'",fontSize:touch?'13px':'12px',fontWeight:active?600:500,cursor:'pointer', background:active?'#fff':'transparent', color:active?'#1B1A17':'#807c73', boxShadow:active?'0 1px 2px rgba(0,0,0,.08)':'none', textAlign:'center' });
-const chip = (active,color) => ({ display:'flex',alignItems:'center',gap:'5px',border:'1px solid '+(active?color:'#E9E6DF'),borderRadius:'8px',padding:'5px 10px',fontFamily:"'Noto Sans'",fontSize:'11.5px',fontWeight:active?600:500,cursor:'pointer', background:active?(color+'14'):'#fff', color:active?color:'#6E6A62' });
+const segM = (active,touch) => ({ flex:1, border:'none',borderRadius:'8px',padding:touch?'11px 0':'8px 0',fontFamily:isW2()?W2.font:"'Noto Sans'",fontSize:touch?'13px':'12px',fontWeight:active?600:500,cursor:'pointer', background:active?'#fff':'transparent', color:active?(isW2()?W2.ink:'#1B1A17'):(isW2()?W2.ink2:'#807c73'), boxShadow:active?'0 1px 2px rgba(20,24,28,.12)':'none', textAlign:'center' });
+const chip = (active,color) => ({ display:'flex',alignItems:'center',gap:'5px',border:'1px solid '+(active?color:(isW2()?W2.line:'#E9E6DF')),borderRadius:'8px',padding:'5px 10px',fontFamily:isW2()?W2.font:"'Noto Sans'",fontSize:'11.5px',fontWeight:active?600:500,cursor:'pointer', background:active?(color+'14'):'#fff', color:active?color:'#6E6A62' });
 
 /* ============================= icons ============================= */
 const I = {
@@ -3690,17 +3707,19 @@ const RAIL_GROUPS = [
 const navLbl = k => k==='iotci' ? ciT('need') : k==='iotcia' ? ciT('acres') : (RAIL_LBL[k]||NAV_TITLE[k]||k);
 function w2RailHTML(){
   const P=curProject(), v=state.view;
-  const items=RAIL_GROUPS.flat().filter(([k])=>!roleHidesView(k));
-  const btn=(k,ic)=>`<button data-act="view" data-view="${k}" title="${E(NAV_TITLE[k]||k)}"${v===k?' aria-current="page"':''} class="w2Nav${v===k?' on':''}">${ic}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(navLbl(k))}</span></button>`;
-  const foot=(act,ic,t)=>`<button data-act="${act}" class="w2Nav" style="color:rgba(255,255,255,.7)">${ic}<span>${t}</span></button>`;
-  return `<aside style="width:232px;flex-shrink:0;background:linear-gradient(185deg,#1F2B3A 0%,#182C33 60%,#14302A 100%);color:#fff;display:flex;flex-direction:column;padding:20px 14px 16px;overflow:hidden">
-    <div style="display:flex;align-items:center;gap:10px;padding:0 6px 20px;flex-shrink:0">
+  // One labelled group per RAIL_GROUPS entry that has a page for this login. Wheat and IoT pages all sit in the first
+  // group (headed with the project's name); Kharif's sit in Today · People · Season, the same groups as the phone's All pages.
+  const groups=RAIL_GROUPS.map((g,i)=>({ name:i?RAIL_GROUP_NAMES[i]:P.short, items:g.filter(([k])=>!roleHidesView(k)) })).filter(g=>g.items.length);
+  const btn=(k,ic)=>`<button data-act="view" data-view="${k}" title="${E(NAV_TITLE[k]||k)}" aria-label="${E(NAV_TITLE[k]||k)}"${v===k?' aria-current="page"':''} class="w2Nav${v===k?' on':''}">${ic}<span class="w2NavT" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${E(navLbl(k))}</span></button>`;
+  const foot=(act,ic,t)=>`<button data-act="${act}" title="${t}" aria-label="${t}" class="w2Nav" style="color:rgba(255,255,255,.7)">${ic}<span class="w2NavT">${t}</span></button>`;
+  return `<aside class="w2Rail" style="width:232px;flex-shrink:0;background:linear-gradient(185deg,#1F2B3A 0%,#182C33 60%,#14302A 100%);color:#fff;display:flex;flex-direction:column;padding:20px 14px 16px;overflow:hidden">
+    <div class="w2Logo" style="display:flex;align-items:center;gap:10px;padding:0 6px 20px;flex-shrink:0">
       <div aria-hidden="true" style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#F5821F,#1FAE43);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;letter-spacing:.02em;flex-shrink:0">UPL</div>
-      <div style="display:flex;flex-direction:column;min-width:0"><span style="font-size:15px;font-weight:600">Ops Console</span><span style="font-size:12px;color:rgba(255,255,255,.62);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(P.short)} · AFS</span></div>
+      <div class="w2NavT" style="display:flex;flex-direction:column;min-width:0"><span style="font-size:15px;font-weight:600">Ops Console</span><span style="font-size:12px;color:rgba(255,255,255,.62);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(P.short)} · AFS</span></div>
     </div>
     <nav aria-label="Pages" style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:1px">
-      <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,.55);letter-spacing:.08em;padding:0 10px 6px;text-transform:uppercase">${E(P.short)}</div>
-      ${items.map(([k,ic])=>btn(k,ic)).join('')}
+      ${groups.map((g,i)=>`<div class="w2Grp" style="font-size:11px;font-weight:600;color:rgba(255,255,255,.55);letter-spacing:.08em;padding:${i?'12px':'0'} 10px 6px;text-transform:uppercase;flex-shrink:0">${E(g.name)}</div>
+      ${g.items.map(([k,ic])=>btn(k,ic)).join('')}`).join('')}
     </nav>
     <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:12px;display:flex;flex-direction:column;gap:1px;flex-shrink:0">
       ${foot('device',I.mobile,'Phone view')}${foot('logout',I.logout,'Log out')}
@@ -3741,8 +3760,12 @@ function topbarHTML(v){
   if(isW2()) return `<header style="height:68px;flex-shrink:0;background-color:#fff;background-image:linear-gradient(90deg,#F5821F,#1FAE43);background-size:100% 3px;background-repeat:no-repeat;border-bottom:1px solid ${W2.line};display:flex;align-items:center;gap:20px;padding:0 32px">
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
       <div style="font-size:17px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(curProject().head(scope))}</div>
-      <div style="font-size:13px;color:${W2.ink2}">${E(curProject().sub)}</div>
+      <div style="font-size:13px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(curProject().sub)}</div>
     </div>
+    ${OWN_PAGES.has(state.view)?'':`<div style="position:relative;width:320px;max-width:30vw">
+      ${I.search}
+      <input id="searchInput" type="search" enterkeyhint="search" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Search machine no. or operator…" aria-label="Search machine number or operator" style="width:100%;height:38px;border:1px solid ${W2.line};border-radius:10px;background:#fff;padding:0 12px 0 34px;font:14px ${W2.font};color:${W2.ink}" />
+    </div>`}
     <div style="display:flex;align-items:center;gap:10px;padding-left:20px;border-left:1px solid ${W2.line}">
       <span style="width:8px;height:8px;border-radius:50%;background:${v.statusDot};box-shadow:0 0 0 3px ${v.statusRing}"></span>
       <div style="display:flex;flex-direction:column;line-height:1.25"><span style="font-size:14px;font-weight:600">${E(v.statusLabel)}</span><span style="font-size:12px;color:${W2.ink2}">${E(fresh)}</span></div>
@@ -3865,6 +3888,18 @@ function kpiStripHTML(v){
       ${kpiLbl(`Worked ${st.day.toLowerCase()}`)}`, 'min-width:150px');
   const seasonCell = se ? cell(`<div style="display:flex;align-items:baseline;gap:5px;white-space:nowrap"><span style="${css(mono22(C.ink))}">${fmt(se.val)}</span><span style="font-size:10.5px;color:#B6B1A8">ac</span></div>
       ${kpiLbl(`Season to ${E(se.through)}`)}<div style="font-size:10.5px;color:#6E6A62;margin-top:3px;white-space:nowrap">${seasonDeltaHTML(se)}</div>`, 'min-width:200px') : '';
+  if(isW2()){   // v2: one tinted tile per figure (w2tone, by what it counts), on the page's own background
+    const tl=(lab,inner,minW=132)=>{ const t=w2tone(lab); return `<div style="flex:1 0 auto;min-width:${minW}px;background:${t.bg};border:1px solid ${t.bd};border-radius:14px;box-shadow:${W2.shadow};padding:9px 14px;display:flex;flex-direction:column;gap:2px">${inner}</div>`; };
+    const lb=t=>`<div style="font-size:12px;font-weight:500;color:${W2.ink2};white-space:nowrap">${t}</div>`;
+    const vl=(lab,x,u)=>`<div style="display:flex;align-items:baseline;gap:4px;white-space:nowrap"><span style="${w2num(22,600,w2tone(lab).vc)}">${x}</span>${u?`<span style="font-size:12px;color:${W2.ink2};font-weight:500">${u}</span>`:''}</div>`;
+    const wl=`Worked ${st.day.toLowerCase()}`, sl=se?`Season to ${E(se.through)}`:'';
+    return `<div style="flex-shrink:0;display:flex;align-items:stretch;gap:10px;overflow-x:auto;padding:10px 22px;border-bottom:1px solid ${W2.line}">
+      ${tl(wl, lb(wl)+vl(wl, fmt(st.worked), `of ${fmt(st.of)} · ${st.pct}%`), 160)}
+      ${se?tl(sl, lb(sl)+vl(sl, fmt(se.val), 'ac')+`<div style="font-size:12px;color:${W2.ink2};white-space:nowrap">${seasonDeltaHTML(se)}</div>`, 210):''}
+      <div style="display:flex;align-items:center;flex-shrink:0">${glossBtnHTML(false)}</div>
+      ${v.kpis.map(k=>k.kind==='fleet' ? tl('Machines', fleetTileInner(v.fleet,false), 180) : tl(k.label, lb(E(k.label))+vl(k.label, E(k.value), E(k.unit)))).join('')}
+    </div>`;
+  }
   return `<div style="flex-shrink:0;background:#FBFAF8;border-bottom:1px solid #E9E6DF;display:flex;gap:0;overflow-x:auto;padding:0 8px">
     ${statusCell}${seasonCell}<div style="display:flex;align-items:center;padding:0 10px;border-right:1px solid #EFEDE7">${glossBtnHTML(false)}</div>
     ${v.kpis.map(k=>k.kind==='fleet' ? cell(fleetTileInner(v.fleet,false),'min-width:170px') : cell(`
@@ -14079,12 +14114,15 @@ const M_NEXT = { norun:['machines','bm'], map:['tables','machines'], tables:['ma
   insights:['snake','recap'], snake:['insights','product'], product:['mpprod','snake'], mpprod:['product'], leader:['recap'],
   wplan:['w500','wterr'], w500:['wterr','wplan'], wterr:['wam','wfo'], wam:['wfo'], wfo:['wmap','wplan'], wmap:['wtop','wplan'], wtop:['w250','wplan'], w250:['wbd','wplan'], wbd:['wmc','wplan'], wmc:['wdr','wplan'], wdr:['wcum','wplan'], wcum:['wplan'], iotci:['iotcia'], iotcia:['iotci'] };   // Wheat: the first one the login has
 function mNextHTML(view){
-  const ks=(M_NEXT[view]||[]).filter(k=>!roleHidesView(k)).slice(0, isW2()?1:9);
+  const ks=(M_NEXT[view]||[]).filter(k=>!roleHidesView(k)).slice(0, isKharif()?9:1);
   const brk = view==='machines' && !state.health.includes('Breakdown')
     ? `<button data-act="health" data-h="Breakdown" style="min-height:44px;padding:0 13px;border:1px solid #E9E6DF;border-radius:11px;background:#fff;font-size:13px;color:#1B1A17;cursor:pointer">Breakdowns only</button>` : '';
   if(!ks.length && !brk) return '';
   // Wheat v2: one full-width row per next page — "Next · Territories ›".
-  if(isW2()) return `<div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">${ks.map(k=>`<button data-act="view" data-view="${k}" style="display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 16px;${w2card(16)};font:500 15px ${W2.font};color:${W2.ink};cursor:pointer;text-align:left"><span><span style="color:${W2.ink2}">Next</span> · ${E(NAV_TITLE[k]||k)}</span><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${W2.ink2}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>`;
+  if(isW2()){
+    const row=(attrs,pre,t)=>`<button ${attrs} style="display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 16px;${w2card(16)};font:500 15px ${W2.font};color:${W2.ink};cursor:pointer;text-align:left"><span><span style="color:${W2.ink2}">${pre}</span> · ${E(t)}</span><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${W2.ink2}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>`;
+    return `<div style="display:flex;flex-direction:column;gap:8px;margin-top:16px">${brk?row('data-act="health" data-h="Breakdown"','Show','Breakdowns only'):''}${ks.map(k=>row(`data-act="view" data-view="${k}"`,'Next',NAV_TITLE[k]||k)).join('')}</div>`;
+  }
   return `<div style="margin-top:18px"><div class="mLbl" style="margin-bottom:8px">Next</div><div style="display:flex;gap:8px;flex-wrap:wrap">${brk}${ks.map(k=>`<button data-act="view" data-view="${k}" style="min-height:44px;padding:0 13px;border:1px solid #E9E6DF;border-radius:11px;background:#fff;font-size:13px;color:#1B1A17;cursor:pointer">${E(NAV_TITLE[k]||k)} →</button>`).join('')}</div></div>`;
 }
 // "All pages" (plan I1/I2): EVERY page the role has, in the desktop rail's groups and order under the same
@@ -14365,7 +14403,7 @@ function mobileHTML(v){
   const notch = ph ? '' : `<div style="position:absolute;top:0;left:50%;transform:translateX(-50%);width:118px;height:25px;background:#15140F;border-radius:0 0 16px 16px;z-index:8"></div>`;
   const toDesktop = ph ? '' : `<button data-act="device" title="Desktop" aria-label="Switch to desktop layout" style="width:30px;height:30px;border:1px solid #E9E6DF;border-radius:8px;background:#fff;color:#6E6A62;display:flex;align-items:center;justify-content:center;cursor:pointer">${I.desktop}</button>`;
   const nFilt = activeFilterCount();
-  const filterBtn = `<button data-act="sheet" data-sheet="filters" title="Filters" aria-label="Filters${nFilt?`, ${nFilt} active`:''}" style="position:relative;min-width:44px;height:44px;padding:0 11px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid ${nFilt?'#1B1A17':'#E9E6DF'};border-radius:11px;background:${nFilt?'#1B1A17':'#fff'};color:${nFilt?'#fff':'#6E6A62'};font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0">
+  const filterBtn = `<button data-act="sheet" data-sheet="filters" title="Filters" aria-label="Filters${nFilt?`, ${nFilt} active`:''}" style="position:relative;min-width:44px;height:44px;padding:0 11px;display:flex;align-items:center;justify-content:center;gap:6px;border:1px solid ${nFilt?W2.ink:W2.line};border-radius:12px;background:${nFilt?W2.ink:'#fff'};color:${nFilt?'#fff':W2.ink};font:600 13px ${W2.font};cursor:pointer;flex-shrink:0">
     ${I.filter}${nFilt?`<span style="font-family:'IBM Plex Mono'">${nFilt}</span>`:''}
   </button>`;
   const nav = mViews().find(x=>x.k===S.view);
@@ -14389,7 +14427,7 @@ function mobileHTML(v){
             <!-- the status line doubles as the refresh control: it is the thing you look at when the numbers seem old -->
             <div data-act="refresh" role="button" tabindex="0" aria-label="${E(v.statusAria)}" style="display:flex;align-items:center;gap:5px;padding:2px 0;cursor:pointer;font-size:12.5px;color:${W2.ink2};min-width:0">${S.refreshing?I.refresh('animation:spin 1s linear infinite;width:12px;height:12px'):`<span style="width:7px;height:7px;border-radius:50%;background:${v.statusDot};flex-shrink:0"></span>`}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(v.statusTime)} · ${E(headSub)}</span></div>
           </div>
-          ${toDesktop}
+          ${OWN_PAGES.has(S.view)?'':filterBtn}${toDesktop}
           <button data-act="logout" title="Log out" aria-label="Log out" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:1px solid ${W2.line};border-radius:12px;background:#fff;color:${W2.ink};cursor:pointer;flex-shrink:0">${I.logout}</button>
         </div>
       </div>` : `      <div style="padding:${ph?'calc(env(safe-area-inset-top) + 12px) 16px 12px':'30px 18px 12px'};background:#fff;border-bottom:1px solid #E9E6DF;flex-shrink:0">
