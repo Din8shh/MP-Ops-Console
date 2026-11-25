@@ -286,7 +286,7 @@ const isPhone = () => window.matchMedia(PHONE_MQ).matches;
 const state = { ciMe:w250Load0('mpoc_iotci_me',''), ciLang:w250Load0('mpoc_iotci_lang',''), ciPick:false, ciQ:'', ciDay:'', ciAcDay:'', view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
-  wDay:'', wsnSt:'ALL', wsnRun:'cum', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wDep:'dep', wSh:'', wmcQ:'', wmcShow:'all', wmcRunD:[], w250RunD:[], w500Tab:'fix', w500All:false, wdrLy:'same', wdrSt:'', wdrOrg:'ALL', wdrLyOrg:'ALL', wdrQ:'', wdrSort:'kmac', wdrOpen:'', wdrAll:false, w500CiSort:'on', w500CiAll:false, wmcSort:'mc', wmcLimit:60, w250Tgt:+w250Load0('mpoc_w250_tgt',250)||250, w250Dl:w250Load0('mpoc_w250_dl',''), w250Bands:[], w250Why:[], w250Run:'all', w250Terrs:[], w250Ams:[], w250GSort:'over', w250Sort:'ac', w250By:'terr', w250Limit:60, w250GAll:false, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
+  wDay:'', wsnSt:'ALL', wsnRun:'cum', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wDep:'dep', wSh:'', wmcQ:'', wmcShow:'all', wmcRunD:[], w250RunD:[], w500Tab:'fix', w500All:false, wdrLy:'same', wdrSt:'', wdrOrg:'ALL', wdrLyEx:[], wdrQ:'', wdrSort:'kmac', wdrOpen:'', wdrAll:false, w500CiSort:'on', w500CiAll:false, wmcSort:'mc', wmcLimit:60, w250Tgt:+w250Load0('mpoc_w250_tgt',250)||250, w250Dl:w250Load0('mpoc_w250_dl',''), w250Bands:[], w250Why:[], w250Run:'all', w250Terrs:[], w250Ams:[], w250GSort:'over', w250Sort:'ac', w250By:'terr', w250Limit:60, w250GAll:false, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
   wfoSort:'bk', wfoOpen:{}, wfoOn:'',   // Wheat TM → FO page: its own sort, open rows and onboarded filter; the rest is the wt* scope
   wamSort:'plan', wamOpen:{},   // Wheat Area managers — its own sort and open rows; the filters are the wt* scope above
   iotSt:'', iotQ:'', itFrom:'', itTo:'', iotQueue:'new', iotLimit:60, iotTs:'',   // IoT pages — page-local, shared by the three of them
@@ -11123,22 +11123,24 @@ function wdrAgg(){
   // The Company filter puts UPL and SWAL together as one choice (Dinesh 2026-11-25); the rows still name each company.
   const orgKey = o => { const g=o.cur.org||'Not assigned'; return g==='UPL'||g==='SWAL' ? 'UPL/SWAL' : g; };
   const orgs = wdrTally(all, orgKey).map(([k])=>k), org = orgs.includes(S.wdrOrg) ? S.wdrOrg : 'ALL';
-  // Last year's programme, as a second filter (Dinesh 2026-11-25): it keeps this season's machines whose own last season ran
-  // under that programme, AND narrows each territory's last-year pool to that programme, so both sides compare like with like.
+  // Last year's programmes, as a multi-select of what last year COUNTS (Dinesh 2026-11-25): a territory that did well for PI or
+  // Bayer last year has no such work this year, so unticking them drops those machines from every last-year figure (tiles, the
+  // territories' grey lines, a machine's own last year). This season is never touched by it.
   const lyKey = o => { if(!o.prev) return 'none'; const u=String(o.prev.org||'').toUpperCase().replace(/\s+/g,'');
     return !u ? 'Not named' : /^(UPL|SWAL|UPL\/SWAL|SWAL\/UPL)$/.test(u) ? 'UPL/SWAL' : u==='BAYER' ? 'Bayer' : u==='PI' ? 'PI' : o.prev.org; };
-  const lyOrgs = wdrTally(allP, lyKey).map(([k])=>k).concat(all.some(o=>!o.prev)?['none']:[]), lyOrg = lyOrgs.includes(S.wdrLyOrg) ? S.wdrLyOrg : 'ALL';
+  const lyRan = allP.filter(o=>{ const s=wdrStats(o.prev, cut); return s.rDays||s.tDays; });
+  const lyOrgs = wdrTally(lyRan, lyKey), lyEx = (S.wdrLyEx||[]).filter(k=>lyOrgs.some(([g])=>g===k)), lyIn = o => !lyEx.includes(lyKey(o));
   const q = String(S.wdrQ||'').trim().toLowerCase();
   const hit = o => !q || [o.mc, o.mc.replace(/\D/g,''), o.cur.terr, o.cur.org, o.prev&&o.prev.terr, o.prev&&o.prev.org, o.prev&&o.prev.stMain].some(v=>String(v||'').toLowerCase().includes(q));
-  const list = all.filter(o=>(!st || stOf(o)===st) && (org==='ALL' || orgKey(o)===org) && (lyOrg==='ALL' || lyKey(o)===lyOrg) && hit(o));
-  const rows = list.map(o=>({ o, c:wdrStats(o.cur), p:o.prev?wdrStats(o.prev, cut):null }));
+  const list = all.filter(o=>(!st || stOf(o)===st) && (org==='ALL' || orgKey(o)===org) && hit(o));
+  const rows = list.map(o=>({ o, c:wdrStats(o.cur), p:o.prev&&lyIn(o)?wdrStats(o.prev, cut):null }));
   // Last year is read by TERRITORY (Dinesh 2026-11-25): every machine whose last-season rows name that territory, whoever it was.
-  const PT={}; allP.forEach(o=>{ if(lyOrg!=='ALL' && lyKey(o)!==lyOrg) return; const s=wdrStats(o.prev, cut); if(!s.rDays&&!s.tDays) return; (PT[o.prev.terr||'']||(PT[o.prev.terr||'']=[])).push({ o, p:s }); });
+  const PT={}; allP.forEach(o=>{ if(!lyIn(o)) return; const s=wdrStats(o.prev, cut); if(!s.rDays&&!s.tDays) return; (PT[o.prev.terr||'']||(PT[o.prev.terr||'']=[])).push({ o, p:s }); });
   const G={}; const grp = k => G[k]||(G[k]={ key:k||'—', name:k||'Territory not on sheet', none:!k, list:[] });
   rows.forEach(r=>grp(r.o.cur.terr||'').list.push(r));
   // A territory that only ran last year is listed too — unless the view is narrowed by company or search, which only
   // this season can answer. Its state is where most of its last-year machines sprayed.
-  if(org==='ALL' && lyOrg==='ALL' && !q) Object.keys(PT).forEach(k=>{ if(G[k]) return; const s0=wdrTally(PT[k], r=>r.o.prev.stMain)[0]; if(st && (!s0||s0[0]!==st)) return; grp(k); });
+  if(org==='ALL' && !q) Object.keys(PT).forEach(k=>{ if(G[k]) return; const s0=wdrTally(PT[k], r=>r.o.prev.stMain)[0]; if(st && (!s0||s0[0]!==st)) return; grp(k); });
   const groups = Object.values(G).map(g=>{ const c=wdrSum(g.list.map(r=>r.c)), pl=(PT[g.none?'':g.key]||[]), p=pl.length?wdrSum(pl.map(r=>r.p)):null;
     return { ...g, c, p, nPrev:pl.filter(r=>r.p.rDays).length, lyOnly:!g.list.length, orgs:wdrTally(g.list, r=>r.o.cur.org||'Not assigned'),
       lySt:wdrTally(pl, r=>r.o.prev.stMain), lyOrg:wdrTally(pl, r=>r.o.prev.org||'Not named'),
@@ -11155,9 +11157,9 @@ function wdrAgg(){
   groups.sort((a,b)=> a.lyOnly&&b.lyOnly ? ((b.p?b.p.km:0)-(a.p?a.p.km:0))||nm(a,b) : cmp(a,b));
   groups.forEach(g=>g.list.sort((a,b)=>cmp({ ...a, few:a.c.rDays<WDR_FEW }, { ...b, few:b.c.rDays<WDR_FEW })));
   const C = wdrSum(rows.map(r=>r.c)), P = wdrSum(groups.filter(g=>g.p).map(g=>g.p));   // P.n = machines that ran in those territories last year
-  const sig = [st,org,lyOrg,q,ly].join('|');
-  return { ly, cut, sts, st, orgs, org, lyOrgs, lyOrg, q, all, rows, C, P, groups, sort, sig, chgOf,
-    nLyOnly:groups.filter(g=>g.lyOnly).length, narrowed: !!(st||org!=='ALL'||lyOrg!=='ALL'||q) };
+  const sig = [st,org,lyEx.join(','),q,ly].join('|');
+  return { ly, cut, sts, st, orgs, org, lyOrgs, lyEx, q, all, rows, C, P, groups, sort, sig, chgOf,
+    nLyOnly:groups.filter(g=>g.lyOnly).length, narrowed: !!(st||org!=='ALL'||lyEx.length||q) };
 }
 function wdrBodyHTML(mob){
   if(!isAdmin()) return wplanBodyHTML(mob);
@@ -11176,13 +11178,15 @@ function wdrBodyHTML(mob){
   const sel = (id,label,opts,cur) => `<div style="position:relative;${mob?'flex:1;min-width:0':''}"><select id="${id}" aria-label="${label}" style="${w2sel(mob)}${mob?';width:100%':''}">${optionsHTML(opts.map(([v,t])=>({v,t})),cur)}</select>${I.caret}</div>`;
   const stSel = Z.sts.length>1 ? sel('wdrStSel','State',[['','All states'],...Z.sts.map(s=>[s,s])],Z.st) : '';
   const orgSel = sel('wdrOrgSel','Assigned to',[['ALL',mob?'Company':'All companies'],...Z.orgs.map(s=>[s,s])],Z.org);
-  const lyOrgSel = sel('wdrLyOrgSel','Last year ran under',[['ALL',mob?'Last year':'Last year: all'],...Z.lyOrgs.map(s=>[s, s==='none' ? 'Didn’t run last year' : (mob?'':'Last year: ')+s])],Z.lyOrg);
+  // Multi-select: which of last year's programmes last year COUNTS. Ticked = counted.
+  const lyChips = `<div role="group" aria-label="Last year counts" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:14px;color:${W2.ink2};font-weight:500">Last year counts:</span>${Z.lyOrgs.map(([k,n])=>{ const on=!Z.lyEx.includes(k);
+      return `<button data-act="wdrlyx" data-k="${E(k)}" aria-pressed="${on}" style="display:inline-flex;align-items:center;gap:6px;min-height:${mob?44:34}px;padding:0 ${mob?14:12}px;border-radius:999px;border:1px solid ${on?"#243447":W2.line};background:${on?W2.dark:"#fff"};color:${on?'#fff':W2.ink2};font:500 14px ${W2.font};cursor:pointer;${on?'':'text-decoration:line-through'}"><span aria-hidden="true">${on?'✓':'✕'}</span>${E(k)} <span style="opacity:.7;font-variant-numeric:tabular-nums">${fmt(n)}</span></button>`; }).join('')}${Z.lyEx.length?`<span style="font-size:13px;color:${W2.ink2}">Tap to put back. This year is not changed.</span>`:''}</div>`;
   const lySeg = `<div role="group" aria-label="Last year" style="${w2segBox(mob)}${mob?';width:100%':''}">${[['same','Last year · same dates'],['all','Last year · whole season']].map(([k,t])=>`<button data-act="wdrly" data-k="${k}" aria-pressed="${Z.ly===k}" style="${w2seg(Z.ly===k,mob)}">${mob?t.replace('Last year · ','LY '):t}</button>`).join('')}</div>`;
   const sortSel = sel('wdrSortSel','Sort by',WDR_SORTS.map(([k,t])=>[k,'Sort: '+t]),Z.sort);
   const clear = Z.narrowed ? B.ghost('wdrclear','Clear') : '';
   const controls = mob
-    ? `<div style="display:flex;flex-direction:column;gap:10px">${B.search('wdrSearch','Machine or territory',S.wdrQ)}<div style="display:flex;gap:8px">${stSel}${orgSel}</div><div style="display:flex;gap:8px">${lyOrgSel}</div><div style="display:flex;gap:8px">${sortSel}${clear}${B.csv('wdrcsv','Download as CSV')}</div>${lySeg}</div>`
-    : `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${B.search('wdrSearch','Search machine, territory, programme',S.wdrQ)}${stSel}${orgSel}${lyOrgSel}${sortSel}${clear}<span style="flex:1"></span>${B.csv('wdrcsv',`Download the ${fmt(Z.rows.length)} machines as CSV`)}</div>`;
+    ? `<div style="display:flex;flex-direction:column;gap:10px">${B.search('wdrSearch','Machine or territory',S.wdrQ)}<div style="display:flex;gap:8px">${stSel}${orgSel}</div>${lyChips}<div style="display:flex;gap:8px">${sortSel}${clear}${B.csv('wdrcsv','Download as CSV')}</div>${lySeg}</div>`
+    : `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">${B.search('wdrSearch','Search machine, territory, programme',S.wdrQ)}${stSel}${orgSel}${sortSel}${clear}<span style="flex:1"></span>${B.csv('wdrcsv',`Download the ${fmt(Z.rows.length)} machines as CSV`)}</div><div style="margin-top:10px">${lyChips}</div>`;
   const head = `<div style="margin-top:${mob?14:20}px;display:flex;${mob?'flex-direction:column;gap:10px':'align-items:flex-end;justify-content:space-between;gap:16px'}">
       <div style="min-width:0"><div style="font-size:${mob?18:20}px;font-weight:600">Dry run · this season against last</div>
       <div style="font-size:14px;color:${W2.ink2};margin-top:2px;line-height:1.45">FY ${fy(WDR.cur)}: ${curTxt} · ${fmt(Z.rows.length)} machine${Z.rows.length===1?'':'s'}${Z.narrowed?' · in this view':''} · last year: every machine in the same territories, ${Z.ly==='same'?'on the same dates':'over the whole season'} (${lyTxt}) · the page’s own filters only</div></div>${mob?'':lySeg}</div>`;
@@ -11205,7 +11209,7 @@ function wdrBodyHTML(mob){
     : `<div style="${gap};display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px">${tiles.join('')}</div>`;
   const nLyT = Z.groups.filter(g=>g.p).length;
   const cover = `<div style="${gap};padding:${mob?'12px 14px':'12px 18px'};border-radius:12px;background:${W2.head};border:1px solid ${W2.line2};font-size:14px;line-height:1.55">
-      <b style="font-weight:600">Last year = the same territories:</b> ${fmt(P.n)} machine${P.n===1?'':'s'} ran in the ${fmt(nLyT)} territor${nLyT===1?'y':'ies'} below last season, against ${fmt(C.n)} this season${Z.nLyOnly?`, including ${fmt(Z.nLyOnly)} territor${Z.nLyOnly===1?'y':'ies'} that ran only last year (listed at the end)`:''}. Last year ${Z.ly==='same'?`stops at ${wpDate(`${+WDR.curLast.slice(0,4)-1}${WDR.curLast.slice(4)}`)} ${+WDR.curLast.slice(0,4)-1}, the same point as this season`:`is the whole season, to ${wpDate(WDR.prevLast)}`}.${Z.lyOrg==='none'?` Showing only machines that did not run last season, so there is no last year to compare.`:Z.lyOrg!=='ALL'?` Only machines that ran under ${E(Z.lyOrg)} last season are counted: this season’s machines whose own last season was ${E(Z.lyOrg)}, and last year’s figures from the ${E(Z.lyOrg)} machines in those territories.`:''}${(Z.org!=='ALL'||Z.q)&&Z.lyOrg==='ALL'?` The company filter and search narrow this season only; last year is still every machine in those territories.`:''}</div>`;
+      <b style="font-weight:600">Last year = the same territories:</b> ${fmt(P.n)} machine${P.n===1?'':'s'} ran in the ${fmt(nLyT)} territor${nLyT===1?'y':'ies'} below last season, against ${fmt(C.n)} this season${Z.nLyOnly?`, including ${fmt(Z.nLyOnly)} territor${Z.nLyOnly===1?'y':'ies'} that ran only last year (listed at the end)`:''}. Last year ${Z.ly==='same'?`stops at ${wpDate(`${+WDR.curLast.slice(0,4)-1}${WDR.curLast.slice(4)}`)} ${+WDR.curLast.slice(0,4)-1}, the same point as this season`:`is the whole season, to ${wpDate(WDR.prevLast)}`}.${Z.lyEx.length?` Last year leaves out the machines that ran under ${E(Z.lyEx.join(' and '))} last season, everywhere on this page; this season is unchanged.`:''}${Z.org!=='ALL'||Z.q?` The company filter and search narrow this season only; last year is still every machine in those territories${Z.lyEx.length?' (less the programmes left out)':''}.`:''}</div>`;
   // ---- the territory summary: one plain this-year / last-year table (Dinesh 2026-11-25: "easy to read").
   // Every figure cell is the same shape: this year large, last year small and grey under it. Only km per acre carries an
   // arrow, because it is the one figure where lower is plainly better. Last year's whereabouts are ONE grey line.
@@ -14827,7 +14831,6 @@ app.addEventListener('change', e=>{
   else if(e.target.id==='wdrSortSel') setState({wdrSort:e.target.value});
   else if(e.target.id==='wdrStSel') setState({wdrSt:e.target.value, wdrOpen:''});
   else if(e.target.id==='wdrOrgSel') setState({wdrOrg:e.target.value, wdrOpen:''});
-  else if(e.target.id==='wdrLyOrgSel') setState({wdrLyOrg:e.target.value, wdrOpen:''});
   else if(e.target.id==='w250SortSel') setState({w250Sort:e.target.value});
   else if(e.target.id==='wsnFromSel'||e.target.id==='wsnToSel'){ const md=String(e.target.value).slice(5), o=WSN_IDX[md==='02-29'?'02-28':md];
     if(o!=null){ const cur=state.wsnTo==null?null:state.wsnTo; if(e.target.id==='wsnFromSel') setState({wsnFrom:o, wsnTo:cur!=null&&cur<o?o:cur}); else setState({wsnTo:o, wsnFrom:Math.min(o, state.wsnFrom==null?WSN_FROM0:state.wsnFrom)}); } }
@@ -14966,7 +14969,8 @@ app.addEventListener('click', e=>{
     case 'w500ciall': setState(s=>({w500CiAll:!s.w500CiAll})); break;
     case 'w500csv': w500CSV(); track('w500_csv',{ st:state.wtSt||'all' }); break;
     case 'wdrly': setState({wdrLy:el.dataset.k}); track('wdr_lastyear',{ k:el.dataset.k }); break;
-    case 'wdrclear': setState({wdrSt:'', wdrOrg:'ALL', wdrLyOrg:'ALL', wdrQ:'', wdrOpen:''}); break;
+    case 'wdrlyx': { const k=el.dataset.k, ex=state.wdrLyEx||[]; setState({wdrLyEx: ex.includes(k) ? ex.filter(x=>x!==k) : [...ex,k], wdrOpen:''}); track('wdr_lyex',{ k }); break; }
+    case 'wdrclear': setState({wdrSt:'', wdrOrg:'ALL', wdrLyEx:[], wdrQ:'', wdrOpen:''}); break;
     case 'wdrsort': setState({wdrSort:el.dataset.k}); break;
     case 'wdrexp': setState(s=>({wdrOpen:s.wdrOpen===el.dataset.k?'':el.dataset.k})); break;
     case 'wdrall': setState(s=>({wdrAll:!s.wdrAll})); break;
