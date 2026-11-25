@@ -1107,8 +1107,9 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
   does not match the rows). **One row per machine per SPRAY day, per season**; the newest FY is this season, the one before is last.
   On this season's rows `Last year organisation` is who the machine is assigned to now (UPL / SWAL / Bayer); on last season's rows it
   is the programme it ran under (UPL/Swal, PI, Bayer, Buffer …). `state` is where it sprayed that day (last season reaches MP / RJ).
-  · **Four figures** (Dinesh): dry run km · **km per running machine** (km ÷ machines that sprayed at least one day; added
-    2026-11-25 as the "running machine average") · km per acre sprayed (km ÷ acres) · km per running day (km ÷ spray days). Trips
+  · **Five figures** (Dinesh): dry run km · **km per running machine** (km ÷ machines that sprayed at least one day; added
+    2026-11-25) · **acres per running machine** (acres ÷ the same machines; Dinesh's "running machine average", added beside it
+    the same day) · km per acre sprayed (km ÷ acres) · km per running day (km ÷ spray days). Trips
     and transport tiles went (the tab only has spray days). A day over `WDR_TRANSPORT` (150 km) is a move, left out of all three
     (32 last-season days, 16,877 km; none this season) and counted in the note.
   · **No global filter applies** (comparison page). Own controls, page-local: State · Company (assigned to) · search · sort ·
@@ -1121,7 +1122,7 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
     programme, or "New this year"). Territory names are folded (`wdrTerr`: " Territory" / " District" dropped, case,
     Yamuna Nager / Sonepat / Tarntaran / Hosiyarpur). Fewer than 5 running days: no km per acre, sorts last.
   · **The territory table is a plain this-year / last-year grid** (rebuilt 2026-11-25, Dinesh: "easy to read"): Territory ·
-    Machines ran · Dry run km · Km per machine · Km per acre · Km per running day; every cell is this year on top, last year
+    Machines ran · Dry run km · Km per machine · Acres per machine · Km per acre · Km per running day; every cell is this year on top, last year
     (same territory) grey under it, and only km per acre carries an arrow (▼ green = fewer km per acre). Under the name, two
     grey lines: who the machines are assigned to now, and "Last year: N machines · ran in <states> · <programmes>". No
     coloured tags. On the phone each territory is a card with a mini table (measure · This year · Last year); a machine
