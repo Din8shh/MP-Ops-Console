@@ -1349,8 +1349,9 @@ gate is what sets it. **Wheat Spray Operations — North** is Haryana + Punjab, 
 ## Wheat v2 visual refresh (design "Ops Console Refresh v2", 2026-10-28)
 Wheat is the first project on the Claude Design refresh (project b803ccee…, file `Ops Console Refresh v2.dc.html`):
 calm cool-neutral surfaces, IBM Plex Sans with tabular figures (Mono only for machine / phone numbers), tinted KPI
-tiles, a 232px labelled dark rail, a 68px header with the brand stripe, and a pill-marked phone tab bar. **Kharif and
-IoT are untouched**; roll out to them the same way when asked.
+tiles, a 232px labelled dark rail, a 68px header with the brand stripe, and a pill-marked phone tab bar. **IoT took it on
+2026-11-24 and Kharif on 2026-11-25, so every project now wears it** (`isW2()` is true for all three; the warm shell branches
+are unreachable and can be deleted).
 - **Tokens are `W2`** (next to `C`), with `w2tone(label)` deciding a KPI tile's tint by what it counts (acres blue,
   MTD / scanned violet, machines orange, operators / retailers / territories teal, IoT / pings indigo, Idle amber,
   stale = amber whatever the tile), and `w2seg` / `w2sel` / `w2card` / `w2num` for controls and figures.
@@ -1360,6 +1361,16 @@ IoT are untouched**; roll out to them the same way when asked.
 - **`render()` sets `html[data-proj]`**; the `html[data-proj="wheat"]` block in `<style>` remaps the warm inline
   neutrals of the pieces Wheat SHARES with Kharif (the filter sheet, the machine panel's call rows, zoom buttons) onto
   the cool ones and swaps Noto Sans for Plex. It is a backstop like the phone one — new Wheat code uses W2, not it.
+- **Kharif on v2 (2026-11-25).** Shell only, plus the shared controls: the rail (grouped Today · People · Season, from
+  `RAIL_GROUPS` / `RAIL_GROUP_NAMES`), the header (keeps the machine search on fleet pages), the KPI strip (`kpiStripHTML`'s
+  v2 branch: one `w2tone` tile per figure; `w2tone` knows "Worked …" green and "Season …" blue), `seg` / `segM` / `chip` in
+  Plex and the v2 inks, the phone header (keeps the Filters button), the phone bar and the Next rows (Kharif keeps every
+  Next link and the "Breakdowns only" shortcut, as full-width rows). **Kharif's page builders are NOT rewritten** — they are
+  still the warm palette, remapped by the backstop block, which now lists `kharif`. Map land fills are SVG attributes and
+  stay warm. **Below 1536px of width the Kharif rail folds to icons (76px)** (`.w2Rail` media rule): its AM / BM / Territory
+  tables are fixed-px grids sized for the old 74px rail, and with 232px the Territory table scrolled sideways at 1280.
+  Measured: at 1280 every Kharif table scrolls exactly as on the old shell. Wheat and IoT keep the labelled rail at every width.
+  The old `.navbtn` / `.railNav` height clamp below no longer renders (the v2 nav simply scrolls when short).
 - The Territory / AM / Map strip left the design's Map KPI grid on 2026-10-30: it is now the Machines and Acres pieces (see the
   Territory page's notes). Wheat has no last season, so the season tile shows % of plan with no direction to colour.
 - Every Wheat phone page ends in a "Next · <page>" row (`M_NEXT`: Retailers → Territories → Map → Retailers).
