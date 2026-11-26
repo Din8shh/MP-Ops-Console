@@ -283,7 +283,7 @@ const isKharif = () => curProject().id==='kharif';
 // file — keep the two in step.
 const PHONE_MQ = '(max-width:820px), (max-height:500px) and (pointer:coarse)';
 const isPhone = () => window.matchMedia(PHONE_MQ).matches;
-const state = { ciMe:w250Load0('mpoc_iotci_me',''), ciLang:w250Load0('mpoc_iotci_lang',''), ciPick:false, ciQ:'', ciDay:'', ciAcDay:'', view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
+const state = { amMe:w250Load0('mpoc_iotam_me',''), amPick:false, amDay:'', amPer:'day', amOpen:{}, ciMe:w250Load0('mpoc_iotci_me',''), ciLang:w250Load0('mpoc_iotci_lang',''), ciPick:false, ciQ:'', ciDay:'', ciAcDay:'', view:'map', st:'', org:'Both', terr:'', cluster:'', am:'', co:'', bm:'', tm:'', health:[], search:'', moreF:false, gloss:false, metric:'deploy', pinMode:'health', day:'yday', wxDay:0, selected:null, expanded:{}, loaded:true, refreshing:false, device: isPhone()?'mobile':'desktop',
   sheet:null, listLimit:60,
   wpSt:'', wpOrg:'ALL', wpTerr:'', wpTm:'', wpFo:'', wpAm:'', wpCi:'', wpQ:'', wpSort:'plan', wpOpen:{}, wpLimit:30,   // Wheat Retailer summary — page-local scope
   wDay:'', wsnSt:'ALL', wsnRun:'cum', wsnFrom:null, wsnTo:null, wtmBrkOpen:false, wtNoIotOpen:false, wmShow:'all', wtopBy:'ac', wbdSort:'closedD', wbdOpen:{}, wbdAll:false, wDep:'dep', wSh:'', wmcQ:'', wmcShow:'all', wmcRunD:[], w250RunD:[], w500Tab:'fix', w500All:false, wdrLy:'same', wdrSt:'', wdrOrg:'ALL', wdrLyEx:[], wdrQ:'', wdrSort:'kmac', wdrOpen:'', wdrAll:false, w500CiSort:'on', w500CiAll:false, wmcSort:'mc', wmcLimit:60, w250Tgt:+w250Load0('mpoc_w250_tgt',250)||250, w250Dl:w250Load0('mpoc_w250_dl',''), w250Bands:[], w250Why:[], w250Run:'all', w250Terrs:[], w250Ams:[], w250GSort:'over', w250Sort:'ac', w250By:'terr', w250Limit:60, w250GAll:false, wcPer:'season', wcAll:false, wtSt:'', wtOrg:'ALL', wtTerr:'', wtTm:'', wtAm:'', wtQ:'', wtSort:'plan', wtOpen:{}, wtLimit:30,   // Wheat Territory summary — page-local scope (shared by the Map and Area managers pages)
@@ -428,7 +428,7 @@ const PROJECTS = {
   iot:    { id:'iot', title:'IoT Device Monitoring', short:'IoT', allLabel:'All states',
             gid:'', demo:[], states:null, fullDeploy:[],
             iot:{ sheetId:'19CSbLqTIB-TivT1rVrilFeQEERcts_LHAGwjpgE__Oo', tamperGid:'0', riskGid:'504457328', mapGid:'954063262', actionsTab:'IoT actions' },
-            home:'iottamper', views:['iotci','iotcia','iottamper','iotrisk','iotteam'], only:['iotci','iotcia','iottamper','iotrisk','iotteam'], kharifTabs:false,
+            home:'iottamper', views:['iotci','iotcia','iotam','iottamper','iotrisk','iotteam'], only:['iotci','iotcia','iotam','iottamper','iotrisk','iotteam'], kharifTabs:false,
             head:sc=>`IoT Device Monitoring · ${sc==='India'?'All states':sc}`, sub:'Potential tamper cases · At risk machines · Farm Mechanisation Services',
             mHead:sc=>`IoT Monitoring · ${sc==='India'?'All':sc}`, mSub:'IoT team · AFS' },
 };
@@ -749,7 +749,7 @@ async function loadData(){
   // Wheat (rebuild): its own machine-day sheet, no machine rows, no weather. Fetched for the Wheat ADMIN only — the
   // other Wheat logins see a "being rebuilt" page until their views are decided, and carry none of the data meanwhile.
   if(P.ret){ applyRows([]); if(wSees()) await loadWRet(); else { dataMode='live'; lastUpdated=nowIST(); render(); } return; }
-  if(P.iot){ applyRows([]); if(!roleHidesView('iotci')) loadIotWheat(IOTW.loaded); await loadIoT(); return; }   // IoT team: its own workbook, no machine rows, no weather
+  if(P.iot){ applyRows([]); if(!roleHidesView('iotci')||!roleHidesView('iotam')) loadIotWheat(IOTW.loaded); await loadIoT(); return; }   // IoT team: its own workbook, no machine rows, no weather
   // The project's state list is the outer scope: a row outside it never reaches a view, whatever the tab holds.
   const scoped = rows => P.states ? rows.filter(m=>P.states.includes(m.st)) : rows;
   const demo = () => scoped(hygiene(P.demo.map(m=>({...m}))));
@@ -2704,7 +2704,7 @@ const wSees = () => isAdmin() || wTeam();
 // 'mpprod' is the exception to that constraint rather than a breach of it: its tab holds Madhya Pradesh and
 // nothing else, and it renders NO state picker, so it cannot widen anybody's scope. It is safe to grant to a
 // state-locked MP login, and is granted to exactly those two plus leadership.
-const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia'];   // iotci / iotcia: the North CI page (role iotci + IoT head)   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
+const GATED_VIEWS = ['insights','tables','am','leader','pending','snake','product','recap','mpprod','fo','retailer','iotteam','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia','iotam'];   // iotci / iotcia: the North CI page (role iotci + IoT head)   // wplan / wterr: Wheat's Retailer and Territory summaries, Wheat admin only   // iotteam: the IoT head's (admin) team overview
 function roleHidesView(view){
   // The PROJECT is the outer gate and runs first, so it binds admin too: a Wheat login never sees a Kharif-tab
   // view, and the Wheat-only views never appear under Kharif.
@@ -2712,7 +2712,7 @@ function roleHidesView(view){
   // "Didn't run" is the field logins' home (plan M3): their own machines that did not run, with whom to ring.
   // Kharif only; admin reads the same set through Machines + the Health filter.
   if(view==='norun') return curProject().id!=='kharif' || !['upl','swal'].includes(GATE.cur&&GATE.cur.role);
-  if(GATE.cur && GATE.cur.role==='iotci' && (view==='iottamper'||view==='iotrisk')) return true;   // the North CI login: its own two pages only
+  if(GATE.cur && (GATE.cur.role==='iotci'||GATE.cur.role==='iotam') && (view==='iottamper'||view==='iotrisk')) return true;   // the North CI login: its own two pages only
   if(!GATED_VIEWS.includes(view)) return false;
   // The MP product summary reads a Madhya-Pradesh-only tab, so it is offered only while the ACTIVE STATE SCOPE
   // is MP — not at All India, and not under another state. This is a scope test, not a role test, and it runs
@@ -2725,10 +2725,10 @@ function roleHidesView(view){
 }
 // Views that render their OWN controls and so drop the shared machine filter bar + KPI strip (desktop) and the
 // weather banner + KPI cards (mobile): the standalone rollup/insight pages.
-const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia','iottamper','iotrisk','iotteam']);
+const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia','iotam','iottamper','iotrisk','iotteam']);
 // Pages with no machine rows behind them (Wheat plan, the IoT pages): the machine search and the phone's filter
 // button go, because neither can reach anything on them.
-const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia','iottamper','iotrisk','iotteam']);
+const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia','iotam','iottamper','iotrisk','iotteam']);
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
@@ -3707,20 +3707,20 @@ const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" 
 const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', norun:'Didn’t run',
   am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Daily recap', leader:'Leaders',
   product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wfo:'TM · FO summary', wmap:'Machine map', wtop:'Top 10 machines', w500:'500 acres by 5 Dec', w250:'Acre target', wbd:'Breakdowns', wmc:'Machine summary', wdr:'Dry run', wcum:'Cumulative acres',
-  iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotteam:'IoT team overview', iotci:'Needs attention', iotcia:'Acres sprayed' };
+  iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotteam:'IoT team overview', iotci:'Needs attention', iotcia:'Acres sprayed', iotam:'My CIs' };
 // The word under each rail icon: short enough for a 64px button at 9.5px. One word where the title is long.
 // ONE NAME TABLE (plan I4). NAV_TITLE is the full name — page heading, browser title, the phone's All pages sheet.
 // RAIL_LBL is the SHORT form, used only where room is tight (desktop rail, phone tab bar, phone header), and it is
 // the same short form in all three. M_VIEWS takes its labels from here.
 const RAIL_LBL = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', am:'AMs', bm:'BMs', norun:'Didn’t run',
   pending:'Pending', recap:'Recap', leader:'Leaders', product:'Products', mpprod:'MP products', snake:'Cumulative', fo:'FOs',
-  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', w500:'500 Drive', w250:'Acre target', wbd:'Breakdowns', wmc:'Machines', wdr:'Dry run', wcum:'Cumulative', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team', iotci:'Needs attention', iotcia:'Acres' };
+  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', w500:'500 Drive', w250:'Acre target', wbd:'Breakdowns', wmc:'Machines', wdr:'Dry run', wcum:'Cumulative', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team', iotci:'Needs attention', iotcia:'Acres', iotam:'My CIs' };
 // Rail order, in labelled groups (a hairline between them): the project's own pages, then what happened TODAY,
 // then the PEOPLE tables, then the SEASON reading. Insights used to lead the rail; it now leads the Season group.
 // Group names, index for index with RAIL_GROUPS (the first group is the project's own pages and has none).
 const RAIL_GROUP_NAMES = ['', 'Today', 'People', 'Season'];
 const RAIL_GROUPS = [
-  [['wplan',I.retailer],['w500',I.leader],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['wtop',I.leader],['w250',I.insights],['wbd',I.risk],['wmc',I.machines],['wdr',I.route],['wcum',I.snake],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am],['iotci',I.tamper],['iotcia',I.snake]],
+  [['wplan',I.retailer],['w500',I.leader],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['wtop',I.leader],['w250',I.insights],['wbd',I.risk],['wmc',I.machines],['wdr',I.route],['wcum',I.snake],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am],['iotci',I.tamper],['iotcia',I.snake],['iotam',I.am]],
   [['norun',I.risk],['map',I.map],['machines',I.machines],['weather',I.weather],['recap',I.recap]],
   [['tables',I.tables],['am',I.am],['bm',I.bm],['fo',I.fo],['retailer',I.retailer],['pending',I.pending]],
   [['insights',I.insights],['snake',I.snake],['product',I.product],['mpprod',I.mpprod],['leader',I.leader]],
@@ -3729,7 +3729,7 @@ const RAIL_GROUPS = [
 // The Wheat rail (v2): 232px, labelled, one group per programme. Short names (RAIL_LBL), as the design has them;
 // the full name is the button's title and the page header.
 // A page's short name in the rail / phone bar / phone header. The CI pages speak the CI's language.
-const navLbl = k => k==='iotci' ? ciT('need') : k==='iotcia' ? ciT('acres') : (RAIL_LBL[k]||NAV_TITLE[k]||k);
+const navLbl = k => k==='iotci' ? ciT('need') : k==='iotcia' ? ciT('acres') : k==='iotam' ? ciT('amTitle') : (RAIL_LBL[k]||NAV_TITLE[k]||k);
 function w2RailHTML(){
   const P=curProject(), v=state.view;
   // One labelled group per RAIL_GROUPS entry that has a page for this login. Wheat and IoT pages all sit in the first
@@ -3775,12 +3775,13 @@ function topbarHTML(v){
     : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500') ? (wt ? (wt.st||wt.lockSt||'India') : (state.wtSt||'India'))
     : state.view==='wdr' ? (state.wdrSt==='Haryana'?'HR':state.wdrSt==='Punjab'?'PB':'India')
     : state.view==='wcum' ? (state.wsnSt==='HR'||state.wsnSt==='PB' ? state.wsnSt : 'India')
-    : (state.view==='iotci'||state.view==='iotcia') ? 'North'
+    : (state.view==='iotci'||state.view==='iotcia'||state.view==='iotam') ? 'North'
     : iot ? (iot.st||iot.lockSt||'India') : v.scopeLabel;
   const fresh = state.view==='wplan' ? (wp ? `${fmt(wp.all.length)} retailers · ${fmt(wp.allMc)} machines` : 'Retailer summary')
     : (state.view==='wterr'||state.view==='wam'||state.view==='wfo'||state.view==='wmap'||state.view==='wtop'||state.view==='wbd'||state.view==='wmc'||state.view==='w250'||state.view==='w500') ? (wt ? `${fmt(wt.allTerr)} territories · ${fmt(wt.allMc)} machines` : NAV_TITLE[state.view])
     : state.view==='wdr' ? (WDR.loaded ? `This season vs last · ${fmt(Object.values(WDR.mc).filter(o=>o.cur).length)} machines` : 'Dry run')
     : state.view==='wcum' ? 'Cumulative acres · 3 seasons'
+    : state.view==='iotam' ? (amMe() ? amMe().name+' · Area Manager' : 'Area Manager · Haryana + Punjab')
     : (state.view==='iotci'||state.view==='iotcia') ? (ciMe() ? ciMe().name+' · Cluster Incharge' : 'Cluster Incharge · Haryana + Punjab')
     : iot ? (IOT.loaded ? `${fmt(IOT.tamper.filter(r=>gateAllowsState(r.st)).length)} potential tamper · ${fmt(IOT.risk.filter(r=>gateAllowsState(r.st)).length)} at risk` : 'IoT sheet')
     : v.freshCount;
@@ -12794,7 +12795,8 @@ const CI_T = {
     loading:'Loading…', mcLoad:'Loading machine details…',
     what:'What did you do?', when:'When did you do it?', sorted:'Is it sorted?', open:'Still checking', closed:'Sorted', rem:'Remark', req:'· required', opt:'· optional',
     today:'Today', yest:'Yesterday', save:'Save', pick:'Pick what you did', add:'Add a remark', checkDate:'Check the date', saved:'Saved ✓', saving:'Saving…',
-    err:'Could not save — check your signal and try again. What you typed is still here.', ph:'What did the operator say?', earlier:'Earlier remarks', okMsg:'Saved.' },
+    err:'Could not save — check your signal and try again. What you typed is still here.', ph:'What did the operator say?', earlier:'Earlier remarks', okMsg:'Saved.',
+    amTitle:'My CIs', noCi:'No CI named', cisN:'{n} CIs', team:'{c} CIs · {m} machines', perDay:'Day', per7:'Last 7 days', wk:'{a} to {b}', tProb:'Machines with a problem', tProb7:'Problems in 7 days', onMcs:'on {n} machines', tHandled:'Handled by the CI', tRan:'Machines ran on {day}', acOn:'{ac} acres', callCi:'Call CI', amNone:'No CIs under your name on the machine sheet.', noProb:'No device problems', probDays:'Problem on {n} days', probDay1:'Problem on 1 day', handledN:'{n} handled', openCards:'Show machines', hideCards:'Hide machines', amNote:'Only machines on the Wheat machine sheet are counted. Device problems come from the IoT sheet; acres from the machine sheet.' },
   hi:{ need:'ध्यान दें', acres:'एकड़ स्प्रे', hello:'नमस्ते, {name}', change:'नाम बदलें',
     sub:'{day} को आपकी मशीनों में डिवाइस की समस्या', none:'{day} को आपकी किसी मशीन में डिवाइस की समस्या नहीं थी।',
     latest:'सबसे नया', stale:'IoT शीट में यही सबसे नया दिन है। यह {n} दिन पुराना है।', staleAc:'मशीन शीट में यही सबसे नया दिन है।',
@@ -12813,7 +12815,8 @@ const CI_T = {
     loading:'लोड हो रहा है…', mcLoad:'मशीनों की जानकारी लोड हो रही है…',
     what:'आपने क्या किया?', when:'कब किया?', sorted:'क्या मामला सुलझ गया?', open:'अभी देख रहे हैं', closed:'सुलझ गया', rem:'टिप्पणी', req:'· ज़रूरी', opt:'· वैकल्पिक',
     today:'आज', yest:'कल', save:'सेव करें', pick:'पहले चुनें कि क्या किया', add:'टिप्पणी लिखें', checkDate:'तारीख़ देखें', saved:'सेव हो गया ✓', saving:'सेव हो रहा है…',
-    err:'सेव नहीं हुआ — नेटवर्क देखकर फिर कोशिश करें। आपका लिखा यहीं है।', ph:'ऑपरेटर ने क्या बताया?', earlier:'पिछली टिप्पणियाँ', okMsg:'सेव हो गया।' },
+    err:'सेव नहीं हुआ — नेटवर्क देखकर फिर कोशिश करें। आपका लिखा यहीं है।', ph:'ऑपरेटर ने क्या बताया?', earlier:'पिछली टिप्पणियाँ', okMsg:'सेव हो गया।',
+    amTitle:'मेरे CI', noCi:'CI का नाम नहीं', cisN:'{n} CI', team:'{c} CI · {m} मशीनें', perDay:'दिन', per7:'पिछले 7 दिन', wk:'{a} से {b}', tProb:'समस्या वाली मशीनें', tProb7:'7 दिनों में समस्याएँ', onMcs:'{n} मशीनों पर', tHandled:'CI ने निपटाईं', tRan:'{day} को चली मशीनें', acOn:'{ac} एकड़', callCi:'CI को फ़ोन', amNone:'मशीन शीट पर आपके नाम कोई CI नहीं है।', noProb:'डिवाइस की कोई समस्या नहीं', probDays:'{n} दिन समस्या', probDay1:'1 दिन समस्या', handledN:'{n} निपटाईं', openCards:'मशीनें देखें', hideCards:'मशीनें छिपाएँ', amNote:'सिर्फ़ Wheat मशीन शीट की मशीनें गिनी गई हैं। डिवाइस की समस्या IoT शीट से, एकड़ मशीन शीट से।' },
   pa:{ need:'ਧਿਆਨ ਦਿਓ', acres:'ਏਕੜ ਸਪਰੇਅ', hello:'ਸਤ ਸ੍ਰੀ ਅਕਾਲ, {name}', change:'ਨਾਮ ਬਦਲੋ',
     sub:'{day} ਨੂੰ ਤੁਹਾਡੀਆਂ ਮਸ਼ੀਨਾਂ ਵਿੱਚ ਡਿਵਾਈਸ ਦੀ ਸਮੱਸਿਆ', none:'{day} ਨੂੰ ਤੁਹਾਡੀ ਕਿਸੇ ਮਸ਼ੀਨ ਵਿੱਚ ਡਿਵਾਈਸ ਦੀ ਸਮੱਸਿਆ ਨਹੀਂ ਸੀ।',
     latest:'ਸਭ ਤੋਂ ਨਵਾਂ', stale:'IoT ਸ਼ੀਟ ਵਿੱਚ ਇਹੀ ਸਭ ਤੋਂ ਨਵਾਂ ਦਿਨ ਹੈ। ਇਹ {n} ਦਿਨ ਪੁਰਾਣਾ ਹੈ।', staleAc:'ਮਸ਼ੀਨ ਸ਼ੀਟ ਵਿੱਚ ਇਹੀ ਸਭ ਤੋਂ ਨਵਾਂ ਦਿਨ ਹੈ।',
@@ -12832,7 +12835,8 @@ const CI_T = {
     loading:'ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ…', mcLoad:'ਮਸ਼ੀਨਾਂ ਦੀ ਜਾਣਕਾਰੀ ਲੋਡ ਹੋ ਰਹੀ ਹੈ…',
     what:'ਤੁਸੀਂ ਕੀ ਕੀਤਾ?', when:'ਕਦੋਂ ਕੀਤਾ?', sorted:'ਕੀ ਮਾਮਲਾ ਸੁਲਝ ਗਿਆ?', open:'ਹਾਲੇ ਦੇਖ ਰਹੇ ਹਾਂ', closed:'ਸੁਲਝ ਗਿਆ', rem:'ਟਿੱਪਣੀ', req:'· ਜ਼ਰੂਰੀ', opt:'· ਮਰਜ਼ੀ ਨਾਲ',
     today:'ਅੱਜ', yest:'ਕੱਲ੍ਹ', save:'ਸੇਵ ਕਰੋ', pick:'ਪਹਿਲਾਂ ਚੁਣੋ ਕਿ ਕੀ ਕੀਤਾ', add:'ਟਿੱਪਣੀ ਲਿਖੋ', checkDate:'ਤਾਰੀਖ਼ ਦੇਖੋ', saved:'ਸੇਵ ਹੋ ਗਿਆ ✓', saving:'ਸੇਵ ਹੋ ਰਿਹਾ ਹੈ…',
-    err:'ਸੇਵ ਨਹੀਂ ਹੋਇਆ — ਨੈੱਟਵਰਕ ਦੇਖ ਕੇ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ। ਤੁਹਾਡਾ ਲਿਖਿਆ ਇੱਥੇ ਹੀ ਹੈ।', ph:'ਆਪਰੇਟਰ ਨੇ ਕੀ ਦੱਸਿਆ?', earlier:'ਪਿਛਲੀਆਂ ਟਿੱਪਣੀਆਂ', okMsg:'ਸੇਵ ਹੋ ਗਿਆ।' },
+    err:'ਸੇਵ ਨਹੀਂ ਹੋਇਆ — ਨੈੱਟਵਰਕ ਦੇਖ ਕੇ ਫਿਰ ਕੋਸ਼ਿਸ਼ ਕਰੋ। ਤੁਹਾਡਾ ਲਿਖਿਆ ਇੱਥੇ ਹੀ ਹੈ।', ph:'ਆਪਰੇਟਰ ਨੇ ਕੀ ਦੱਸਿਆ?', earlier:'ਪਿਛਲੀਆਂ ਟਿੱਪਣੀਆਂ', okMsg:'ਸੇਵ ਹੋ ਗਿਆ।',
+    amTitle:'ਮੇਰੇ CI', noCi:'CI ਦਾ ਨਾਮ ਨਹੀਂ', cisN:'{n} CI', team:'{c} CI · {m} ਮਸ਼ੀਨਾਂ', perDay:'ਦਿਨ', per7:'ਪਿਛਲੇ 7 ਦਿਨ', wk:'{a} ਤੋਂ {b}', tProb:'ਸਮੱਸਿਆ ਵਾਲੀਆਂ ਮਸ਼ੀਨਾਂ', tProb7:'7 ਦਿਨਾਂ ਵਿੱਚ ਸਮੱਸਿਆਵਾਂ', onMcs:'{n} ਮਸ਼ੀਨਾਂ ਤੇ', tHandled:'CI ਨੇ ਨਿਪਟਾਈਆਂ', tRan:'{day} ਨੂੰ ਚੱਲੀਆਂ ਮਸ਼ੀਨਾਂ', acOn:'{ac} ਏਕੜ', callCi:'CI ਨੂੰ ਫ਼ੋਨ', amNone:'ਮਸ਼ੀਨ ਸ਼ੀਟ ਤੇ ਤੁਹਾਡੇ ਨਾਮ ਕੋਈ CI ਨਹੀਂ ਹੈ।', noProb:'ਡਿਵਾਈਸ ਦੀ ਕੋਈ ਸਮੱਸਿਆ ਨਹੀਂ', probDays:'{n} ਦਿਨ ਸਮੱਸਿਆ', probDay1:'1 ਦਿਨ ਸਮੱਸਿਆ', handledN:'{n} ਨਿਪਟਾਈਆਂ', openCards:'ਮਸ਼ੀਨਾਂ ਦੇਖੋ', hideCards:'ਮਸ਼ੀਨਾਂ ਲੁਕਾਓ', amNote:'ਸਿਰਫ਼ Wheat ਮਸ਼ੀਨ ਸ਼ੀਟ ਦੀਆਂ ਮਸ਼ੀਨਾਂ ਗਿਣੀਆਂ ਗਈਆਂ ਹਨ। ਡਿਵਾਈਸ ਦੀ ਸਮੱਸਿਆ IoT ਸ਼ੀਟ ਤੋਂ, ਏਕੜ ਮਸ਼ੀਨ ਸ਼ੀਟ ਤੋਂ।' },
 };
 // What a CI can record. STORED in English (the sheet is read by the IoT team), SHOWN in the CI's language. A remark is
 // required except on the two that are complete statements on their own — the IoT team's rule, applied to this list.
@@ -12860,7 +12864,7 @@ function ciRoster(){
 }
 const ciMe = () => { const mob=state.ciMe; return mob ? ciRoster().find(o=>o.mob===mob)||null : null; };
 // The language: the CI's own pick, else Punjabi for a Punjab CI and Hindi for everyone else.
-const ciLang = () => { const l=state.ciLang; if(CI_T[l]) return l; const me=ciMe(); return me && me.st==='PB' ? 'pa' : 'hi'; };
+const ciLang = () => { const l=state.ciLang; if(CI_T[l]) return l; if(GATE.cur && GATE.cur.role==='iotam') return 'en'; const me=ciMe(); return me && me.st==='PB' ? 'pa' : 'hi'; };   // AMs open in English (Dinesh 2026-11-26)
 const ciT = (k, v) => { let s=(CI_T[ciLang()]||CI_T.en)[k]; if(s==null) s=CI_T.en[k]||k; return v ? s.replace(/\{(\w+)\}/g,(_,x)=>v[x]==null?'':v[x]) : s; };
 // Month and weekday names are spelled out here: browsers without Punjabi locale data print "M11 23" for pa-IN.
 const CI_MON = { en:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
@@ -12878,10 +12882,10 @@ const ciLast = id => { const l=IOT.actions['CI|'+id]; return l&&l.length ? l[l.l
 // Check first: a gap of 6+ hours, 1+ km moved while silent, the sheet's own "suspicious movement", or 5+ km on zero voltage.
 const ciFirstCase = r => r.kind==='T' ? ((r.gap||0)>=6 || (r.km||0)>=1 || r.sts==='SUSPICIOUS_MOVEMENT') : (r.km||0)>=5;
 
-function ciAgg(){
-  const me=state.ciMe, rows=[...IOT.tamper, ...IOT.risk].filter(r=>iotNorth(r) && r.day);
+function ciAgg(me=state.ciMe, pick=state.ciDay){
+  const rows=[...IOT.tamper, ...IOT.risk].filter(r=>iotNorth(r) && r.day);
   const days=[...new Set(rows.map(r=>r.day))].sort(), last=days[days.length-1]||'';
-  const D=days.includes(state.ciDay) ? state.ciDay : last, i=days.indexOf(D);
+  const D=days.includes(pick) ? pick : last, i=days.indexOf(D);
   const mine=rows.filter(r=>ciMobOf(r)===me), on=mine.filter(r=>r.day===D);
   const by={}; on.forEach(r=>{ (by[r.mc]||(by[r.mc]={ mc:r.mc, st:r.st, cases:[] })).cases.push(r); });
   const w0=iotAddDays(D,-6);
@@ -12914,12 +12918,12 @@ function ciAcAgg(){
 }
 
 /* ---- rendering (mobile-first; desktop shows the same cards, two to a row) */
-function ciTopHTML(mob){
-  const me=ciMe(), L=ciLang();
+function ciTopHTML(mob, who, act){
+  const me=who===undefined?ciMe():who, L=ciLang();
   const seg=`<div role="group" aria-label="Language" style="${w2segBox(mob)};flex-shrink:0">${CI_LANGS.map(([k,t])=>`<button data-act="cilang" data-l="${k}" aria-pressed="${L===k}" lang="${k}" style="${w2seg(L===k,mob)};${mob?'flex:0 0 auto;padding:0 10px':''}">${t}</button>`).join('')}</div>`;
   return `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;${mob?'padding-top:14px':''}">
     <div style="flex:1;min-width:${mob?'100%':'0'};display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap"><div style="font-size:${mob?18:20}px;font-weight:600;color:${W2.ink}">${E(ciT('hello',{name:me?me.name:''}))}</div>
-      <button data-act="cipick" style="border:0;background:none;padding:4px 0;min-height:${mob?36:28}px;color:#1D4F80;font:500 13.5px ${W2.font};cursor:pointer;text-decoration:underline">${E(ciT('change'))}</button></div>
+      <button data-act="${act||'cipick'}" style="border:0;background:none;padding:4px 0;min-height:${mob?36:28}px;color:#1D4F80;font:500 13.5px ${W2.font};cursor:pointer;text-decoration:underline">${E(ciT('change'))}</button></div>
     ${seg}</div>`;
 }
 function ciDayBarHTML(d, prev, next, latest, act, mob){
@@ -12930,23 +12934,23 @@ function ciDayBarHTML(d, prev, next, latest, act, mob){
       <span style="font-size:${mob?16:15}px;font-weight:600">${E(ciDayTxt(d))}</span><span style="font-size:12px;color:${W2.ink2}">${E(ciWeekday(d))}${latest?' · '+E(ciT('latest')):''}</span></div>
     ${arrow(next,ciT('next'),'M9 6l6 6-6 6')}</div>`;
 }
-function ciPickHTML(mob){
-  const q=String(state.ciQ||'').trim().toLowerCase(), all=ciRoster();
+function ciPickHTML(mob, kind){
+  const AM=kind==='am', q=String(state.ciQ||'').trim().toLowerCase(), all=AM?amRoster():ciRoster();
   const hits=all.filter(o=>!q || o.name.toLowerCase().includes(q) || o.mob.includes(q.replace(/\D/g,'')||'~'));
   const L=ciLang();
   const seg=`<div role="group" aria-label="Language" style="${w2segBox(mob)};margin-top:12px;width:max-content">${CI_LANGS.map(([k,t])=>`<button data-act="cilang" data-l="${k}" aria-pressed="${L===k}" lang="${k}" style="${w2seg(L===k,mob)};${mob?'flex:0 0 auto;padding:0 12px':''}">${t}</button>`).join('')}</div>`;
   const grp=st=>{ const l=hits.filter(o=>o.st===st); if(!l.length) return '';
     return `<div style="font-size:12.5px;font-weight:600;color:${W2.ink2};margin:16px 2px 8px">${E(iotStName(st)||'—')}</div>
-      <div style="display:grid;gap:8px;grid-template-columns:${mob?'minmax(0,1fr)':'repeat(auto-fill,minmax(260px,1fr))'}">${l.map(o=>`<button data-act="cime" data-mob="${o.mob}" style="display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 14px;${w2card(14)};font:500 15px ${W2.font};color:${W2.ink};cursor:pointer;text-align:left">
+      <div style="display:grid;gap:8px;grid-template-columns:${mob?'minmax(0,1fr)':'repeat(auto-fill,minmax(260px,1fr))'}">${l.map(o=>`<button data-act="${AM?'amme':'cime'}" data-mob="${o.mob}" style="display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 14px;${w2card(14)};font:500 15px ${W2.font};color:${W2.ink};cursor:pointer;text-align:left">
         <span style="flex:1;min-width:0"><span style="display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(o.name)}</span><span style="display:block;font-size:12.5px;color:${W2.ink2};font-family:'IBM Plex Mono',monospace">${o.mob}</span></span>
-        <span style="font-size:12.5px;color:${W2.ink2};white-space:nowrap">${E(ciT('mcs',{n:fmt(o.n)}))}</span></button>`).join('')}</div>`; };
+        <span style="font-size:12.5px;color:${W2.ink2};white-space:nowrap">${E(AM?ciT('cisN',{n:fmt(o.nCi)}):ciT('mcs',{n:fmt(o.n)}))}</span></button>`).join('')}</div>`; };
   return `<div style="${mob?'padding-top:16px':'max-width:880px'}">
     <div style="font-size:${mob?22:24}px;font-weight:600">${E(ciT('pickT'))}</div>
     <div style="font-size:14px;color:${W2.ink2};margin-top:4px;line-height:1.45">${E(ciT('pickS'))}</div>${seg}
     <div style="position:relative;margin-top:14px">${I.search}<input id="ciSearch" type="search" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${E(ciT('pickQ'))}" value="${E(state.ciQ||'')}" aria-label="${E(ciT('pickQ'))}" style="width:100%;box-sizing:border-box;height:${mob?50:40}px;border:1px solid ${W2.line};border-radius:12px;background:#fff;padding:0 12px 0 34px;font:${mob?16:14}px ${W2.font};color:${W2.ink}"></div>
     ${['HR','PB',''].map(grp).join('') || `<div style="margin-top:16px;color:${W2.ink2}">${E(ciT('pickNone'))}</div>`}</div>`;
 }
-function ciCardHTML(x, mob){
+function ciCardHTML(x, mob, ro){
   const line=(dot,t)=>`<div style="display:flex;gap:9px;align-items:flex-start;margin-top:8px"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:${dot};margin-top:7px;flex-shrink:0"></span><span style="font-size:15px;line-height:1.45;color:${W2.ink}">${t}</span></div>`;
   const tlines=x.T.map(c=>{ const t1=c.back&&c.back.slice(0,10)!==c.day ? ciDayTxt(c.back.slice(0,10))+', '+ciClock(c.back) : ciClock(c.back);
     let s=(c.gap||0)>=1 ? ciT('off',{h:fmt(c.gap),t0:ciClock(c.at),t1}) : ciT('offS',{t0:ciClock(c.at),t1});
@@ -12965,7 +12969,7 @@ function ciCardHTML(x, mob){
   const btnH=mob?48:42;
   const call = realTel(x.opMob) ? `<a href="tel:${x.opMob}" style="flex:1;min-width:0;min-height:${btnH}px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;border:1px solid #CFE9DA;background:#EEF8F2;color:${W2.actD};font:600 14.5px ${W2.font};text-decoration:none">${I.phone}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(ciT('call'))}</span></a>` : '';
   const nav = x.loc ? `<a href="${navHref(x.loc)}" target="_blank" rel="noopener" aria-label="${E(ciT('nav'))}" title="${E(ciT('nav'))}" style="${call?`width:${btnH}px;flex-shrink:0`:'flex:1'};min-height:${btnH}px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;border:1px solid ${W2.line};background:#fff;color:${W2.ink};font:600 14.5px ${W2.font};text-decoration:none">${IOT_PIN}${call?'':E(ciT('nav'))}</a>` : '';
-  const rec = IOT_W.url ? `<button data-act="ciact" data-mc="${E(x.mc)}" style="width:100%;margin-top:8px;min-height:${btnH}px;border:0;border-radius:12px;background:${W2.dark};color:#fff;font:600 14.5px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">${IOT_CHECK}${E(x.lastAct?ciT('remarkU'):ciT('remark'))}</button>` : '';
+  const rec = IOT_W.url && !ro ? `<button data-act="ciact" data-mc="${E(x.mc)}" style="width:100%;margin-top:8px;min-height:${btnH}px;border:0;border-radius:12px;background:${W2.dark};color:#fff;font:600 14.5px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px">${IOT_CHECK}${E(x.lastAct?ciT('remarkU'):ciT('remark'))}</button>` : '';
   return `<article style="${w2card(16)};padding:14px 14px 12px;${x.done?'opacity:.78':''}">
     <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:600">${E(x.mc)}</span>${x.terr?`<span style="font-size:13px;color:${W2.ink2};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(x.terr)}</span>`:''}<span style="flex:1"></span>${pill}</div>
     <div style="font-size:14px;color:${W2.ink2};margin-top:3px">${E(ciT('op'))} · <span style="color:${W2.ink};font-weight:500">${E(x.op||ciT('noOp'))}</span></div>
@@ -13004,10 +13008,103 @@ function ciAcresHTML(mob){
   return ciTopHTML(mob) + ciDayBarHTML(A.D, A.prev, A.next, A.latest, 'ciacday', mob) + stale + tiles
     + `<div style="${w2card(16)};overflow:hidden;margin-top:16px">${A.list.map(row).join('')}</div>`;
 }
+/* ---- The AM page (view iotam, role iotam, Dinesh 2026-11-26): an Area Manager reads his CIs. One shared PIN (2752);
+   each AM picks his name once (mpoc_iotam_me). The AM → CI tree is the Wheat Main sheet's (AM_contact → CI_contact, a strict
+   tree: 6 AMs / 28 CIs on 26 Nov, no CI under two AMs). Per CI: machines with a device problem on the day (or machine-days
+   over the last 7 IoT days), how many are Check first, how many the CI has HANDLED (marked sorted in his remark), machines
+   ran and acres on the acres day (yesterday, capped at the sheet's last day). Read-only: the AM sees the CI's remarks and
+   calls the CI; tapping a CI opens his machine cards (no remark button). English by default (ciLang). */
+function amRoster(){
+  const by={};
+  IOTW.machines.forEach(m=>{ if(m.org==='Bayer' || !realTel(m.amNum)) return;
+    const o=by[m.amNum]||(by[m.amNum]={ mob:m.amNum, name:'', st:{}, ci:new Set(), n:0 }); if(!o.name && m.am) o.name=m.am;
+    o.st[m.st]=(o.st[m.st]||0)+1; if(realTel(m.coMob)) o.ci.add(m.coMob); o.n++; });
+  return Object.values(by).map(o=>({ mob:o.mob, name:o.name||o.mob, st:Object.keys(o.st).sort((a,b)=>o.st[b]-o.st[a])[0]||'', n:o.n, nCi:o.ci.size }))
+    .sort((a,b)=>(a.st||'Z').localeCompare(b.st||'Z')||a.name.localeCompare(b.name));
+}
+const amMe = () => { const mob=state.amMe; return mob ? amRoster().find(o=>o.mob===mob)||null : null; };
+const amScopeTxt = () => { const me=amMe(); return me ? me.name : 'North · HR + PB'; };
+// A CI's problems as machine-days in [from, to]: one item per machine per day, with Check first / handled read per item.
+function ciItems(me, from, to){
+  const by={};
+  [...IOT.tamper, ...IOT.risk].forEach(r=>{ if(!iotNorth(r) || !r.day || r.day<from || r.day>to || ciMobOf(r)!==me) return;
+    const k=r.mc+'|'+r.day; (by[k]||(by[k]={ mc:r.mc, day:r.day, cases:[] })).cases.push(r); });
+  return Object.values(by).map(g=>{ const a=g.cases.map(c=>ciLast(c.id));
+    return { ...g, first:g.cases.some(ciFirstCase), done:a.every(x=>x&&x.status==='Closed'), started:a.some(Boolean) }; });
+}
+function amAgg(){
+  const me=state.amMe, rows=[...IOT.tamper, ...IOT.risk].filter(r=>iotNorth(r) && r.day);
+  const days=[...new Set(rows.map(r=>r.day))].sort(), last=days[days.length-1]||'';
+  const D=days.includes(state.amDay) ? state.amDay : last, i=days.indexOf(D), wk=state.amPer==='7';
+  const from=wk ? iotAddDays(D,-6) : D;
+  const yday=istDay(Date.now()-864e5), A=IOTW.lastDate && IOTW.lastDate<yday ? IOTW.lastDate : yday;
+  const ci={}; IOTW.machines.forEach(m=>{ if(m.amNum!==me || m.org==='Bayer') return; const k=realTel(m.coMob)?m.coMob:'~';
+    (ci[k]||(ci[k]={ mob:k==='~'?'':k, name:m.co||'', mcs:[] })).mcs.push(m); if(!ci[k].name && m.co) ci[k].name=m.co; });
+  const list=Object.values(ci).map(c=>{ const it=c.mob ? ciItems(c.mob, from, D) : [];
+    const ran=c.mcs.filter(m=>(m.sdays[A]&&m.sdays[A][4])>0).length, ac=c.mcs.reduce((s,m)=>s+((m.sdays[A]&&m.sdays[A][4])||0),0);
+    return { ...c, items:it, prob:it.length, mcsProb:new Set(it.map(x=>x.mc)).size, first:it.filter(x=>x.first).length, done:it.filter(x=>x.done).length, ran, ac };
+  }).sort((a,b)=>(b.prob-b.done)-(a.prob-a.done) || b.first-a.first || b.prob-a.prob || (a.name||'~').localeCompare(b.name||'~'));
+  const sum=f=>list.reduce((s,c)=>s+c[f],0);
+  const age=D ? Math.round((Date.parse(yday)-Date.parse(D))/864e5) : 0;
+  return { D, from, wk, A, prev:i>0?days[i-1]:'', next:i>=0&&i<days.length-1?days[i+1]:'', latest:D===last, age, list,
+    prob:sum('prob'), mcsProb:sum('mcsProb'), first:sum('first'), done:sum('done'), ran:sum('ran'), ac:sum('ac'), mcs:list.reduce((s,c)=>s+c.mcs.length,0) };
+}
+function amHTML(mob){
+  const A=amAgg(), me=amMe();
+  const seg=`<div role="group" aria-label="${E(ciT('perDay'))} / ${E(ciT('per7'))}" style="${w2segBox(mob)};margin-top:14px;${mob?'':'width:max-content'}">${[['day',ciT('perDay')],['7',ciT('per7')]].map(([k,t])=>{ const on=(k==='7')===A.wk; return `<button data-act="amper" data-p="${k}" aria-pressed="${on}" style="${w2seg(on,mob)}">${E(t)}</button>`; }).join('')}</div>`;
+  const dayTxt = A.wk ? ciT('wk',{a:ciDayTxt(A.from), b:ciDayTxt(A.D)}) : '';
+  const bar = ciDayBarHTML(A.D, A.prev, A.next, A.latest, 'amday', mob) + (A.wk ? `<div style="font-size:13.5px;color:${W2.ink2};margin-top:6px">${E(dayTxt)}</div>` : '');
+  const stale = A.latest && A.age>0 ? `<div style="margin-top:10px;padding:9px 12px;border-radius:10px;background:#FDF4DF;color:${W2.idleD};font-size:13.5px;line-height:1.4">${E(ciT('stale',{n:A.age+1}))}</div>` : '';
+  if(!A.list.length) return ciTopHTML(mob, me, 'ampick') + `<div style="${w2card(16)};padding:34px 18px;margin-top:16px;text-align:center;font-size:15px;color:${W2.ink2}">${E(ciT('amNone'))}</div>`;
+  const pct=(a,b)=>b?Math.round(100*a/b):0;
+  const meter=(a,b,col)=>`<span style="display:block;height:5px;border-radius:3px;background:${W2.line2};overflow:hidden;margin-top:6px"><span style="display:block;height:100%;width:${pct(a,b)}%;min-width:${a>0?3:0}px;background:${col};border-radius:3px"></span></span>`;
+  const tiles = mob
+    ? `<div style="${w2card(16)};overflow:hidden;margin-top:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))">`
+    : `<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px">`;
+  const tile=(tone,l,v,unit,sub)=>{ const t=w2tone(tone); return mob
+    ? `<div style="padding:12px 14px;background:${t.bg};border-right:1px solid ${W2.line2};border-bottom:1px solid ${W2.line2};min-width:0"><div style="font-size:12.5px;color:${W2.ink2};line-height:1.25">${E(l)}</div><div style="${w2num(22,600,t.vc)};margin-top:4px">${v}${unit?w2unit(unit,12):''}</div>${sub?`<div style="font-size:12px;color:${W2.ink2};margin-top:2px">${sub}</div>`:''}</div>`
+    : `<div style="background:${t.bg};border:1px solid ${t.bd};border-radius:16px;box-shadow:${W2.shadow};padding:16px 18px;min-width:0"><div style="font-size:13px;color:${W2.ink2}">${E(l)}</div><div style="${w2num(28,600,t.vc)};margin-top:6px">${v}${unit?w2unit(unit):''}</div>${sub?`<div style="font-size:13px;color:${W2.ink2};margin-top:4px">${sub}</div>`:''}</div>`; };
+  const strip = tiles
+    + tile('Check first', A.wk?ciT('tProb7'):ciT('tProb'), fmt(A.prob), '', A.wk?E(ciT('onMcs',{n:fmt(A.mcsProb)})):'')
+    + tile('Check first', ciT('tFirst'), fmt(A.first), '', '')
+    + tile('Done', ciT('tHandled'), fmt(A.done), '/ '+fmt(A.prob), A.prob?pct(A.done,A.prob)+'%':'')
+    + tile('Ran', ciT('tRan',{day:ciDayTxt(A.A)}), fmt(A.ran), '/ '+fmt(A.mcs), E(ciT('acOn',{ac:acF(A.ac)})))
+    + `</div>`;
+  const fig=(l,v,sub,extra)=>`<div style="min-width:0"><div style="font-size:12px;color:${W2.ink2};line-height:1.25">${E(l)}</div><div style="${w2num(18,600)};margin-top:3px">${v}</div>${sub?`<div style="font-size:12px;color:${W2.ink2};margin-top:1px">${sub}</div>`:''}${extra||''}</div>`;
+  const row=c=>{ const open=!!(state.amOpen||{})[c.mob||'~'], key=c.mob||'~';
+    const call = realTel(c.mob) ? `<a href="tel:${c.mob}" aria-label="${E(ciT('callCi'))} ${E(c.name)}" style="flex-shrink:0;min-height:44px;padding:0 ${mob?12:14}px;display:flex;align-items:center;gap:7px;border-radius:12px;border:1px solid #CFE9DA;background:#EEF8F2;color:${W2.actD};font:600 14px ${W2.font};text-decoration:none">${I.phone}${mob?'':E(ciT('callCi'))}</a>` : '';
+    const body = !open ? '' : !c.prob ? `<div style="margin-top:12px;padding:14px;border-radius:12px;background:#F8F9FA;color:${W2.ink2};font-size:14px;text-align:center">${E(ciT('noProb'))}</div>`
+      : A.wk ? (()=>{ const by={}; c.items.forEach(x=>{ (by[x.mc]||(by[x.mc]={ mc:x.mc, d:0, f:0, h:0, last:'' })); const o=by[x.mc]; o.d++; if(x.first) o.f++; if(x.done) o.h++; if(x.day>o.last) o.last=x.day; });
+          return `<div style="margin-top:12px;border-top:1px solid ${W2.line2}">${Object.values(by).sort((a,b)=>b.d-a.d||b.f-a.f).map(o=>{ const m=IOTW.byMc[o.mc]||{};
+            return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid ${W2.line2}">
+              <span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${o.f?W2.brk:W2.idle}"></span>
+              <div style="flex:1;min-width:0"><div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap"><span style="font-family:'IBM Plex Mono',monospace;font-size:14.5px;font-weight:600">${E(o.mc)}</span><span style="font-size:13px;color:${W2.ink2}">${E(m.opName||ciT('noOp'))}${m.territory?' · '+E(m.territory):''}</span></div>
+                <div style="font-size:13.5px;color:${W2.ink};margin-top:2px">${E(o.d===1?ciT('probDay1'):ciT('probDays',{n:o.d}))} · <span style="color:${o.h===o.d?W2.actD:W2.ink2}">${E(ciT('handledN',{n:o.h}))}</span></div></div>
+              ${realTel(m.opNum)?`<a href="tel:${m.opNum}" aria-label="${E(ciT('call'))}" style="width:44px;height:44px;flex-shrink:0;border-radius:12px;border:1px solid #CFE9DA;background:#EEF8F2;color:${W2.actD};display:flex;align-items:center;justify-content:center">${I.phone}</a>`:''}</div>`; }).join('')}</div>`; })()
+      : `<div style="display:grid;gap:12px;margin-top:12px;grid-template-columns:${mob?'minmax(0,1fr)':'repeat(auto-fill,minmax(380px,1fr))'};align-items:start">${ciAgg(c.mob, A.D).list.map(x=>ciCardHTML(x,mob,true)).join('')}</div>`;
+    const tog = `<button data-act="amexp" data-k="${E(key)}" aria-expanded="${open}" style="width:100%;margin-top:10px;min-height:44px;border:1px solid ${W2.line};border-radius:12px;background:#fff;color:${W2.ink};font:600 14px ${W2.font};cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${E(open?ciT('hideCards'):ciT('openCards'))}<span aria-hidden="true" style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>`;
+    const nOpen=c.prob-c.done;
+    return `<article style="${w2card(16)};padding:14px 16px">
+      <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(c.mob?(c.name||c.mob):ciT('noCi'))}</div>
+        <div style="font-size:13px;color:${W2.ink2};font-family:'IBM Plex Mono',monospace">${c.mob||'—'} <span style="font-family:${W2.font}">· ${E(ciT('mcs',{n:fmt(c.mcs.length)}))}</span></div></div>
+        ${nOpen>0?`<span style="padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:600;background:#FDECEA;color:${W2.brkD};white-space:nowrap">${fmt(nOpen)} ${E(ciT('todo'))}</span>`:c.prob?`<span style="padding:3px 10px;border-radius:999px;font-size:12.5px;font-weight:600;background:#EEF8F2;color:${W2.actD}">✓ ${E(ciT('done'))}</span>`:''}${call}</div>
+      <div style="display:grid;grid-template-columns:repeat(${mob?2:4},minmax(0,1fr));gap:12px 16px;margin-top:12px">
+        ${fig(A.wk?ciT('tProb7'):ciT('tProb'), fmt(c.prob), A.wk&&c.prob?E(ciT('onMcs',{n:fmt(c.mcsProb)})):'')}
+        ${fig(ciT('tFirst'), `<span style="color:${c.first?W2.brkD:W2.ink}">${fmt(c.first)}</span>`, '')}
+        ${fig(ciT('tHandled'), `${fmt(c.done)}<span style="font-size:13px;color:${W2.ink2};font-weight:500"> / ${fmt(c.prob)}</span>`, '', c.prob?meter(c.done,c.prob,W2.act):'')}
+        ${fig(ciT('tRan',{day:ciDayTxt(A.A)}), `${fmt(c.ran)}<span style="font-size:13px;color:${W2.ink2};font-weight:500"> / ${fmt(c.mcs.length)}</span>`, E(ciT('acOn',{ac:acF(c.ac)})))}
+      </div>${tog}${body}</article>`; };
+  return ciTopHTML(mob, me, 'ampick')
+    + `<div style="font-size:14px;color:${W2.ink2};margin-top:4px">${E(ciT('team',{c:fmt(A.list.filter(c=>c.mob).length), m:fmt(A.mcs)}))}</div>`
+    + seg + bar + stale + strip
+    + `<div style="display:grid;gap:12px;margin-top:16px">${A.list.map(row).join('')}</div>`
+    + `<div style="font-size:12.5px;color:${W2.ink2};margin-top:14px;line-height:1.45">${E(ciT('amNote'))}</div>`;
+}
 function iotCiHTML(view, mob){
   if(!IOTW.loaded && !IOTW.error){ if(!IOTW.loading) setTimeout(loadIotWheat,0);
     return `<div style="${w2card(16)};padding:60px 20px;text-align:center;color:${W2.ink2};font-size:15px;margin-top:${mob?14:0}px">${E(ciT('mcLoad'))}</div>`; }
-  const html = !ciMe() || state.ciPick ? ciPickHTML(mob) : view==='iotcia' ? ciAcresHTML(mob) : ciNeedHTML(mob);
+  const html = view==='iotam' ? (!amMe() || state.amPick ? ciPickHTML(mob,'am') : amHTML(mob))
+    : !ciMe() || state.ciPick ? ciPickHTML(mob) : view==='iotcia' ? ciAcresHTML(mob) : ciNeedHTML(mob);
   return mob ? html : `<div style="max-width:920px">${html}</div>`;   // one reading column on a wide screen
 }
 function iotBodyHTML(view, mob){
@@ -13017,7 +13114,7 @@ function iotBodyHTML(view, mob){
     return `<div style="${w2card(16)};padding:60px 20px;text-align:center;color:#6E6A62;font-size:13px">
       ${IOT.error?'⚠ '+msg:skelHTML(msg)}${IOT.error?`<div style="margin-top:14px"><button data-act="iotretry" style="min-height:${mob?44:32}px;padding:0 16px;border:1px solid #E9E6DF;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Retry</button></div>`:''}</div>`;
   }
-  return view==='iotci'||view==='iotcia' ? iotCiHTML(view, mob) : view==='iotteam' ? iotTeamHTML(mob) : iotTechHTML(view, mob);
+  return view==='iotci'||view==='iotcia'||view==='iotam' ? iotCiHTML(view, mob) : view==='iotteam' ? iotTeamHTML(mob) : iotTechHTML(view, mob);
 }
 
 /* ---- the WRITE: "Record action" on a case → one appended row on the actions tab, via apps-script/iot-actions.gs.
@@ -13959,7 +14056,7 @@ function contentHTML(v){
     case 'w500': return `<section style="padding:24px 32px">${w500BodyHTML(false)}</section>`;
     case 'wdr': return `<section style="padding:24px 32px">${wdrBodyHTML(false)}</section>`;
     case 'wcum': return `<section style="padding:24px 32px">${wcumBodyHTML(false)}</section>`;
-    case 'iottamper': case 'iotrisk': case 'iotteam': case 'iotci': case 'iotcia': return `<section style="padding:18px 22px">${iotBodyHTML(state.view,false)}</section>`;
+    case 'iottamper': case 'iotrisk': case 'iotteam': case 'iotci': case 'iotcia': case 'iotam': return `<section style="padding:18px 22px">${iotBodyHTML(state.view,false)}</section>`;
     case 'recap': return recapViewHTML(v);
     case 'norun': return `<section style="padding:18px 22px">${norunBodyHTML(v,false)}</section>`;
     default: return mapViewHTML(v);
@@ -14015,6 +14112,7 @@ const M_VIEWS = [
   { k:'iotteam',  label:RAIL_LBL.iotteam,      icon:()=>I.am },               // IoT head (admin) only
   { k:'iotci',    label:RAIL_LBL.iotci,  icon:()=>I.tamper },     // IoT: the North CI page (needs attention)
   { k:'iotcia',   label:RAIL_LBL.iotcia, icon:()=>I.snake },      // IoT: the CI's machines' acres
+  { k:'iotam',    label:RAIL_LBL.iotam,  icon:()=>I.am },         // IoT: the AM's CIs
   { k:'norun',    label:RAIL_LBL.norun, icon:()=>I.risk },     // field logins' home: their machines that didn't run
   { k:'map',      label:RAIL_LBL.map,       icon:()=>I.map },
   { k:'tables',   label:RAIL_LBL.tables, icon:()=>I.tables },
@@ -14352,7 +14450,7 @@ function mobileHTML(v){
     body = wdrBodyHTML(true);
   } else if(S.view==='wcum'){
     body = wcumBodyHTML(true);
-  } else if(S.view==='iottamper'||S.view==='iotrisk'||S.view==='iotteam'||S.view==='iotci'||S.view==='iotcia'){
+  } else if(S.view==='iottamper'||S.view==='iotrisk'||S.view==='iotteam'||S.view==='iotci'||S.view==='iotcia'||S.view==='iotam'){
     body = iotBodyHTML(S.view,true);
   } else {
     // NOTE: this final else is WEATHER, not an error branch — a view registered in M_VIEWS but missing a case
@@ -14549,6 +14647,7 @@ function mPageScope(view){
     case 'wdr': return state.wdrSt || 'HR + PB';
     case 'wcum': return state.wsnSt==='HR'||state.wsnSt==='PB' ? nm(state.wsnSt) : 'HR + PB';
     case 'iotci': case 'iotcia': return ciScopeTxt();
+    case 'iotam': return amScopeTxt();
     case 'iottamper': case 'iotrisk': case 'iotteam': { const sc=iotScope(); return sc.st ? iotStName(sc.st) : (isAdmin()?'All states':'My states'); }
     default:         return nm(lock||pick('st'));   // the fleet pages: the filter bar's state
   }
@@ -14688,7 +14787,7 @@ function render(){
    pasted address is honoured at boot and on hashchange, and `render()`'s role guard still bounces a view the
    login may not see. */
 const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wam:'area-managers', wfo:'field-officers', wmap:'machine-map', wtop:'top-machines', w250:'250-acres', w500:'500-drive', wdr:'dry-run', wbd:'breakdowns', wmc:'machines', wcum:'wheat-cumulative',
-  iottamper:'tamper', iotrisk:'at-risk', iotteam:'team', iotci:'needs-attention', iotcia:'ci-acres', am:'area-managers', bm:'business-managers',
+  iottamper:'tamper', iotrisk:'at-risk', iotteam:'team', iotci:'needs-attention', iotcia:'ci-acres', iotam:'my-cis', am:'area-managers', bm:'business-managers',
   leader:'leaders', product:'products', fo:'field-officers', recap:'daily-recap', norun:'didnt-run' };
 const slugOf = v => VIEW_SLUG[v]||v;
 const viewOfHash = h => { const sl=String(h||'').replace(/^#\/?/,''); if(!sl) return null;
@@ -14921,6 +15020,11 @@ app.addEventListener('click', e=>{
     case 'ciday': setState({ciDay:el.dataset.d}); break;
     case 'ciacday': setState({ciAcDay:el.dataset.d}); break;
     case 'ciact': iotActOpen('CI|'+el.dataset.mc); break;
+    case 'ampick': setState({amPick:true, ciQ:''}); break;
+    case 'amme': ciSave('mpoc_iotam_me', el.dataset.mob); setState({amMe:el.dataset.mob, amPick:false, ciQ:'', amDay:'', amOpen:{}}); track('iot_am_pick',{}); break;
+    case 'amday': setState({amDay:el.dataset.d}); break;
+    case 'amper': setState({amPer:el.dataset.p}); track('iot_am_period',{ p:el.dataset.p }); break;
+    case 'amexp': { const k=el.dataset.k; setState(s=>({amOpen:{...s.amOpen, [k]:!s.amOpen[k]}})); break; }
     case 'iotact': iotActOpen(el.dataset.case); break;
     case 'iotq': setState({iotQueue:el.dataset.q, iotLimit:IOT_PAGE}); break;
     case 'iotts': setState({iotTs:el.dataset.ts||'', iotLimit:IOT_PAGE}); track('iot_status_filter',{ ts:el.dataset.ts||'all' }); break;
@@ -15168,6 +15272,8 @@ const GATE = {
     '511425f1125b98b09c7b636c27a56b0be1fff185717d5233144fd02ddf0cddab': { id:'iot-manish', project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['HR'], switchStates:false, label:'IoT · Manish Kumar', tech:'Manish Kumar' }, // 2621
     // The NORTH CI login (2026-11-24): one PIN for every Cluster Incharge in Haryana + Punjab; each picks his own name once
     // (kept on the phone). Two pages only — Needs attention and Acres — in Hindi / Punjabi / English. See iotCiHTML.
+    // The NORTH AM login (2026-11-26): one PIN for the Area Managers of Haryana + Punjab; each picks his name once. One page, My CIs.
+    'e09ffd3535b9d219b9e469202e37b92a4138f8ac920871f3144742d1ba656ae0': { id:'iot-am', project:'iot', role:'iotam', org:'Both', allow:['Both'], states:['HR','PB'], switchStates:true, views:['iotam'], home:'iotam', label:'IoT · AM North' }, // 2752
     '2611b07ac9addfb7d2e4259eb234bc7e240931c54564e05eb7e25f5d69780efc': { id:'iot-ci', project:'iot', role:'iotci', org:'Both', allow:['Both'], states:['HR','PB'], switchStates:true, views:['iotci','iotcia'], home:'iotci', label:'IoT · CI North' }, // 2751
     '72a1917673994c23e72b3f49c2134549aa2219dffd8c029a071efe9c437f7888': { id:'iot-vishal', project:'iot', role:'iottech', org:'Both', allow:['Both'], states:['MP','GJ','TG','MH','AP'], switchStates:true, label:'IoT · Vishal Makwana', tech:'Vishal Makwana' }, // 2631
     'd95936051b112558c270fd675137155155c74b8f0721fde9007b53d40cedba2b': { id:'wh-hr-sales', project:'wheat', role:'wsales', org:'Both', allow:['Both','UPL','SWAL'], states:['HR'], switchStates:false, views:['wplan','wterr','wfo','wmap'], label:'Wheat North · Haryana sales' }, // 4822

@@ -772,6 +772,7 @@ plaintext PIN sits in a trailing comment on each row by convention. Three shapes
 | **IoT** `admin` (`iot-admin`, 7314 — Amit Kumar, IoT head; 2601 retired 2026-10-16) | n/a | all, switchable | Potential tamper, At risk, **Team overview** |
 | **IoT** `iottech` × Rohit (2611) / Manish (2621) / Vishal (2631) | n/a | **the cases whose row names him** (states follow; PIN row = fallback) | Potential tamper, At risk |
 | **IoT** `iotci` — every North CI (2751) | n/a | HR + PB; each CI picks his NAME once (kept on the phone) | **only** Needs attention + Acres (the CI page) |
+| **IoT** `iotam` — every North AM (2752) | n/a | HR + PB; each AM picks his NAME once (kept on the phone) | **only** My CIs (the AM page) |
 | **Partner** `bayer` (3906) | n/a | n/a | **none in the console** — a handoff to `bayer/` (see Partner pages) |
 
 The Wheat rows carry `project:'wheat'`; see **Projects** below. The Kharif admin (0088) does NOT see Wheat, and
@@ -1530,6 +1531,20 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
   · Checked 24 Nov against the sheets: Dharmender (9541042129) 16 Nov = 7 machines / 3 check first; acres 23 Nov = 132.2 ac,
     11 of 21 ran, 2,798 season — all equal to a direct count. 1280 / 375 / 320 px, no sideways scroll; the save path was tested
     against a faked server only (nothing written).
+- **The AM page (view `iotam` "My CIs", role `iotam`, PIN 2752, Dinesh 2026-11-26; `amAgg` / `amHTML` / `amRoster` / `ciItems`).**
+  An Area Manager reads his CIs. The AM → CI tree is the Wheat Main sheet's (`AM_contact` → `CI_contact`): 6 AMs / 28 CIs on
+  26 Nov, a strict tree (no CI under two AMs), Bayer machines out. Each AM picks his name once (`mpoc_iotam_me`). **English by
+  default** (`ciLang` returns 'en' for the role; Hindi / Punjabi on the switch). The IoT head also sees it.
+  · **Day / Last 7 days** (`state.amPer`): Day = machines with a device problem on the IoT day (the CI page's day, ‹ › to step
+    back); 7 days = problems as MACHINE-DAYS over that day and the 6 before, with "on N machines". Strip and one card per CI:
+    problems · Check first · **Handled by the CI** (machine-days whose every case the CI marked sorted, `ciItems().done`) · machines
+    ran and acres on the acres day (yesterday, capped at the Main sheet's last day). CIs sort by unhandled problems first.
+  · **Read-only**: Call CI; "Show machines" opens the CI's cards for the day (`ciCardHTML(x, mob, ro)` — no remark button) or, in
+    7-day mode, one line per machine (days with a problem, handled, Call operator). A machine with no CI on the sheet groups as
+    "No CI named". Only Main-sheet machines count (IoT-row-only CIs have no AM), and the page says so.
+  · `ciAgg(me, day)` now takes a CI and a day, so both pages share it. Checked 26 Nov for Sampat (9802235004): 16 Nov = 9 machines /
+    2 check first; 10–16 Nov = 70 machine-days on 47 machines / 20 check first; 25 Nov = 45 of 119 ran, 716 ac — all equal to a
+    direct count. 1280 / 375 / 320 px, no sideways scroll. The CI login is bounced off `#/my-cis`.
 
 ## PWA
 The console installs to the home screen and opens with no signal. It is one app for every project; the PIN
