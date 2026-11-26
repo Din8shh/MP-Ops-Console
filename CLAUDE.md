@@ -1422,6 +1422,7 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
 | `0` | Tampered cases and suspicious | one row per IoT ping GAP on one machine (27 Sep → 14 Oct 2026, 2,388 rows / 459 machines) | **Potential tamper cases** (`iottamper`) |
 | `504457328` | battery outage | one row per zero-voltage OUTAGE, dated by `outage_start` (63 outages / 46 machines, 1–14 Oct on 2026-10-15) — **no `state` column** | **At risk machines** (`iotrisk`) — the sheet's name is never shown |
 | `954063262` | IOT vs state mapping | technician ⇄ state + phone, IoT head | Team overview (`iotteam`, admin only) |
+| `1455152898` | IOT vs dry run | one row per machine per DAY: date, machine, km driven (dry run), IoT acres — 22 Oct → yesterday | **High priority** driving cases on the CI / AM pages |
 | by name `IoT actions` | written by `apps-script/iot-actions.gs` | one row per technician action | the case's Open / Closed status |
 
 - **"Potential", always.** A ping gap is a lead, not a finding, so no screen says "tampered". The sheet's own
@@ -1545,6 +1546,22 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
   · `ciAgg(me, day)` now takes a CI and a day, so both pages share it. Checked 26 Nov for Sampat (9802235004): 16 Nov = 9 machines /
     2 check first; 10–16 Nov = 70 machine-days on 47 machines / 20 check first; 25 Nov = 45 of 119 ran, 716 ac — all equal to a
     direct count. 1280 / 375 / 320 px, no sideways scroll. The CI login is bounced off `#/my-cis`.
+- **Driving cases — HIGH PRIORITY on the CI and AM pages (Dinesh 2026-11-26; `iotDryBuild`, `ciRows`, `ciHigh`).** Off the
+  "IOT vs dry run" tab (`PROJECTS.iot.iot.dryGid`). Its acres equal the Main sheet's IOT_acres on every machine-day (12,320 of
+  12,320, checked 26 Nov); 70 duplicated machine-days are read once. Only machine-days breaking a rule become cases (kind `D`):
+  · **trip** — 1 km or more (`DRY_MIN_KM`) and 0 acres; over 150 km (`DRY_LONG_KM`) it is worded as a long move ("probably
+    shifted to a new area") but still flagged. ~8–16 machines a day in North.
+  · **low** — 10 km or more (`DRY_LOW_KM`) at 3 km per acre or worse (`DRY_KM_PER_AC`; normal ≈ 1, top 5% of running days).
+  No state column: a case is placed by the machine's Main-sheet row (`ciRows`), so machines not on it (≈74, Bayer) reach nobody.
+  A machine with a driving case goes to a **High priority** section above Check first (its own tile; on the AM page a tile and a
+  figure per CI, and CIs with more high-priority problems sort higher). The page opens on the latest day of ANY source, so with
+  the tamper / battery tabs stopping at 16 Nov it opens on the dry-run day and says "Device-off and battery cases … stop at
+  16 Nov" (`devLast`). CI choices add "Machine was moving to a new area", "Sprayed, but the device did not count the acres",
+  "Machine was used for other work" (`CI_DRY_ACTIONS`; the first two need no remark). **The script only accepts the two case
+  types, so a driving remark is saved as "At risk" with Case ID `CI|D|<machine>|<date>`** — filter on that prefix; give it its
+  own type once the script is redeployed from the deploying account (add "Dry run" to `KINDS`, then set `IOT_KIND.D`).
+  Checked 26 Nov: 25 Nov North = 13 trip + 5 low; Dharmender UPL_2722 (5.6 km, 0 ac); Sampat 8 on 25 Nov, 68 over 19–25 Nov —
+  equal to a direct count.
 
 ## PWA
 The console installs to the home screen and opens with no signal. It is one app for every project; the PIN
