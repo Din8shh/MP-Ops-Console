@@ -428,7 +428,7 @@ const PROJECTS = {
   iot:    { id:'iot', title:'IoT Device Monitoring', short:'IoT', allLabel:'All states',
             gid:'', demo:[], states:null, fullDeploy:[],
             iot:{ sheetId:'19CSbLqTIB-TivT1rVrilFeQEERcts_LHAGwjpgE__Oo', tamperGid:'0', riskGid:'504457328', mapGid:'954063262', dryGid:'1455152898', actionsTab:'IoT actions' },
-            home:'iottamper', views:['iotci','iotcia','iotam','iottamper','iotrisk','iotteam'], only:['iotci','iotcia','iotam','iottamper','iotrisk','iotteam'], kharifTabs:false,
+            home:'iottamper', views:['iotci','iotcia','iotam','iottamper','iotrisk','iotdry','iotteam'], only:['iotci','iotcia','iotam','iottamper','iotrisk','iotdry','iotteam'], kharifTabs:false,
             head:sc=>`IoT Device Monitoring · ${sc==='India'?'All states':sc}`, sub:'Potential tamper cases · At risk machines · Farm Mechanisation Services',
             mHead:sc=>`IoT Monitoring · ${sc==='India'?'All':sc}`, mSub:'IoT team · AFS' },
 };
@@ -749,7 +749,7 @@ async function loadData(){
   // Wheat (rebuild): its own machine-day sheet, no machine rows, no weather. Fetched for the Wheat ADMIN only — the
   // other Wheat logins see a "being rebuilt" page until their views are decided, and carry none of the data meanwhile.
   if(P.ret){ applyRows([]); if(wSees()) await loadWRet(); else { dataMode='live'; lastUpdated=nowIST(); render(); } return; }
-  if(P.iot){ applyRows([]); if(!roleHidesView('iotci')||!roleHidesView('iotam')) loadIotWheat(IOTW.loaded); await loadIoT(); return; }   // IoT team: its own workbook, no machine rows, no weather
+  if(P.iot){ applyRows([]); if(!roleHidesView('iotci')||!roleHidesView('iotam')||!roleHidesView('iotdry')) loadIotWheat(IOTW.loaded); await loadIoT(); return; }   // IoT team: its own workbook, no machine rows, no weather
   // The project's state list is the outer scope: a row outside it never reaches a view, whatever the tab holds.
   const scoped = rows => P.states ? rows.filter(m=>P.states.includes(m.st)) : rows;
   const demo = () => scoped(hygiene(P.demo.map(m=>({...m}))));
@@ -2712,7 +2712,7 @@ function roleHidesView(view){
   // "Didn't run" is the field logins' home (plan M3): their own machines that did not run, with whom to ring.
   // Kharif only; admin reads the same set through Machines + the Health filter.
   if(view==='norun') return curProject().id!=='kharif' || !['upl','swal'].includes(GATE.cur&&GATE.cur.role);
-  if(GATE.cur && (GATE.cur.role==='iotci'||GATE.cur.role==='iotam') && (view==='iottamper'||view==='iotrisk')) return true;   // the North CI login: its own two pages only
+  if(GATE.cur && (GATE.cur.role==='iotci'||GATE.cur.role==='iotam') && (view==='iottamper'||view==='iotrisk'||view==='iotdry')) return true;   // the North CI login: its own two pages only
   if(!GATED_VIEWS.includes(view)) return false;
   // The MP product summary reads a Madhya-Pradesh-only tab, so it is offered only while the ACTIVE STATE SCOPE
   // is MP — not at All India, and not under another state. This is a scope test, not a role test, and it runs
@@ -2725,10 +2725,10 @@ function roleHidesView(view){
 }
 // Views that render their OWN controls and so drop the shared machine filter bar + KPI strip (desktop) and the
 // weather banner + KPI cards (mobile): the standalone rollup/insight pages.
-const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia','iotam','iottamper','iotrisk','iotteam']);
+const CHROMELESS = new Set(['insights','snake','product','recap','mpprod','leader','wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia','iotam','iottamper','iotrisk','iotdry','iotteam']);
 // Pages with no machine rows behind them (Wheat plan, the IoT pages): the machine search and the phone's filter
 // button go, because neither can reach anything on them.
-const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia','iotam','iottamper','iotrisk','iotteam']);
+const OWN_PAGES = new Set(['wplan','wterr','wam','wfo','wmap','wtop','w500','w250','wbd','wmc','wdr','wcum','iotci','iotcia','iotam','iottamper','iotrisk','iotdry','iotteam']);
 function roll(list){
   const o={deployed:list.length,upl:0,swal:0,open:0,Active:0,Idle:0,Breakdown:0,target:0,achieved:0,mtd:0,acresY:0,iotAcresY:0,pinged:0,opMappedCount:0};
   list.forEach(m=>{ o[m.org==='UPL'?'upl':m.org==='SWAL'?'swal':'open']++;
@@ -3707,20 +3707,20 @@ const navBtn = (act,icon,active) => `<button data-act="view" data-view="${act}" 
 const NAV_TITLE = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', norun:'Didn’t run',
   am:'Area managers', bm:'Business managers', pending:'Pending deployment', recap:'Daily recap', leader:'Leaders',
   product:'Products', mpprod:'MP products', snake:'Cumulative acres', fo:'Field officers', retailer:'Retailers', wplan:'Retailer summary', wterr:'Territory summary', wam:'Area manager summary', wfo:'TM · FO summary', wmap:'Machine map', wtop:'Top 10 machines', w500:'500 acres by 5 Dec', w250:'Acre target', wbd:'Breakdowns', wmc:'Machine summary', wdr:'Dry run', wcum:'Cumulative acres',
-  iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotteam:'IoT team overview', iotci:'Needs attention', iotcia:'Acres sprayed', iotam:'My CIs' };
+  iottamper:'Potential tamper cases', iotrisk:'At risk machines', iotdry:'Dry run cases', iotteam:'IoT team overview', iotci:'Needs attention', iotcia:'Acres sprayed', iotam:'My CIs' };
 // The word under each rail icon: short enough for a 64px button at 9.5px. One word where the title is long.
 // ONE NAME TABLE (plan I4). NAV_TITLE is the full name — page heading, browser title, the phone's All pages sheet.
 // RAIL_LBL is the SHORT form, used only where room is tight (desktop rail, phone tab bar, phone header), and it is
 // the same short form in all three. M_VIEWS takes its labels from here.
 const RAIL_LBL = { insights:'Insights', map:'Map', tables:'Territories', machines:'Machines', weather:'Weather', am:'AMs', bm:'BMs', norun:'Didn’t run',
   pending:'Pending', recap:'Recap', leader:'Leaders', product:'Products', mpprod:'MP products', snake:'Cumulative', fo:'FOs',
-  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', w500:'500 Drive', w250:'Acre target', wbd:'Breakdowns', wmc:'Machines', wdr:'Dry run', wcum:'Cumulative', iottamper:'Potential tamper', iotrisk:'At risk', iotteam:'Team', iotci:'Needs attention', iotcia:'Acres', iotam:'My CIs' };
+  retailer:'Retailers', wplan:'Retailers', wterr:'Territories', wam:'AMs', wfo:'FOs', wmap:'Map', wtop:'Top 10', w500:'500 Drive', w250:'Acre target', wbd:'Breakdowns', wmc:'Machines', wdr:'Dry run', wcum:'Cumulative', iottamper:'Potential tamper', iotrisk:'At risk', iotdry:'Dry run', iotteam:'Team', iotci:'Needs attention', iotcia:'Acres', iotam:'My CIs' };
 // Rail order, in labelled groups (a hairline between them): the project's own pages, then what happened TODAY,
 // then the PEOPLE tables, then the SEASON reading. Insights used to lead the rail; it now leads the Season group.
 // Group names, index for index with RAIL_GROUPS (the first group is the project's own pages and has none).
 const RAIL_GROUP_NAMES = ['', 'Today', 'People', 'Season'];
 const RAIL_GROUPS = [
-  [['wplan',I.retailer],['w500',I.leader],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['wtop',I.leader],['w250',I.insights],['wbd',I.risk],['wmc',I.machines],['wdr',I.route],['wcum',I.snake],['iottamper',I.tamper],['iotrisk',I.risk],['iotteam',I.am],['iotci',I.tamper],['iotcia',I.snake],['iotam',I.am]],
+  [['wplan',I.retailer],['w500',I.leader],['wterr',I.tables],['wam',I.am],['wfo',I.fo],['wmap',I.map],['wtop',I.leader],['w250',I.insights],['wbd',I.risk],['wmc',I.machines],['wdr',I.route],['wcum',I.snake],['iottamper',I.tamper],['iotrisk',I.risk],['iotdry',I.route],['iotteam',I.am],['iotci',I.tamper],['iotcia',I.snake],['iotam',I.am]],
   [['norun',I.risk],['map',I.map],['machines',I.machines],['weather',I.weather],['recap',I.recap]],
   [['tables',I.tables],['am',I.am],['bm',I.bm],['fo',I.fo],['retailer',I.retailer],['pending',I.pending]],
   [['insights',I.insights],['snake',I.snake],['product',I.product],['mpprod',I.mpprod],['leader',I.leader]],
@@ -12037,13 +12037,18 @@ try{ const H=location.hostname, q=new URLSearchParams(location.search);
   if((H==='localhost'||H==='127.0.0.1'||H==='') && q.get('iotUrl')) IOT_W.url=q.get('iotUrl'); }catch(_){}   // localhost only, as HELP.url
 const IOT_ACTIONS = {
   T:['Called the operator','Visited the machine','Device reinstalled / repaired','Genuine gap — no tampering','Tampering confirmed','Other'],
-  R:['Called the operator','Visited the machine','Battery replaced / charged','Wiring / connector fixed','Device replaced','Other'] };
-const IOT_KIND = { T:'Potential tamper', R:'At risk' };
+  R:['Called the operator','Visited the machine','Battery replaced / charged','Wiring / connector fixed','Device replaced','Other'],
+  D:['Called the operator','Visited the machine','Device checked — counting acres correctly','Device fault — repaired / replaced','Machine was moving to a new area','Other'] };
+const IOT_KIND = { T:'Potential tamper', R:'At risk', D:'Dry run' };
+// The case TYPE the script accepts: only the first two. A dry-run case is written as "At risk" (its Case ID starts D| / CI|D|)
+// until the script is redeployed with "Dry run" in KINDS — then this line becomes IOT_KIND[k].
+const iotScriptKind = k => k==='D' ? 'At risk' : IOT_KIND[k];
+const IOT_DRY_SUB = { trip:'Drove, sprayed nothing', long:'Long move, sprayed nothing', low:'Many km for the acres' };
 // A remark is REQUIRED on every action except these two (by request, 2026-10-15): both are complete statements on
 // their own, while "Called the operator" or "Visited the machine" says nothing about what was found. Only Potential
 // tamper offers either one, so on At risk every action needs a remark. A remark must hold 3+ visible characters, so
 // "." or "ok" cannot satisfy it. To exempt another action, add its exact label here.
-const IOT_REMARK_OPTIONAL = new Set(['Genuine gap — no tampering','Device reinstalled / repaired']);
+const IOT_REMARK_OPTIONAL = new Set(['Genuine gap — no tampering','Device reinstalled / repaired','Machine was moving to a new area']);
 const iotNeedsRemark = act => !!act && !IOT_REMARK_OPTIONAL.has(act);
 const iotRemarkOk = (act, txt) => !iotNeedsRemark(act) || String(txt||'').replace(/\s/g,'').length >= 3;
 // The day the work was DONE, which is not the day it was typed in: a technician visits in a dead zone and records it
@@ -12205,7 +12210,13 @@ async function loadIoT(){
         const c=res.headers.get('x-sw-cached-at'); if(c) cachedAt=Math.min(cachedAt||Infinity, +c);
         return parseCSV(await res.text());
       }catch(e){ if(optional){ console.warn('[MP-Ops] iot optional tab failed →', q, e); return null; } throw e; } };
-    const [t,r,m,a,dr]=await Promise.all([ get('gid='+src.tamperGid), get('gid='+src.riskGid), get('gid='+src.mapGid,true), get('sheet='+encodeURIComponent(src.actionsTab),true), src.dryGid?get('gid='+src.dryGid,true):Promise.resolve(null) ]);
+    // The mapping and dry-run tabs are read through the plain CSV EXPORT, not gviz: on 2026-11-26 the mapping tab had machine /
+    // date / km columns pasted beside the technician list, and gviz (which types a column by its majority) returned the eight
+    // technician rows BLANK — no state fallback, no phone numbers on the Team page. The export keeps every cell as written.
+    const exp=async (gid)=>{ try{ const res=await fetch(`https://docs.google.com/spreadsheets/d/${src.sheetId}/export?format=csv&gid=${gid}&t=${Date.now()}`);
+        if(!res.ok) throw new Error('HTTP '+res.status); const c=res.headers.get('x-sw-cached-at'); if(c) cachedAt=Math.min(cachedAt||Infinity, +c); return parseCSV(await res.text());
+      }catch(e){ console.warn('[MP-Ops] iot export failed → gid', gid, e); return null; } };
+    const [t,r,m,a,dr]=await Promise.all([ get('gid='+src.tamperGid), get('gid='+src.riskGid), exp(src.mapGid).then(x=>x||get('gid='+src.mapGid,true)), get('sheet='+encodeURIComponent(src.actionsTab),true), src.dryGid?exp(src.dryGid):Promise.resolve(null) ]);
     const lt={blank:0,badDate:0,badState:0}, lr={blank:0,badState:0};
     IOT.tamper=iotTamperBuild(t,lt);
     { const n={}; IOT.tamper.forEach(r=>{ if(r.sts) n[r.sts]=(n[r.sts]||0)+1; }); IOT.tsKeys=Object.keys(n).sort((a,b)=>(IOT_TSTATUS[a]?0:1)-(IOT_TSTATUS[b]?0:1)||n[b]-n[a]); }
@@ -12416,7 +12427,7 @@ function iotMachines(cases, every){
   cases.forEach(r=>{ (by[r.mc]||(by[r.mc]={ mc:r.mc, st:r.st, kind:r.kind, cases:[] })).cases.push(r); });
   return Object.values(by).map(m=>{
     const T=m.kind==='T';
-    m.cases.sort(T ? (a,b)=>b.at.localeCompare(a.at) : (a,b)=>(b.km||0)-(a.km||0));
+    const Dk=m.kind==='D'; m.cases.sort(T||Dk ? (a,b)=>b.at.localeCompare(a.at) : (a,b)=>(b.km||0)-(a.km||0));
     const top=m.cases[0], who=m.cases.find(c=>c.op||c.opMob)||top, ciw=m.cases.find(c=>c.ci||c.ciMob)||top;
     const sts=m.cases.map(c=>iotState(c.id));
     const hist=((every&&every[m.mc])||m.cases).flatMap(c=>IOT.actions[c.id]||[]).sort((a,b)=>(iotActOn(a)+a.ts).localeCompare(iotActOn(b)+b.ts));
@@ -12433,15 +12444,15 @@ function iotMachines(cases, every){
         const ref=lastClosed, after=ref ? fresh.filter(c=>c.at && (c.day>iotActOn(ref) || (c.day===iotActOn(ref) && c.at>ref.ts))) : [];
         return { nNew:fresh.length, nAfter:after.length, back: status==='new' && after.length>0, partly: status==='new' && !!last && !after.length }; })(),
       dark: T ? m.cases.reduce((a,c)=>a+(c.gap||0),0) : m.cases.reduce((a,c)=>a+(c.mins||0),0),
-      km:   T ? Math.max(0,...m.cases.map(c=>c.km||0)) : m.cases.reduce((a,c)=>a+(c.km||0),0),
+      km:   T ? Math.max(0,...m.cases.map(c=>c.km||0)) : m.cases.reduce((a,c)=>a+(c.km||0),0), ac: Dk ? m.cases.reduce((a,c)=>a+(c.ac||0),0) : null,
       pings: T ? null : m.cases.reduce((a,c)=>a+(c.pings||0),0),
-      loc:  T ? ((m.cases.find(c=>c.loc)||{}).loc||null) : (top.end||top.start||null) };
+      loc:  T||Dk ? ((m.cases.find(c=>c.loc)||{}).loc||null) : (top.end||top.start||null) };
   });
 }
 function iotPageAgg(view){
-  const kind=view==='iotrisk'?'R':'T', sc=iotScope(), q=String(state.iotQ||'').trim().toLowerCase();
+  const kind=view==='iotrisk'?'R':view==='iotdry'?'D':'T', sc=iotScope(), q=String(state.iotQ||'').trim().toLowerCase();
   const queue=IOT_Q.some(x=>x[0]===state.iotQueue) ? state.iotQueue : 'new';
-  const src=kind==='T'?IOT.tamper:IOT.risk, inSt=src.filter(r=>iotInScope(r,sc));
+  const src=kind==='T'?IOT.tamper:kind==='D'?iotDryCases():IOT.risk, inSt=src.filter(r=>iotInScope(r,sc));
   // At risk carries a date since 2026-10-15 (outage_start); a tab without one falls back to the undated list.
   const dated=inSt.some(r=>r.day), R=dated ? iotRange(inSt.filter(r=>r.day)) : null;
   const pool=dated ? inSt.filter(r=>r.day>=R.from && r.day<=R.to) : inSt;
@@ -12475,15 +12486,19 @@ function iotPersonRow(role, name, mob){
 const IOT_PIN = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>';
 const IOT_CHECK = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
 function iotCardHTML(m, A){
-  const T=m.kind==='T', key='iot:'+m.kind+'|'+m.mc, open=!!state.expanded[key];
+  const T=m.kind==='T', Dk=m.kind==='D', key='iot:'+m.kind+'|'+m.mc, open=!!state.expanded[key];
+  const dTxt = c => c.sub==='low' ? `${iotKm(c.km)} km driven for ${acF(c.ac)} acres (${(Math.round(c.km/c.ac*10)/10).toLocaleString('en-IN')} km an acre)` : `${iotKm(c.km)} km driven, nothing sprayed`;
   const cap='font-size:12.5px;color:#46433d;line-height:1.45';
   const back=T ? m.top.back : '', backDay=back.slice(0,10);
-  const fig = T
+  const fig = Dk
+    ? `<div style="display:flex;align-items:baseline;gap:7px;margin-top:10px"><span style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1">${iotKm(m.km)}</span><span style="font-size:13px;font-weight:600">km driven</span><span style="${cap}">· ${acF(m.ac||0)} acres${m.n>1?` · ${m.n} days`:''}</span></div>
+       <div style="${cap};margin-top:4px">Latest ${iotShortDay(m.top.day)} · ${dTxt(m.top)}</div>`
+    : T
     ? `<div style="display:flex;align-items:baseline;gap:7px;margin-top:10px"><span style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1">${m.n}</span><span style="font-size:13px;font-weight:600">ping gap${m.n===1?'':'s'}</span>${m.n>1?`<span style="${cap}">· ${fmt(m.dark)} h dark in all</span>`:''}</div>
        <div style="${cap};margin-top:4px">Latest ${iotShortDay(m.top.day)}, ${iotTime(m.top.at)} → ${backDay&&backDay!==m.top.day?iotShortDay(backDay)+' ':''}${iotTime(back)} · ${m.top.gap==null?'—':m.top.gap+' h'}${m.top.km?` · moved ${iotKm(m.top.km)} km`:''}</div>`
     : `<div style="display:flex;align-items:baseline;gap:7px;margin-top:10px"><span style="font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1">${iotKm(m.km)}</span><span style="font-size:13px;font-weight:600">km on zero voltage</span></div>
        <div style="${cap};margin-top:4px">${m.top.at?`Started ${iotShortDay(m.top.day)}, ${iotTime(m.top.at)} · `:''}${iotMins(m.dark)} without power · ${fmt(m.pings||0)} pings${m.n>1?` · ${m.n} outages`:''}</div>`;
-  const unit = n => T ? (n===1?'ping gap':'ping gaps') : (n===1?'outage':'outages');
+  const unit = n => T ? (n===1?'ping gap':'ping gaps') : Dk ? (n===1?'day':'days') : (n===1?'outage':'outages');
   const backLine = m.back
     ? `<div style="margin-top:10px;display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:10px;background:#FDECEA;color:#8F1D14;font-size:12.5px;line-height:1.4"><span aria-hidden="true" style="font-weight:700">↻</span><div><b>Back again</b> — ${m.nAfter} new ${unit(m.nAfter)} since it was closed on ${iotShortDay(iotActOn(m.lastClosed))}${m.nNew>m.nAfter?`, plus ${m.nNew-m.nAfter} older one${m.nNew-m.nAfter===1?'':'s'} with no action`:''}.</div></div>`
     : m.partly
@@ -12494,21 +12509,22 @@ function iotCardHTML(m, A){
   const nav = m.loc ? `<a href="${iotMapHref(m.loc)}" target="_blank" rel="noopener" style="flex:1;min-height:46px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;background:#1B1A17;color:#fff;font-size:14px;font-weight:700;text-decoration:none">${IOT_PIN}Navigate</a>`
     : `<span style="flex:1;min-height:46px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:#F2F0EB;color:#6E6A62;font-size:13px">No location on sheet</span>`;
   const rec = IOT_W.url ? `<button data-act="iotact" data-case="${E(m.kind+'|'+m.mc)}" style="flex:1;min-height:46px;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:12px;border:1.5px solid #1B1A17;background:#fff;color:#1B1A17;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer">${IOT_CHECK}${m.last?'Update':'Record action'}</button>` : '';
-  const rows = m.n>1 ? `<button data-act="exp" data-key="${E(key)}" aria-expanded="${open}" style="width:100%;min-height:44px;margin-top:6px;border:none;background:none;color:#46433d;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${open?'Hide':'Show'} all ${m.n} ${T?'gaps':'outages'} <span style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>
+  const rows = m.n>1 ? `<button data-act="exp" data-key="${E(key)}" aria-expanded="${open}" style="width:100%;min-height:44px;margin-top:6px;border:none;background:none;color:#46433d;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${open?'Hide':'Show'} all ${m.n} ${T?'gaps':Dk?'days':'outages'} <span style="display:inline-block;transform:rotate(${open?180:0}deg)">▾</span></button>
     ${open?`<div style="border-top:1px solid #F0EEE9">${m.cases.map(c=>{ const s=iotState(c.id), dot=IOT_PILL[s][1];
       return `<div style="display:flex;align-items:center;gap:10px;min-height:48px;border-bottom:1px solid #F4F2EE">
         <span title="${IOT_PILL[s][2]}" style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0"></span>
-        <div style="flex:1;min-width:0;font-size:12.5px">${T
+        <div style="flex:1;min-width:0;font-size:12.5px">${Dk ? `<b>${iotShortDay(c.day)}</b> <span style="color:#6E6A62">· ${dTxt(c)}</span><div style="font-size:11.5px;color:#B42318">${E(IOT_DRY_SUB[c.sub]||'')}</div>` : T
           ? `<b>${iotShortDay(c.day)}</b> ${iotTime(c.at)} → ${iotTime(c.back)} <span style="color:#6E6A62">· ${c.gap==null?'—':c.gap+' h'}${c.km?` · ${iotKm(c.km)} km`:''}</span>${c.sts?`<div style="font-size:11.5px;color:${c.sts==='SUSPICIOUS_MOVEMENT'?'#B42318':'#6E6A62'}">${E(iotTsTxt(c.sts))}</div>`:''}`
           : `${c.at?`<b>${iotShortDay(c.day)}</b> ${iotTime(c.at)} · `:''}<b>${iotKm(c.km)} km</b> <span style="color:#6E6A62">· ${iotMins(c.mins)} · ${fmt(c.pings||0)} pings</span>`}</div>
-        ${(T?c.loc:c.end)?`<a href="${iotMapHref(T?c.loc:c.end)}" target="_blank" rel="noopener" aria-label="Open this ${T?'gap':'outage'} in Maps" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#1B6FD1">${IOT_PIN}</a>`:''}</div>`; }).join('')}</div>`:''}` : '';
+        ${!Dk&&(T?c.loc:c.end)?`<a href="${iotMapHref(T?c.loc:c.end)}" target="_blank" rel="noopener" aria-label="Open this ${T?'gap':'outage'} in Maps" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#1B6FD1">${IOT_PIN}</a>`:''}</div>`; }).join('')}</div>`:''}` : '';
   return `<article style="${w2card(16)};padding:14px 14px 10px;box-shadow:0 1px 2px rgba(27,26,23,.04)">
     <div style="display:flex;align-items:center;gap:8px">
       <span style="font-family:'IBM Plex Mono';font-size:16px;font-weight:700">${E(m.mc)}</span>
       ${A.st?'':`<span style="font-size:11.5px;color:#6E6A62">${E(iotStName(m.st))}</span>`}
       <span style="flex:1"></span>${iotPill(m.status)}</div>
     ${T?(Object.keys(m.tsN).length?`<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${Object.keys(m.tsN).sort((a,b)=>(a==='SUSPICIOUS_MOVEMENT'?0:1)-(b==='SUSPICIOUS_MOVEMENT'?0:1)).map(k=>iotTsTag(k,m.n>1?m.tsN[k]:1)).join('')}</div>`:'')
-       :`<div style="margin-top:6px"><span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#FBEAE7;color:#B42318">${E(m.top.status||'At risk')}</span></div>`}
+       :`<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${Dk ? (()=>{ const n={}; m.cases.forEach(c=>{ n[c.sub]=(n[c.sub]||0)+1; }); return Object.keys(n).map(k=>`<span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#FBEAE7;color:#B42318">${E(IOT_DRY_SUB[k]||k)}${m.n>1?' ×'+n[k]:''}</span>`).join(''); })()
+         : `<span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#FBEAE7;color:#B42318">${E(m.top.status||'At risk')}</span>`}</div>`}
     ${fig}${last}${ciNote}
     <div style="margin-top:8px;border-top:1px solid #F0EEE9">${m.op||m.opMob||m.ci||m.ciMob ? iotPersonRow('Operator',m.op,m.opMob)+iotPersonRow('CI',m.ci,m.ciMob)
       : `<div style="min-height:40px;display:flex;align-items:center;font-size:13px;color:#6E6A62;font-style:italic">No operator or CI on the sheet for this machine</div>`}</div>
@@ -12528,15 +12544,18 @@ function iotTechHTML(view, mob){
       ${A.custom?`<span style="flex-shrink:0;min-height:${mob?40:34}px;display:flex;align-items:center;padding:0 13px;border-radius:999px;background:#1B1A17;color:#fff;font-size:12.5px;font-weight:600;white-space:nowrap">${iotShortDay(A.from)} – ${iotShortDay(A.to)}</span>`:''}</div>` : '';
   const sticky=`<div style="position:sticky;top:0;z-index:6;background:#F3F6FB;margin:12px -${P}px 0;padding:8px ${P}px 10px;border-bottom:1px solid #E9E6DF">${qBar}${strip}</div>`;
   const scopeTxt = (A.st ? iotStName(A.st) : (isAdmin()?'all states':'your states')) + (T&&A.TS.cur ? ' · '+iotTsTxt(A.TS.cur) : '');
-  const sum = T
+  const Dk=A.kind==='D';
+  const sum = Dk
+    ? `${fmt(A.machines.length)} machine${A.machines.length===1?'':'s'} · ${fmt(A.machines.reduce((a,m)=>a+m.n,0))} cases · ${iotKm(A.machines.reduce((a,m)=>a+m.km,0))} km · ${A.from===A.to?iotShortDay(A.from):iotShortDay(A.from)+' – '+iotShortDay(A.to)} · ${scopeTxt}`
+    : T
     ? `${fmt(A.machines.length)} machine${A.machines.length===1?'':'s'} · ${fmt(A.machines.reduce((a,m)=>a+m.n,0))} gaps · ${A.from===A.to?iotShortDay(A.from):iotShortDay(A.from)+' – '+iotShortDay(A.to)} · ${scopeTxt}`
     : `${fmt(A.machines.length)} machine${A.machines.length===1?'':'s'} · ${iotKm(A.machines.reduce((a,m)=>a+m.km,0))} km on zero voltage${A.dated?` · ${A.from===A.to?iotShortDay(A.from):iotShortDay(A.from)+' – '+iotShortDay(A.to)}`:''} · ${scopeTxt}`;
-  const lead = T ? 'A ping gap is a lead to check, not proof of tampering.' : `Machines that moved while the device read zero voltage${A.dated?', by the day the outage started':''}.`;
+  const lead = Dk ? `Days a machine drove ${DRY_MIN_KM} km or more and sprayed nothing, or drove ${DRY_LOW_KM} km or more at ${DRY_KM_PER_AC} km an acre or worse (usually about 1). Over ${DRY_LONG_KM} km is marked a long move. The CIs see these too.` : T ? 'A ping gap is a lead to check, not proof of tampering.' : `Machines that moved while the device read zero voltage${A.dated?', by the day the outage started':''}.`;
   const ro = IOT_W.url ? '' : ' Recording actions switches on once the write endpoint is deployed.';
   const head=`<div style="margin-top:12px;font-size:13px;font-weight:700">${sum}</div><div style="font-size:12px;color:#6E6A62;margin-top:2px;line-height:1.45">${lead}${ro}</div>`;
   const lim=state.iotLimit||IOT_PAGE, shown=A.machines.slice(0,lim);
   const emptyTxt = T && A.TS.cur && !A.TS.opts.find(o=>o.k===A.TS.cur).n ? `No ${E(iotTsTxt(A.TS.cur).toLowerCase())} gaps in this range.` : A.queue==='new' && A.cnt.all ? `Nothing left to do here. Every machine in ${A.dated?'this range':'this list'} has an action recorded.`
-    : A.q ? `No machine matches "${E(A.q)}".` : A.queue==='all' ? (T?'No ping gaps in this range.':A.dated?'No zero-voltage outages started in this range.':'No machines at risk right now.') : `No ${A.queue==='open'?'open':'closed'} machines here.`;
+    : A.q ? `No machine matches "${E(A.q)}".` : A.queue==='all' ? (Dk?'No dry run cases in this range.':T?'No ping gaps in this range.':A.dated?'No zero-voltage outages started in this range.':'No machines at risk right now.') : `No ${A.queue==='open'?'open':'closed'} machines here.`;
   const list = !shown.length ? `<div style="margin-top:14px;${w2card(16)};padding:36px 20px;text-align:center;font-size:13.5px;color:#46433d;line-height:1.5">${emptyTxt}</div>`
     : `<div style="margin-top:12px;display:grid;gap:12px;grid-template-columns:${mob?'minmax(0,1fr)':'repeat(auto-fill,minmax(340px,1fr))'};align-items:start">${shown.map(m=>iotCardHTML(m,A)).join('')}</div>`
       + (shown.length<A.machines.length ? `<div style="text-align:center;margin-top:14px"><button data-act="iotmore" style="min-height:46px;padding:0 20px;border:1px solid #E9E6DF;border-radius:12px;background:#fff;color:#1B1A17;font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer">Show more · ${fmt(shown.length)} of ${fmt(A.machines.length)}</button></div>` : '');
@@ -12561,6 +12580,12 @@ function iotSheetHTML(){
 function iotCSV(view){
   const A=iotPageAgg(view), T=A.kind==='T';
   const ll=l=>l?`${l.lat},${l.lon}`:'', last=r=>{ const a=iotLast(r.id); return a?[a.status,a.action,iotActOn(a),a.remark,a.by,a.ts]:['No action yet','','','','','']; };
+  if(A.kind==='D'){
+    const hd=['Date','Machine','Case','Dry run (km)','Acres','Km per acre','Days on machine in range','Operator','Operator mobile','CI','CI mobile','State','IoT technician','Action status','Action','Action date','Remark','By','Recorded at'];
+    const ln=[hd.join(',')].concat(A.machines.flatMap(m=>m.cases.map(r=>[r.day,r.mc,IOT_DRY_SUB[r.sub]||r.sub,r.km,r.ac,r.ac>0?Math.round(r.km/r.ac*10)/10:'',m.n,r.op,r.opMob,r.ci,r.ciMob,iotStName(r.st),r.tech||'',...last(r)].map(csvCell).join(','))));
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['\ufeff'+ln.join('\n')],{type:'text/csv;charset=utf-8'}));
+    a.download=`IoT_dry-run_${A.from}_${A.to}_${A.st||'all'}_${A.queue}.csv`; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },0); return;
+  }
   const head=T ? ['Potential tamper date','Last ping','Back online','Machine','Gaps on machine in range','Gap (h)','Moved (km)','Recovery lat,long','Maps link','Operator','Operator mobile','CI','CI mobile','State','Status','IoT technician','Action status','Action','Action date','Remark','By','Recorded at']
                : ['Outage start','Machine','Status','Outage (min)','Pings','Travelled (km)','Start lat,long','End lat,long','Maps link (end)','Operator','Operator mobile','CI','CI mobile','State','IoT technician','Action status','Action','Action date','Remark','By','Recorded at'];
   const lines=[head.join(',')].concat(A.machines.flatMap(m=>m.cases.map(r=>(T
@@ -12644,13 +12669,13 @@ function iotActOpen(key){
   if(String(key||'').startsWith('CI|')) return ciActOpen(ov, key);
   if(_iotTarget && _iotTarget.ci) _iotTarget=null;
   ov.querySelectorAll('[data-l]').forEach(el=>{ el.textContent=IOT_FORM_EN[el.dataset.l]||el.textContent; }); ov.lang='en';
-  const [kind,mc]=String(key||'').split('|'), A=iotPageAgg(kind==='R'?'iotrisk':'iottamper'), m=A.all.find(x=>x.mc===mc); if(!m) return;
+  const [kind,mc]=String(key||'').split('|'), A=iotPageAgg(kind==='R'?'iotrisk':kind==='D'?'iotdry':'iottamper'), m=A.all.find(x=>x.mc===mc); if(!m) return;
   const targets=m.cases.filter(c=>iotState(c.id)!=='closed'), cover=targets.length?targets:[m.cases[0]];
   const fresh=!_iotTarget || _iotTarget.key!==key;
   _iotTarget={ key, kind, mc, st:m.st, cases:cover };
   const q=s=>ov.querySelector(s), T=kind==='T';
   q('#iotActTitle').textContent=mc;
-  const what = T ? `${cover.length===1?'1 ping gap':cover.length+' ping gaps'}${cover.length>1?` (${iotShortDay(cover[cover.length-1].day)} – ${iotShortDay(cover[0].day)})`:` on ${iotShortDay(cover[0].day)}, ${iotTime(cover[0].at)}`}`
+  const what = kind==='D' ? `${cover.length===1?'1 day':cover.length+' days'} · ${iotKm(cover.reduce((a,c)=>a+(c.km||0),0))} km driven${cover.length===1?' on '+iotShortDay(cover[0].day):''}` : T ? `${cover.length===1?'1 ping gap':cover.length+' ping gaps'}${cover.length>1?` (${iotShortDay(cover[cover.length-1].day)} – ${iotShortDay(cover[0].day)})`:` on ${iotShortDay(cover[0].day)}, ${iotTime(cover[0].at)}`}`
                  : `${cover.length===1?'1 outage':cover.length+' outages'} · ${iotKm(cover.reduce((a,c)=>a+(c.km||0),0))} km on zero voltage`;
   q('#iotActSub').textContent=`${IOT_KIND[kind]} · ${targets.length?'covers '+what:'updates the latest — '+what} · ${iotStName(m.st)}`;
   const seen=new Set(), hist=m.cases.flatMap(c=>IOT.actions[c.id]||[]).filter(a=>{ const k=a.ts+'|'+a.action+'|'+a.remark; if(seen.has(k)) return false; seen.add(k); return true; }).sort((a,b)=>(iotActOn(b)+b.ts).localeCompare(iotActOn(a)+a.ts));
@@ -12723,7 +12748,7 @@ async function ciActSend(ov, t, action, remark, status, on){
     for(const k of [...new Set(t.cases.map(c=>c.kind))]){
       const cs=t.cases.filter(c=>c.kind===k);
       // The script accepts only "Potential tamper" / "At risk"; a driving case is saved as "At risk" (its Case ID starts CI|D|).
-      const payload={ token:IOT_W.token, kind:IOT_KIND[k]||'At risk', machine:t.mc, state:iotStName(t.st), action, status, remark, by, role:'iotci',
+      const payload={ token:IOT_W.token, kind:iotScriptKind(k), machine:t.mc, state:iotStName(t.st), action, status, remark, by, role:'iotci',
         actionDate:on, cases:cs.map(c=>({ id:'CI|'+c.id, date:k==='D'?c.day:(c.at||'') })), caseId:'CI|'+cs[0].id };
       const res=await fetch(IOT_W.url, { method:'POST', body:JSON.stringify(payload) });   // bare string body ⇒ no preflight
       const j=await res.json().catch(()=>({ok:false,error:'bad_response'}));
@@ -12749,8 +12774,8 @@ async function iotActSend(){
   const note=(kind,txt)=>{ const el=q('#iotActMsg'), tone=kind==='ok'?['#E6F5EA','#15803D']:kind==='err'?['#FBEAE7','#B42318']:['#FBF1DA','#8A6A12']; el.style.display='block'; el.style.background=tone[0]; el.style.color=tone[1]; el.textContent=txt; };
   const btn=q('#iotActSend'); btn.disabled=true; btn.dataset.busy='1'; btn.textContent='Saving…'; note('warn','Saving…');
   const by=(GATE.cur&&GATE.cur.label)||'';
-  const payload={ token:IOT_W.token, kind:IOT_KIND[t.kind], machine:t.mc, state:iotStName(t.st), action, status, remark, by, role:(GATE.cur&&GATE.cur.role)||'',
-    actionDate:on, cases:t.cases.map(c=>({ id:c.id, date:t.kind==='T'?c.at:'' })), caseId:t.cases[0].id };
+  const payload={ token:IOT_W.token, kind:iotScriptKind(t.kind), machine:t.mc, state:iotStName(t.st), action, status, remark, by, role:(GATE.cur&&GATE.cur.role)||'',
+    actionDate:on, cases:t.cases.map(c=>({ id:c.id, date:t.kind==='T'?c.at:t.kind==='D'?c.day:'' })), caseId:t.cases[0].id };
   try{
     const res=await fetch(IOT_W.url, { method:'POST', body:JSON.stringify(payload) });   // bare string body ⇒ no preflight
     const j=await res.json().catch(()=>({ok:false,error:'bad_response'}));
@@ -12915,6 +12940,27 @@ const ciClock = s => { const m=/(\d{1,2}):(\d{2})/.exec(String(s||'').slice(11))
 const ciDur = mins => { if(mins==null) return '—'; const h=Math.floor(mins/60), m=Math.round(mins%60); return h ? ciT('hm',{h,m}) : ciT('mOnly',{m}); };
 const ciScopeTxt = () => { const me=ciMe(); return me ? me.name : 'North · HR + PB'; };
 const ciLast = id => { const l=IOT.actions['CI|'+id]; return l&&l.length ? l[l.length-1] : null; };
+// The dry-run cases as TECHNICIAN cases (view iotdry, Dinesh 2026-11-26). The tab names no state, people or technician, so
+// each comes from the machine: its Wheat Main sheet row (state, operator, CI, last ping position), else its latest tamper /
+// at-risk row; the technician is the one those tabs name for the machine, else the mapping tab's technician for the state.
+// A machine known to neither is dropped (it would reach nobody).
+function iotDryCases(){
+  const prev={}; [...IOT.tamper, ...IOT.risk].forEach(r=>{ const o=prev[r.mc]; if(!o || r.day>o.day) prev[r.mc]=r; });
+  const techMc={}; [...IOT.tamper, ...IOT.risk].forEach(r=>{ if(r.tech) techMc[r.mc]=r.tech; });
+  return IOT.dry.filter(r=>{
+    const m=IOTW.byMc[r.mc], p=prev[r.mc];
+    if(!m && !p) return false;
+    if(!r._dressed){
+      r.st = (m&&m.st) || p.st;
+      r.op = (m&&m.opName) || (p&&p.op) || ''; r.opMob = (m&&m.opNum) || (p&&p.opMob) || '';
+      r.ci = (m&&m.co) || (p&&p.ci) || ''; r.ciMob = (m&&m.coMob) || (p&&p.ciMob) || '';
+      r.loc = m&&m.lat!=null ? { lat:m.lat, lon:m.lon } : null;
+      r.tech = techMc[r.mc] || ((IOT.techs.find(x=>x.st===r.st)||{}).name) || '';
+      r._dressed = true;
+    }
+    return !!r.st;
+  });
+}
 // Every case a CI can see: North device-off / battery rows, plus the dry-run cases of machines on the Wheat Main sheet
 // (placed in that machine's state).
 function ciRows(){
@@ -13167,6 +13213,8 @@ function iotBodyHTML(view, mob){
     return `<div style="${w2card(16)};padding:60px 20px;text-align:center;color:#6E6A62;font-size:13px">
       ${IOT.error?'⚠ '+msg:skelHTML(msg)}${IOT.error?`<div style="margin-top:14px"><button data-act="iotretry" style="min-height:${mob?44:32}px;padding:0 16px;border:1px solid #E9E6DF;border-radius:9px;background:#1B1A17;color:#fff;font-size:12px;font-weight:600;cursor:pointer">Retry</button></div>`:''}</div>`;
   }
+  if(view==='iotdry' && !IOTW.loaded && !IOTW.error){ if(!IOTW.loading) setTimeout(loadIotWheat,0);
+    return `<div style="${w2card(16)};padding:60px 20px;text-align:center;color:${W2.ink2};font-size:13px">Loading the machine sheet…</div>`; }
   return view==='iotci'||view==='iotcia'||view==='iotam' ? iotCiHTML(view, mob) : view==='iotteam' ? iotTeamHTML(mob) : iotTechHTML(view, mob);
 }
 
@@ -14109,7 +14157,7 @@ function contentHTML(v){
     case 'w500': return `<section style="padding:24px 32px">${w500BodyHTML(false)}</section>`;
     case 'wdr': return `<section style="padding:24px 32px">${wdrBodyHTML(false)}</section>`;
     case 'wcum': return `<section style="padding:24px 32px">${wcumBodyHTML(false)}</section>`;
-    case 'iottamper': case 'iotrisk': case 'iotteam': case 'iotci': case 'iotcia': case 'iotam': return `<section style="padding:18px 22px">${iotBodyHTML(state.view,false)}</section>`;
+    case 'iottamper': case 'iotrisk': case 'iotdry': case 'iotteam': case 'iotci': case 'iotcia': case 'iotam': return `<section style="padding:18px 22px">${iotBodyHTML(state.view,false)}</section>`;
     case 'recap': return recapViewHTML(v);
     case 'norun': return `<section style="padding:18px 22px">${norunBodyHTML(v,false)}</section>`;
     default: return mapViewHTML(v);
@@ -14162,6 +14210,7 @@ const M_VIEWS = [
   { k:'wcum',     label:RAIL_LBL.wcum,  icon:()=>I.snake },      // Wheat Cumulative acres (snake chart)
   { k:'iottamper',label:RAIL_LBL.iottamper, icon:()=>I.tamper },   // IoT project only
   { k:'iotrisk',  label:RAIL_LBL.iotrisk,   icon:()=>I.risk },
+  { k:'iotdry',   label:RAIL_LBL.iotdry,    icon:()=>I.route },   // IoT: dry-run cases, technicians + head
   { k:'iotteam',  label:RAIL_LBL.iotteam,      icon:()=>I.am },               // IoT head (admin) only
   { k:'iotci',    label:RAIL_LBL.iotci,  icon:()=>I.tamper },     // IoT: the North CI page (needs attention)
   { k:'iotcia',   label:RAIL_LBL.iotcia, icon:()=>I.snake },      // IoT: the CI's machines' acres
@@ -14503,7 +14552,7 @@ function mobileHTML(v){
     body = wdrBodyHTML(true);
   } else if(S.view==='wcum'){
     body = wcumBodyHTML(true);
-  } else if(S.view==='iottamper'||S.view==='iotrisk'||S.view==='iotteam'||S.view==='iotci'||S.view==='iotcia'||S.view==='iotam'){
+  } else if(S.view==='iottamper'||S.view==='iotrisk'||S.view==='iotdry'||S.view==='iotteam'||S.view==='iotci'||S.view==='iotcia'||S.view==='iotam'){
     body = iotBodyHTML(S.view,true);
   } else {
     // NOTE: this final else is WEATHER, not an error branch — a view registered in M_VIEWS but missing a case
@@ -14701,7 +14750,7 @@ function mPageScope(view){
     case 'wcum': return state.wsnSt==='HR'||state.wsnSt==='PB' ? nm(state.wsnSt) : 'HR + PB';
     case 'iotci': case 'iotcia': return ciScopeTxt();
     case 'iotam': return amScopeTxt();
-    case 'iottamper': case 'iotrisk': case 'iotteam': { const sc=iotScope(); return sc.st ? iotStName(sc.st) : (isAdmin()?'All states':'My states'); }
+    case 'iottamper': case 'iotrisk': case 'iotdry': case 'iotteam': { const sc=iotScope(); return sc.st ? iotStName(sc.st) : (isAdmin()?'All states':'My states'); }
     default:         return nm(lock||pick('st'));   // the fleet pages: the filter bar's state
   }
 }
@@ -14840,7 +14889,7 @@ function render(){
    pasted address is honoured at boot and on hashchange, and `render()`'s role guard still bounces a view the
    login may not see. */
 const VIEW_SLUG = { tables:'territories', snake:'cumulative', mpprod:'mp-products', wplan:'retailer-summary', wterr:'territory-summary', wam:'area-managers', wfo:'field-officers', wmap:'machine-map', wtop:'top-machines', w250:'250-acres', w500:'500-drive', wdr:'dry-run', wbd:'breakdowns', wmc:'machines', wcum:'wheat-cumulative',
-  iottamper:'tamper', iotrisk:'at-risk', iotteam:'team', iotci:'needs-attention', iotcia:'ci-acres', iotam:'my-cis', am:'area-managers', bm:'business-managers',
+  iottamper:'tamper', iotrisk:'at-risk', iotdry:'dry-run-cases', iotteam:'team', iotci:'needs-attention', iotcia:'ci-acres', iotam:'my-cis', am:'area-managers', bm:'business-managers',
   leader:'leaders', product:'products', fo:'field-officers', recap:'daily-recap', norun:'didnt-run' };
 const slugOf = v => VIEW_SLUG[v]||v;
 const viewOfHash = h => { const sl=String(h||'').replace(/^#\/?/,''); if(!sl) return null;

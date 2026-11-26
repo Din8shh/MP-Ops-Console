@@ -1562,6 +1562,18 @@ no weather), and lives on three chromeless pages (`OWN_PAGES` drops the machine 
   own type once the script is redeployed from the deploying account (add "Dry run" to `KINDS`, then set `IOT_KIND.D`).
   Checked 26 Nov: 25 Nov North = 13 trip + 5 low; Dharmender UPL_2722 (5.6 km, 0 ac); Sampat 8 on 25 Nov, 68 over 19–25 Nov —
   equal to a direct count.
+- **Dry run cases for the TECHNICIANS too (view `iotdry` "Dry run", `#/dry-run-cases`, Dinesh 2026-11-26; `iotDryCases`).**
+  The same rule-breaking machine-days as the CI page, on the technicians' own mobile-first page — queue, day strip, cards,
+  Record action, CSV — beside Potential tamper and At risk (hidden from the CI / AM logins, shown to the IoT head). The tab
+  names no state, people or technician, so each case takes them from the machine: Wheat Main sheet row (state, operator, CI,
+  last ping position) else its latest tamper / at-risk row; technician = the one the IoT tabs name for that machine, else the
+  mapping tab's technician for the state. Technician actions: `IOT_ACTIONS.D`; saved as "At risk" (`iotScriptKind`) with Case ID
+  `D|<machine>|<date>` until the script has a "Dry run" type. A CI's remark on the same case shows on the card ("CI: …").
+  Checked 26 Nov, 19–25 Nov: Rohit 122 cases / 78 machines + Manish 88 / 60 = 210 / 138, every placed case in the tab.
+- **The mapping tab and the dry-run tab are read through the plain CSV EXPORT, not gviz** (26 Nov): machine / date / km
+  columns had been pasted beside the technician list in "IOT vs state mapping", and gviz returned the eight technician rows
+  BLANK — the Team page lost its phone numbers and zero rows, and the dry-run state fallback found nobody. Ask for those
+  pasted columns to be moved to their own tab.
 
 ## PWA
 The console installs to the home screen and opens with no signal. It is one app for every project; the PIN
